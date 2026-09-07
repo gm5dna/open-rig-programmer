@@ -18,12 +18,7 @@ import (
 // FieldSupport.CanWrite's write-state comparison silently — Validate is
 // what catches that before it does.
 func validSupport(s Support) bool {
-	switch s {
-	case Unsupported, Unverified, Supported, Inert, ConsentedUnverified:
-		return true
-	default:
-		return false
-	}
+	return s >= Unsupported && s <= ConsentedUnverified
 }
 
 // validateVocabEntries checks a capability vocabulary list — ShiftOptions,
@@ -50,16 +45,23 @@ func validateVocabEntries(fieldName string, values []string) []string {
 	return problems
 }
 
-// shiftOptionValues returns the Value of every entry in opts, in order —
-// so validateVocab can check a ShiftOption list with the same blank and
-// duplicate rules it applies to every other vocabulary, without a
-// []string being built by hand at the call site.
-func shiftOptionValues(opts []ShiftOption) []string {
-	values := make([]string, len(opts))
-	for i, o := range opts {
-		values[i] = o.Value
+// valuesOf returns the Value of every entry in items, in order, via the
+// caller's own accessor — so a vocabulary list can be checked against the
+// same blank/duplicate rules every other vocabulary gets, without a
+// []string being built by hand at the call site. Shared by
+// shiftOptionValues, duplexOptionValues and toneModeValues below, whose
+// item types differ.
+func valuesOf[T any](items []T, value func(T) string) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = value(it)
 	}
-	return values
+	return out
+}
+
+// shiftOptionValues returns the Value of every entry in opts, in order.
+func shiftOptionValues(opts []ShiftOption) []string {
+	return valuesOf(opts, func(o ShiftOption) string { return o.Value })
 }
 
 // validShiftDirection reports whether d is one of the three declared,
@@ -68,56 +70,33 @@ func shiftOptionValues(opts []ShiftOption) []string {
 // never set must fail here, not silently read as ShiftNone — see
 // ShiftDirection's doc comment.
 func validShiftDirection(d ShiftDirection) bool {
-	switch d {
-	case ShiftNone, ShiftUp, ShiftDown:
-		return true
-	default:
-		return false
-	}
+	return d >= ShiftNone && d <= ShiftDown
 }
 
 // duplexOptionValues returns the Value of every entry in opts, in order,
 // so validateVocabEntries can check a DuplexOption list with the same
 // blank and duplicate rules every other vocabulary gets.
 func duplexOptionValues(opts []DuplexOption) []string {
-	values := make([]string, len(opts))
-	for i, o := range opts {
-		values[i] = o.Value
-	}
-	return values
+	return valuesOf(opts, func(o DuplexOption) string { return o.Value })
 }
 
 // toneModeValues returns the Value of every entry in modes, in order.
 func toneModeValues(modes []ToneMode) []string {
-	values := make([]string, len(modes))
-	for i, m := range modes {
-		values[i] = m.Value
-	}
-	return values
+	return valuesOf(modes, func(m ToneMode) string { return m.Value })
 }
 
 // validDuplexDirection reports whether d is one of the three declared,
 // meaningful DuplexDirection constants. DuplexUnspecified (the zero
 // value) is deliberately excluded, exactly as ShiftUnspecified is.
 func validDuplexDirection(d DuplexDirection) bool {
-	switch d {
-	case DuplexOff, DuplexUp, DuplexDown:
-		return true
-	default:
-		return false
-	}
+	return d >= DuplexOff && d <= DuplexDown
 }
 
 // validToneModeSemantics reports whether s is one of the five declared,
 // meaningful ToneModeSemantics constants. ToneModeUnspecified (the zero
 // value) is deliberately excluded.
 func validToneModeSemantics(s ToneModeSemantics) bool {
-	switch s {
-	case ToneModeOff, ToneModeCTCSS, ToneModeCTCSSSquelch, ToneModeCTCSSRxSquelch, ToneModeDTCS, ToneModeCross:
-		return true
-	default:
-		return false
-	}
+	return s >= ToneModeOff && s <= ToneModeCross
 }
 
 // validToneSemantics reports whether s is one of the five declared,
@@ -131,12 +110,7 @@ func validToneModeSemantics(s ToneModeSemantics) bool {
 // nothing else: no registered model's CTCSSStates moves, and the
 // uniqueness rule below is unchanged.
 func validToneSemantics(s ToneSemantics) bool {
-	switch s {
-	case ToneOff, ToneEncode, ToneEncodeDecode, ToneDCSEncodeDecode, ToneDCSEncode:
-		return true
-	default:
-		return false
-	}
+	return s >= ToneOff && s <= ToneDCSEncode
 }
 
 // Validate checks c for internal STRUCTURAL consistency — not hardware
@@ -483,7 +457,11 @@ func (c Capabilities) Validate() error {
 	// the ambiguity is resolved by declaration: where a direction is
 	// expressed more than once, exactly one of those options carries
 	// Canonical.
-	problems = append(problems, canonicalProblems("DuplexOptions", "direction", duplexCanonicalGroups(c.DuplexOptions))...)
+	problems = append(problems, canonicalProblems("DuplexOptions", "direction", canonicalGroupsOf(c.DuplexOptions,
+		func(o DuplexOption) DuplexDirection { return o.Direction },
+		func(o DuplexOption) string { return o.Value },
+		func(o DuplexOption) bool { return o.Canonical },
+	))...)
 
 	problems = append(problems, validateVocabEntries("ToneModes", toneModeValues(c.ToneModes))...)
 	for _, m := range c.ToneModes {
@@ -495,7 +473,11 @@ func (c Capabilities) Validate() error {
 		}
 	}
 	// The canonical rule again, on the other Icom vocabulary.
-	problems = append(problems, canonicalProblems("ToneModes", "semantics", toneModeCanonicalGroups(c.ToneModes))...)
+	problems = append(problems, canonicalProblems("ToneModes", "semantics", canonicalGroupsOf(c.ToneModes,
+		func(m ToneMode) ToneModeSemantics { return m.Semantics },
+		func(m ToneMode) string { return m.Value },
+		func(m ToneMode) bool { return m.Canonical },
+	))...)
 
 	problems = append(problems, validateVocabEntries("DTCSPolarities", c.DTCSPolarities)...)
 	problems = append(problems, validateVocabEntries("Filters", c.Filters)...)
@@ -657,49 +639,35 @@ func canonicalProblems(list, what string, groups []canonicalGroup) []string {
 	return problems
 }
 
-// duplexCanonicalGroups groups options by Direction, preserving both
+// canonicalGroupsOf groups items by the semantic key, preserving both
 // declaration order within a group and first-appearance order between
-// groups, so a Validate message never depends on map iteration.
-func duplexCanonicalGroups(options []DuplexOption) []canonicalGroup {
-	index := make(map[DuplexDirection]int, len(options))
+// groups, so a Validate message never depends on map iteration. Shared by
+// DuplexOptions and ToneModes, whose grouping key (Direction/Semantics)
+// differs in type, which is what the type parameter and the three
+// accessors are for.
+func canonicalGroupsOf[T any, K comparable](items []T, key func(T) K, value func(T) string, canonical func(T) bool) []canonicalGroup {
+	index := make(map[K]int, len(items))
 	var groups []canonicalGroup
-	for _, o := range options {
-		i, seen := index[o.Direction]
+	for _, it := range items {
+		k := key(it)
+		i, seen := index[k]
 		if !seen {
 			i = len(groups)
-			index[o.Direction] = i
-			groups = append(groups, canonicalGroup{semantic: fmt.Sprintf("%d", o.Direction)})
+			index[k] = i
+			groups = append(groups, canonicalGroup{semantic: fmt.Sprintf("%v", k)})
 		}
-		groups[i].values = append(groups[i].values, o.Value)
-		if o.Canonical {
+		groups[i].values = append(groups[i].values, value(it))
+		if canonical(it) {
 			groups[i].canonical++
 		}
 	}
 	return groups
 }
 
-// toneModeCanonicalGroups is duplexCanonicalGroups for ToneModes.
-func toneModeCanonicalGroups(modes []ToneMode) []canonicalGroup {
-	index := make(map[ToneModeSemantics]int, len(modes))
-	var groups []canonicalGroup
-	for _, m := range modes {
-		i, seen := index[m.Semantics]
-		if !seen {
-			i = len(groups)
-			index[m.Semantics] = i
-			groups = append(groups, canonicalGroup{semantic: fmt.Sprintf("%d", m.Semantics)})
-		}
-		groups[i].values = append(groups[i].values, m.Value)
-		if m.Canonical {
-			groups[i].canonical++
-		}
-	}
-	return groups
-}
-
-// CanonicalDuplexOption returns the wire-form duplex value this radio uses
-// for direction d, and true, or ("", false) when the table gives no single
-// answer for it.
+// canonicalValueOf returns the wire-form value the entries of items
+// sharing key want share for want, and true, or ("", false) when the
+// table gives no single answer for it. Shared by CanonicalDuplexOption
+// and CanonicalToneMode, on identical terms and for identical reasons.
 //
 // IT SCANS THE WHOLE GROUP BEFORE ANSWERING, and that is the point rather
 // than an inefficiency. Returning on the FIRST canonical entry would be
@@ -715,30 +683,30 @@ func toneModeCanonicalGroups(modes []ToneMode) []canonicalGroup {
 //
 // So the answer is given only when it is unambiguous:
 //
-//   - exactly one entry marked Canonical among those sharing d — the
+//   - exactly one entry marked Canonical among those sharing want — the
 //     normal multi-code case;
-//   - or exactly one entry with d at all, canonical or not — a lone entry
-//     needs no marking, there being nothing to choose between.
+//   - or exactly one entry with want at all, canonical or not — a lone
+//     entry needs no marking, there being nothing to choose between.
 //
 // Everything else — no entry, several with no canonical, several with
 // more than one canonical — is not an answer this function will invent.
-func (c Capabilities) CanonicalDuplexOption(d DuplexDirection) (string, bool) {
-	var canonical, sole string
+func canonicalValueOf[T any, K comparable](items []T, want K, key func(T) K, value func(T) string, canonical func(T) bool) (string, bool) {
+	var canon, sole string
 	var canonicals, total int
-	for _, o := range c.DuplexOptions {
-		if o.Direction != d {
+	for _, it := range items {
+		if key(it) != want {
 			continue
 		}
 		total++
-		sole = o.Value
-		if o.Canonical {
+		sole = value(it)
+		if canonical(it) {
 			canonicals++
-			canonical = o.Value
+			canon = value(it)
 		}
 	}
 	switch {
 	case canonicals == 1:
-		return canonical, true
+		return canon, true
 	case canonicals == 0 && total == 1:
 		return sole, true
 	default:
@@ -746,28 +714,23 @@ func (c Capabilities) CanonicalDuplexOption(d DuplexDirection) (string, bool) {
 	}
 }
 
+// CanonicalDuplexOption returns the wire-form duplex value this radio uses
+// for direction d, and true, or ("", false) when the table gives no single
+// answer for it. See canonicalValueOf.
+func (c Capabilities) CanonicalDuplexOption(d DuplexDirection) (string, bool) {
+	return canonicalValueOf(c.DuplexOptions, d,
+		func(o DuplexOption) DuplexDirection { return o.Direction },
+		func(o DuplexOption) string { return o.Value },
+		func(o DuplexOption) bool { return o.Canonical },
+	)
+}
+
 // CanonicalToneMode is CanonicalDuplexOption for the tone-mode
 // vocabulary, on identical terms and for identical reasons.
 func (c Capabilities) CanonicalToneMode(s ToneModeSemantics) (string, bool) {
-	var canonical, sole string
-	var canonicals, total int
-	for _, m := range c.ToneModes {
-		if m.Semantics != s {
-			continue
-		}
-		total++
-		sole = m.Value
-		if m.Canonical {
-			canonicals++
-			canonical = m.Value
-		}
-	}
-	switch {
-	case canonicals == 1:
-		return canonical, true
-	case canonicals == 0 && total == 1:
-		return sole, true
-	default:
-		return "", false
-	}
+	return canonicalValueOf(c.ToneModes, s,
+		func(m ToneMode) ToneModeSemantics { return m.Semantics },
+		func(m ToneMode) string { return m.Value },
+		func(m ToneMode) bool { return m.Canonical },
+	)
 }

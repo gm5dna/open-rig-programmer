@@ -172,12 +172,13 @@ func (d Dialect) Clarifier() ClarifierPolicy { return d.clar }
 // that answered for the FT-710 whatever dialect it was called on; that
 // helper is gone, and the receiver is still the one that must decide.
 func (d Dialect) mtSlotValid(s Slot) bool {
-	switch d.classifySlot(s.Wire()) {
-	case slotKindMemory, slotKindPMS:
-		return true
-	default:
-		return false
-	}
+	// Delegates to writableSlot rather than reimplementing its
+	// classify-then-memory/PMS check: the two rules read identically
+	// today (mtcombined.go's validateCombinedMTFields doc comment), and
+	// remain FREE TO DIVERGE — this is its own named entry point, not an
+	// alias — should 5xx/EMG ever be hardware-verified for one command
+	// and not the other.
+	return d.writableSlot(s)
 }
 
 // validMTTagByte reports whether b is a legal MT tag byte: printable ASCII
@@ -341,12 +342,7 @@ func (d Dialect) mtReadSlotValid(s Slot) bool {
 			return false
 		}
 	case MTReadsMemoryPMS:
-		switch d.classifySlot(s.Wire()) {
-		case slotKindMemory, slotKindPMS:
-			return true
-		default:
-			return false
-		}
+		return d.writableSlot(s)
 	default:
 		return false
 	}

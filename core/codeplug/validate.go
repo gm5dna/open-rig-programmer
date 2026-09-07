@@ -48,26 +48,27 @@ func findToneState(states []spec.ToneState, value string) (spec.ToneState, bool)
 	return states[i], true
 }
 
-// toneStateValues returns the Value of every entry in states, in order —
-// for building a caps-driven vocabulary list for an error message
-// without re-deriving a []string by hand at the call site.
-func toneStateValues(states []spec.ToneState) []string {
-	values := make([]string, len(states))
-	for i, s := range states {
-		values[i] = s.Value
+// valuesOf returns the Value of every entry in items, in order, via the
+// caller's own accessor — for building a caps-driven vocabulary list for
+// an error message without re-deriving a []string by hand at the call
+// site. Shared by toneStateValues, shiftOptionValues, duplexOptionValues
+// and toneModeValues below, whose item types differ.
+func valuesOf[T any](items []T, value func(T) string) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = value(it)
 	}
-	return values
+	return out
 }
 
-// shiftOptionValues returns the Value of every entry in opts, in order —
-// for building a caps-driven vocabulary list for an error message
-// without re-deriving a []string by hand at the call site.
+// toneStateValues returns the Value of every entry in states, in order.
+func toneStateValues(states []spec.ToneState) []string {
+	return valuesOf(states, func(s spec.ToneState) string { return s.Value })
+}
+
+// shiftOptionValues returns the Value of every entry in opts, in order.
 func shiftOptionValues(opts []spec.ShiftOption) []string {
-	values := make([]string, len(opts))
-	for i, o := range opts {
-		values[i] = o.Value
-	}
-	return values
+	return valuesOf(opts, func(o spec.ShiftOption) string { return o.Value })
 }
 
 // quotedList formats vals as a comma-separated list of double-quoted
@@ -562,20 +563,12 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 // — caps' own duplex vocabulary as the plain []string StringField.Valid
 // takes.
 func duplexOptionValues(opts []spec.DuplexOption) []string {
-	values := make([]string, len(opts))
-	for i, o := range opts {
-		values[i] = o.Value
-	}
-	return values
+	return valuesOf(opts, func(o spec.DuplexOption) string { return o.Value })
 }
 
 // toneModeValues returns the Value of every entry in modes, in order.
 func toneModeValues(modes []spec.ToneMode) []string {
-	values := make([]string, len(modes))
-	for i, m := range modes {
-		values[i] = m.Value
-	}
-	return values
+	return valuesOf(modes, func(m spec.ToneMode) string { return m.Value })
 }
 
 // HasErrors reports whether issues contains at least one SeverityError
