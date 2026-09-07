@@ -208,15 +208,10 @@ func SetUnverifiedWrites(path, slug string, on bool) error {
 	if err != nil {
 		return fmt.Errorf("userconfig: encoding settings for %s: %w", path, err)
 	}
-	// Checked twice, deliberately. Here, on the buffer, so an encoding
-	// fault is caught before any file is created at all; and again inside
-	// replaceAtomically on the bytes READ BACK from the temporary file,
-	// which is the check that actually matters — it is the file, not the
-	// buffer, that is about to become the user's settings.
-	if err := verifyEncoded(out, slug, on); err != nil {
-		return fmt.Errorf("userconfig: refusing to replace %s: %w", path, err)
-	}
-
+	// Verified on the bytes READ BACK from the temporary file inside
+	// replaceAtomically, not on this buffer: it is the file, not the
+	// buffer, that is about to become the user's settings, and that is
+	// the check that actually matters (see verifyEncoded's doc comment).
 	return replaceAtomically(path, out, func(b []byte) error {
 		return verifyEncoded(b, slug, on)
 	})
