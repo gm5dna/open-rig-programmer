@@ -2,7 +2,10 @@
 
 package ftdx101
 
-import "github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
+import (
+	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
+)
 
 // modelName is the name the two siblings share where a message means the
 // PACKAGE's radio rather than one variant of it — the settings surface,
@@ -22,4 +25,17 @@ var params = yaesu.Params{
 	// nil default), and prints each item's position as the "P1-P2-P3"
 	// triple this Display renders.
 	Display: yaesu.DisplayP1P2P3,
+
+	// The combined MT record encodes three CTCSS states, in the manual's
+	// own legend order — which is the order the refusal text names them
+	// in.
+	CTCSS: []yaesu.CTCSSName{
+		{Name: "OFF", State: cat.CTCSSOff},
+		{Name: "ENC-DEC", State: cat.CTCSSEncDec},
+		{Name: "ENC", State: cat.CTCSSEnc},
+	},
+	EraseReason: "the FTdx101's CAT command set has no erase command, so this codec cannot express an erase, and FieldErase is not write-Supported",
+	BuildMT: func(d cat.Dialect, m cat.MemoryData, tag string, _ bool) (cat.Command, error) {
+		return d.BuildMTSetCombined(m, tag)
+	},
 }
