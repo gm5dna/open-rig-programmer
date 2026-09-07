@@ -202,13 +202,10 @@ func needsTierColumns(channels []codeplug.Channel) bool {
 		if ch.Empty() {
 			continue
 		}
-		d := ch.Data
-		if !d.TxFreqHz.State.RepresentableByOmission() || !d.Duplex.State.RepresentableByOmission() ||
-			!d.OffsetHz.State.RepresentableByOmission() || !d.ToneMode.State.RepresentableByOmission() ||
-			!d.ToneTx.State.RepresentableByOmission() || !d.ToneRx.State.RepresentableByOmission() ||
-			!d.DTCSCode.State.RepresentableByOmission() || !d.DTCSPolarity.State.RepresentableByOmission() ||
-			!d.Filter.State.RepresentableByOmission() || !d.DataMode.State.RepresentableByOmission() {
-			return true
+		for _, tf := range codeplug.TierFields {
+			if !tf.Receiver && !tf.State(ch.Data).RepresentableByOmission() {
+				return true
+			}
 		}
 	}
 	return false
@@ -224,12 +221,10 @@ func needsReceiverColumns(channels []codeplug.Channel) bool {
 		if ch.Empty() {
 			continue
 		}
-		d := ch.Data
-		if !d.TuningStepEnabled.State.RepresentableByOmission() || !d.TuningStep.State.RepresentableByOmission() ||
-			!d.ProgramTuningStepHz.State.RepresentableByOmission() || !d.AttenuatorDB.State.RepresentableByOmission() ||
-			!d.Preamp.State.RepresentableByOmission() || !d.Antenna.State.RepresentableByOmission() ||
-			!d.IPPlus.State.RepresentableByOmission() {
-			return true
+		for _, tf := range codeplug.TierFields {
+			if tf.Receiver && !tf.State(ch.Data).RepresentableByOmission() {
+				return true
+			}
 		}
 	}
 	return false
