@@ -9,23 +9,23 @@ import { appState } from '../app.svelte.js'
  * where they exist, matching how production code would reset them. */
 function resetState() {
 	appState.clearConnection()
-	appState.setPorts([])
+	appState.ports = []
 	appState.setPortsLoading(false)
 	appState.setConnecting(false)
-	appState.setUISpec(null)
-	appState.setSettingsSpec(null)
+	appState.uiSpec = null
+	appState.settingsSpec = null
 	appState.setSettings(null)
-	appState.setActiveView('channels')
-	appState.setSupportedModels([])
-	appState.setSelectedModel('')
+	appState.activeView = 'channels'
+	appState.supportedModels = []
+	appState.selectedModel = ''
 	// Task 14 (M9d): the consent surface's own state — deliberately NOT
 	// connection-scoped (see each field's doc comment), so, exactly like
 	// uiSpec and the model picker's fields, a test that wants it clean
 	// resets it here rather than relying on clearConnection.
 	appState.setUnverifiedConsentPrompt(null)
-	appState.setUnverifiedConsents([])
-	appState.closeUnverifiedGrants()
-	appState.setSendDialogOpen(false)
+	appState.unverifiedConsents = []
+	appState.unverifiedGrantsOpen = false
+	appState.sendDialogOpen = false
 	appState.alerts = []
 }
 
@@ -40,20 +40,20 @@ describe('connection state transitions', () => {
 		expect(appState.connection).toBeNull()
 	})
 
-	it('setConnection makes connected true and exposes the connection', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+	it('assigning connection makes connected true and exposes the connection', () => {
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		expect(appState.connected).toBe(true)
 		expect(appState.isDemo).toBe(false)
 		expect(appState.connection?.Model).toBe('FT-710')
 	})
 
 	it('isDemo reflects ConnectionInfo.Demo', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'fake', USBSerial: 'SIM0001', Region: '', Demo: true })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'fake', USBSerial: 'SIM0001', Region: '', Demo: true }
 		expect(appState.isDemo).toBe(true)
 	})
 
 	it('clearConnection resets connection, codeplug, dirty, issues and transfer', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: true, BaselineStale: false })
 		appState.setIssues([{ Slot: '001', Field: 'freq', Severity: 'error', Msg: 'bad' }])
 		appState.dirtyTransferConflicts = true
@@ -71,7 +71,7 @@ describe('connection state transitions', () => {
 	})
 
 	it('disconnectConnection (Fix 1, Codex M6 #1, adjudicated HIGH) clears ONLY connection-scoped state — codeplug/dirty/issues/workingPath persist', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({
 			Schema: 1, Generator: 'x', Radio: {},
 			Channels: [{ slot: '001', data: { freq_hz: 7100000 } }],
@@ -175,7 +175,7 @@ describe('progress event updates', () => {
 
 describe('canSend pieces', () => {
 	function makeReadyState() {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: false, BaselineStale: false })
 	}
 
@@ -186,7 +186,7 @@ describe('canSend pieces', () => {
 
 	it('is false when not connected', () => {
 		makeReadyState()
-		appState.setConnection(null)
+		appState.connection = null
 		expect(appState.canSend).toBe(false)
 	})
 
@@ -198,7 +198,7 @@ describe('canSend pieces', () => {
 	})
 
 	it('is false when no codeplug has ever loaded (baselineFresh is false, not unknown)', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		expect(appState.baselineFresh).toBe(false)
 		expect(appState.canSend).toBe(false)
 	})
@@ -231,12 +231,12 @@ describe('canSend pieces', () => {
 })
 
 describe('uiSpec (task 17)', () => {
-	it('starts null and stores whatever setUISpec is given', () => {
+	it('starts null and stores whatever it is assigned', () => {
 		expect(appState.uiSpec).toBeNull()
 		const spec = { Live: false, Banks: [], Modes: ['LSB'], ShiftOptions: [], CTCSSStateOptions: [], Tones: [], TagMaxBytes: 12, ClarMaxHz: 9990, ClarStepHz: 10 }
-		appState.setUISpec(spec)
+		appState.uiSpec = spec
 		expect(appState.uiSpec).toEqual(spec)
-		appState.setUISpec(null)
+		appState.uiSpec = null
 		expect(appState.uiSpec).toBeNull()
 	})
 })
@@ -246,42 +246,31 @@ describe('model picker state (task 13, M9d — the GUI can finally name a radio)
 		expect(appState.selectedModel).toBe('')
 	})
 
-	it('setSelectedModel stores the user\'s choice, and "" puts it back to the default', () => {
-		appState.setSelectedModel('FTdx10')
+	it('stores the user\'s choice, and "" puts it back to the default', () => {
+		appState.selectedModel = 'FTdx10'
 		expect(appState.selectedModel).toBe('FTdx10')
-		appState.setSelectedModel('')
-		expect(appState.selectedModel).toBe('')
-	})
-
-	it('setSelectedModel coerces a null choice to "" rather than storing it — the connect path takes a string', () => {
-		appState.setSelectedModel(null)
+		appState.selectedModel = ''
 		expect(appState.selectedModel).toBe('')
 	})
 
 	it('supportedModels starts empty and stores whatever GetSupportedModels returned, in that order', () => {
 		expect(appState.supportedModels).toEqual([])
-		appState.setSupportedModels(['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10'])
+		appState.supportedModels = ['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10']
 		expect(appState.supportedModels).toEqual(['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10'])
 	})
 
-	it('setSupportedModels(null) leaves an empty list, never null — the picker always iterates an array', () => {
-		appState.setSupportedModels(['FT-710'])
-		appState.setSupportedModels(null)
-		expect(appState.supportedModels).toEqual([])
-	})
-
 	it('a chosen model survives clearConnection — it is the picker\'s own choice, not connection-scoped state', () => {
-		appState.setSelectedModel('FTdx10')
-		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.selectedModel = 'FTdx10'
+		appState.supportedModels = ['FT-710', 'FTdx10']
 		appState.clearConnection()
 		expect(appState.selectedModel).toBe('FTdx10')
 		expect(appState.supportedModels).toEqual(['FT-710', 'FTdx10'])
 	})
 
 	it('a chosen model survives disconnectConnection too — reconnecting must offer the radio the user picked', () => {
-		appState.setSelectedModel('FTdx10')
-		appState.setSupportedModels(['FT-710', 'FTdx10'])
-		appState.setConnection({ Model: 'FTdx10', CATID: '0761', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.selectedModel = 'FTdx10'
+		appState.supportedModels = ['FT-710', 'FTdx10']
+		appState.connection = { Model: 'FTdx10', CATID: '0761', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		appState.disconnectConnection()
 		expect(appState.connection).toBeNull()
 		expect(appState.selectedModel).toBe('FTdx10')
@@ -292,18 +281,18 @@ describe('model picker state (task 13, M9d — the GUI can finally name a radio)
 describe('activeView / settingsSpec / settings (task 36, M8b-6)', () => {
 	it('activeView defaults to "channels"; setActiveView stores either value', () => {
 		expect(appState.activeView).toBe('channels')
-		appState.setActiveView('settings')
+		appState.activeView = 'settings'
 		expect(appState.activeView).toBe('settings')
-		appState.setActiveView('channels')
+		appState.activeView = 'channels'
 		expect(appState.activeView).toBe('channels')
 	})
 
-	it('settingsSpec starts null and stores whatever setSettingsSpec is given', () => {
+	it('settingsSpec starts null and stores whatever it is assigned', () => {
 		expect(appState.settingsSpec).toBeNull()
 		const spec = { Live: false, DescriptorVersion: 'v1', Menus: [{ ID: 'M1', Label: 'MENU ALPHA', Groups: [] }] }
-		appState.setSettingsSpec(spec)
+		appState.settingsSpec = spec
 		expect(appState.settingsSpec).toEqual(spec)
-		appState.setSettingsSpec(null)
+		appState.settingsSpec = null
 		expect(appState.settingsSpec).toBeNull()
 	})
 
@@ -316,7 +305,7 @@ describe('activeView / settingsSpec / settings (task 36, M8b-6)', () => {
 
 	it('clearConnection nulls settings (same working-copy content as codeplug) but leaves settingsSpec alone (mirrors uiSpec — meaningful offline)', () => {
 		const spec = { Live: false, DescriptorVersion: 'v1', Menus: [] }
-		appState.setSettingsSpec(spec)
+		appState.settingsSpec = spec
 		appState.setSettings({ HasSnapshot: true, Descriptor: 'v1', Complete: true, HasLegacy: false, Entries: [] })
 
 		appState.clearConnection()
@@ -326,9 +315,9 @@ describe('activeView / settingsSpec / settings (task 36, M8b-6)', () => {
 	})
 
 	it('disconnectConnection leaves BOTH settings and settingsSpec untouched — bindings.js refreshes settingsSpec separately, exactly like uiSpec', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		const spec = { Live: true, DescriptorVersion: 'v1', Menus: [] }
-		appState.setSettingsSpec(spec)
+		appState.settingsSpec = spec
 		const settings = { HasSnapshot: true, Descriptor: 'v1', Complete: true, HasLegacy: false, Entries: [{ ID: '990101', Value: 'ON', State: 'known' }] }
 		appState.setSettings(settings)
 
@@ -341,7 +330,7 @@ describe('activeView / settingsSpec / settings (task 36, M8b-6)', () => {
 
 describe('canReadSettings / readSettingsBlockedReason (task 36, M8b-6)', () => {
 	function makeReadyState() {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: false, BaselineStale: false })
 	}
 
@@ -364,7 +353,7 @@ describe('canReadSettings / readSettingsBlockedReason (task 36, M8b-6)', () => {
 	})
 
 	it('explains a missing codeplug once connected', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		expect(appState.canReadSettings).toBe(false)
 		expect(appState.readSettingsBlockedReason).toMatch(/read the radio|open a codeplug/i)
 	})
@@ -375,18 +364,18 @@ describe('issuesAdvisory (task 17; storage model superseded by Fix 5, adjudicate
 		expect(appState.issuesAdvisory).toBe(true)
 	})
 
-	it('setIssuesAdvisory stores the flag verbatim — it is no longer DERIVED from `connected` (Fix 5: connecting alone must not silently relabel stale offline issues as authoritative; only an actual Validate pass may)', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+	it('issuesAdvisory stores the flag verbatim — it is no longer DERIVED from `connected` (Fix 5: connecting alone must not silently relabel stale offline issues as authoritative; only an actual Validate pass may)', () => {
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		// Connecting alone does NOT flip it — a genuine caller (bindings.js's
 		// revalidateQuiet) must do that from a real ValidationView.
 		expect(appState.issuesAdvisory).toBe(true)
 
-		appState.setIssuesAdvisory(false)
+		appState.issuesAdvisory = false
 		expect(appState.issuesAdvisory).toBe(false)
 	})
 
 	it('clearConnection resets it back to true (advisory)', () => {
-		appState.setIssuesAdvisory(false)
+		appState.issuesAdvisory = false
 		appState.clearConnection()
 		expect(appState.issuesAdvisory).toBe(true)
 	})
@@ -459,7 +448,7 @@ describe('alerts', () => {
 
 describe('sendBlockedReason (task 18)', () => {
 	function makeReadyState() {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: false, BaselineStale: false })
 	}
 
@@ -480,7 +469,7 @@ describe('sendBlockedReason (task 18)', () => {
 	})
 
 	it('explains a missing codeplug once connected', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		expect(appState.sendBlockedReason).toMatch(/read the radio|open a codeplug/i)
 	})
 
@@ -518,10 +507,10 @@ describe('applyTransferDone marks the baseline stale after a send (task 18)', ()
 		expect(appState.codeplug.BaselineStale).toBe(false)
 	})
 
-	it('leaves BaselineStale alone for a read/diff transfer', () => {
+	it('leaves BaselineStale alone for a non-send transfer', () => {
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: false, BaselineStale: false })
-		appState.beginTransfer('diff')
-		appState.applyTransferDone({ Kind: 'diff', Outcome: 'ok', Report: null, Message: '' })
+		appState.beginTransfer('read')
+		appState.applyTransferDone({ Kind: 'read', Outcome: 'ok', Report: null, Message: '' })
 		expect(appState.codeplug.BaselineStale).toBe(false)
 	})
 
@@ -550,28 +539,28 @@ function specWithAmber(consented) {
 
 describe('unverifiedConsentDue — when the arming dialogue is owed (task 14)', () => {
 	it('is true after a real connect to a consent-eligible radio with no decision recorded', () => {
-		appState.setConnection(NEEDS_CONSENT)
+		appState.connection = NEEDS_CONSENT
 		expect(appState.unverifiedConsentDue).toBe(true)
 	})
 
 	it('is false once a decision is recorded — a DECLINE is a decision, so it is not re-asked', () => {
-		appState.setConnection({ ...NEEDS_CONSENT, UnverifiedConsentRecorded: true })
+		appState.connection = { ...NEEDS_CONSENT, UnverifiedConsentRecorded: true }
 		expect(appState.unverifiedConsentDue).toBe(false)
 	})
 
 	it('is false for a recorded GRANT too (the session is already armed — nothing to ask)', () => {
-		appState.setConnection({ ...NEEDS_CONSENT, UnverifiedConsentRecorded: true })
-		appState.setUISpec(specWithAmber(true))
+		appState.connection = { ...NEEDS_CONSENT, UnverifiedConsentRecorded: true }
+		appState.uiSpec = specWithAmber(true)
 		expect(appState.unverifiedConsentDue).toBe(false)
 	})
 
 	it('is false for a demo session, even one whose model would need consent on real hardware', () => {
-		appState.setConnection({ ...NEEDS_CONSENT, Demo: true })
+		appState.connection = { ...NEEDS_CONSENT, Demo: true }
 		expect(appState.unverifiedConsentDue).toBe(false)
 	})
 
 	it('is false for a radio whose writes are hardware-verified', () => {
-		appState.setConnection({ ...NEEDS_CONSENT, Model: 'FT-710', NeedsUnverifiedConsent: false })
+		appState.connection = { ...NEEDS_CONSENT, Model: 'FT-710', NeedsUnverifiedConsent: false }
 		expect(appState.unverifiedConsentDue).toBe(false)
 	})
 
@@ -582,9 +571,9 @@ describe('unverifiedConsentDue — when the arming dialogue is owed (task 14)', 
 
 describe('unverifiedWritesArmed — the amber indicator (task 14)', () => {
 	it('derives from uiSpec.UnverifiedWritesConsented and nothing else', () => {
-		appState.setUISpec(specWithAmber(true))
+		appState.uiSpec = specWithAmber(true)
 		expect(appState.unverifiedWritesArmed).toBe(true)
-		appState.setUISpec(specWithAmber(false))
+		appState.uiSpec = specWithAmber(false)
 		expect(appState.unverifiedWritesArmed).toBe(false)
 	})
 
@@ -596,9 +585,9 @@ describe('unverifiedWritesArmed — the amber indicator (task 14)', () => {
 		// A recorded grant on a connected, consent-eligible radio, but a spec
 		// whose capabilities carry no ConsentedUnverified: the session is not
 		// armed, so the badge must stay dark.
-		appState.setConnection({ ...NEEDS_CONSENT, UnverifiedConsentRecorded: true })
-		appState.setUnverifiedConsents([{ Model: 'FTdx10', NeedsConsent: true, Granted: true, Recorded: true, Warning: 'w' }])
-		appState.setUISpec(specWithAmber(false))
+		appState.connection = { ...NEEDS_CONSENT, UnverifiedConsentRecorded: true }
+		appState.unverifiedConsents = [{ Model: 'FTdx10', NeedsConsent: true, Granted: true, Recorded: true, Warning: 'w' }]
+		appState.uiSpec = specWithAmber(false)
 		expect(appState.unverifiedWritesArmed).toBe(false)
 	})
 })
@@ -616,7 +605,7 @@ describe('canChangeUnverifiedConsent — the busy guards (task 14)', () => {
 	})
 
 	it('is false while a send dialogue is open', () => {
-		appState.setSendDialogOpen(true)
+		appState.sendDialogOpen = true
 		expect(appState.canChangeUnverifiedConsent).toBe(false)
 		expect(appState.consentChangeBlockedReason).toMatch(/send/i)
 	})
@@ -637,30 +626,28 @@ describe('consent panel + prompt bookkeeping (task 14)', () => {
 		expect(appState.unverifiedConsentPrompt).toBeNull()
 	})
 
-	it('setUnverifiedConsents stores the rows verbatim; null/undefined becomes an empty list', () => {
+	it('stores the rows verbatim', () => {
 		const rows = [
 			{ Model: 'FT-710', NeedsConsent: false, Granted: false, Recorded: false, Warning: '' },
 			{ Model: 'FTdx10', NeedsConsent: true, Granted: true, Recorded: true, Warning: 'w' },
 		]
-		appState.setUnverifiedConsents(rows)
+		appState.unverifiedConsents = rows
 		expect(appState.unverifiedConsents).toEqual(rows)
-		appState.setUnverifiedConsents(null)
-		expect(appState.unverifiedConsents).toEqual([])
 	})
 
 	it('open/closeUnverifiedGrants toggle the always-reachable panel', () => {
 		expect(appState.unverifiedGrantsOpen).toBe(false)
 		appState.openUnverifiedGrants()
 		expect(appState.unverifiedGrantsOpen).toBe(true)
-		appState.closeUnverifiedGrants()
+		appState.unverifiedGrantsOpen = false
 		expect(appState.unverifiedGrantsOpen).toBe(false)
 	})
 
 	it('invalidatePreparedPlan bumps preparedPlanEpoch — the signal a prepared plan is stale', () => {
 		const before = appState.preparedPlanEpoch
-		appState.invalidatePreparedPlan()
+		appState.preparedPlanEpoch += 1
 		expect(appState.preparedPlanEpoch).toBe(before + 1)
-		appState.invalidatePreparedPlan()
+		appState.preparedPlanEpoch += 1
 		expect(appState.preparedPlanEpoch).toBe(before + 2)
 	})
 })

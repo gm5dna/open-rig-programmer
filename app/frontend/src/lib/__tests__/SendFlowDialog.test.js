@@ -90,7 +90,7 @@ function planFixture(overrides = {}) {
 
 beforeEach(() => {
 	appState.clearConnection()
-	appState.setUISpec(UI_SPEC)
+	appState.uiSpec = UI_SPEC
 	appState.alerts = []
 	vi.clearAllMocks()
 	confirmSendMock.mockResolvedValue(undefined)
@@ -159,7 +159,7 @@ describe('review phase', () => {
 	})
 
 	it('task 42: an empty served FirmwarePlaceholder leaves the input with no placeholder (no hardcoded fallback)', () => {
-		appState.setUISpec({ ...UI_SPEC, FirmwarePlaceholder: '' })
+		appState.uiSpec = { ...UI_SPEC, FirmwarePlaceholder: '' }
 		render(SendFlowDialog, { plan: planFixture({ FirmwareRequired: true, FirmwareGuidance: 'x' }), onClose: vi.fn(), onPrepareAgain: vi.fn() })
 		expect(screen.getByLabelText('Confirmed firmware version')).toHaveAttribute('placeholder', '')
 	})
@@ -266,7 +266,7 @@ describe('blocked-only informational state (task-25 brief)', () => {
 	})
 
 	it('task 42: an empty served EraseDialogNote skips the erase-procedure paragraph even for a blocked erase (no hardcoded fallback)', () => {
-		appState.setUISpec({ ...UI_SPEC, EraseDialogNote: '' })
+		appState.uiSpec = { ...UI_SPEC, EraseDialogNote: '' }
 		const plan = planFixture({
 			NothingToSend: true,
 			Diff: {

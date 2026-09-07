@@ -27,14 +27,8 @@ func cmdProbe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printProbeUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog probe: %v\n", err)
-		printProbeUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "probe", printProbeUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "rigprog probe: unexpected argument %q\n", fs.Arg(0))
@@ -42,27 +36,11 @@ func cmdProbe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return exitUsage
 	}
 
-	if !validateModel(stderr, "probe", *model, printProbeUsage) {
+	if !validateSessionArgs(stderr, "probe", *model, *port, *fake, printProbeUsage) {
 		return exitUsage
 	}
 
-	havePort := *port != ""
-	if havePort == *fake { // both true, or both false
-		fmt.Fprintln(stderr, "rigprog probe: exactly one of --port or --fake is required")
-		printProbeUsage(stderr)
-		return exitUsage
-	}
-
-	var (
-		sess     driver.Session
-		closeAll func() error
-		err      error
-	)
-	if *fake {
-		sess, closeAll, err = openFakeSession(ctx, *model)
-	} else {
-		sess, closeAll, err = openRealSession(ctx, *model, *port)
-	}
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
 	if err != nil {
 		var wrongRadio *driver.WrongRadioError
 		if errors.As(err, &wrongRadio) {

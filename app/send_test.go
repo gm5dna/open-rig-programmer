@@ -189,8 +189,8 @@ func TestPrepareSend_ConfirmSend_HappyPath(t *testing.T) {
 // ctx-check boundary before the hook runs), slot 2 is never attempted
 // (ctx.Err() is checked at the TOP of the loop, before slot 2's own
 // verify-read). No sleeps/timing races: the hook runs synchronously on
-// Execute's own goroutine, so calling ReadRadio/DiffAgainstRadio/
-// LoadFile/Disconnect from inside it deterministically observes svc's
+// Execute's own goroutine, so calling ReadRadio/LoadFile/Disconnect
+// from inside it deterministically observes svc's
 // op lock held (clone.ErrBusy) and a.transfer.running == true.
 func TestConfirmSend_CancelMidTransfer_AndBusyExclusion(t *testing.T) {
 	a, rec := newTestApp(t)
@@ -210,18 +210,13 @@ func TestConfirmSend_CancelMidTransfer_AndBusyExclusion(t *testing.T) {
 		hookFired = true
 
 		// Busy exclusion: svc's own op lock is held for the whole
-		// Execute call — a reentrant ReadRadio/DiffAgainstRadio on the
+		// Execute call — a reentrant ReadRadio on the
 		// SAME Service must be refused with a friendly *clone.BusyError
 		// wrap, not deadlock or silently interleave.
 		if _, err := a.ReadRadio(); err == nil {
 			busyErrs = append(busyErrs, fmt.Errorf("ReadRadio during transfer: got nil error, want a busy error"))
 		} else if !errors.Is(err, clone.ErrBusy) {
 			busyErrs = append(busyErrs, fmt.Errorf("ReadRadio during transfer: err = %v, want errors.Is(_, clone.ErrBusy)", err))
-		}
-		if _, err := a.DiffAgainstRadio(); err == nil {
-			busyErrs = append(busyErrs, fmt.Errorf("DiffAgainstRadio during transfer: got nil error, want a busy error"))
-		} else if !errors.Is(err, clone.ErrBusy) {
-			busyErrs = append(busyErrs, fmt.Errorf("DiffAgainstRadio during transfer: err = %v, want errors.Is(_, clone.ErrBusy)", err))
 		}
 
 		// App-level transfer-running guards (task-15 brief §2): these do

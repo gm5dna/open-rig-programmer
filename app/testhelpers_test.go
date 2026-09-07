@@ -208,7 +208,7 @@ func waitForEvent(t *testing.T, rec *eventRecorder, event string, timeout time.D
 
 // waitForTransferDone polls rec for a transfer:done event whose Kind
 // equals kind, up to timeout. Filters by Kind (not just event name)
-// because a busy ReadRadio/DiffAgainstRadio probe (see send_test.go's
+// because a busy ReadRadio probe (see send_test.go's
 // cancel-mid-transfer test, which deliberately calls both from inside
 // Execute's own progress hook) ALSO emits a transfer:done event (Kind
 // "read"/"diff") — waitForEvent's plain first-match would otherwise

@@ -12,41 +12,24 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/internal/buildinfo"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
-// cliGeneratorPrefix is the stable prefix a CLI-set Codeplug.Generator
-// always starts with (task-12 brief §1). What follows it is the build's
-// version — "dev" for any build the release pipeline did not stamp, so a
-// file written by a development build says so.
-const cliGeneratorPrefix = "rigprog/"
-
-// cliGeneratorID is what applyDefaultGenerator fills Codeplug.Generator
-// with, when it is empty. See applyDefaultGenerator's doc comment: as of
-// this task, clone.Service.ReadAll always sets Generator itself (to
+// cliGeneratorID is the stable "rigprog/"-prefixed Codeplug.Generator a
+// CLI-set file carries (task-12 brief §1) — "dev" for any build the
+// release pipeline did not stamp, so a file written by a development
+// build says so. clone.Service.ReadAll always sets Generator itself (to
 // "open-rig-programmer/core/clone", never empty — core/clone/service.go's
-// generatorID), so in practice this value is never observed in a file
-// this command writes; it exists to honour task-12 brief §1's "if and
-// only if the service leaves it empty" rule defensively, in case that
-// changes. The offline "import" path, by contrast, sets it directly and
-// IS observed (import.go).
+// generatorID), so cmdRead's own "if empty" fill below is never observed
+// in practice; it exists defensively, per task-12 brief §1's "if and only
+// if the service leaves it empty" rule, in case that changes. The offline
+// "import" path, by contrast, sets it directly and IS observed
+// (import.go).
 //
 // A var rather than a const because buildinfo.Version() is only known at
 // link time; it is assigned once at init and never written again.
-var cliGeneratorID = cliGeneratorPrefix + buildinfo.Version()
-
-// applyDefaultGenerator sets cp.Generator to cliGeneratorID if and only
-// if it is currently empty (task-12 brief §1) — it must never overwrite
-// a Generator the read already populated. See cliGeneratorID's doc
-// comment for why this branch is not reachable via any wiring this
-// package currently offers.
-func applyDefaultGenerator(cp *codeplug.Codeplug) {
-	if cp.Generator == "" {
-		cp.Generator = cliGeneratorID
-	}
-}
+var cliGeneratorID = "rigprog/" + buildinfo.Version()
 
 // countPopulated returns how many of channels are populated (see
 // codeplug.Channel.Empty).
@@ -118,14 +101,8 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	force := fs.Bool("force", false, "overwrite --out if it already exists")
 	snapshotDirFlag := fs.String("snapshot-dir", "", "snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printReadUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog read: %v\n", err)
-		printReadUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "read", printReadUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "rigprog read: unexpected argument %q\n", fs.Arg(0))
@@ -133,14 +110,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	if !validateModel(stderr, "read", *model, printReadUsage) {
-		return exitUsage
-	}
-
-	havePort := *port != ""
-	if havePort == *fake { // both true, or both false
-		fmt.Fprintln(stderr, "rigprog read: exactly one of --port or --fake is required")
-		printReadUsage(stderr)
+	if !validateSessionArgs(stderr, "read", *model, *port, *fake, printReadUsage) {
 		return exitUsage
 	}
 	if *out == "" {
@@ -175,15 +145,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
-	var (
-		sess     driver.Session
-		closeAll func() error
-	)
-	if *fake {
-		sess, closeAll, err = openFakeSession(ctx, *model)
-	} else {
-		sess, closeAll, err = openRealSession(ctx, *model, *port)
-	}
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
 	if err != nil {
 		if isCancelled(err) {
 			fmt.Fprintln(stderr, "rigprog read: cancelled")
@@ -210,7 +172,12 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
-	applyDefaultGenerator(cp)
+	// See cliGeneratorID's doc comment: never observed in practice, since
+	// ReadAll always sets Generator itself, but kept as a defensive
+	// "if and only if empty" fill.
+	if cp.Generator == "" {
+		cp.Generator = cliGeneratorID
+	}
 
 	// task-34 brief: --settings is opt-in and runs AFTER the channel
 	// ReadAll above — the default (no flag) path above is completely

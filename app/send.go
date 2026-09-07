@@ -66,7 +66,7 @@ func (a *App) progressCallback() clone.Progress {
 }
 
 // emitDone emits transfer:done exactly once for one ReadRadio/
-// DiffAgainstRadio/ReadSettingsRadio call or one ConfirmSend transfer
+// ReadSettingsRadio call or one ConfirmSend transfer
 // (task-15 brief §2; ReadSettingsRadio added by task 35).
 func (a *App) emitDone(kind, outcome string, report *ReportView, message string) {
 	a.emit("transfer:done", TransferDoneEvent{Kind: kind, Outcome: outcome, Report: report, Message: message})
@@ -242,7 +242,7 @@ func (a *App) firmwareRequiredLocked() bool {
 // PrepareSend builds a send plan (svc.PrepareSend against a DEEP COPY of
 // working) and stores it as the active plan for a subsequent ConfirmSend.
 // Synchronous: it does not emit transfer:done (only ReadRadio/
-// DiffAgainstRadio/ConfirmSend's async transfer do — see
+// ConfirmSend's async transfer do — see
 // TransferDoneEvent.Kind's doc comment), but DOES emit transfer:progress
 // during PrepareSend's own internal fresh read.
 //
@@ -261,7 +261,7 @@ func (a *App) firmwareRequiredLocked() bool {
 // PrepareSend would still leave open). The pre-existing explicit
 // transfer.running check is kept EXACTLY as before (still ErrTransferRunning,
 // checked before the new reservation) — see reserveOpLocked's doc
-// comment for why this method alone (unlike ReadRadio/DiffAgainstRadio/
+// comment for why this method alone (unlike ReadRadio/
 // ReadSettingsRadio) has always special-cased a running send this way.
 func (a *App) PrepareSend() (SendPlanView, error) {
 	a.mu.Lock()
@@ -375,12 +375,12 @@ func (a *App) ConfirmSend(confirmationDigest, firmware string) error {
 	}
 	// Fix 2 (adjudicated HIGH, Codex M6 #2): ConfirmSend is one of the
 	// four operations the remedy names as reserving/respecting the
-	// App-level exclusive-operation slot ("ReadRadio, DiffAgainstRadio,
+	// App-level exclusive-operation slot ("ReadRadio,
 	// PrepareSend, and ConfirmSend reserve exclusively" — that adjudicated
 	// text predates task 35, which added a fifth holder, ReadSettingsRadio,
 	// to the same reservation; the quote is left verbatim as the
 	// historical record) — refused if a concurrently-running ReadRadio/
-	// DiffAgainstRadio/PrepareSend/ReadSettingsRadio holds a.opBusy, so a
+	// PrepareSend/ReadSettingsRadio holds a.opBusy, so a
 	// NEW PrepareSend can never race a ConfirmSend still acting on an
 	// OLDER plan.
 	if a.opBusy != "" {

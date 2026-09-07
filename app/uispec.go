@@ -81,53 +81,22 @@ func bankCoreFields(caps spec.Capabilities, id spec.BankID) []spec.Field {
 // bankReadOnly reports whether the bank identified by id is READ-ONLY as
 // a PERMANENT protocol fact: true iff every field in that bank's derived
 // core set (bankCoreFields) has Write == spec.Unsupported. A bank whose
-// derived set is EMPTY — nothing the grid edits exists in this radio's
-// frame there at all, which is also what an absent bank looks like — is
-// vacuously read-only, and rightly: there is nothing to type into.
+// derived set is EMPTY is vacuously read-only — there is nothing to type
+// into.
 //
-// This is deliberately NOT "has this field been hardware-verified yet".
-// spec.Unverified — documented in the manual/assumed by analogy, but
-// not proven against a physical FT-710 — is a DIFFERENT state from
-// spec.Unsupported (the radio structurally cannot accept a write here
-// at all, e.g. the discovered 60m/EMG banks, whose Write is
-// unconditionally forced to Unsupported by
-// core/driver/ft710.effectiveCapabilities, on every profile, verified
-// or not); and so is spec.Inert (the M5b-added transmitted-but-ignored
-// state the clarifier now carries — an Inert column stays editable
-// too, with a CHANGED value caught at send time by codeplug.Diff, not
-// by locking the cell); and so, a fortiori, is spec.ConsentedUnverified
-// (a consented session's write label — a state the user has explicitly
-// asked to be able to write, which could hardly justify locking the
-// cell, and which this Write != Unsupported test admits for the same
-// reason it admits the other three). Treating Unverified as ReadOnly would have
-// locked MEM/PMS editing before the very M5b hardware trials that
-// unlocked it (13/07/2026: writeTrialsComplete flipped;
-// core/driver/ft710/caps.go) — breaking the offline clone workflow this
-// project exists for. Send-time write gating
-// (spec.FieldSupport.CanWrite, false for Unverified and Inert alike) is
-// a separate, already-enforced concern (codeplug.Diff, clone.Service,
-// Session.WriteChannel) — this derivation only answers "can the grid
-// let the user type into this cell at all", not "will a send actually
-// reach the radio".
-//
-// M9c-6 divergence, recorded rather than silently resolved: the milestone
-// spec's D5a states as a CONSEQUENCE that a real (RealHardware-profile)
-// FTdx10 yields ReadOnly true on every bank — "a read-only grid pre-trials
-// is CORRECT". Under the rule above it does not, and cannot: that
-// profile's MEM/PMS fields are Write spec.Unverified
-// (core/driver/ftdx10's writeTrialsComplete is false, so RealHardware
-// selects CapabilitiesUnverified), Unverified is not Unsupported, and the
-// paragraph above is the standing adjudication that says so. Making the
-// spec's sentence true would mean re-testing on CanWrite() instead —
-// reversing that adjudication for every radio, re-locking the FT-710's own
-// fail-safe profile, and contradicting this package's own pinned case
-// ("all Unverified -> not read-only (awaiting hardware trials, not
-// locked)", TestBankReadOnly_Table). D5a's operative rule changes the
-// candidate SET only, so the set is all this implements; the observed
-// per-bank verdicts for a registered FTdx10 are pinned exactly as they
-// are by TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile, and which
-// of the two rules the project wants is an adjudication, not an
-// implementation detail.
+// Deliberately NOT "has this field been hardware-verified yet":
+// spec.Unverified (documented/assumed, not yet proven on hardware) is a
+// DIFFERENT state from spec.Unsupported (the radio structurally cannot
+// accept a write here at all), so an Unverified field stays editable
+// here — send-time write gating (spec.FieldSupport.CanWrite, false for
+// Unverified) is the separate, already-enforced concern (codeplug.Diff,
+// clone.Service, Session.WriteChannel) that decides whether a send
+// actually reaches the radio. spec.Inert and spec.ConsentedUnverified
+// fields stay editable for the same reason: this derivation only
+// answers "can the grid let the user type into this cell at all". See
+// TestBankReadOnly_Table and
+// TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile for the pinned
+// per-state/per-bank verdicts this contract implies.
 func bankReadOnly(caps spec.Capabilities, id spec.BankID) bool {
 	for _, f := range bankCoreFields(caps, id) {
 		if caps.FieldSupport(id, f).Write != spec.Unsupported {

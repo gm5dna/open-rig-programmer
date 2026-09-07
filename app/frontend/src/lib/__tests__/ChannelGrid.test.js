@@ -129,7 +129,7 @@ function codeplugFixture() {
 
 beforeEach(() => {
 	appState.clearConnection()
-	appState.setUISpec(UI_SPEC)
+	appState.uiSpec = UI_SPEC
 	appState.setCodeplug(codeplugFixture())
 	appState.setIssues([])
 	appState.alerts = []
@@ -206,10 +206,10 @@ describe('bank tabs', () => {
 
 describe('rows and cells', () => {
 	it('renders only receiver columns named by the active bank', () => {
-		appState.setUISpec({
+		appState.uiSpec = {
 			...UI_SPEC,
 			Banks: UI_SPEC.Banks.map((bank, i) => ({ ...bank, Fields: i === 0 ? ['antenna'] : [] })),
-		})
+		}
 		render(ChannelGrid)
 		expect(screen.getByRole('columnheader', { name: 'Antenna' })).toBeInTheDocument()
 		expect(screen.queryByRole('columnheader', { name: 'Tuning step' })).not.toBeInTheDocument()
@@ -267,7 +267,7 @@ describe('rows and cells', () => {
 	})
 
 	it('task 42: an empty served PreservationTooltips renders no tooltip text, not a hardcoded fallback', () => {
-		appState.setUISpec({ ...UI_SPEC, PreservationTooltips: { Tone: '', ScanSkip: '' } })
+		appState.uiSpec = { ...UI_SPEC, PreservationTooltips: { Tone: '', ScanSkip: '' } }
 		const { container } = render(ChannelGrid)
 		expect(cell(container, 0, TONE).getAttribute('title')).toBe('')
 		expect(cell(container, 0, SKIP).getAttribute('title')).toBe('')
@@ -625,12 +625,12 @@ describe('read-only banks', () => {
 
 describe('issue decoration', () => {
 	it('outlines an error cell red (connected) with the message as tooltip, and marks the row', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		// Fix 5 (adjudicated MED, Codex M6 #5): issuesAdvisory is now STORED
 		// (from a real Validate pass), not derived from `connected` — a
 		// connected caller (bindings.js's revalidateQuiet) sets it
 		// explicitly; this test drives appState directly, so it must too.
-		appState.setIssuesAdvisory(false)
+		appState.issuesAdvisory = false
 		appState.setIssues([{ Slot: '001', Field: 'frequency', Severity: 'error', Msg: 'slot "001": bad frequency' }])
 		const { container } = render(ChannelGrid)
 
@@ -641,8 +641,8 @@ describe('issue decoration', () => {
 	})
 
 	it('outlines a warning amber', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
-		appState.setIssuesAdvisory(false)
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
+		appState.issuesAdvisory = false
 		appState.setIssues([{ Slot: '001', Field: 'tag', Severity: 'warning', Msg: 'slot "001": odd tag' }])
 		const { container } = render(ChannelGrid)
 		expect(cell(container, 0, TAG).classList.contains('cell-issue-warn')).toBe(true)
@@ -695,7 +695,7 @@ describe('channel delete (task 22)', () => {
 	})
 
 	it('task 42: an empty served EraseDialogNote skips the erase-procedure paragraph entirely (no hardcoded fallback)', async () => {
-		appState.setUISpec({ ...UI_SPEC, EraseDialogNote: '' })
+		appState.uiSpec = { ...UI_SPEC, EraseDialogNote: '' }
 		render(ChannelGrid)
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete M-01' }))
 		expect(screen.getByText('Clear M-01 in this file?')).toBeInTheDocument()
@@ -752,8 +752,8 @@ describe('channel delete (task 22)', () => {
 	})
 
 	it('deleting M-01 (RequiredSlots) sends the empty channel and the grid shows the resulting blocking issue', async () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
-		appState.setIssuesAdvisory(false)
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
+		appState.issuesAdvisory = false
 		updateChannelMock.mockImplementation(async (ch) => {
 			appState.applyChannelEdits([ch])
 			const issues = [{ Slot: '001', Field: '', Severity: 'error', Msg: 'required slot "001" must not be empty' }]
@@ -1096,14 +1096,14 @@ describe('legend (task 22 §3: Tone/Scan-skip discoverability)', () => {
 	})
 
 	it('task 42: an empty served GridLegendNote leaves ToneScanSkipVerification rendering alone, with no hardcoded fallback for either sentence', () => {
-		appState.setUISpec({ ...UI_SPEC, GridLegendNote: '' })
+		appState.uiSpec = { ...UI_SPEC, GridLegendNote: '' }
 		render(ChannelGrid)
 		expect(screen.queryByText(/aren't carried by the FT-710's CAT protocol/)).not.toBeInTheDocument()
 		expect(screen.getByText(/hardware-verified for Tone/)).toBeInTheDocument()
 	})
 
 	it('m42a: an empty served ToneScanSkipVerification leaves GridLegendNote rendering alone, with no hardcoded fallback for either sentence', () => {
-		appState.setUISpec({ ...UI_SPEC, ToneScanSkipVerification: '' })
+		appState.uiSpec = { ...UI_SPEC, ToneScanSkipVerification: '' }
 		render(ChannelGrid)
 		expect(screen.getByText(/aren't carried by the FT-710's CAT protocol/)).toBeInTheDocument()
 		expect(screen.queryByText(/hardware-verified for Tone/)).not.toBeInTheDocument()
@@ -1161,7 +1161,7 @@ describe('empty states', () => {
 	})
 
 	it('explains a missing UISpec instead of rendering a broken grid', () => {
-		appState.setUISpec(null)
+		appState.uiSpec = null
 		render(ChannelGrid)
 		expect(screen.getByText('Grid layout unavailable')).toBeInTheDocument()
 	})
@@ -1296,7 +1296,7 @@ const IP_PLUS = 23
 
 describe('tier-column editing', () => {
 	beforeEach(() => {
-		appState.setUISpec(TIER_UI_SPEC)
+		appState.uiSpec = TIER_UI_SPEC
 		appState.setCodeplug({
 			Schema: 1,
 			Generator: 'test',
@@ -1516,7 +1516,7 @@ describe('tier-column editing', () => {
 	})
 
 	it('a Known tone cell with NO served tone list edits as free text, opening on its own display spelling', async () => {
-		appState.setUISpec(TIER_UI_SPEC_NO_TONES)
+		appState.uiSpec = TIER_UI_SPEC_NO_TONES
 		appState.setCodeplug({
 			Schema: 1,
 			Generator: 'test',
@@ -1553,7 +1553,7 @@ describe('tier-column editing', () => {
 	})
 
 	it('an UNANSWERED tone cell with no served tone list opens the free-text editor empty', async () => {
-		appState.setUISpec(TIER_UI_SPEC_NO_TONES)
+		appState.uiSpec = TIER_UI_SPEC_NO_TONES
 		const { container } = render(ChannelGrid)
 		const cellEl = cell(container, 0, TONE_RX)
 		cellEl.focus()
@@ -1797,10 +1797,10 @@ describe('tier-column editing', () => {
 	})
 
 	it('a read-only bank opens no tier editor', async () => {
-		appState.setUISpec({
+		appState.uiSpec = {
 			...TIER_UI_SPEC,
 			Banks: [{ ...TIER_UI_SPEC.Banks[0], ReadOnly: true }],
-		})
+		}
 		const { container } = render(ChannelGrid)
 		const cellEl = cell(container, 0, DUPLEX)
 		cellEl.focus()

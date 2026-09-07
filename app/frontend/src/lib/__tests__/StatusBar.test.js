@@ -11,7 +11,7 @@ function resetState() {
 	appState.setDirty(false)
 	// clearConnection deliberately leaves appVersion alone (it is not
 	// connection-scoped), so reset it here or it leaks between tests.
-	appState.setAppVersion(null)
+	appState.appVersion = null
 }
 
 beforeEach(() => {
@@ -92,7 +92,7 @@ describe('StatusBar', () => {
 		})
 
 		it('renders the backend-composed Display verbatim for a release build', () => {
-			appState.setAppVersion({ Version: 'v1.0.0', Display: 'v1.0.0', IsRelease: true })
+			appState.appVersion = { Version: 'v1.0.0', Display: 'v1.0.0', IsRelease: true }
 			render(StatusBar)
 
 			const chip = screen.getByTestId('app-version')
@@ -101,11 +101,11 @@ describe('StatusBar', () => {
 		})
 
 		it('renders the unreleased-build wording from Go, not composed here', () => {
-			appState.setAppVersion({
+			appState.appVersion = {
 				Version: 'dev',
 				Display: 'dev (unreleased build)',
 				IsRelease: false,
-			})
+			}
 			render(StatusBar)
 
 			const chip = screen.getByTestId('app-version')
@@ -117,11 +117,11 @@ describe('StatusBar', () => {
 			// The frontend must not reconstruct the string from Version +
 			// IsRelease: a future backend wording change lands here with no
 			// JS edit at all.
-			appState.setAppVersion({
+			appState.appVersion = {
 				Version: 'v2.3.4',
 				Display: 'v2.3.4 — release candidate',
 				IsRelease: true,
-			})
+			}
 			render(StatusBar)
 			expect(screen.getByTestId('app-version')).toHaveTextContent('v2.3.4 — release candidate')
 		})

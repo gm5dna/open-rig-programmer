@@ -13,28 +13,11 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
-// openRealSession, openFakeSession, and validateModel used to be defined
-// in this file alongside ft710Model/newRegistry/newRealDriver
-// (task-11/task-12), then task-15 extracted the session-construction
-// plumbing into internal/wiring so app/ (the M6 GUI) could share it. Task
-// 40 (M9a-4, the CLI neutralisation) migrated this file's own two
-// aliases off internal/wiring's Task-39 compatibility wrappers
-// (wiring.OpenRealSession/wiring.OpenFakeSession, which were
-// DefaultModel-only and returned the concrete *ft710.Session) onto the
-// model-keyed wiring.OpenRealSessionFor/wiring.OpenFakeSessionFor, which
-// return driver.Session — so cmd/rigprog no longer needs to import
-// core/driver/ft710 at all. Task 41 (M9a-5, app/'s own neutralisation)
-// migrated app/ off those same wrappers too and, once grep confirmed
-// nothing anywhere still called them, deleted the wrappers and their
-// UnexpectedSessionTypeError/UnexpectedFakeSessionTypeError types from
-// internal/wiring outright.
-//
-// newRegistry/newRealDriver, this file's own thin aliases of
-// internal/wiring's NewRegistry/NewRealDriver, were untouched by that
-// migration but had already gone unused by any caller (openRealSession
-// and openFakeSession call wiring.NewRegistry/wiring.NewRealDriver
-// directly via wiring.OpenRealSessionFor/wiring.OpenFakeSessionFor) —
-// task 44 deleted both, confirmed dead by grep repo-wide first.
+// openRealSession/openFakeSession open a session via internal/wiring's
+// model-keyed OpenRealSessionFor/OpenFakeSessionFor (returning
+// driver.Session, never a concrete *ft710.Session, so this file needs no
+// core/driver/ft710 import), translating its typed errors back to this
+// command's own wording — see openRealSession's doc comment.
 
 // userConfigPath resolves this machine's shared settings file — the store
 // holding the user's recorded consent decisions (internal/userconfig). It is
@@ -124,23 +107,10 @@ func openRealSession(ctx context.Context, model, portPath string) (driver.Sessio
 	}
 
 	sess, closer, err := openRealSessionWith(ctx, model, portPath, opts)
-	if err == nil {
-		return sess, closer, nil
+	if err != nil {
+		return nil, nil, translateWiringErr(err)
 	}
-
-	var regErr *wiring.RegisterDriverError
-	if errors.As(err, &regErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: register driver: %w", regErr.Cause)
-	}
-	var serialErr *wiring.OpenSerialError
-	if errors.As(err, &serialErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: open serial port %q: %w", serialErr.Port, serialErr.Cause)
-	}
-	var sessionErr *wiring.OpenSessionError
-	if errors.As(err, &sessionErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: open session on %q: %w", sessionErr.Port, sessionErr.Cause)
-	}
-	return nil, nil, err
+	return sess, closer, nil
 }
 
 // openFakeSession opens a session against a fresh in-process
@@ -150,19 +120,40 @@ func openRealSession(ctx context.Context, model, portPath string) (driver.Sessio
 // openRealSession's doc comment for the full rationale).
 func openFakeSession(ctx context.Context, model string) (driver.Session, func() error, error) {
 	sess, closer, err := wiring.OpenFakeSessionFor(ctx, model)
-	if err == nil {
-		return sess, closer, nil
+	if err != nil {
+		return nil, nil, translateWiringErr(err)
 	}
+	return sess, closer, nil
+}
 
+// translateWiringErr reconstructs internal/wiring's typed session-open
+// errors into this command's ORIGINAL, pre-extraction wording (Fix 7 —
+// see openRealSession's doc comment for the full rationale). Shared by
+// openRealSession/openFakeSession: only RegisterDriverError is common to
+// both (the registry failure can arise transitively via
+// internal/wiring.NewRegistry inside either OpenRealSessionFor or
+// OpenFakeSessionFor) — checking every case unconditionally is harmless,
+// since a fake session never produces OpenSerialError/OpenSessionError,
+// and a real one never produces OpenFakeSessionError. Returns err
+// unchanged if none match.
+func translateWiringErr(err error) error {
 	var regErr *wiring.RegisterDriverError
 	if errors.As(err, &regErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: register driver: %w", regErr.Cause)
+		return fmt.Errorf("cmd/rigprog: register driver: %w", regErr.Cause)
+	}
+	var serialErr *wiring.OpenSerialError
+	if errors.As(err, &serialErr) {
+		return fmt.Errorf("cmd/rigprog: open serial port %q: %w", serialErr.Port, serialErr.Cause)
+	}
+	var sessionErr *wiring.OpenSessionError
+	if errors.As(err, &sessionErr) {
+		return fmt.Errorf("cmd/rigprog: open session on %q: %w", sessionErr.Port, sessionErr.Cause)
 	}
 	var openErr *wiring.OpenFakeSessionError
 	if errors.As(err, &openErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: open fake session: %w", openErr.Cause)
+		return fmt.Errorf("cmd/rigprog: open fake session: %w", openErr.Cause)
 	}
-	return nil, nil, err
+	return err
 }
 
 // validateModel checks model against wiring.SupportedModels(), printing a
@@ -187,4 +178,37 @@ func validateModel(stderr io.Writer, cmdName, model string, printUsage func(io.W
 	fmt.Fprintf(stderr, "rigprog %s: %v\n", cmdName, err)
 	printUsage(stderr)
 	return false
+}
+
+// validateSessionArgs validates --model (validateModel) and requires
+// exactly one of --port/--fake — probe/read/diff/write's shared
+// pre-flight check, run before any side-effecting step (a directory
+// created, a session opened). Returns false after writing a usage
+// diagnostic to stderr (an unknown --model, or neither/both of port and
+// fake); the caller returns exitUsage immediately, exactly as each of
+// these commands did by hand before this helper existed.
+func validateSessionArgs(stderr io.Writer, cmdName, model, port string, fake bool, printUsage func(io.Writer)) bool {
+	if !validateModel(stderr, cmdName, model, printUsage) {
+		return false
+	}
+	havePort := port != ""
+	if havePort == fake { // both true, or both false
+		fmt.Fprintf(stderr, "rigprog %s: exactly one of --port or --fake is required\n", cmdName)
+		printUsage(stderr)
+		return false
+	}
+	return true
+}
+
+// openSession opens a real or fake session per fake, once
+// validateSessionArgs has already approved --model/--port/--fake — the
+// fake-or-real branch every radio-touching subcommand repeats. Error
+// interpretation (probe's own WrongRadioError handling, read/diff/
+// write's own isCancelled handling) differs per caller, so it stays at
+// each call site, unchanged.
+func openSession(ctx context.Context, model, port string, fake bool) (driver.Session, func() error, error) {
+	if fake {
+		return openFakeSession(ctx, model)
+	}
+	return openRealSession(ctx, model, port)
 }

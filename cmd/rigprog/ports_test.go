@@ -16,8 +16,9 @@ func TestCmdPorts_FakeRejected(t *testing.T) {
 	if got != exitUsage {
 		t.Errorf("cmdPorts([--fake]) = %d, want exitUsage (%d)", got, exitUsage)
 	}
-	if !strings.Contains(stderr.String(), "--fake") {
-		t.Errorf("stderr = %q, want it to mention --fake", stderr.String())
+	const wantTop = `rigprog ports: --fake is not accepted (ports enumerates real serial devices only; use "rigprog probe --fake" to exercise the simulator)`
+	if top, _, _ := strings.Cut(stderr.String(), "\n"); top != wantTop {
+		t.Errorf("stderr top line = %q, want %q", top, wantTop)
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty on a usage error", stdout.String())

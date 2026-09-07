@@ -35,7 +35,7 @@
 //   - `transfer.active` is NOT driven solely by transfer:progress/
 //     transfer:done — see bindings.js's module doc comment for why
 //     ConfirmSend is a special case (it starts a background transfer and
-//     returns immediately; ReadRadio/DiffAgainstRadio/PrepareSend block
+//     returns immediately; ReadRadio/PrepareSend block
 //     until their own call settles).
 
 /** @typedef {import('../../../wailsjs/go/models').main.PortEntry} PortEntry */
@@ -311,9 +311,9 @@ class AppState {
 	 * invalidation, not just the first. */
 	preparedPlanEpoch = $state(0)
 
-	/** In-flight transfer state, spanning ReadRadio/DiffAgainstRadio/
-	 * PrepareSend/ConfirmSend/ReadSettingsRadio. `kind` is one of 'read'|
-	 * 'diff'|'prepare'|'send'|'settings'|null — 'prepare' is a
+	/** In-flight transfer state, spanning ReadRadio/PrepareSend/
+	 * ConfirmSend/ReadSettingsRadio. `kind` is one of 'read'|
+	 * 'prepare'|'send'|'settings'|null — 'prepare' is a
 	 * bindings.js-local addition (PrepareSend has no Kind of its own in
 	 * transfer:done, since it never emits one); 'settings' mirrors
 	 * ReadSettingsRadio's own transfer:done Kind (task 36, M8b-6).
@@ -485,36 +485,9 @@ class AppState {
 		this.portsLoading = loading
 	}
 
-	/** @param {PortEntry[]} ports */
-	setPorts(ports) {
-		this.ports = ports ?? []
-	}
-
 	/** @param {boolean} connecting */
 	setConnecting(connecting) {
 		this.connecting = connecting
-	}
-
-	/** Task 13 (M9d) — the model picker's list, exactly as
-	 * GetSupportedModels returned it. Null/undefined becomes an empty
-	 * array (mirrors setPorts): the picker always iterates an array.
-	 * @param {string[] | null} models */
-	setSupportedModels(models) {
-		this.supportedModels = models ?? []
-	}
-
-	/** Task 13 (M9d) — the user's chosen radio; '' means the default model
-	 * (see `selectedModel`'s own doc comment). A null/undefined choice
-	 * (a `<select>` with no value) becomes '' rather than being stored:
-	 * the connect path takes a string.
-	 * @param {string | null} model */
-	setSelectedModel(model) {
-		this.selectedModel = model ?? ''
-	}
-
-	/** @param {ConnectionInfo | null} info */
-	setConnection(info) {
-		this.connection = info
 	}
 
 	/** Resets everything scoped to one connection: connection info, the
@@ -531,16 +504,16 @@ class AppState {
 	 * the SAME working copy's content, so a full reset must clear both
 	 * together. `settingsSpec` is deliberately left alone, mirroring
 	 * `uiSpec`'s own "meaningful offline, not connection-scoped" treatment
-	 * (see that field's doc comment) — test files that need it null call
-	 * setSettingsSpec(null) themselves, exactly as they already do for
+	 * (see that field's doc comment) — test files that need it null set
+	 * settingsSpec themselves, exactly as they already do for
 	 * uiSpec. `activeView` is untouched too: it is not connection- or
 	 * working-copy-scoped at all.
 	 *
 	 * Task 13 (M9d): neither is the model picker's state —
 	 * `supportedModels` is a property of the BUILD, and `selectedModel` is
 	 * the user's own pending choice, which must survive so a reconnect
-	 * offers the radio they picked. Test files that want either reset call
-	 * its setter themselves, exactly as they already do for uiSpec. */
+	 * offers the radio they picked. Test files that want either reset assign
+	 * it directly themselves, exactly as they already do for uiSpec. */
 	clearConnection() {
 		this.connection = null
 		this.codeplug = null
@@ -595,33 +568,6 @@ class AppState {
 		this.issues = issues ?? []
 	}
 
-	/** @param {boolean} advisory */
-	setIssuesAdvisory(advisory) {
-		this.issuesAdvisory = advisory
-	}
-
-	/** @param {UISpecView | null} spec */
-	setUISpec(spec) {
-		this.uiSpec = spec
-	}
-
-	/** @param {VersionView | null} version */
-	setAppVersion(version) {
-		this.appVersion = version
-	}
-
-	/** Task 36 (M8b-6) — the Channels|Settings view switch. Pure frontend
-	 * state; see `activeView`'s own doc comment.
-	 * @param {'channels' | 'settings'} view */
-	setActiveView(view) {
-		this.activeView = view
-	}
-
-	/** @param {SettingsSpecView | null} spec */
-	setSettingsSpec(spec) {
-		this.settingsSpec = spec
-	}
-
 	/** @param {SettingsView | null} settings */
 	setSettings(settings) {
 		this.settings = settings
@@ -645,22 +591,8 @@ class AppState {
 		this.dirty = dirty
 	}
 
-	/** Updates the loaded codeplug's WorkingPath (Fix 4, adjudicated MED,
-	 * Codex M6 #4) — used after a successful Save As, whose own return
-	 * value is just the chosen path; without this, appState.codeplug.
-	 * WorkingPath stayed stale, so the title bar kept showing "Untitled"
-	 * (App.svelte derives the title from it) and a subsequent plain Save
-	 * wrongly reopened the Save As dialogue (ActionBar's handleSave
-	 * branches on WorkingPath being non-empty). A no-op if nothing is
-	 * loaded (should not happen — SaveFileAs itself requires a working
-	 * copy — but mirrors applyChannelEdits' same defensive null check).
-	 * @param {string} path */
-	setWorkingPath(path) {
-		if (this.codeplug !== null) this.codeplug.WorkingPath = path
-	}
-
-	/** Marks a transfer as starting. `kind` is 'read'|'diff'|'prepare'|
-	 * 'send'. Resets progress to zero so a stale reading from a previous
+	/** Marks a transfer as starting. `kind` is 'read'|'prepare'|'send'|
+	 * 'settings'. Resets progress to zero so a stale reading from a previous
 	 * transfer never flashes before the first real progress event. Also
 	 * clears `lastOutcome` — a new operation supersedes whatever the
 	 * previous one left behind, so a consumer keyed on lastOutcome (e.g.
@@ -680,7 +612,7 @@ class AppState {
 
 	/** Clears the active flag without touching kind/lastOutcome — used
 	 * when a call settles with no transfer:done coming (ReadRadio/
-	 * DiffAgainstRadio/PrepareSend on completion; ConfirmSend only on a
+	 * PrepareSend on completion; ConfirmSend only on a
 	 * synchronous pre-flight rejection, since a successful ConfirmSend
 	 * call hands off to the eventual transfer:done event instead). */
 	endTransfer() {
@@ -733,36 +665,9 @@ class AppState {
 		this.unverifiedConsentPrompt = view
 	}
 
-	/** Task 14 (M9d) — the grants panel's rows, exactly as
-	 * ListUnverifiedWriteConsents returned them (never re-sorted or
-	 * filtered here: hardware-verified models are LISTED, so a user
-	 * looking for a radio finds it and is told there is nothing to
-	 * decide). Null/undefined becomes an empty array, mirroring setPorts.
-	 * @param {UnverifiedWriteConsentView[] | null} rows */
-	setUnverifiedConsents(rows) {
-		this.unverifiedConsents = rows ?? []
-	}
-
 	/** Task 14 (M9d) — opens the always-reachable grants panel. */
 	openUnverifiedGrants() {
 		this.unverifiedGrantsOpen = true
-	}
-
-	/** Task 14 (M9d) — closes the grants panel. */
-	closeUnverifiedGrants() {
-		this.unverifiedGrantsOpen = false
-	}
-
-	/** Task 14 (M9d) — see `sendDialogOpen`.
-	 * @param {boolean} open */
-	setSendDialogOpen(open) {
-		this.sendDialogOpen = open
-	}
-
-	/** Task 14 (M9d) — see `preparedPlanEpoch`: announces that any
-	 * already-prepared send plan is now unspendable. */
-	invalidatePreparedPlan() {
-		this.preparedPlanEpoch += 1
 	}
 
 	/** Pushes a dismissible alert (see AlertStrip.svelte) and returns its

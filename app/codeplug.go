@@ -130,7 +130,7 @@ func (a *App) applyEditsLocked(chs []codeplug.Channel) (EditResult, error) {
 
 // UpdateChannel applies one channel edit to the working copy. Refused
 // with a typed busy error while Fix 2's reservation is held by a
-// concurrently-running ReadRadio/DiffAgainstRadio/PrepareSend/
+// concurrently-running ReadRadio/PrepareSend/
 // ReadSettingsRadio (task 35), or while a send transfer is running — see
 // checkNotBusyLocked.
 func (a *App) UpdateChannel(ch codeplug.Channel) (EditResult, error) {
@@ -173,60 +173,4 @@ func (a *App) Validate() (ValidationView, error) {
 	caps, advisory := currentCaps(a.conn, a.working)
 	issues := codeplug.Validate(a.working, caps)
 	return ValidationView{Issues: issuesToView(issues), Advisory: advisory}, nil
-}
-
-// DiffAgainstRadio computes a fresh, read-only comparison between the
-// radio's CURRENT contents and the working copy: a fresh svc.ReadAll
-// (never the App's cached baseline) diffed via codeplug.Diff against a
-// DEEP COPY of working (Fix 2, adjudicated HIGH, Codex M6 #2: the old
-// shape captured a.working's own pointer under a quick lock and then
-// dereferenced it OUTSIDE mu for the whole ReadAll/Diff duration —
-// concurrent with UpdateChannel(s), which mutates that same struct under
-// mu, that was a genuine unsynchronized read/write), using the connected
-// session's capabilities. Unlike PrepareSend, this never snapshots,
-// journals, or mutates the App's baseline/working state — it is purely
-// informational. Requires a connection and a loaded working copy. Emits
-// transfer:progress during the read and transfer:done (Kind "diff")
-// exactly once on completion.
-//
-// Reserves the App-level exclusive-operation slot (a.opBusy) for its
-// whole duration — see ReadRadio's doc comment for why, and
-// reserveOpLocked's doc comment for why this checks ONLY a.opBusy (not
-// a.transfer.running): a DiffAgainstRadio call made during a running
-// send transfer continues to collide with clone.Service's OWN op lock
-// instead, exactly as before this fix.
-func (a *App) DiffAgainstRadio() (DiffView, error) {
-	a.mu.Lock()
-	conn := a.conn
-	if conn == nil {
-		a.mu.Unlock()
-		return DiffView{}, ErrNotConnected
-	}
-	if a.working == nil {
-		a.mu.Unlock()
-		return DiffView{}, ErrNothingLoaded
-	}
-	if err := a.reserveOpLocked("DiffAgainstRadio"); err != nil {
-		a.mu.Unlock()
-		return DiffView{}, err
-	}
-	workingCopy := deepCopyCodeplug(a.working)
-	a.mu.Unlock()
-	defer a.releaseOp()
-
-	freshBaseline, err := conn.svc.ReadAll(a.ctx)
-	if err != nil {
-		outcome, message := classifyReadDiffOutcome(err)
-		a.emitDone("diff", outcome, nil, message)
-		return DiffView{}, fmt.Errorf("app: diffing against radio: %w", friendlyErr(err))
-	}
-
-	result, err := codeplug.Diff(freshBaseline, workingCopy, conn.session.Capabilities())
-	if err != nil {
-		a.emitDone("diff", "error", nil, err.Error())
-		return DiffView{}, fmt.Errorf("app: diffing against radio: %w", err)
-	}
-
-	a.emitDone("diff", "ok", nil, "")
-	return DiffView{Diff: buildDiffSummary(result)}, nil
 }

@@ -474,15 +474,6 @@ func TestReadRadio_NotConnected(t *testing.T) {
 	}
 }
 
-// TestDiffAgainstRadio_NotConnected pins the same guard for
-// DiffAgainstRadio.
-func TestDiffAgainstRadio_NotConnected(t *testing.T) {
-	a, _ := newTestApp(t)
-	if _, err := a.DiffAgainstRadio(); !errors.Is(err, ErrNotConnected) {
-		t.Errorf("DiffAgainstRadio while not connected: err = %v, want ErrNotConnected", err)
-	}
-}
-
 // TestPrepareSend_NotConnected pins the same guard for PrepareSend.
 func TestPrepareSend_NotConnected(t *testing.T) {
 	a, _ := newTestApp(t)
