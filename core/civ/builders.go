@@ -71,7 +71,7 @@ func (p Profile) BuildMemoryRead(addr ChannelAddress) (Command, error) {
 // reach, and the only builder here that mutates anything.
 //
 // It emits the profile's BuildRecordLength, and it validates rec through
-// validateRecordFieldsAt — the SAME validator AllowedCommand re-runs on the
+// validateRecordFields — the SAME validator AllowedCommand re-runs on the
 // frame it decodes — so a record this builder accepts is a frame the gate
 // admits, and one it refuses is a frame the gate refuses.
 //

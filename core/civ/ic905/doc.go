@@ -407,7 +407,7 @@
 // must never be mapped as skip. civ.FieldSelect exists, but the neutral
 // codeplug.ChannelData has no home for it, so mapping it would make
 // BuildMemorySet demand a value the driver could only invent —
-// validateRecordFieldsAt refuses a mapped field with no value. Leaving (5)
+// validateRecordFields refuses a mapped field with no value. Leaving (5)
 // in Fixed at 0x00 is also exactly what the CALL bank requires ("* Set 0
 // for Call channel.", PDF p.19 folio 18, the (5) breakout footnote) and
 // exactly what both golden vectors carry.
