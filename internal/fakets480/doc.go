@@ -41,9 +41,8 @@
 // to mean anything, and it can only disagree if it was built from the manual
 // rather than from the code.
 //
-// The fence is enforced mechanically and recursively (imports_test.go), from
-// birth, ahead of the gen/ subdirectory a later task of this milestone's plan
-// brings in.
+// The fence is enforced mechanically and recursively (imports_test.go): this
+// directory and every one beneath it.
 //
 // THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
 // the goroutine bookkeeping, the interruptible latency wait and the raw write.

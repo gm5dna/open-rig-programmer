@@ -29,10 +29,10 @@
 // core/cat/ft891, not core/codeplug, not core/spec, and not
 // internal/fakeradio or any sibling fake. Standard library only, in every
 // non-test file, in this directory AND every directory beneath it — which
-// now includes internal/fakeft891/gen, the stdlib-only generator for this
+// now includes exinventory.go, the stdlib-only generator for this
 // radio's transcription B. The fence was recursive from birth for that
 // directory's sake, and TestNoCoreImports_ReachesTheGenerator asserts that the
-// scan of this package really does parse gen/main.go rather than merely being
+// scan of this package really does parse exinventory.go rather than merely being
 // capable of it.
 // Every byte offset, field width and validation rule below is re-derived from
 // the FT-891 CAT Operation Reference Book's own position charts (rev 1909-C),

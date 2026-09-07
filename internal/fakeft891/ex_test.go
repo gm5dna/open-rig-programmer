@@ -229,7 +229,7 @@ func twoDigits(n int) string {
 // Every default is all-'0' and between one and five bytes wide — five being
 // this radio's widest field, where the FTdx10's alphabet stops at four (plus
 // its one 12-byte text item, which this chart has no counterpart for and whose
-// transcription could not describe one: gen/main.go's widthToken).
+// transcription could not describe one: exinventory.go's widthToken).
 //
 // The five-wide addresses are pinned BY NAME, as literals: 0803 OTHER DISP and
 // 0804 OTHER SHIFT, whose signed "-3000 Hz - 0 - +3000 Hz" parameter counts its

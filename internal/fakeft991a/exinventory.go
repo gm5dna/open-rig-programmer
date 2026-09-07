@@ -1,87 +1,85 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Command gen projects internal/fakeft991a's own copy of TRANSCRIPTION B into
-// the fake's EX (MENU) inventory, emitting exinventory_gen.go. It is invoked by
-// the //go:generate directive in internal/fakeft991a/ex.go, whose working
-// directory is internal/fakeft991a — hence the relative paths on the
-// directive's flags.
-//
-// # STANDARD LIBRARY ONLY, and why that is the whole point
-//
-// This command imports nothing project-internal, and in particular NOT
-// internal/extable — the machinery that generates the DIALECT's inventory from
-// transcription A. fakeft991a's recursive no-imports fence (imports_test.go,
-// TestNoCoreImports and TestNoCoreImports_ReachesTheGenerator) enforces that
-// mechanically for this directory, and the reason is the design this file
-// exists to serve:
-//
-//	the dialect's inventory is generated from transcription A by
-//	internal/extable; this fake's is generated from transcription B by the
-//	code below; and core/transport's cross-check proves the two agree.
-//
-// A defect in either transcription, or in either generator, therefore surfaces
-// as a cross-check MISMATCH. Reaching for extable here — even for something as
-// innocent as its CSV row parser — would put one parser on both sides of that
-// comparison, and a shared parsing bug would reproduce itself identically into
-// both inventories and be invisible.
-//
-// So the CSV reading below is written afresh against B's OWN schema.
-//
-// # A NEW GENERATOR, not internal/fakeft891/gen's with the paths changed
-//
-// The two charts deliver the SAME three columns — menu_number,name,digits —
-// and that resemblance is exactly why this file is written rather than copied:
-// three of its four structural facts differ, and each difference is a property
-// of the printed chart.
-//
-//   - THE ADDRESS IS A SINGLE COMPONENT. This chart prints a THREE-digit MENU
-//     Number that is the whole address — 087 is P1=87, with P2 and P3 zero
-//     (core/cat's EXAddressSingle) — where the FT-891's four digits are a
-//     (P1,P2) pair. So there are no GROUPS: the FT-891 generator's group key,
-//     its per-group widths string, its "one contiguous block" rule and its
-//     "P2 runs from 01" rule all have no counterpart, and the projection is a
-//     flat list of one entry per address. What replaces them is the property
-//     this chart does have, which theirs does not: ONE run of addresses,
-//     001 upwards, consecutive to the last row (checkRun).
-//   - THERE IS A ROW WITH NO PARAMETER AT ALL. 087 RADIO ID prints a single
-//     hyphen for its Digits and ten spaced hyphens for its parameter legend,
-//     so it names no field an EX frame could read or write. It is transcribed
-//     and counted, and EXCLUDED from the inventory — see parameterlessAddrs.
-//     The FT-891's chart has no such row and its generator has no such rule.
-//   - THE WIDTH ALPHABET RUNS TO EIGHT, from one row: 151 PRESET FREQUENCY,
-//     whose "00030000 ~ 47000000" parameter is eight digits wide. The FT-891's
-//     stops at 5 and the FTdx10's at 4. See widthToken and maxWidth.
-//
-// The fourth fact is shared and is stated because it is a SILENCE rather than
-// a difference: there are no group labels and no parameter-legend column, so
-// there is no cell from which a TEXT item could be identified, and every
-// projected row is numeric. That is a statement about the delivered SCHEMA and
-// not a claim about the radio — see widthToken.
-//
-// # What is projected, and what is deliberately dropped
-//
-// The output models WIRE BEHAVIOUR ONLY — which addresses answer, and each
-// one's raw P4 reply WIDTH. B's name column (the item's human name) is NOT
-// emitted: this fake answers menu reads, it does not interpret menu meanings,
-// and the dialect is the layer that carries names. The name is read only so
-// that a malformed row can be NAMED in an error message, and so that a blank
-// cell — the signature of a misparsed row — is refused rather than silently
-// projected.
-package main
+package fakeft991a
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/csv"
-	"flag"
 	"fmt"
-	"go/format"
-	"log"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 )
+
+// # STANDARD LIBRARY ONLY, and why that is the whole point
+//
+// The parsing below imports nothing project-internal, and in particular NOT
+// internal/extable — the machinery that derives the DIALECT's inventory from
+// transcription A. imports_test.go's recursive fence enforces that
+// mechanically, and the reason is the design this file exists to serve: the
+// dialect's inventory comes from transcription A by one piece of code, this
+// fake's from transcription B by the code below, and core/transport's
+// cross-check proves the two agree. One parser on both sides of that
+// comparison would reproduce a shared parsing bug into both inventories
+// invisibly.
+//
+// It was a generator emitting a checked-in table until 06/09/2026. The
+// generated file, and the second copy of the parser it needed, are gone; the
+// projection now happens at init from the same committed bytes. The CSV itself
+// has NOT moved — core/transport's cross-check reads it by path.
+
+// transcriptionB is this package's OWN COPY of transcription B, embedded and
+// projected here at init. PROVENANCE.md records where the copy came from and
+// why it is a copy rather than a move.
+//
+//go:embed transcription-b.csv
+var transcriptionB []byte
+
+// exItems is this fake's EX (MENU) inventory: one entry per menu address, in
+// the chart's own order, with the raw P4 reply WIDTH that address answers as a
+// token '1'..'8' — a numeric field of that many raw ASCII bytes. There is NO
+// text token: this chart's transcription carries no column from which a text
+// item could be identified, so every row is projected as numeric (widthToken
+// says what that does and does not claim).
+//
+// THE ADDRESS IS A SINGLE COMPONENT: the chart's three-digit MENU Number is the
+// whole address, with P2 and P3 zero (core/cat's EXAddressSingle), which is why
+// this radio's EX read frame is six bytes — the narrowest in the family. There
+// are no groups, so this is a flat list rather than the FT-891's widths
+// strings.
+//
+// The parameterless rows are EXCLUDED but still counted in the run: the chart
+// prints them with no parameter at all, so they name no field an EX frame could
+// read or write (parameterlessToken, and plan decision P18 on why the two
+// transcriptions spell one printed hyphen differently).
+var exItems = mustItems(transcriptionB)
+
+// mustItems is the init-time projection. Every malformed input PANICS rather
+// than yielding a shorter table: this CSV is a committed, hash-frozen
+// evidential artefact, so anything the projection cannot read is a finding, and
+// a fake answering from a truncated inventory would be worse than one that
+// refuses to start.
+func mustItems(data []byte) []exItem {
+	rows, err := parseB(data)
+	if err != nil {
+		panic("fakeft991a: the embedded transcription B: " + err.Error())
+	}
+	if err := checkRun(rows); err != nil {
+		panic("fakeft991a: the embedded transcription B: " + err.Error())
+	}
+	out := make([]exItem, 0, len(rows))
+	for _, r := range rows {
+		if r.excluded {
+			continue
+		}
+		out = append(out, exItem{addr: r.addr, width: r.token})
+	}
+	if len(out) == 0 {
+		panic("fakeft991a: the embedded transcription B projected no items")
+	}
+	return out
+}
 
 // bHeader is transcription B's exact header row, as delivered and committed.
 // It is pinned so that a schema change fails LOUDLY here rather than being
@@ -112,7 +110,7 @@ const menuNumberDigits = 3
 // maxWidth is the widest raw P4 field this chart declares: 8. It comes from
 // exactly ONE row, 151 PRESET FREQUENCY, whose "00030000 ~ 47000000" parameter
 // is eight digits wide, and it is pinned independently from both sides —
-// gen/main_test.go's TestParseB_TheOnlyEightWideRowIs151 from B, and
+// exinventory_test.go's TestParseB_TheOnlyEightWideRowIs151 from B, and
 // core/cat/ft991a/crosscheck_test.go's widestRowDigits/widestRowAddr from A.
 //
 // EIGHT, where the FT-891's alphabet stops at five and the FTdx10's at four.
@@ -188,46 +186,6 @@ type row struct {
 	// line is the 1-based physical line in the CSV, header included, for
 	// error messages and for the emitted provenance comment.
 	line int
-}
-
-func main() {
-	log.SetFlags(0)
-	log.SetPrefix("fakeft991a/gen: ")
-
-	csvPath := flag.String("csv", "", "path to this package's copy of transcription B (required)")
-	outPath := flag.String("out", "", "path of the generated Go file to write (required)")
-	flag.Parse()
-
-	// No positional operands, and no defaulted paths. Silently ignoring an
-	// operand — or defaulting a path — would let a mistyped invocation read as
-	// a successful run that generated something other than what was asked for
-	// (internal/extable/gen's own reasoning, which is about invocation
-	// discipline rather than about EX tables, and is worth sharing).
-	if flag.NArg() > 0 {
-		log.Fatalf("unexpected positional arguments %v — gen takes only -csv and -out", flag.Args())
-	}
-	if *csvPath == "" || *outPath == "" {
-		log.Fatal("-csv and -out are both required; see the //go:generate directive in ex.go")
-	}
-
-	data, err := os.ReadFile(*csvPath)
-	if err != nil {
-		log.Fatalf("reading %s: %v", *csvPath, err)
-	}
-	rows, err := parseB(data)
-	if err != nil {
-		log.Fatalf("parsing %s: %v", *csvPath, err)
-	}
-	if err := checkRun(rows); err != nil {
-		log.Fatalf("checking %s: %v", *csvPath, err)
-	}
-	out, err := render(rows, *csvPath)
-	if err != nil {
-		log.Fatalf("rendering %s: %v", *outPath, err)
-	}
-	if err := os.WriteFile(*outPath, out, 0o644); err != nil {
-		log.Fatalf("writing %s: %v", *outPath, err)
-	}
 }
 
 // parseB parses transcription B into rows, in file order. Every malformed
@@ -366,8 +324,6 @@ func parseMenuNumber(cell string) (addr string, num int, err error) {
 	return s, n, nil
 }
 
-func isDigit(b byte) bool { return b >= '0' && b <= '9' }
-
 // checkRun enforces the one structural property this flat chart has, in place
 // of the FT-891 generator's group rules: the menu numbers are ONE CONSECUTIVE
 // RUN, opening at 001 and increasing by exactly one to the last row, with no
@@ -397,95 +353,4 @@ func checkRun(rows []row) error {
 		}
 	}
 	return nil
-}
-
-// render emits the generated Go file. csvPath names the source; only its BASE
-// NAME is written into the output, so where the generator was invoked from
-// cannot leak into the committed bytes — which is what lets gen's own staleness
-// test read the CSV as "../transcription-b.csv" and still render the file the
-// //go:generate directive produces from "transcription-b.csv".
-//
-// The output is DETERMINISTIC: entries are emitted in the file order checkRun
-// validated, every value derives from the parsed rows, nothing is ranged over
-// a map, and the whole buffer is run through go/format — so two runs over equal
-// input produce byte-identical, gofmt-clean output. That is what makes the
-// staleness test's byte comparison (gen/main_test.go) a meaningful check rather
-// than a formatting lottery.
-func render(rows []row, csvPath string) ([]byte, error) {
-	csvName := filepath.Base(csvPath)
-	var kept, excluded []row
-	for _, r := range rows {
-		if r.excluded {
-			excluded = append(excluded, r)
-			continue
-		}
-		kept = append(kept, r)
-	}
-	if len(kept) == 0 {
-		return nil, fmt.Errorf("no rows to render")
-	}
-
-	var buf bytes.Buffer
-	buf.WriteString("// SPDX-License-Identifier: GPL-3.0-or-later\n\n")
-	fmt.Fprintf(&buf, "// Code generated by internal/fakeft991a/gen from %s. DO NOT EDIT.\n\n", csvName)
-	buf.WriteString("package fakeft991a\n\n")
-	buf.WriteString("// exItems is this fake's EX (MENU) inventory: one entry per menu address, in\n")
-	buf.WriteString("// the chart's own order, with the raw P4 reply WIDTH that address answers as a\n")
-	buf.WriteString("// token '1'..'8' — a numeric field of that many raw ASCII bytes. There is NO\n")
-	buf.WriteString("// text token: this chart's transcription carries no column from which a text\n")
-	buf.WriteString("// item could be identified, so every row is projected as numeric\n")
-	buf.WriteString("// (gen/main.go's widthToken says what that does and does not claim).\n")
-	buf.WriteString("// ex.go expands this into the address -> default raw P4 map the fake answers\n")
-	buf.WriteString("// from, and states what the table does and does not claim.\n")
-	buf.WriteString("//\n")
-	buf.WriteString("// THE ADDRESS IS A SINGLE COMPONENT: the chart's three-digit MENU Number is the\n")
-	buf.WriteString("// whole address, with P2 and P3 zero (core/cat's EXAddressSingle), which is why\n")
-	buf.WriteString("// this radio's EX read frame is six bytes — the narrowest in the family. There\n")
-	buf.WriteString("// are no groups, so this is a flat list rather than the FT-891's widths\n")
-	buf.WriteString("// strings.\n")
-	buf.WriteString("//\n")
-	fmt.Fprintf(&buf, "// It is a PROJECTION OF TRANSCRIPTION B (%s), derived from that\n", csvName)
-	buf.WriteString("// artefact's digits column alone. The dialect's inventory\n")
-	buf.WriteString("// (core/cat/ft991a/exinventory_gen.go) is generated from transcription A by\n")
-	buf.WriteString("// different code, and core/transport's cross-check proves the two agree — so a\n")
-	buf.WriteString("// defect in either transcription or either generator shows up there.\n")
-	buf.WriteString("//\n")
-	buf.WriteString("// EVERY ENTRY'S SOURCE LINE IS ITS ADDRESS PLUS ONE, and no line number is\n")
-	buf.WriteString("// repeated below because of it: the chart's menu numbers are one consecutive\n")
-	buf.WriteString("// run from 001, which gen/main.go's checkRun enforces rather than assumes.\n")
-	buf.WriteString("//\n")
-	buf.WriteString("// The exItem type is declared in ex.go, not here: this file is DATA, and a\n")
-	buf.WriteString("// type declared in it would be a second thing a hand-edit could reach.\n")
-	for _, r := range excluded {
-		fmt.Fprintf(&buf, "//\n// EXCLUDED, and counted in that run: %s (%s line %d),\n", r.addr, csvName, r.line)
-		buf.WriteString("// whose digits cell is this transcription's no-parameter token. The chart\n")
-		buf.WriteString("// prints that row with no parameter at all, so it names no field an EX frame\n")
-		buf.WriteString("// could read or write (gen/main.go's parameterlessToken, and plan decision\n")
-		buf.WriteString("// P18 on why the two transcriptions spell one printed hyphen differently).\n")
-	}
-	buf.WriteString("//\n")
-	fmt.Fprintf(&buf, "// %s of a %d-row chart. Regenerate with `go generate ./internal/fakeft991a`;\n",
-		plural(len(kept), "item"), len(rows))
-	buf.WriteString("// gen/main_test.go refuses a file that has drifted from the CSV.\n")
-	buf.WriteString("var exItems = []exItem{\n")
-	for _, r := range kept {
-		fmt.Fprintf(&buf, "\t{%s, %s},\n", strconv.Quote(r.addr), strconv.QuoteRune(rune(r.token)))
-	}
-	buf.WriteString("}\n")
-
-	formatted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("formatting generated Go: %w", err)
-	}
-	return formatted, nil
-}
-
-// plural renders a count with its noun, pluralised. A generated comment reading
-// "1 items" is the kind of small wrongness that makes a reader distrust the
-// numbers beside it.
-func plural(n int, noun string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, noun)
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
 }
