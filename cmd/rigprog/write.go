@@ -665,14 +665,8 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 	snapshotDirFlag := fs.String("snapshot-dir", "", "snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printWriteUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog write: %v\n", err)
-		printWriteUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "write", printWriteUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(stderr, "rigprog write: exactly one FILE argument is required")
@@ -681,14 +675,7 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	}
 	filePath := fs.Arg(0)
 
-	if !validateModel(stderr, "write", *model, printWriteUsage) {
-		return exitUsage
-	}
-
-	havePort := *port != ""
-	if havePort == *fake { // both true, or both false
-		fmt.Fprintln(stderr, "rigprog write: exactly one of --port or --fake is required")
-		printWriteUsage(stderr)
+	if !validateSessionArgs(stderr, "write", *model, *port, *fake, printWriteUsage) {
 		return exitUsage
 	}
 
@@ -711,15 +698,7 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 
 	// Step 2: open session; the Service (with the snapshot store and
 	// progress wired to stderr) is built inside runWrite.
-	var (
-		sess     driver.Session
-		closeAll func() error
-	)
-	if *fake {
-		sess, closeAll, err = openFakeSession(ctx, *model)
-	} else {
-		sess, closeAll, err = openRealSession(ctx, *model, *port)
-	}
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
 	if err != nil {
 		if isCancelled(err) {
 			fmt.Fprintln(stderr, "rigprog write: cancelled")

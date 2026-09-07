@@ -37,14 +37,8 @@ func cmdSettings(args []string, stdout, stderr io.Writer) int {
 	model := fs.String("model", wiring.DefaultModel, "radio model whose settings descriptor to group by")
 	force := fs.Bool("force", false, "overwrite --csv if it already exists")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printSettingsUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog settings: %v\n", err)
-		printSettingsUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "settings", printSettingsUsage, stdout, stderr); !ok {
+		return code
 	}
 	// The consent sub-mode is dispatched BEFORE the FILE-arity check, so
 	// "unverified-writes" is a reserved word in FILE position rather than a

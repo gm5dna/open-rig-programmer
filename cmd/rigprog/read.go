@@ -12,7 +12,6 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/internal/buildinfo"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
@@ -102,14 +101,8 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	force := fs.Bool("force", false, "overwrite --out if it already exists")
 	snapshotDirFlag := fs.String("snapshot-dir", "", "snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printReadUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog read: %v\n", err)
-		printReadUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "read", printReadUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "rigprog read: unexpected argument %q\n", fs.Arg(0))
@@ -117,14 +110,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	if !validateModel(stderr, "read", *model, printReadUsage) {
-		return exitUsage
-	}
-
-	havePort := *port != ""
-	if havePort == *fake { // both true, or both false
-		fmt.Fprintln(stderr, "rigprog read: exactly one of --port or --fake is required")
-		printReadUsage(stderr)
+	if !validateSessionArgs(stderr, "read", *model, *port, *fake, printReadUsage) {
 		return exitUsage
 	}
 	if *out == "" {
@@ -159,15 +145,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
-	var (
-		sess     driver.Session
-		closeAll func() error
-	)
-	if *fake {
-		sess, closeAll, err = openFakeSession(ctx, *model)
-	} else {
-		sess, closeAll, err = openRealSession(ctx, *model, *port)
-	}
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
 	if err != nil {
 		if isCancelled(err) {
 			fmt.Fprintln(stderr, "rigprog read: cancelled")
