@@ -39,17 +39,14 @@ func sanitizeForFilename(s string) string {
 	if s == "" {
 		return "unknown"
 	}
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
+	return strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
-			b.WriteRune(r)
+			return r
 		default:
-			b.WriteByte('_')
+			return '_'
 		}
-	}
-	return b.String()
+	}, s)
 }
 
 // snapshotFileName builds "snapshot-<model>-<catid>-<timestamp>.orp.json"

@@ -25,10 +25,10 @@ var (
 )
 
 // isDecimalDigits reports whether s is empty or contains only ASCII
-// digits '0'-'9' (no sign, no separators) — deliberately stricter than
-// isCHIRPDigits's own copy of this check is named for: this one backs a
-// tone parser shared by BOTH csvio import paths (own-schema and CHIRP),
-// not CHIRP alone.
+// digits '0'-'9' (no sign, no separators). It backs a tone parser shared
+// by BOTH csvio import paths (own-schema and CHIRP), and CHIRP's own
+// frequency parser (parseCHIRPFrequency) as well — one check, not a
+// per-caller copy.
 func isDecimalDigits(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] < '0' || s[i] > '9' {
