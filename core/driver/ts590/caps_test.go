@@ -596,18 +596,18 @@ func TestCapabilities_ZeroFrequencyBoundsDisableTheCheck(t *testing.T) {
 }
 
 // TestCapabilities_ASessionHandsOutDefensiveCopies is the SESSION half of the
-// defence, and it is the half cloneCapabilities is actually for. Its sibling
-// above mutates the result of CapabilitiesUnverified and compares against a
-// freshly BUILT set, which baseCapabilities makes true whatever
-// cloneCapabilities does; only a second call on the SAME session can witness
-// that Session.Capabilities copied anything.
+// defence, and it is the half spec.Capabilities.Clone is actually for. Its
+// sibling above mutates the result of CapabilitiesUnverified and compares
+// against a freshly BUILT set, which baseCapabilities makes true whatever
+// spec.Capabilities.Clone does; only a second call on the SAME session can
+// witness that Session.Capabilities copied anything.
 //
 // It is load-bearing from Stage 2 task 12, when WriteChannel begins enforcing
 // against s.caps: a caller that mutated what it was handed must not be able
 // to widen the gate it is about to be measured by.
 //
-// RED PROOF, observed: with cloneCapabilities' "return out" replaced by
-// "return caps" this test fails at the mutated bank slot and the mutated
+// RED PROOF, observed: with spec.Capabilities.Clone's "return out" replaced
+// by "return caps" this test fails at the mutated bank slot and the mutated
 // field grade, while the rest of the package stays green.
 func TestCapabilities_ASessionHandsOutDefensiveCopies(t *testing.T) {
 	for _, row := range bothRows {

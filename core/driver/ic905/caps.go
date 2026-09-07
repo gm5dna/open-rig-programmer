@@ -221,7 +221,7 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // It takes the GRADE rather than a built field map, and calls bankFields
 // once per bank, so MEM and CALL can never end up sharing one map value —
 // spec.Capabilities.Bank hands out defensive copies, but the baseline
-// itself is walked directly by cloneCapabilities and by the tests.
+// itself is walked directly by spec.Capabilities.Clone and by the tests.
 //
 // ALL TWENTY-EIGHT spec.Capabilities fields (twenty-two after the Icom
 // tier, the additions design's five D8 receiver vocabularies, which this

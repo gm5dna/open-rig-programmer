@@ -1580,9 +1580,9 @@ var icr8600Text = Text{
 	// because no other registered model's default Open leaves part of its
 	// memory space unwalked: the IC-705's default is bounded too
 	// (core/driver/ic705/ic705.go:52-63), and
-	// internal/wiring/wiring.go:843-845's NewIC705RealDriver passes it no
-	// ic705.WithFullInventoryWalk() — only the 905's own note happens to
-	// SAY so today; the IC-705's note does not carry this paragraph yet
+	// internal/wiring/wiring.go:643-648's realDrivers[IC705Model] row
+	// passes it no ic705.WithFullInventoryWalk() — only the 905's own note
+	// happens to SAY so today; the IC-705's note does not carry this paragraph yet
 	// (a recorded follow-up, not this round). It is a free-standing
 	// sentence here, as on the IC-905's entry, not folded into the
 	// "things worth knowing before blaming the port" list above it: the
@@ -1597,8 +1597,9 @@ var icr8600Text = Text{
 	// core/driver/icr8600/write.go:215 does not either:
 	// WithFullInventoryWalk (icr8600.go) opts a session into the whole
 	// 100x100 space, but it is a Go-only option no registered
-	// composition passes (internal/wiring's NewICR8600RealDriver), so
-	// the clause NAMES it, to keep "nothing on this build's command line
+	// composition passes (internal/wiring's realDrivers[ICR8600Model]
+	// row, wiring.go:712-718), so the clause NAMES it, to keep "nothing
+	// on this build's command line
 	// or in its window widens it" honest, without pointing the reader at
 	// a control they cannot reach. What the clause states beyond that is
 	// the bound and its consequence: a channel missing from this build's
