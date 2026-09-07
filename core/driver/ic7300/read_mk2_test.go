@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package ic7300mk2
+package ic7300
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 // allFFRecord is 45 bytes of 0xFF: the second of D5 entry 2's two
 // unverified empty-channel answers.
-func allFFRecord() []byte {
+func allFFRecordMK2() []byte {
 	rec := make([]byte, 45)
 	for i := range rec {
 		rec[i] = 0xFF
@@ -24,9 +24,9 @@ func allFFRecord() []byte {
 }
 
 // A populated MEM slot maps every record field into ChannelData.
-func TestReadChannel_PopulatedMemorySlot(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer)
+func TestReadChannel_PopulatedMemorySlot_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "001")
 	if err != nil {
 		t.Fatalf("ReadChannel: %v", err)
@@ -74,9 +74,9 @@ func TestReadChannel_PopulatedMemorySlot(t *testing.T) {
 }
 
 // An FA answer is an EMPTY channel, not an error (D5 entry 2(a)).
-func TestReadChannel_RejectionIsAnEmptyChannel(t *testing.T) {
-	peer := newRespondingPort(t)
-	sess := openSession(t, peer)
+func TestReadChannel_RejectionIsAnEmptyChannel_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t)
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "042")
 	if err != nil {
 		t.Fatalf("ReadChannel: %v — an FA is an unwritten channel, and an error here would abort the whole ReadAll", err)
@@ -93,9 +93,9 @@ func TestReadChannel_RejectionIsAnEmptyChannel(t *testing.T) {
 // record parser. Without the pre-parse hook it would reach
 // ParseMemoryAnswer and die on its first BCD nibble or its first unknown
 // enum value — a failure INDISTINGUISHABLE from a corrupted record.
-func TestReadChannel_AllFFRecordIsAnEmptyChannel(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, allFFRecord()))
-	sess := openSession(t, peer)
+func TestReadChannel_AllFFRecordIsAnEmptyChannel_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, allFFRecordMK2()))
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "001")
 	if err != nil {
 		t.Fatalf("ReadChannel: %v — an all-FF record is D5 entry 2(b)'s empty channel (D5 entry 2(b), lift MK2-R3), never an error that aborts ReadAll", err)
@@ -107,11 +107,11 @@ func TestReadChannel_AllFFRecordIsAnEmptyChannel(t *testing.T) {
 
 // ...and the recognition is EXACT: a record that is all-FF except one byte
 // is NOT empty, and must not be quietly treated as such.
-func TestReadChannel_NearlyAllFFRecordIsNotEmpty(t *testing.T) {
-	rec := allFFRecord()
+func TestReadChannel_NearlyAllFFRecordIsNotEmpty_MK2(t *testing.T) {
+	rec := allFFRecordMK2()
 	rec[6] = 0x01 // the mode byte, a legal USB
-	peer := newRespondingPort(t, withRecord(1, rec))
-	sess := openSession(t, peer)
+	peer := newRespondingPortMK2(t, withRecordMK2(1, rec))
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "001")
 	if err == nil {
 		t.Fatalf("ReadChannel succeeded (empty = %v) on a record that is all-FF except one byte — the empty test is EXACT equality, not a heuristic, and a nearly-all-FF record is a CORRUPT record", ch.Empty())
@@ -124,13 +124,13 @@ func TestReadChannel_NearlyAllFFRecordIsNotEmpty(t *testing.T) {
 // A record of the wrong LENGTH fails the read with *civ.RecordLengthError —
 // the fingerprint is continuous, not one-shot (spec D3.2, D4 "Malformed
 // records": no partial parse, no fake Unavailable channel).
-func TestReadChannel_WrongLengthFailsTheRead(t *testing.T) {
+func TestReadChannel_WrongLengthFailsTheRead_MK2(t *testing.T) {
 	// Channel 9 is past the open probe's bound, so the session opens
 	// UNFINGERPRINTED and the length is met for the first time HERE — which
 	// is the point: the check is re-asked on every record read.
-	peer := newRespondingPort(t, withRecordOfLength(9, 39))
-	sess := openSession(t, peer)
-	if civDiagnostics(t, sess).Fingerprinted {
+	peer := newRespondingPortMK2(t, withRecordOfLengthMK2(9, 39))
+	sess := openSessionMK2(t, peer)
+	if civDiagnosticsMK2(t, sess).Fingerprinted {
 		t.Fatal("the session opened FINGERPRINTED — this test needs the length to be met for the first time at the read")
 	}
 	ch, err := sess.ReadChannel(context.Background(), "009")
@@ -147,12 +147,12 @@ func TestReadChannel_WrongLengthFailsTheRead(t *testing.T) {
 
 // Mode code 06 is printed nowhere and is invented nowhere: the read fails
 // with a *civ.ParseError naming the byte and offset (plan decision D12).
-func TestReadChannel_UnprintedModeCodeFailsHonestly(t *testing.T) {
-	rec := append([]byte(nil), populatedRecord...)
+func TestReadChannel_UnprintedModeCodeFailsHonestly_MK2(t *testing.T) {
+	rec := append([]byte(nil), populatedRecordMK2...)
 	rec[6] = 0x06  // ⑨
 	rec[20] = 0x06 // ❾, so the duplicated spans still agree
-	peer := newRespondingPort(t, withRecord(1, rec))
-	sess := openSession(t, peer)
+	peer := newRespondingPortMK2(t, withRecordMK2(1, rec))
+	sess := openSessionMK2(t, peer)
 	_, err := sess.ReadChannel(context.Background(), "001")
 	if err == nil {
 		t.Fatal("ReadChannel succeeded on mode code 06 — that value is printed NOWHERE in this document (matrix §3.16 A7) and no meaning is invented for it")
@@ -164,11 +164,11 @@ func TestReadChannel_UnprintedModeCodeFailsHonestly(t *testing.T) {
 
 // A record whose TX block disagrees with its RX block fails the WHOLE read,
 // rather than one copy silently winning. That cost travels to the user.
-func TestReadChannel_DisagreeingTXBlockFailsTheRead(t *testing.T) {
-	rec := append([]byte(nil), populatedRecord...)
+func TestReadChannel_DisagreeingTXBlockFailsTheRead_MK2(t *testing.T) {
+	rec := append([]byte(nil), populatedRecordMK2...)
 	rec[20] = 0x02 // ❾ says AM where ⑨ says USB
-	peer := newRespondingPort(t, withRecord(1, rec))
-	sess := openSession(t, peer)
+	peer := newRespondingPortMK2(t, withRecordMK2(1, rec))
+	sess := openSessionMK2(t, peer)
 	_, err := sess.ReadChannel(context.Background(), "001")
 	if err == nil {
 		t.Fatal("ReadChannel succeeded on a record whose TX mode differs from its RX mode — the duplicated spans are checked for AGREEMENT, and letting the last copy win would silently lose half the record")
@@ -180,12 +180,12 @@ func TestReadChannel_DisagreeingTXBlockFailsTheRead(t *testing.T) {
 
 // P1 and P2 read through the same record shape (ASSUMED —
 // ic7300mk2-scan-edge-record-layout, lift MK2-R10).
-func TestReadChannel_ScanEdges(t *testing.T) {
-	peer := newRespondingPort(t,
-		withRecord(100, populatedRecord),
-		withRecord(101, populatedRecord),
+func TestReadChannel_ScanEdges_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t,
+		withRecordMK2(100, populatedRecordMK2),
+		withRecordMK2(101, populatedRecordMK2),
 	)
-	sess := openSession(t, peer)
+	sess := openSessionMK2(t, peer)
 	for _, slot := range []string{"P1", "P2"} {
 		ch, err := sess.ReadChannel(context.Background(), slot)
 		if err != nil {
@@ -213,9 +213,9 @@ func TestReadChannel_ScanEdges(t *testing.T) {
 
 // Fields this record does not carry read back Unavailable, not Unknown, and
 // not a guess.
-func TestReadChannel_AbsentFieldsAreUnavailable(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer)
+func TestReadChannel_AbsentFieldsAreUnavailable_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "001")
 	if err != nil {
 		t.Fatalf("ReadChannel: %v", err)
@@ -254,13 +254,13 @@ func TestReadChannel_AbsentFieldsAreUnavailable(t *testing.T) {
 // T1(3): a tone number OUTSIDE the declared domain — zero included — maps to
 // Unknown. A read must never construct a Known value ToneField.Valid would
 // then refuse.
-func TestReadChannel_ZeroToneReadsBackUnknown(t *testing.T) {
-	rec := append([]byte(nil), populatedRecord...)
+func TestReadChannel_ZeroToneReadsBackUnknown_MK2(t *testing.T) {
+	rec := append([]byte(nil), populatedRecordMK2...)
 	for _, off := range []int{9, 10, 11, 12, 13, 14, 23, 24, 25, 26, 27, 28} {
 		rec[off] = 0x00
 	}
-	peer := newRespondingPort(t, withRecord(1, rec))
-	sess := openSession(t, peer)
+	peer := newRespondingPortMK2(t, withRecordMK2(1, rec))
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "001")
 	if err != nil {
 		t.Fatalf("ReadChannel: %v — the civ layer is LOSSLESS over the whole encodable range, zero included (T1(1)); the DOMAIN is a capability, and a value outside it is not a parse failure", err)
@@ -276,12 +276,12 @@ func TestReadChannel_ZeroToneReadsBackUnknown(t *testing.T) {
 
 // The answer's echoed channel address must match the one requested, and the
 // check precedes EVERY use of the answer.
-func TestReadChannel_AnswerAddressMismatchIsAnError(t *testing.T) {
-	peer := newRespondingPort(t,
-		withRecord(9, populatedRecord),
-		withAnswerAddressedElsewhere(9, 10),
+func TestReadChannel_AnswerAddressMismatchIsAnError_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t,
+		withRecordMK2(9, populatedRecordMK2),
+		withAnswerAddressedElsewhereMK2(9, 10),
 	)
-	sess := openSession(t, peer)
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "009")
 	if !errors.Is(err, ErrAnswerMismatch) {
 		t.Fatalf("ReadChannel error = %v, want ErrAnswerMismatch — civ's MemoryAnswerMatcher is ENVELOPE-ONLY by design, so the channel address is the driver's to check (T2, D20)", err)
@@ -289,7 +289,7 @@ func TestReadChannel_AnswerAddressMismatchIsAnError(t *testing.T) {
 	if !ch.Empty() {
 		t.Error("a mismatched answer produced channel data — refusing to map a reply onto the wrong slot is the whole point")
 	}
-	if n := civDiagnostics(t, sess).AnswerMismatches; n != 1 {
+	if n := civDiagnosticsMK2(t, sess).AnswerMismatches; n != 1 {
 		t.Errorf("AnswerMismatches = %d, want 1 — the refusal carries a diagnostic count beside it", n)
 	}
 }
@@ -298,12 +298,12 @@ func TestReadChannel_AnswerAddressMismatchIsAnError(t *testing.T) {
 // all-FF record for the WRONG address. With the all-FF branch first this
 // reads as "this slot is empty"; with the address check first it is the
 // mismatch it actually is.
-func TestReadChannel_AllFFForTheWrongAddressIsAMismatchNotAnEmptySlot(t *testing.T) {
-	peer := newRespondingPort(t,
-		withRecord(9, allFFRecord()),
-		withAnswerAddressedElsewhere(9, 10),
+func TestReadChannel_AllFFForTheWrongAddressIsAMismatchNotAnEmptySlot_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t,
+		withRecordMK2(9, allFFRecordMK2()),
+		withAnswerAddressedElsewhereMK2(9, 10),
 	)
-	sess := openSession(t, peer)
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "009")
 	if err == nil {
 		t.Fatalf("ReadChannel succeeded (empty = %v) — an all-FF answer for the WRONG channel is not evidence that the REQUESTED channel is empty, and accepting it would silently blank a populated slot in a codeplug", ch.Empty())
@@ -314,9 +314,9 @@ func TestReadChannel_AllFFForTheWrongAddressIsAMismatchNotAnEmptySlot(t *testing
 }
 
 // A slot this radio does not have is refused before any wire traffic.
-func TestReadChannel_RefusesASlotThisRadioDoesNotHave(t *testing.T) {
-	peer := newRespondingPort(t)
-	sess := openSession(t, peer)
+func TestReadChannel_RefusesASlotThisRadioDoesNotHave_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t)
+	sess := openSessionMK2(t, peer)
 	for _, slot := range []string{"", "1", "0001", "100", "000", "P3", "M-01", "EMG"} {
 		before := len(peer.Received())
 		if _, err := sess.ReadChannel(context.Background(), slot); err == nil {
@@ -329,7 +329,7 @@ func TestReadChannel_RefusesASlotThisRadioDoesNotHave(t *testing.T) {
 }
 
 // parseSlot is D11's table in both directions, and Task 16 reuses it.
-func TestParseSlot_D11Table(t *testing.T) {
+func TestParseSlot_D11Table_MK2(t *testing.T) {
 	for _, tc := range []struct {
 		slot    string
 		channel int
@@ -362,14 +362,14 @@ func TestParseSlot_D11Table(t *testing.T) {
 // here resolves the ambiguity — and nothing may. A driver that silently
 // normalised 0x60 to 0x27 would hand the user a name their radio does not
 // hold, and would then write that different name back.
-func TestReadChannel_Byte0x60RoundTripsWithoutBeingRenamed(t *testing.T) {
-	rec := append([]byte(nil), populatedRecord...)
+func TestReadChannel_Byte0x60RoundTripsWithoutBeingRenamed_MK2(t *testing.T) {
+	rec := append([]byte(nil), populatedRecordMK2...)
 	// The whole sixteen-byte name field: 0x60 first, then 0x27 beside it, so
 	// a normalisation in either direction is visible.
 	name := []byte{0x60, 0x27, 0x60, 0x27, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'}
 	copy(rec[29:45], name)
-	peer := newRespondingPort(t, withRecord(1, rec))
-	sess := openSession(t, peer)
+	peer := newRespondingPortMK2(t, withRecordMK2(1, rec))
+	sess := openSessionMK2(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "001")
 	if err != nil {
 		t.Fatalf("ReadChannel: %v — 0x60 is a LEGAL name byte on this model (D13), whatever glyph it draws", err)

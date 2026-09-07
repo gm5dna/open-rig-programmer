@@ -120,20 +120,26 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// encloses it.
 		{"ic7610", "Simulated", "fakeic7610.New", "internal/fakeic7610", []string{"IC-7610"}},
 		// The IC-7300 and IC-7300MK2 (Wave 4 task R3), this project's
-		// second Icom family and first Icom PAIR: two rows, not one,
-		// because — unlike the IC-7610 — this pair has SEPARATE driver
-		// packages and SEPARATE fakes (core/driver/ic7300 /
-		// core/driver/ic7300mk2, internal/fakeic7300 /
-		// internal/fakeic7300mk2), so each contributes its own pkg, its
-		// own Simulated token and its own fake constructor. Both fakes'
-		// New calls appear directly in internal/wiring/fake.go's
-		// fakeDrivers table (no adapter wraps either — both Port()
-		// methods already return io.ReadWriteCloser), so the AST walk
-		// finds each fakeic7300.New(...) / fakeic7300mk2.New(...) call
-		// expression exactly where the ic7610 row's comment says it
-		// would even if one had been wrapped.
+		// second Icom family and first Icom PAIR: TWO ROWS OVER ONE
+		// PACKAGE, which is the FTdx101 shape rather than the ic7610 one.
+		// The v1.4.1 sweep folded core/driver/ic7300mk2 into
+		// core/driver/ic7300 (audit finding 8), so there is now ONE pkg
+		// and ONE Simulated token — but still TWO fakes, internal/fakeic7300
+		// and internal/fakeic7300mk2, independently written and NOT folded,
+		// and a row is (package, token, fake CONSTRUCTOR). The second row
+		// is earned by fakeic7300mk2.New exactly as the FTdx101's is by
+		// fakedx101.NewMP: the confinement clauses agree trivially over the
+		// shared token, and the PAIRING clause is what the row is for —
+		// a registration that wired the MK2 to fakeic7300.New would satisfy
+		// the first row and fail this one. Both fakes' New calls appear
+		// directly in internal/wiring/fake.go's fakeDrivers table (no
+		// adapter wraps either — both Port() methods already return
+		// io.ReadWriteCloser), so the AST walk finds each
+		// fakeic7300.New(...) / fakeic7300mk2.New(...) call expression
+		// exactly where the ic7610 row's comment says it would even if one
+		// had been wrapped.
 		{"ic7300", "Simulated", "fakeic7300.New", "internal/fakeic7300", []string{"IC-7300"}},
-		{"ic7300mk2", "Simulated", "fakeic7300mk2.New", "internal/fakeic7300mk2", []string{"IC-7300MK2"}},
+		{"ic7300", "Simulated", "fakeic7300mk2.New", "internal/fakeic7300mk2", []string{"IC-7300MK2"}},
 		// The IC-705 (Wave 4 task R4), this project's third Icom
 		// registration and second lone-model one: one package, one
 		// Simulated token and one fake constructor, on the same ic7610
