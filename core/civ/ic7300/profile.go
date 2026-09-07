@@ -39,45 +39,42 @@ const nameLength = 10
 // modeEnum is ⑨ / ❾, the whole byte. PDF p.167 (folio 19-9),
 // "① Operating mode". `06` IS ABSENT FROM THE PRINTED COLUMN and no value
 // is invented for it here — see doc.go's D12 paragraph.
-func modeEnum() map[byte]string {
-	return map[byte]string{
-		0x00: "LSB",
-		0x01: "USB",
-		0x02: "AM",
-		0x03: "CW",
-		0x04: "RTTY",
-		0x05: "FM",
-		0x07: "CW-R",
-		0x08: "RTTY-R",
-	}
+//
+// A var, not a func: both layouts below reference the same map, which is
+// safe because nothing mutates a FieldSpan's Enum after construction —
+// FieldSpan.clone() is what hands a copy to any caller outside this
+// package.
+var modeEnum = map[byte]string{
+	0x00: "LSB",
+	0x01: "USB",
+	0x02: "AM",
+	0x03: "CW",
+	0x04: "RTTY",
+	0x05: "FM",
+	0x07: "CW-R",
+	0x08: "RTTY-R",
 }
 
 // filterEnum is ⑩ / ❿, the whole byte. PDF p.167, "② Filter".
-func filterEnum() map[byte]string {
-	return map[byte]string{
-		0x01: "FIL1",
-		0x02: "FIL2",
-		0x03: "FIL3",
-	}
+var filterEnum = map[byte]string{
+	0x01: "FIL1",
+	0x02: "FIL2",
+	0x03: "FIL3",
 }
 
 // dataModeEnum is ⑪'s HIGH nibble. The nibble assignment is a leader-order
 // reading (W hazard (c)): the LEFT (high) nibble reaches
 // "0=Data mode OFF / 1=Data mode ON".
-func dataModeEnum() map[byte]string {
-	return map[byte]string{
-		0x0: "OFF",
-		0x1: "ON",
-	}
+var dataModeEnum = map[byte]string{
+	0x0: "OFF",
+	0x1: "ON",
 }
 
 // toneModeEnum is ⑪'s LOW nibble: "0: OFF, 1: TONE, 2: TSQL".
-func toneModeEnum() map[byte]string {
-	return map[byte]string{
-		0x0: "OFF",
-		0x1: "TONE",
-		0x2: "TSQL",
-	}
+var toneModeEnum = map[byte]string{
+	0x0: "OFF",
+	0x1: "TONE",
+	0x2: "TSQL",
 }
 
 // selectEnum is ③'s LOW nibble, and its LOW nibble only (D14). The four
@@ -89,13 +86,11 @@ func toneModeEnum() map[byte]string {
 // The names are SEL1/SEL2/SEL3 rather than the printed stars because a
 // neutral record's text values are compared, logged and round-tripped as
 // Go strings; the printed glyphs are recorded in doc.go.
-func selectEnum() map[byte]string {
-	return map[byte]string{
-		0x0: "OFF",
-		0x1: "SEL1",
-		0x2: "SEL2",
-		0x3: "SEL3",
-	}
+var selectEnum = map[byte]string{
+	0x0: "OFF",
+	0x1: "SEL1",
+	0x2: "SEL2",
+	0x3: "SEL3",
 }
 
 // profile is the IC-7300's civ.Profile, built once at package
@@ -149,17 +144,17 @@ var profile = civ.MustNewProfile(civ.ProfileConfig{
 		Fields: []civ.FieldSpan{
 			// ③ low nibble — SELECT. The high nibble is the split flag
 			// and is UNMAPPED.
-			{Field: civ.FieldSelect, Offset: 0, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: selectEnum()},
+			{Field: civ.FieldSelect, Offset: 0, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: selectEnum},
 			// ④–⑧ — RX frequency, five packed-BCD bytes, least
 			// significant pair first (PDF p.167's five-cell diagram).
 			{Field: civ.FieldRXFrequency, Offset: 1, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
 			// ⑨ — operating mode.
-			{Field: civ.FieldMode, Offset: 6, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum()},
+			{Field: civ.FieldMode, Offset: 6, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum},
 			// ⑩ — filter.
-			{Field: civ.FieldFilter, Offset: 7, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum()},
+			{Field: civ.FieldFilter, Offset: 7, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum},
 			// ⑪ high / low — data mode and tone type.
-			{Field: civ.FieldDataMode, Offset: 8, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum()},
-			{Field: civ.FieldToneMode, Offset: 8, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum()},
+			{Field: civ.FieldDataMode, Offset: 8, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum},
+			{Field: civ.FieldToneMode, Offset: 8, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum},
 			// ⑫–⑭ — repeater tone, three packed-BCD bytes, most
 			// significant pair first, in TENTHS of a hertz.
 			{Field: civ.FieldToneTX, Offset: 9, Length: 3, Encoding: civ.EncodingBCDNumber, Order: civ.OrderBigEndian, Scale: 1},
@@ -171,10 +166,10 @@ var profile = civ.MustNewProfile(civ.ProfileConfig{
 			// encoder mirror them and the decoder require the two copies
 			// to AGREE.
 			{Field: civ.FieldTXFrequency, Offset: 15, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
-			{Field: civ.FieldMode, Offset: 20, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum()},
-			{Field: civ.FieldFilter, Offset: 21, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum()},
-			{Field: civ.FieldDataMode, Offset: 22, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum()},
-			{Field: civ.FieldToneMode, Offset: 22, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum()},
+			{Field: civ.FieldMode, Offset: 20, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum},
+			{Field: civ.FieldFilter, Offset: 21, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum},
+			{Field: civ.FieldDataMode, Offset: 22, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum},
+			{Field: civ.FieldToneMode, Offset: 22, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum},
 			{Field: civ.FieldToneTX, Offset: 23, Length: 3, Encoding: civ.EncodingBCDNumber, Order: civ.OrderBigEndian, Scale: 1},
 			{Field: civ.FieldToneRX, Offset: 26, Length: 3, Encoding: civ.EncodingBCDNumber, Order: civ.OrderBigEndian, Scale: 1},
 			// ⑱–㉗ — the memory name.

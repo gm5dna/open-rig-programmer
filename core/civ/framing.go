@@ -215,16 +215,9 @@ func (f *framing) NewAccumulator(max int) transport.Accumulator {
 	return lockedAccumulator{f: f}
 }
 
-// rebound adjusts this adapter's frame bound, taking the lock. It exists
-// for NewAccumulator's max>0 path and for the test that pins it; a
-// non-positive max leaves the profile's own bound in force.
-func (f *framing) rebound(max int) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.reboundLocked(max)
-}
-
-// reboundLocked is rebound's body, for callers already holding f.mu.
+// reboundLocked adjusts this adapter's frame bound: NewAccumulator's
+// max>0 path, called while already holding f.mu. A non-positive max
+// leaves the profile's own bound in force.
 //
 // It sets the BOUND on the accumulator in hand and touches nothing else,
 // which is the whole contract: notes and buffered bytes survive, because

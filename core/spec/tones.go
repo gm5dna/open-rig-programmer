@@ -2,7 +2,10 @@
 
 package spec
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Tone is a CTCSS sub-audible tone frequency, stored in decihertz (tenths
 // of a hertz) to keep the table exact-integer rather than floating point.
@@ -110,12 +113,7 @@ func (c Capabilities) AdmitsTone(t Tone) bool {
 	if c.CTCSSToneRange != nil {
 		return c.CTCSSToneRange.admits(t)
 	}
-	for _, x := range c.CTCSSTones {
-		if x == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(c.CTCSSTones, t)
 }
 
 // standardCTCSSTones is the 50-tone CTCSS chart shared across the radio
@@ -131,9 +129,7 @@ func (c Capabilities) AdmitsTone(t Tone) bool {
 // pickers, validation) can depend on it without hardcoding FT-710 facts.
 //
 // Unexported: callers get at it only through StandardCTCSSTones (a fresh
-// array copy every call, so nothing can mutate this package's own copy)
-// and ValidTone (for the common "is this a real tone" question, without
-// needing the whole table at all).
+// array copy every call, so nothing can mutate this package's own copy).
 var standardCTCSSTones = [50]Tone{
 	670, 693, 719, 744, 770, 797, 825, 854, 885,
 	915, 948, 974, 1000, 1035, 1072, 1109, 1148, 1188,
@@ -152,21 +148,4 @@ var standardCTCSSTones = [50]Tone{
 // other caller's copy.
 func StandardCTCSSTones() [50]Tone {
 	return standardCTCSSTones
-}
-
-// ValidTone reports whether t appears in StandardCTCSSTones. Prefer this
-// over fetching the whole table with StandardCTCSSTones when a caller
-// only needs to answer "is this a real tone in the standard family-wide
-// chart" — a generic, radio-neutral question. It is NOT the check for
-// whether a tone is sendable to a specific radio: that is
-// codeplug.ToneField.Valid, which consults a Capabilities' own
-// CTCSSTones, since not every radio in this family necessarily shares
-// the standard chart.
-func ValidTone(t Tone) bool {
-	for _, s := range standardCTCSSTones {
-		if s == t {
-			return true
-		}
-	}
-	return false
 }

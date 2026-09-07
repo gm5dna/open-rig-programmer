@@ -2,7 +2,10 @@
 
 package civ
 
-import "fmt"
+import (
+	"encoding/hex"
+	"fmt"
+)
 
 // answerBody checks that frame is an ANSWER to this profile's radio —
 // addressed to this controller, from this radio, carrying cn/sc — and
@@ -58,12 +61,7 @@ func (p Profile) ParseTransceiverID(frame []byte) (string, error) {
 	if len(body) == 0 {
 		return "", newParseError(frame, "%s: transceiver-ID answer carries no data", p.model)
 	}
-	const digits = "0123456789abcdef"
-	out := make([]byte, 0, 2*len(body))
-	for _, b := range body {
-		out = append(out, digits[b>>4], digits[b&0x0F])
-	}
-	return string(out), nil
+	return hex.EncodeToString(body), nil
 }
 
 // MemoryAnswerRecord splits a `1A 00 <address> <record>` answer into the

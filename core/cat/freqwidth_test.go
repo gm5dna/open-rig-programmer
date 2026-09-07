@@ -3,7 +3,7 @@
 package cat
 
 import (
-	"errors"
+	"fmt"
 	"math"
 	"testing"
 )
@@ -35,12 +35,9 @@ func TestMemoryFreqHz(t *testing.T) {
 				if err == nil {
 					t.Fatalf("MemoryFreqHz(%d) = %d, nil; want an error", tt.in, got)
 				}
-				var ftw *FreqTooWideError
-				if !errors.As(err, &ftw) {
-					t.Fatalf("MemoryFreqHz(%d) error = %v, want a *FreqTooWideError", tt.in, err)
-				}
-				if ftw.FreqHz != tt.in {
-					t.Errorf("FreqTooWideError.FreqHz = %d, want %d", ftw.FreqHz, tt.in)
+				want := fmt.Sprintf("cat: frequency %d Hz is too large for this protocol's memory frame (maximum %d Hz)", tt.in, memFreqMax)
+				if err.Error() != want {
+					t.Errorf("MemoryFreqHz(%d) error = %q, want %q", tt.in, err.Error(), want)
 				}
 				if got != 0 {
 					t.Errorf("MemoryFreqHz(%d) returned %d alongside its error, want 0", tt.in, got)

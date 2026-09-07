@@ -5,6 +5,8 @@ package codeplug
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 )
 
 // MenuEntryState classifies one menu/EX entry within a MenuSnapshot.
@@ -74,13 +76,8 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 		return nil
 	}
 	out := *m
-	if m.Entries != nil {
-		out.Entries = make([]MenuEntry, len(m.Entries))
-		copy(out.Entries, m.Entries)
-	}
-	if m.Legacy != nil {
-		out.Legacy = append(json.RawMessage(nil), m.Legacy...)
-	}
+	out.Entries = slices.Clone(m.Entries)
+	out.Legacy = slices.Clone(m.Legacy)
 	return &out
 }
 
@@ -129,12 +126,7 @@ func isSettingIDWidth(id string) bool {
 	if len(id) != 3 && len(id) != 4 && len(id) != 6 {
 		return false
 	}
-	for i := 0; i < len(id); i++ {
-		if id[i] < '0' || id[i] > '9' {
-			return false
-		}
-	}
-	return true
+	return strings.IndexFunc(id, func(r rune) bool { return r < '0' || r > '9' }) < 0
 }
 
 // Validate enforces the MenuSnapshot consistency rules, returning the

@@ -79,35 +79,32 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 // value-shaped temptation, and the next datum promoted into Dialect will
 // too.
 func (d Dialect) validateMWFields(m MemoryData) error {
-	if !d.writableSlot(m.Slot) {
-		// THE WORDING IS FROZEN, and still says "Writable()" although M9d
-		// removed that method. The FT-710's render of it is baked into six
-		// lines of core/cat/testdata/frame-corpus.golden, one of the
-		// twenty paths the milestone golden gate forbids moving (twenty-five
-		// once the FT-991A's own artefacts join them); rewording it here
-		// would move that golden. Harmless in practice — the parenthetical
-		// spells the rule out in full, so the message stands alone without
-		// the symbol — but it is frozen deliberately, not by oversight.
-		// Reword it in a change that is ALLOWED to regenerate the frame
-		// corpus, never on its own.
-		//
-		// WHAT S0.2 CHANGED IS WHERE THE BYTES COME FROM, not what they
-		// are. The sentence is composed by Dialect.mwSlotDomainRefusal
-		// (slot.go) from this dialect's own memory range, PMS domain,
-		// declared special banks and none form, because all four were
-		// literals true only of the token-PMS radios: the FT-991A's pairs
-		// are 100-117 and it has neither a 5 MHz bank nor an emergency
-		// channel. All four token dialects render byte-for-byte what stood
-		// here, so the corpus does not move — proved directly by
-		// TestSlotDomainText_FT710SentencesAreByteIdentical, on the OTHER
-		// FOUR registered dialects by
-		// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
-		// (core/transport, which can import them where this package cannot),
-		// and, on the whole corpus, by the golden itself.
-		return newParseError([]byte(m.Slot.Wire()), d.mwSlotDomainRefusal())
-	}
-
-	// Kind-on-write pairing, from THIS DIALECT'S policy.
+	// THE SLOT REFUSAL WORDING IS FROZEN, and still says "Writable()"
+	// although M9d removed that method. The FT-710's render of it is
+	// baked into six lines of core/cat/testdata/frame-corpus.golden, one
+	// of the twenty paths the milestone golden gate forbids moving
+	// (twenty-five once the FT-991A's own artefacts join them); rewording
+	// it here would move that golden. Harmless in practice — the
+	// parenthetical spells the rule out in full, so the message stands
+	// alone without the symbol — but it is frozen deliberately, not by
+	// oversight. Reword it in a change that is ALLOWED to regenerate the
+	// frame corpus, never on its own.
+	//
+	// WHAT S0.2 CHANGED IS WHERE THE BYTES COME FROM, not what they are.
+	// The sentence is composed by Dialect.mwSlotDomainRefusal (slot.go)
+	// from this dialect's own memory range, PMS domain, declared special
+	// banks and none form, because all four were literals true only of
+	// the token-PMS radios: the FT-991A's pairs are 100-117 and it has
+	// neither a 5 MHz bank nor an emergency channel. All four token
+	// dialects render byte-for-byte what stood here, so the corpus does
+	// not move — proved directly by
+	// TestSlotDomainText_FT710SentencesAreByteIdentical, on the OTHER
+	// FOUR registered dialects by
+	// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
+	// (core/transport, which can import them where this package cannot),
+	// and, on the whole corpus, by the golden itself.
+	//
+	// KIND-ON-WRITE PAIRING is THIS DIALECT'S policy.
 	//
 	// THE FT-710's VALUE IS HW-CONFIRMED 2026-07-13 (M5b write trials
 	// against Stuart's real UK FT-710 — see docs/hardware-notes.md's M5b
@@ -128,13 +125,43 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	// gate. No claim is made that any other radio DOES differ; only that
 	// the FT-710's value is the FT-710's.
 	//
-	// Because d.writableSlot(m.Slot) above already guarantees memory XOR
-	// PMS, this single check also structurally rejects every OTHER Kind
-	// value for either slot kind — no separate validKindByte call is
-	// needed here. NewDialect has already checked that the policy byte is
-	// itself a documented P7 value.
-	if m.Kind != d.mwWriteKind {
-		return newParseError([]byte{m.Kind}, fmt.Sprintf("MW: Kind must be %q for both memory-channel and PMS slots (the FT-710's own value is KindMemory ('1'), HW-CONFIRMED 2026-07-13: PMS writes with KindPMS ('5') are REJECTED by the radio — docs/hardware-notes.md)", d.mwWriteKind))
+	// Because writableSlot above already guarantees memory XOR PMS, this
+	// single check also structurally rejects every OTHER Kind value for
+	// either slot kind — no separate validKindByte call is needed here.
+	// NewDialect has already checked that the policy byte is itself a
+	// documented P7 value.
+	return d.validateSetFields(m, "MW", d.writableSlot, d.mwSlotDomainRefusal(),
+		d.mwWriteKind, fmt.Sprintf("MW: Kind must be %q for both memory-channel and PMS slots (the FT-710's own value is KindMemory ('1'), HW-CONFIRMED 2026-07-13: PMS writes with KindPMS ('5') are REJECTED by the radio — docs/hardware-notes.md)", d.mwWriteKind))
+}
+
+// validateSetFields is validateMWFields' and validateCombinedMTFields'
+// shared checklist — slot writability, the fixed P7 kind byte, Mode,
+// ClarHz, FreqHz, P5 and CTCSSState/Shift — with only the SLOT PREDICATE
+// (slotOK), its refusal wording (slotRefusal), the WANTED KIND BYTE
+// (wantKind) and its refusal wording (kindRefusal) varying between MW and
+// combined-form MT. prefix ("MW" or "MT") names the command in every
+// other message.
+//
+// Everything below is MW's rule, for MW's reason, restated for whichever
+// command called it: Mode, CTCSSState and Shift are byte-alias types, so
+// a caller-forged value must be re-validated through this dialect's own
+// ParseMode and through ParseCTCSSState/ParseShift; ModeUnset is
+// separately refused, because parsers must accept the '-' placeholder and
+// builders must never emit it; the clarifier is bounded by THIS DIALECT'S
+// policy; and the frequency must be nonzero as well as fitting the
+// 9-digit field.
+//
+// slotRefusal and kindRefusal are passed in fully composed, never built
+// here: mw.go's slot refusal is FROZEN (golden-pinned, see
+// validateMWFields), and a shared body that assembled the wording itself
+// would put every caller's frozen message one edit away from moving it.
+func (d Dialect) validateSetFields(m MemoryData, prefix string, slotOK func(Slot) bool, slotRefusal string, wantKind byte, kindRefusal string) error {
+	if !slotOK(m.Slot) {
+		return newParseError([]byte(m.Slot.Wire()), slotRefusal)
+	}
+
+	if m.Kind != wantKind {
+		return newParseError([]byte{m.Kind}, kindRefusal)
 	}
 
 	// Mode is a raw byte alias (mode.go): never trust a caller-forged
@@ -143,18 +170,18 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	// emit (mode.go doc comment; Task 2 review note).
 	validMode, err := d.ParseMode(m.Mode.Wire())
 	if err != nil {
-		return newParseError([]byte{m.Mode.Wire()}, "MW: mode field (P6) is not a valid Mode")
+		return newParseError([]byte{m.Mode.Wire()}, prefix+": mode field (P6) is not a valid Mode")
 	}
 	if validMode == ModeUnset {
-		return newParseError([]byte{m.Mode.Wire()}, "MW: mode field (P6) must not be ModeUnset in a Set frame")
+		return newParseError([]byte{m.Mode.Wire()}, prefix+": mode field (P6) must not be ModeUnset in a Set frame")
 	}
 
 	if !d.validClarHz(m.ClarHz) {
-		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), fmt.Sprintf("MW: ClarHz must be a multiple of %d Hz, magnitude <= %d", d.clar.StepHz, d.clar.MaxAbsHz))
+		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), fmt.Sprintf("%s: ClarHz must be a multiple of %d Hz, magnitude <= %d", prefix, d.clar.StepHz, d.clar.MaxAbsHz))
 	}
 
 	if m.FreqHz == 0 || m.FreqHz > memFreqMax {
-		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), "MW: FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
+		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), prefix+": FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
 	}
 
 	// P5, BY THIS DIALECT'S OWN READING. Under P5Fixed byte 21 is printed
@@ -164,7 +191,7 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	// validate-don't-rewrite posture this validator takes with every other
 	// field. This is the WRITE-direction check on a caller-supplied
 	// MemoryData; a FORGED wire frame is instead refused earlier, by
-	// parseMemoryFields (memdata.go), which the gate's MW grammar check
+	// parseMemoryFields (memdata.go), which the gate's grammar check
 	// reaches before this validator ever runs.
 	//
 	// A SWITCH, not an if with an implicit "everything else passes" arm: see
@@ -174,21 +201,21 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	switch d.memoryP5 {
 	case P5Fixed:
 		if m.TxClar {
-			return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("MW: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", d.memoryP5))
+			return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("%s: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", prefix, d.memoryP5))
 		}
 	case P5TxClar:
 	default:
-		return newParseError(nil, "MW: P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
+		return newParseError(nil, prefix+": P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
 	}
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: never trust
 	// a caller-forged value (e.g. CTCSSState('9')). Re-validate via their
 	// own Parse functions for the same reason as the Mode check above.
 	if _, err := d.ParseCTCSSState(m.CTCSS.Wire()); err != nil {
-		return newParseError([]byte{m.CTCSS.Wire()}, "MW: CTCSS field (P8) is not a valid CTCSSState")
+		return newParseError([]byte{m.CTCSS.Wire()}, prefix+": CTCSS field (P8) is not a valid CTCSSState")
 	}
 	if _, err := ParseShift(m.Shift.Wire()); err != nil {
-		return newParseError([]byte{m.Shift.Wire()}, "MW: shift field (P10) is not a valid Shift")
+		return newParseError([]byte{m.Shift.Wire()}, prefix+": shift field (P10) is not a valid Shift")
 	}
 
 	return nil

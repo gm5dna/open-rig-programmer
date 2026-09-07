@@ -106,12 +106,7 @@ func (d Dialect) mcSendValid(s Slot) bool {
 			return false
 		}
 	case MCSelectsMemoryPMS:
-		switch d.classifySlot(s.Wire()) {
-		case slotKindMemory, slotKindPMS:
-			return true
-		default:
-			return false
-		}
+		return d.writableSlot(s)
 	default:
 		return false
 	}

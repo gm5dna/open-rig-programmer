@@ -82,10 +82,7 @@ func (e *ParseError) Error() string {
 // truncating it so the returned error never aliases caller-owned memory and
 // never grows unbounded.
 func newParseError(input []byte, reason string) *ParseError {
-	n := len(input)
-	if n > maxParseErrorFrameLen {
-		n = maxParseErrorFrameLen
-	}
+	n := min(len(input), maxParseErrorFrameLen)
 	frame := make([]byte, n)
 	copy(frame, input[:n])
 	return &ParseError{Frame: frame, Reason: reason}
