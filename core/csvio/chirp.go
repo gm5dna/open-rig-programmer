@@ -1349,34 +1349,22 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 // directions because no CHIRP column and therefore no mapping branch
 // speaks to them — see the comment at those two below.
 func markUnreachableTierFields(data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) {
-	if !reaches(caps, bank, spec.FieldTxFrequency) {
-		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	for _, tf := range codeplug.TierFields {
+		// Filter and DataMode are handled below, not here: unlike every
+		// other D4 field, they get BOTH answers, never leaving a
+		// reachable one alone. Receiver fields are handled by the
+		// second loop, for the same both-answers reason.
+		if tf.Receiver || tf.Field == spec.FieldFilter || tf.Field == spec.FieldDataMode {
+			continue
+		}
+		if !reaches(caps, bank, tf.Field) {
+			tf.SetState(data, codeplug.Unavailable)
+		}
 	}
-	if !reaches(caps, bank, spec.FieldDuplex) {
-		data.Duplex = codeplug.StringField{State: codeplug.Unavailable}
-	}
-	if !reaches(caps, bank, spec.FieldOffset) {
-		data.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
-	}
-	if !reaches(caps, bank, spec.FieldToneMode) {
-		data.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
-	}
-	if !reaches(caps, bank, spec.FieldToneTx) {
-		data.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
-	}
-	if !reaches(caps, bank, spec.FieldToneRx) {
-		data.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
-	}
-	if !reaches(caps, bank, spec.FieldDTCSCode) {
-		data.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
-	}
-	if !reaches(caps, bank, spec.FieldDTCSPolarity) {
-		data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
-	}
-	// Filter and DataMode get BOTH answers here, unlike the eight above:
-	// no CHIRP column speaks to either, so no mapping branch below ever
-	// revisits them, and leaving a reachable one at its zero value would
-	// leave it ABSENT — "this channel says nothing at all", which
+	// Filter and DataMode get BOTH answers here, unlike the fields
+	// above: no CHIRP column speaks to either, so no mapping branch below
+	// ever revisits them, and leaving a reachable one at its zero value
+	// would leave it ABSENT — "this channel says nothing at all", which
 	// codeplug.Validate reports as an error on every imported channel and
 	// codeplug.Diff counts as a modification in a field the file never
 	// mentioned (Wave-1c review 1, finding 4). Where the radio HAS the
@@ -1397,17 +1385,14 @@ func markUnreachableTierFields(data *codeplug.ChannelData, caps spec.Capabilitie
 	// CHIRP has no columns for D8's receiver settings. A reachable field
 	// is therefore Unknown (the radio has it; this file did not say), while
 	// an unreachable one is positively Unavailable.
-	receiverState := func(field spec.Field) codeplug.FieldState {
-		if reaches(caps, bank, field) {
-			return codeplug.Unknown
+	for _, tf := range codeplug.TierFields {
+		if !tf.Receiver {
+			continue
 		}
-		return codeplug.Unavailable
+		if reaches(caps, bank, tf.Field) {
+			tf.SetState(data, codeplug.Unknown)
+		} else {
+			tf.SetState(data, codeplug.Unavailable)
+		}
 	}
-	data.TuningStepEnabled = codeplug.BoolField{State: receiverState(spec.FieldTuningStepEnabled)}
-	data.TuningStep = codeplug.StringField{State: receiverState(spec.FieldTuningStep)}
-	data.ProgramTuningStepHz = codeplug.FreqField{State: receiverState(spec.FieldProgramTuningStep)}
-	data.AttenuatorDB = codeplug.IntField{State: receiverState(spec.FieldAttenuator)}
-	data.Preamp = codeplug.StringField{State: receiverState(spec.FieldPreamp)}
-	data.Antenna = codeplug.StringField{State: receiverState(spec.FieldAntenna)}
-	data.IPPlus = codeplug.BoolField{State: receiverState(spec.FieldIPPlus)}
 }

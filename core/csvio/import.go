@@ -630,25 +630,18 @@ func parseReceiverCells(data *codeplug.ChannelData, cell func(string) string) er
 // have the column and says nothing in it is a different statement from
 // a file with no column at all.
 func markTierFieldsUnavailable(data *codeplug.ChannelData) {
-	data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
-	data.Duplex = codeplug.StringField{State: codeplug.Unavailable}
-	data.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
-	data.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
-	data.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
-	data.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
-	data.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
-	data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
-	data.Filter = codeplug.StringField{State: codeplug.Unavailable}
-	data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	for _, tf := range codeplug.TierFields {
+		if !tf.Receiver {
+			tf.SetState(data, codeplug.Unavailable)
+		}
+	}
 	markReceiverFieldsUnavailable(data)
 }
 
 func markReceiverFieldsUnavailable(data *codeplug.ChannelData) {
-	data.TuningStepEnabled = codeplug.BoolField{State: codeplug.Unavailable}
-	data.TuningStep = codeplug.StringField{State: codeplug.Unavailable}
-	data.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Unavailable}
-	data.AttenuatorDB = codeplug.IntField{State: codeplug.Unavailable}
-	data.Preamp = codeplug.StringField{State: codeplug.Unavailable}
-	data.Antenna = codeplug.StringField{State: codeplug.Unavailable}
-	data.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
+	for _, tf := range codeplug.TierFields {
+		if tf.Receiver {
+			tf.SetState(data, codeplug.Unavailable)
+		}
+	}
 }
