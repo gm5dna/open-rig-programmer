@@ -153,7 +153,9 @@ func capabilities(write spec.Support) spec.Capabilities {
 		Bauds: append([]int(nil), baudRates...), // Matrix §1 row 10.
 		// Matrix §1 row 11: 19200 is the highest documented numeric rate;
 		// ASSUMED factory Auto locking on the first 19 00 is pinned to
-		// register entry ic7100-default-baud-auto and remains version-dependent.
+		// register entry ic7100-default-baud-auto and remains version-dependent
+		// (PDF p.317 warns that defaults differ by transceiver version, so the
+		// lift records the radio version alongside the first 19 00).
 		DefaultBaud: defaultBaud,
 		// Matrix §1 row 12; ASSUMED storable bound pinned to register entry
 		// ic7100-storable-frequency-range.
@@ -169,8 +171,11 @@ func capabilities(write spec.Support) spec.Capabilities {
 		ToneModes:     toneModes(),     // Matrix §1 row 18.
 		// Matrix §1 row 19.
 		DTCSPolarities: []string{"NN", "NR", "RN", "RR"},
-		DTCSCodes:      append([]int(nil), standardDTCSCodes...), // Matrix §1 row 20: the conservative 104-code CHOICE.
-		Filters:        []string{"FIL1", "FIL2", "FIL3"},         // Matrix §1 row 21.
+		// Matrix §1 row 20: the conservative 104-code CHOICE, enforced until the
+		// open lift ic7100-dtcs-code-clamp (write off-list DTCS 000 to a scratch
+		// channel and read it back) settles what the radio does with an off-list code.
+		DTCSCodes: append([]int(nil), standardDTCSCodes...),
+		Filters:   []string{"FIL1", "FIL2", "FIL3"}, // Matrix §1 row 21.
 
 		TuningSteps:            nil,                     // Matrix §1b D8: no tuning-step field.
 		ProgramTuningStepRange: nil,                     // Matrix §1b D8: no programmable-step field.
