@@ -112,8 +112,8 @@
 	}
 
 	// Transition 'transferring' -> 'result' the moment THIS dialogue's own
-	// transfer settles (Kind "send" — ReadRadio/DiffAgainstRadio events
-	// never arrive while Send's own transfer is running, since the Send
+	// transfer settles (Kind "send" — ReadRadio events never arrive while
+	// Send's own transfer is running, since the Send
 	// button is disabled whenever any transfer is active). Gated on
 	// `!appState.transfer.active` as well as Kind "send" — defence in depth
 	// alongside beginTransfer clearing lastOutcome on confirm: only

@@ -130,7 +130,7 @@ func (a *App) applyEditsLocked(chs []codeplug.Channel) (EditResult, error) {
 
 // UpdateChannel applies one channel edit to the working copy. Refused
 // with a typed busy error while Fix 2's reservation is held by a
-// concurrently-running ReadRadio/DiffAgainstRadio/PrepareSend/
+// concurrently-running ReadRadio/PrepareSend/
 // ReadSettingsRadio (task 35), or while a send transfer is running — see
 // checkNotBusyLocked.
 func (a *App) UpdateChannel(ch codeplug.Channel) (EditResult, error) {
