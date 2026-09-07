@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -266,7 +267,7 @@ func mergeRecord(slot string, addr civ.ChannelAddress, data codeplug.ChannelData
 }
 
 func (s *Session) validateWriteValues(slot string, data codeplug.ChannelData) error {
-	if !contains(s.caps.Modes, data.Mode) {
+	if !slices.Contains(s.caps.Modes, data.Mode) {
 		return refuse(slot, []spec.Field{spec.FieldMode}, "mode %q is not in %v", data.Mode, s.caps.Modes)
 	}
 	if data.FreqHz < s.caps.MinFreqHz || data.FreqHz > s.caps.MaxFreqHz {
@@ -320,14 +321,6 @@ func (s *Session) validateWriteValues(slot string, data codeplug.ChannelData) er
 	return nil
 }
 
-func contains(values []string, value string) bool {
-	for _, candidate := range values {
-		if candidate == value {
-			return true
-		}
-	}
-	return false
-}
 func fieldList(fields []spec.Field) string {
 	names := make([]string, len(fields))
 	for i, f := range fields {
