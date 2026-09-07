@@ -10,6 +10,7 @@ import (
 	// core/cat side of the FT-991A", which is exactly what it is, and it
 	// appears at ONE call site (catDialect, below).
 	catft991a "github.com/gm5dna/open-rig-programmer/core/cat/ft991a"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -123,19 +124,18 @@ var catID = catDialect.CATID()
 // internal/fakeft991a and about nothing else. Any OTHER unrecognised
 // Profile value fails the same way, through Capabilities' explicit default
 // arm.
-type Profile int
+type Profile = driver.Profile
 
+// RealHardware and Simulated are this package's own names for the shared
+// profile constants — AN ALIAS AND UNTYPED RE-DECLARATIONS, never a fresh
+// named type. The alias keeps this package's Profile and driver.Profile
+// the SAME type, so driver.Base can be embedded, while the selector
+// internal/wiring names stays this package's own: TestSimulatedProfile
+// TokensConfinement walks for it by package-local name, and that is what
+// confines the fake-only profile to one non-test file in the repository.
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects
-	// CapabilitiesUnverified: reads labelled Unverified, every candidate
-	// field's Write Unverified, nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakeft991a-backed sessions
-	// ONLY (the CLI's --fake mode, the GUI's demo mode): Write Supported
-	// for the six fields the combined MT form can express, so the write
-	// choreography can be exercised end to end with no hardware at risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // modeNames returns the selectable mode display names this radio's
@@ -652,48 +652,4 @@ func CapabilitiesSimulated() spec.Capabilities {
 	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
 	clar := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
 	return baseCapabilities(bankFields(rw, clar), bankFields(rw, clar))
-}
-
-// cloneCapabilities returns a deep copy of caps: Banks (each with fresh
-// Slots and Fields) and every other populated slice independently
-// allocated, so mutating the copy can never reach the original.
-//
-// Load-bearing for the write gate, exactly as in the sibling drivers:
-// Session.Capabilities hands copies out, and a caller mutating one must
-// never alter what WriteChannel enforces.
-//
-// The twelve deliberately-empty Icom-tier slices are not copied because
-// they are nil on this radio in every profile (matrix §1.10, §1.18-1.28)
-// and appending nil to nil yields nil — there is nothing to alias. A
-// future edit that populated one would have to add its copy here, which is
-// what TestCapabilities_EveryFieldExplicit's inverted rule is there to
-// prevent happening silently.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// Capabilities.Bank returns a defensive copy (fresh Slots and
-		// Fields) — reuse that guarantee rather than restating per-field
-		// copying here.
-		//
-		// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE:
-		// b came out of caps.Banks and Bank scans that same slice for
-		// b.ID, so the lookup cannot miss. The only way it could return
-		// the WRONG bank is a DUPLICATE BankID, and
-		// spec.Capabilities.Validate refuses one outright, with
-		// TestProfiles_Validate running it over both profiles. On this
-		// radio that closure is total rather than partial: there are no
-		// discovered banks to append after validation, so the two banks
-		// this function ever copies are exactly the two the validated
-		// baseline declares.
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	return out
 }

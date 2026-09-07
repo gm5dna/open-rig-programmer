@@ -14,16 +14,7 @@ import (
 )
 
 // bankFor reports which of this session's banks claims slot.
-func (s *Session) bankFor(slot string) (spec.BankID, bool) {
-	for _, b := range s.caps.Banks {
-		for _, sl := range b.Slots {
-			if sl == slot {
-				return b.ID, true
-			}
-		}
-	}
-	return "", false
-}
+func (s *Session) bankFor(slot string) (spec.BankID, bool) { return s.caps.BankOf(slot) }
 
 // requestedFields lists every spec.Field a write of data actually
 // requests: the six plain fields are ALWAYS requested (the MW frame

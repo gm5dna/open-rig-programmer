@@ -8,6 +8,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	catft891 "github.com/gm5dna/open-rig-programmer/core/cat/ft891"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -105,7 +106,7 @@ func TestOpen_UnconfiguredDialectRefusesToOpen(t *testing.T) {
 	p := newRespondingPort(t, slotImage{})
 
 	// Deliberately NOT via New: a hand-built driver with the zero dialect.
-	d := &ft891Driver{profile: Simulated}
+	d := &ft891Driver{Base: driver.Base{Profile: Simulated}}
 
 	sess, err := d.Open(testCtx(t), p.Port(), testIdentity)
 	if err == nil {

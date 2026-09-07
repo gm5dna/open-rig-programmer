@@ -970,8 +970,8 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 			t.Fatalf("tierRequestedFields has %d entries, want the seventeen codeplug's tierAddedFieldFor carries", len(tierRequestedFields))
 		}
 		for _, tr := range tierRequestedFields {
-			if tr.present(*writableChannel().Data) {
-				t.Errorf("%s is requested by an ordinary FT-891 channel — every tier field reads back Unavailable on this radio", tr.field)
+			if tr.Present(*writableChannel().Data) {
+				t.Errorf("%s is requested by an ordinary FT-891 channel — every tier field reads back Unavailable on this radio", tr.Field)
 			}
 		}
 	})
@@ -1003,7 +1003,7 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 
 		gotTier := make([]spec.Field, len(tierRequestedFields))
 		for i, tr := range tierRequestedFields {
-			gotTier[i] = tr.field
+			gotTier[i] = tr.Field
 		}
 		if !reflect.DeepEqual(gotTier, wantTier) {
 			t.Errorf("tierRequestedFields names\n %v\nbut spec.AllFields() carries the tier-added\n %v\n(the two must be the same seventeen fields in the same order)", gotTier, wantTier)

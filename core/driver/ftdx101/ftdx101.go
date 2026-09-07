@@ -4,8 +4,8 @@ package ftdx101
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	// ALIASED deliberately: the dialect package's own name is also
@@ -16,6 +16,7 @@ import (
 	// model, because there are two models and therefore two dialects.
 	catftdx101 "github.com/gm5dna/open-rig-programmer/core/cat/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -118,7 +119,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // proven.
 func WithConsentedUnverifiedWrites() Option {
 	return func(d *ftdx101Driver) {
-		d.consentUnverifiedWrites = true
+		d.Consented = true
 	}
 }
 
@@ -146,7 +147,7 @@ func NewMP(profile Profile, opts ...Option) driver.Driver {
 // fallback: there is no bare New, for the same reason core/cat/ftdx101
 // offers no bare Dialect().
 func newDriver(m modelParams, profile Profile, opts ...Option) driver.Driver {
-	d := &ftdx101Driver{model: m, profile: profile}
+	d := &ftdx101Driver{model: m, Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -170,8 +171,8 @@ type ftdx101Driver struct {
 	// the value the driver or session carries, so a hand-built driver with
 	// a zero modelParams fails closed rather than silently borrowing one
 	// model's dialect (see TestOpen_UnconfiguredDialectRefusesToOpen).
-	model   modelParams
-	profile Profile
+	model modelParams
+	driver.Base
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
@@ -180,7 +181,6 @@ type ftdx101Driver struct {
 	// sessionCapabilities. FALSE is the zero value and the default, so a
 	// driver built without the option behaves exactly as it did before the
 	// option existed.
-	consentUnverifiedWrites bool
 }
 
 // Model implements driver.Driver.
@@ -190,7 +190,7 @@ func (d *ftdx101Driver) Model() string { return d.model.name }
 // driver's model and profile — no discovered banks (see
 // Session.Capabilities for the effective, per-radio set).
 func (d *ftdx101Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated(d.model)
 	case RealHardware:
@@ -218,18 +218,6 @@ func (d *ftdx101Driver) Capabilities() spec.Capabilities {
 		// TestProfileMatrix_StaticPerField's invalid-profile rows.
 		return capabilitiesUnverified(d.model)
 	}
-}
-
-// idSpec is the transport spec for the ID; probe: a fixed 7-byte answer
-// ("ID0681;" for the D, "ID0682;" for the MP). The length is core/cat's
-// idAnswerLen, and core/cat/ftdx101's reused-command verification checked
-// this radio's own ID frame table against it (frame block at layout
-// 1069-1078, availability row X O O X at layout 304: no Set, Read "ID;",
-// Answer seven bytes) before the shared codec was accepted — see that
-// package's doc.go. One retry: an identity read is idempotent and Open
-// should survive a single swallowed reply.
-func idSpec() transport.CommandSpec {
-	return transport.CATReadSpec("ID", 7, 1)
 }
 
 // Open implements driver.Driver: it builds a transport.Engine over port,
@@ -264,18 +252,13 @@ func idSpec() transport.CommandSpec {
 // one, so there is no code action here; it is why every Stage R capture
 // must record its port.
 func (d *ftdx101Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngine(port, d.model.dialect, engOpts...)
+	eng, err := yaesu.NewEngine(port, d.model.dialect, d.transportLogger, &params)
 	if err != nil {
-		// NewEngine has not taken the port on this path (it refuses before
-		// touching it), so closing it here is Open's own ownership
-		// obligation, not a double close.
-		_ = port.Close()
-		return nil, fmt.Errorf("ftdx101: Open: %w", err)
+		// NewEngine has closed the port itself on this path — Open's
+		// ownership obligation, discharged there in one place.
+		return nil, err
 	}
+
 	sess, err := d.open(ctx, eng, id)
 	if err != nil {
 		_ = eng.Close()
@@ -288,50 +271,13 @@ func (d *ftdx101Driver) Open(ctx context.Context, port transport.Port, id driver
 // one place.
 func (d *ftdx101Driver) open(ctx context.Context, eng *transport.Engine, id driver.Identity) (*Session, error) {
 	m := d.model
-	if err := eng.Init(ctx); err != nil {
-		return nil, fmt.Errorf("ftdx101: Open: %w", err)
-	}
-
-	// Identity probe: the ID; answer is authoritative (matrix §3.10,
-	// MANUAL-EVIDENCED — the D answers "ID0681;", the MP "ID0682;"), and
-	// anything else means the wrong radio, or something else that speaks
-	// CAT, is on this port.
-	//
-	// THE SIBLING CASE IS THE ONE THIS PACKAGE EXISTS TO GET RIGHT: an
-	// FTDX101MP answering a D driver's probe is not a foreign radio but the
-	// other half of this very package, and it must be refused with BOTH
-	// models named rather than with two bare four-digit IDs a user would
-	// have to look up. The refusal is a CHOICE and its wording is too; the
-	// IDs it compares are the manual's.
-	catID := m.dialect.CATID()
-	frame, err := eng.Do(ctx, m.dialect.BuildIDRead(), idSpec())
+	got, err := yaesu.Handshake(ctx, eng, m.dialect, &params, yaesu.Want{CATID: m.dialect.CATID(), Model: m.name, Sibling: func(id string) string { return siblingNames[id] }})
 	if err != nil {
-		return nil, fmt.Errorf("ftdx101: Open: ID probe: %w", err)
-	}
-	got, err := m.dialect.ParseIDAnswer(frame)
-	if err != nil {
-		return nil, fmt.Errorf("ftdx101: Open: ID probe: %w", err)
-	}
-	if got != catID {
-		// BOTH name fields are populated when the found ID is one this
-		// package knows, and BOTH must be: driver.WrongRadioError.Error()
-		// renders its named form only when WantModel and GotModel are both
-		// set, so a driver that filled one alone would produce the ID-only
-		// text from Error() while cmd/rigprog's probe formatter — which
-		// keys on GotModel alone — rendered the named one, and the same
-		// refusal would read two different ways in two places. GotModel is
-		// "" for an ID this package does not register, which is the
-		// deliberate ID-only path (siblingNames' doc comment).
-		return nil, &driver.WrongRadioError{
-			Want:      catID,
-			Got:       got,
-			WantModel: m.name,
-			GotModel:  siblingNames[got],
-		}
+		return nil, err
 	}
 	id.CATID = got
 
-	slots60m, emg, err := discoverInventory(ctx, m.dialect, eng)
+	slots60m, emg, err := yaesu.DiscoverInventory(ctx, eng, m.dialect, &params)
 	if err != nil {
 		return nil, fmt.Errorf("ftdx101: Open: 5xx/EMG discovery: %w", err)
 	}
@@ -355,132 +301,13 @@ func (d *ftdx101Driver) open(ctx context.Context, eng *transport.Engine, id driv
 // the transform here, before the Session exists, keeps the set WriteChannel
 // enforces (s.caps) and the set Capabilities() hands out the same value.
 func (d *ftdx101Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capabilities {
-	caps := effectiveCapabilities(d.model.dialect, d.Capabilities(), slots60m, emg)
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(effectiveCapabilities(d.model.dialect, d.Capabilities(), slots60m, emg))
 }
 
 // profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set Capabilities' switch
-// names explicitly, restated here so the consent gate cannot drift open for
-// a profile that switch would fail safe on. It carries no model dimension
-// because Profile carries none: which radio a driver is for is fixed by
-// which constructor built it (plan D1).
-func (d *ftdx101Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
-
-// discoverInventory probes this radio's 5xx and EMG channel inventory:
-// EVERY slot the dialect's own 5xx space declares, in ascending order, then
-// the EMG slot. It returns the wire forms that answered, in probe order,
-// and whether EMG did.
-//
-// NO TERMINATION ASSUMPTIONS, and this is the whole design (doc.go,
-// "Discovery walks the WHOLE declared range"; matrix §3.4): no contiguity
-// from the first slot, no stop at the first rejection, no cap, no sentinel.
-// Each of those is an FT-710 hardware fact about a radio whose factory 5xx
-// channels are believed contiguous and non-erasable; nothing of the kind is
-// known for either FTdx101, a populated 503 behind an empty 502 is entirely
-// possible, and a walk that stopped early would report a truncated
-// inventory as a complete one. The price is ~100 exchanges per Open,
-// ACCEPTED and budgeted — TWICE OVER for this package, since two models
-// means two models' worth of sessions in every gate. Anybody tempted to
-// trim it must read doc.go's discovery section first, because the trimming
-// IS the assumption.
-//
-// The range's extent comes from the DIALECT, by asking SixtyMSlot for
-// successive ordinals until it refuses one: the last accepted ordinal is
-// that dialect's declared ceiling, so no bound is written down here and a
-// dialect declaring a different 5xx space would be walked correctly. The
-// loop provably terminates — SixtyMSlot refuses every ordinal past
-// (SixtyHi - SixtyLo + 1), and refuses ordinal 1 outright for a dialect
-// with no 5xx space at all, which yields zero probes rather than a spurious
-// one. The 501..599 NUMBERING itself is the DIALECT register's entry
-// "SlotSpace.SixtyLo/SixtyHi = 501/599", cited not restated; what a
-// REJECTION MEANS is this driver's own register entry 7.
-//
-// A discovery error is FATAL to Open (see open, above): a malformed answer
-// or a wrong-slot echo aborts the walk and closes the port, and no bank is
-// synthesised from the partial result. Discovery refuses rather than
-// guesses — half a walk is not a smaller inventory, it is an unknown one.
-func discoverInventory(ctx context.Context, dialect cat.Dialect, eng *transport.Engine) (slots60m []string, emg bool, err error) {
-	for n := 1; ; n++ {
-		slot, serr := dialect.SixtyMSlot(n)
-		if serr != nil {
-			// Past this dialect's declared 5xx space: the walk is complete.
-			// This is the ONLY loop exit — never a rejection.
-			break
-		}
-		populated, perr := probeSlot(ctx, dialect, eng, slot)
-		if perr != nil {
-			return nil, false, perr
-		}
-		if populated {
-			slots60m = append(slots60m, slot.Wire())
-		}
-	}
-
-	emgSlot := dialect.EMGSlot()
-	if emgSlot.Wire() == "" {
-		// A dialect with no emergency channel: nothing to probe, and no EMG
-		// bank. (core/cat/ftdx101 declares "EMG" — the wire form is
-		// MANUAL-EVIDENCED, matrix §1.3.4 — so this is the defensive
-		// branch, not either FTdx101's path.)
-		return slots60m, false, nil
-	}
-	emg, err = probeSlot(ctx, dialect, eng, emgSlot)
-	if err != nil {
-		return nil, false, err
-	}
-	return slots60m, emg, nil
-}
-
-// probeSlot MT-reads one slot purely for existence: a well-formed answer
-// naming the probed slot reports populated, a "?;" rejection reports not
-// populated (ASSUMED — register entry 7), and anything else is an error.
-//
-// It probes with the COMBINED MT READ, not MR: this driver never sends MR
-// at all (doc.go, "MR is deliberately unused"), and a discovery path that
-// quietly did would make that statement false while nothing failed.
-//
-// Unlike Session.ReadChannel it maps no fields — discovery only needs to
-// know whether the slot answered — but it does parse the answer and check
-// the slot echo, so a radio answering for a different slot raises the typed
-// *AnswerMismatchError here rather than silently adding the wrong channel
-// to a capability bank.
-func probeSlot(ctx context.Context, dialect cat.Dialect, eng *transport.Engine, slot cat.Slot) (bool, error) {
-	cmd, err := dialect.BuildMTRead(slot)
-	if err != nil {
-		return false, err
-	}
-	// cmdSpec, not spec: the package spec (core/spec) is imported here.
-	cmdSpec, err := mtSpec(dialect)
-	if err != nil {
-		return false, err
-	}
-	frame, err := eng.Do(ctx, cmd, cmdSpec)
-	if errors.Is(err, cat.ErrRejected) {
-		// ASSUMED absent — see register entry 7.
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	m, _, err := dialect.ParseMTAnswerCombined(frame)
-	if err != nil {
-		return false, fmt.Errorf("probe %s: %w", slot.Wire(), err)
-	}
-	if m.Slot.Wire() != slot.Wire() {
-		return false, &AnswerMismatchError{Requested: slot.Wire(), Answered: m.Slot.Wire()}
-	}
-	return true, nil
-}
+// declared constants — driver.Base's shared predicate, kept under the
+// name this package's tests put the question by.
+func (d *ftdx101Driver) profileRecognised() bool { return d.Recognised() }
 
 // SynthesiseDiscoveredBanks implements the optional
 // driver.DiscoveredBankSynthesizer capability (core/driver/optional.go): it
@@ -567,16 +394,24 @@ func (d *ftdx101Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 // it. Safe for concurrent use — transport.Engine serialises every
 // individual exchange, and everything else here is immutable after Open.
 //
-// There is NO operation mutex, and that is a consequence of the MT-only
-// choreography rather than an omission: every logical operation this
-// session performs is exactly ONE wire exchange (ReadChannel's combined MT
-// read; the combined MT Set the write path will send), so there is no gap
-// between two frames of the same operation for a concurrent operation to
-// land in. The FT-710's Session holds an opMu precisely because its
-// operations are two exchanges each (MR+MT, MW+MT) and a concurrent write
-// landing between a read's two halves tears the channel — frequency from
-// one moment, tag from another. See doc.go: a future FTdx101 operation
-// needing two frames needs an opMu with it.
+// ONE OPERATION MUTEX PER SESSION, taken by ReadSetting and by
+// WriteChannel and never re-entered: a whole driver operation excludes
+// another, which is a larger claim than the engine's own per-exchange
+// lock because it covers the work an operation does around its
+// exchanges. Every one of these radios states the rule the same way, so
+// there is one rule rather than a per-radio exception that a second
+// frame added to any operation would silently invalidate.
+//
+// This radio's operations happen to be ONE wire exchange each today
+// (ReadChannel's combined MT read; WriteChannel's combined MT Set,
+// write.go), so the lock costs nothing here; holding it anyway is what
+// makes the FT-710's two-exchange choreography (MR+MT, MW+MT) a
+// difference in the radio rather than a difference in the rule.
+//
+// THE SHARED BODIES TAKE NO LOCK. core/driver/internal/yaesu's
+// WriteChannel and ReadSetting document that their caller holds it, so
+// the mutex is taken in exactly one place per method and cannot be
+// re-entered from inside.
 type Session struct {
 	eng *transport.Engine
 	// dialect is the CAT dialect this session's every codec call goes
@@ -591,6 +426,14 @@ type Session struct {
 	dialect cat.Dialect
 	id      driver.Identity
 	caps    spec.Capabilities // effective; never mutated after Open
+
+	// opMu serialises whole DRIVER OPERATIONS on this session, which is a
+	// larger claim than the engine's own per-exchange mutex: it covers the
+	// work an operation does around its exchanges, not just the exchange.
+	// Every operation takes it, single-frame ones included, so the rule is
+	// one rule rather than a list of exceptions that a second frame added
+	// to any of them would silently invalidate.
+	opMu sync.Mutex
 }
 
 // Identity implements driver.Session.
@@ -598,9 +441,9 @@ func (s *Session) Identity() driver.Identity { return s.id }
 
 // Capabilities implements driver.Session: the EFFECTIVE capability set
 // (profile baseline plus the discovered read-only 60M/EMG banks), as a deep
-// copy per call — see cloneCapabilities for why the copy is load-bearing.
+// copy per call — see spec.Capabilities.Clone for why the copy is load-bearing.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // Diagnostics reports this session's transport-level health counters as a
@@ -612,13 +455,7 @@ func (s *Session) Capabilities() spec.Capabilities {
 // concrete *Session rather than part of driver.Session, because which
 // diagnostics exist is a per-driver matter.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close
@@ -630,36 +467,17 @@ func (s *Session) Close() error { return s.eng.Close() }
 // placeholder that stood here, and the TestWriteChannel_RefusedUntilTask3
 // that pinned it, were both replaced by that file at task 3.)
 
-// ErrAnswerMismatch is the sentinel a caller should compare against (via
-// errors.Is) when a slot-addressed answer names a DIFFERENT slot than the
-// one just requested. The transport's quarantine discipline makes this
-// unlikely (a stale same-shape reply should have been drained), but the
-// driver still refuses to map an answer onto the wrong slot.  The error
-// actually returned is an *AnswerMismatchError.
-var ErrAnswerMismatch = errors.New("ftdx101: answer names a different slot than was requested")
+// ErrAnswerMismatch is the sentinel a caller compares against (via
+// errors.Is) to ask "did a radio answer about the wrong channel?" —
+// the shared one, so the question can be put once rather than once
+// per driver package. The error actually returned is an
+// *AnswerMismatchError naming both addresses.
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered slot. It is
-// this PACKAGE's own typed error, in this package's own namespace: the
-// FT-710 and FTdx10 drivers have same-shaped ones, and none imports
-// another — a caller distinguishing which radio's read went wrong needs
-// distinct types, and a shared one would put a radio-specific failure on a
-// seam that is meant to be neutral.
-//
-// ONE type for BOTH models, unlike the two capability sets: the failure it
-// reports is a property of the combined MT record's slot echo, which matrix
-// §2.5 shows is printed once for both radios, and the model that met it is
-// already legible from the session the caller holds.
-type AnswerMismatchError struct {
-	// Requested is the slot the read asked for.
-	Requested string
-	// Answered is the slot the reply actually named.
-	Answered string
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ftdx101: requested slot %q but the answer names slot %q — refusing to map a reply onto the wrong slot", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports that a memory answer's decoded slot was
+// not the one asked for, naming both. THE CHECK IS THIS DRIVER'S
+// BECAUSE NOTHING BELOW IT MAKES ONE: a NEWCAT prefix matcher checks
+// the command name, so an answer for another slot satisfies the read's
+// spec perfectly well, and a record mis-attributed to the wrong slot is
+// the corruption this project refuses.
+type AnswerMismatchError = driver.AnswerMismatchError[string]

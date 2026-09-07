@@ -127,11 +127,11 @@
 // core/cat/dialecttest's conformance suite, the fake's answers — because a
 // dialect describes a radio's protocol, not one driver's use of it.
 //
-// The same one-exchange property is why this Session carries no operation
-// mutex: transport.Engine already serialises each individual exchange, and
-// every logical operation here is exactly one. A future FTdx101 operation
-// needing two frames needs an opMu with it, and must not assume this one is
-// safe without it.
+// That one-exchange property does not buy this Session out of the
+// operation mutex: ReadSetting and WriteChannel take it like every other
+// Yaesu driver's do, so "a driver operation excludes another" is one rule
+// across the family. An operation that grows a second frame is then
+// already covered, rather than needing the lock added with it.
 //
 // # No per-class kind narrowing, and a legend that invites one
 //
@@ -266,7 +266,7 @@
 //     caps.go's modeNames excludes from the advertised mode list, so that
 //     no user is offered a mode core/cat refuses to emit.
 //   - "SlotSpace.SixtyLo/SixtyHi = 501/599" — the extent of the discovery
-//     walk (ftdx101.go's discoverInventory), which asks the dialect for
+//     walk (Open's shared discovery sweep, yaesu.DiscoverInventory), which asks the dialect for
 //     successive 5xx ordinals until it refuses rather than writing a bound
 //     down.
 //   - "The combined MT answer's EXACT length (consumed here as
@@ -417,7 +417,7 @@
 //     skip flag.
 //
 //  7. "?;" ON A 5xx/EMG DISCOVERY PROBE MEANS ABSENT FROM THIS RADIO
-//     (ftdx101.go's discoverInventory/probeSlot). Discovery treats a
+//     (Open's shared discovery sweep, yaesu.DiscoverInventory/ProbeSlot). Discovery treats a
 //     rejection as "this radio does not have that channel" and a
 //     well-formed answer as "it does". "?;" is the protocol's SINGLE
 //     unattributed NAK (cat.ErrRejected's own doc comment): it is also what

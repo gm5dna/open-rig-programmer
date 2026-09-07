@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -53,14 +54,7 @@ var shiftNames = map[cat.Shift]string{
 // instead of its window's top silently becoming a hard requirement (which
 // would reject every shorter answer as unmatched, i.e. as a timeout).
 func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
-	lo, hi, err := d.MTAnswerBounds()
-	if err != nil {
-		return transport.CommandSpec{}, fmt.Errorf("ftdx10: MT answer geometry: %w", err)
-	}
-	if lo != hi {
-		return transport.CommandSpec{}, fmt.Errorf("ftdx10: MT answer geometry: this dialect reports a %d..%d length WINDOW, but transport.CATReadSpec takes a single exact length — a windowed answer needs a spec that expresses the window, not its top", lo, hi)
-	}
-	return transport.CATReadSpec("MT", hi, 1), nil
+	return yaesu.MTSpec(d, &params)
 }
 
 // ReadChannel implements driver.Session: ONE combined MT read, mapped into
@@ -145,7 +139,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, fmt.Errorf("ftdx10: ReadChannel %s: %w", sl.Wire(), err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: sl.Wire(), Answered: m.Slot.Wire()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
 	}
 
 	ctcss, ok := ctcssNames[m.CTCSS]

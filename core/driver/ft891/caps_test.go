@@ -650,7 +650,7 @@ func TestDiscoveredBankFields_TagAndTagDisplayAreZero(t *testing.T) {
 
 // TestBankFieldMapsAreNotShared: each bank gets a FRESH field map, so a
 // caller (or a future derivation) mutating one bank's map cannot reach
-// another's. cloneCapabilities makes the copies a Session hands out
+// another's. spec.Capabilities.Clone makes the copies a Session hands out
 // defensive; this is the same property one layer lower, at construction.
 func TestBankFieldMapsAreNotShared(t *testing.T) {
 	caps := CapabilitiesSimulated()

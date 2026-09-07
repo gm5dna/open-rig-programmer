@@ -816,7 +816,7 @@ func TestSession_ReadSetting_TimeoutIsTypedAndRetriedOnce(t *testing.T) {
 	}
 }
 
-// parkFirstSettingsRead arms readSettingGapHook so that the FIRST settings
+// parkFirstSettingsRead arms params.ReadGap so that the FIRST settings
 // read to reach the gap parks there until release is closed, and every later
 // one passes straight through. It returns the channel closed when that first
 // read has parked.
@@ -831,7 +831,7 @@ func parkFirstSettingsRead(t *testing.T, release <-chan struct{}) <-chan struct{
 	reached := make(chan struct{})
 	first := make(chan struct{}, 1)
 	first <- struct{}{}
-	readSettingGapHook = func() {
+	params.ReadGap = func() {
 		select {
 		case <-first:
 		default:
@@ -840,7 +840,7 @@ func parkFirstSettingsRead(t *testing.T, release <-chan struct{}) <-chan struct{
 		close(reached)
 		<-release
 	}
-	t.Cleanup(func() { readSettingGapHook = nil })
+	t.Cleanup(func() { params.ReadGap = nil })
 	return reached
 }
 
@@ -867,7 +867,7 @@ func awaitPark(t *testing.T, reached <-chan struct{}) {
 // outside its Do call. Nothing in this driver had such work, so the lock was
 // asserted in prose and pinned by nothing.
 //
-// readSettingGapHook creates exactly that window deterministically: a
+// params.ReadGap creates exactly that window deterministically: a
 // settings read that has sent its EX frame and has not yet finished the
 // operation. THE WINDOW IS SYNTHETIC AND THE EXCLUSION IS NOT — the hook
 // runs under opMu because ReadSetting holds it, so what the concurrent
