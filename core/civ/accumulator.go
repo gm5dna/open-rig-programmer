@@ -141,12 +141,6 @@ func (a *FrameAccumulator) NoteSent(frame []byte) {
 // Stats returns a snapshot of this accumulator's counters.
 func (a *FrameAccumulator) Stats() AccumulatorStats { return a.stats }
 
-// notedLen and bufLen exist for this package's own tests, which assert
-// that neither list grows without bound under a flood or a radio that
-// never echoes.
-func (a *FrameAccumulator) notedLen() int { return len(a.noted) }
-func (a *FrameAccumulator) bufLen() int   { return len(a.buf) }
-
 // Push appends chunk to the accumulator's buffer and extracts every
 // complete frame now available that is addressed to this controller and is
 // not an echo of a noted sent frame.

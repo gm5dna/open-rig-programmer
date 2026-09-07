@@ -963,13 +963,14 @@ func TestNewAccumulator_PositiveMaxAdjustsTheBoundInPlace(t *testing.T) {
 
 	// NOW the wider bound. (The engine calls NewAccumulator once; this
 	// test reaches the same code path a second Engine would, which is why
-	// it uses the adapter's own re-bound entry point rather than a second
-	// NewAccumulator call, refused by X1.)
+	// it calls reboundLocked directly rather than a second NewAccumulator
+	// call, refused by X1. Sequential test, so no lock is needed around
+	// it.)
 	const wider = 40
 	if wider <= p.MaxFrame() {
 		t.Fatalf("fixture error: %d is not wider than %s's own bound of %d", wider, p.Model(), p.MaxFrame())
 	}
-	f.(*framing).rebound(wider)
+	f.(*framing).reboundLocked(wider)
 
 	// The buffered bytes survived: the rest of the answer completes the
 	// frame that was half-received before the bound moved.

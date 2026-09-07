@@ -322,7 +322,7 @@ func TestAccumulator_NotedSentFramesAreBounded(t *testing.T) {
 	for i := 0; i < maxNotedSent*3; i++ {
 		a.NoteSent(frameFor(0x94, ctrl, 0x19, byte(i)))
 	}
-	if n := a.notedLen(); n > maxNotedSent {
+	if n := len(a.noted); n > maxNotedSent {
 		t.Fatalf("noted %d sent frames, want at most %d", n, maxNotedSent)
 	}
 	// The FIRST one has been forgotten, so its late echo is ordinary
@@ -383,7 +383,7 @@ func TestAccumulator_SurvivesAContinuousFlood(t *testing.T) {
 	if returned != 1 {
 		t.Fatalf("a %d-round flood returned %d frames, want exactly the 1 addressed to us", rounds, returned)
 	}
-	if n := a.bufLen(); n != 0 {
+	if n := len(a.buf); n != 0 {
 		t.Fatalf("the accumulator retained %d bytes after a flood that always ended on a frame boundary", n)
 	}
 	if s := a.Stats(); s.Unexpected != rounds*2 {

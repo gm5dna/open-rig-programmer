@@ -65,42 +65,6 @@ func (o ByteOrder) String() string {
 	}
 }
 
-// EncodeFrequencyBCD renders hz as an n-byte little-endian packed-BCD
-// field — the CI-V frequency form: two decimal digits per byte, least
-// significant pair first.
-//
-// n is the FIELD WIDTH in bytes, and the two widths this tier meets are 5
-// (ten digits, up to 9.999 999 999 GHz) and 6 (twelve digits, which is
-// what the IC-905 needs to reach 10 GHz). Any width from 1 to maxBCDBytes
-// is accepted so a per-model layout can declare a narrower numeric field
-// through the same helper.
-//
-// It REFUSES a value that does not fit rather than truncating it. A
-// truncated frequency is a plausible-looking frame naming a different
-// channel, and this package's whole safety story is that a frame it built
-// says what the caller asked for.
-func EncodeFrequencyBCD(hz uint64, n int) ([]byte, error) {
-	return encodeBCDNumber(hz, n, OrderLittleEndian)
-}
-
-// DecodeFrequencyBCD reads an n-byte little-endian packed-BCD frequency
-// field back to Hz. It refuses any byte carrying a nibble above 9: those
-// are not BCD, and guessing at them would turn line noise into a
-// frequency.
-func DecodeFrequencyBCD(b []byte) (uint64, error) {
-	return decodeBCDNumber(b, OrderLittleEndian)
-}
-
-// EncodeBCD2 renders v (0..99) as ONE packed-BCD byte: tens in the high
-// nibble, units in the low. The two-digit field is CI-V's unit of address
-// and count — a channel number's halves, a group index, a bank number.
-func EncodeBCD2(v int) (byte, error) {
-	if v < 0 || v > 99 {
-		return 0, fmt.Errorf("%w: value %d does not fit a 2-digit field (want 0..99)", ErrBCD, v)
-	}
-	return byte(v/10)<<4 | byte(v%10), nil
-}
-
 // DecodeBCD2 reads one packed-BCD byte back to 0..99, refusing any byte
 // with a nibble above 9.
 func DecodeBCD2(b byte) (int, error) {
