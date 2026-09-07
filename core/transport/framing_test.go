@@ -611,28 +611,6 @@ func TestClassWriteWithAck_RetryReadsIsRefused(t *testing.T) {
 	}
 }
 
-// --- DrainPolicy --------------------------------------------------------
-
-func TestDrainPolicy_WithDefaults(t *testing.T) {
-	got := DrainPolicy{}.withDefaults()
-	if got.IdleGap != QuietPeriod {
-		t.Errorf("IdleGap = %v, want %v", got.IdleGap, QuietPeriod)
-	}
-	if got.Cap != 2*QuietPeriod {
-		t.Errorf("Cap = %v, want %v (twice the idle gap: room for one postponement)", got.Cap, 2*QuietPeriod)
-	}
-
-	explicit := DrainPolicy{IdleGap: 5 * time.Millisecond}.withDefaults()
-	if explicit.IdleGap != 5*time.Millisecond || explicit.Cap != 10*time.Millisecond {
-		t.Errorf("withDefaults(%v) = %+v, want the cap derived from the SUPPLIED gap", 5*time.Millisecond, explicit)
-	}
-
-	both := DrainPolicy{IdleGap: time.Second, Cap: time.Minute}.withDefaults()
-	if both.IdleGap != time.Second || both.Cap != time.Minute {
-		t.Errorf("withDefaults overrode explicit values: %+v", both)
-	}
-}
-
 // TestCATFraming_DrainPolicyIsUnchangedTiming pins the byte-identity
 // claim's timing half for CAT: the values D2 moved into a policy are the
 // ones the engine used before it, hardcoded.

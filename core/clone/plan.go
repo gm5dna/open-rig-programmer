@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -26,7 +25,6 @@ import (
 // *codeplug.Codeplug value passed in), can never change what a plan built
 // from it writes. See PrepareSend's doc comment.
 type SendPlan struct {
-	preparedAt time.Time
 	identity   driver.Identity
 	generation int64
 
@@ -80,25 +78,16 @@ func (p *SendPlan) BaselineDigest() string { return p.baselineDigest }
 // coincide by chance.
 const confirmationDigestDomain = "open-rig-programmer/core/clone/confirmation-digest-v1"
 
-// writeLengthPrefixed writes a length-prefixed s to h: len(s) as decimal
-// digits, ':', then s itself. Framing every field this way (rather than
-// concatenating raw strings) means ConfirmationDigest's inputs can never be
-// reinterpreted across a field boundary — e.g. baselineDigest="ab" +
-// candidateDigest="cd" hashing identically to baselineDigest="a" +
-// candidateDigest="bcd" — the way naive concatenation of variable-length
-// fields would allow.
-func writeLengthPrefixed(h interface{ Write([]byte) (int, error) }, s string) {
-	fmt.Fprintf(h, "%d:", len(s))
-	h.Write([]byte(s))
-}
-
 // ConfirmationDigest returns the exact value Execute's confirmedDigest
 // parameter must equal for THIS plan (obligation 5 — see doc.go and
 // ErrConfirmationMismatch): a hex-encoded SHA-256 over
 // confirmationDigestDomain, this plan's baseline digest, its candidate
 // digest, its bound session identity (CATID, USBSerial, Port), and its
-// Service generation — every field length-prefixed (writeLengthPrefixed)
-// so none can bleed into its neighbour.
+// Service generation — every field written as "%d:%s" (its length, then
+// itself) so none can bleed into its neighbour: without the length
+// prefix, baselineDigest="ab"+candidateDigest="cd" would hash identically
+// to baselineDigest="a"+candidateDigest="bcd", the way naive concatenation
+// of variable-length fields would allow.
 //
 // This exists, distinct from BaselineDigest (Fix 1, adjudicated HIGH), because
 // two plans PrepareSend built from the SAME baseline read but different
@@ -112,14 +101,15 @@ func writeLengthPrefixed(h interface{ Write([]byte) (int, error) }, s string) {
 // confirmation captured for one session can never be replayed, even
 // coincidentally, against a plan bound to a different one.
 func (p *SendPlan) ConfirmationDigest() string {
+	gen := fmt.Sprintf("%d", p.generation)
 	h := sha256.New()
-	writeLengthPrefixed(h, confirmationDigestDomain)
-	writeLengthPrefixed(h, p.baselineDigest)
-	writeLengthPrefixed(h, p.candidateDigest)
-	writeLengthPrefixed(h, p.identity.CATID)
-	writeLengthPrefixed(h, p.identity.USBSerial)
-	writeLengthPrefixed(h, p.identity.Port)
-	writeLengthPrefixed(h, fmt.Sprintf("%d", p.generation))
+	fmt.Fprintf(h, "%d:%s", len(confirmationDigestDomain), confirmationDigestDomain)
+	fmt.Fprintf(h, "%d:%s", len(p.baselineDigest), p.baselineDigest)
+	fmt.Fprintf(h, "%d:%s", len(p.candidateDigest), p.candidateDigest)
+	fmt.Fprintf(h, "%d:%s", len(p.identity.CATID), p.identity.CATID)
+	fmt.Fprintf(h, "%d:%s", len(p.identity.USBSerial), p.identity.USBSerial)
+	fmt.Fprintf(h, "%d:%s", len(p.identity.Port), p.identity.Port)
+	fmt.Fprintf(h, "%d:%s", len(gen), gen)
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -258,7 +248,6 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 	}
 
 	plan := &SendPlan{
-		preparedAt:      s.now(),
 		identity:        s.sess.Identity(),
 		generation:      s.generation,
 		baseline:        copyChannels(baseline.Channels),

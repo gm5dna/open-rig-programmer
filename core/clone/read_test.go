@@ -59,7 +59,7 @@ func TestReadAll_DefaultImage(t *testing.T) {
 		t.Errorf("Radio Port/USBSerial = %q/%q, want %q/%q", cp.Radio.Port, cp.Radio.USBSerial, testIdentity.Port, testIdentity.USBSerial)
 	}
 	if cp.Radio.Region != "no-60m" {
-		t.Errorf("Radio.Region = %q, want \"no-60m\" (ft710.Session.Region via the regioner accessor; HW-CONFIRMED 2026-07-13 label for a zero-60m/zero-EMG inventory)", cp.Radio.Region)
+		t.Errorf("Radio.Region = %q, want \"no-60m\" (ft710.Session.Region via the driver.RegionReporter accessor; HW-CONFIRMED 2026-07-13 label for a zero-60m/zero-EMG inventory)", cp.Radio.Region)
 	}
 	wantDigest := codeplug.Digest(cp.Channels)
 	if cp.Radio.BaselineDigest != wantDigest {

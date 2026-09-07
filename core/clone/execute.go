@@ -586,6 +586,13 @@ func journalSteps(res driver.WriteResult) []map[string]any {
 // the SAME pointer passed in, equivalently discard the first return and
 // use their own report variable).
 func (s *Service) writePair(journal journalAppender, report *Report, i, total int, e codeplug.DiffEntry, ch codeplug.Channel) (*Report, error) {
+	// failed builds the SlotResult this method's several failure paths
+	// each append: a write-action slot that did not verify, with detail
+	// naming why.
+	failed := func(detail string) SlotResult {
+		return SlotResult{Slot: e.Slot, Action: actionWrite, VerifyOK: false, Detail: detail}
+	}
+
 	// write_attempt is the intent-to-write line: FAIL-SAFE per the
 	// ratified policy (doc.go). If it cannot be persisted, refuse BEFORE
 	// calling WriteChannel — at this instant nothing has touched the
@@ -614,9 +621,9 @@ func (s *Service) writePair(journal journalAppender, report *Report, i, total in
 			// The wire write itself succeeded — it counts, even though
 			// the journal failed to record it.
 			report.Written++
-			report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionWrite, VerifyOK: false, Detail: jfe.Error()})
+			report.Slots = append(report.Slots, failed(jfe.Error()))
 		} else {
-			report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionWrite, VerifyOK: false, Detail: err.Error()})
+			report.Slots = append(report.Slots, failed(err.Error()))
 		}
 		// Fix 1 (Codex M5b fix wave, adjudicated HIGH): WriteChannel has
 		// been invoked — wire contact is possible (indeed, here it
@@ -627,7 +634,7 @@ func (s *Service) writePair(journal journalAppender, report *Report, i, total in
 		return s.abort(report, journal, e.Slot, jfe.Error(), jfe)
 	}
 	if err != nil {
-		report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionWrite, VerifyOK: false, Detail: err.Error()})
+		report.Slots = append(report.Slots, failed(err.Error()))
 		// Fix 1: WriteChannel itself failed or was rejected — MW may
 		// still have landed before MT failed/was rejected (exactly the
 		// scenario this fix exists for). Always attempt the readback
@@ -641,7 +648,7 @@ func (s *Service) writePair(journal journalAppender, report *Report, i, total in
 
 	verify, err := s.sess.ReadChannel(pairCtx, e.Slot)
 	if err != nil {
-		report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionWrite, VerifyOK: false, Detail: err.Error()})
+		report.Slots = append(report.Slots, failed(err.Error()))
 		if jfe := s.appendDeltaJournal(journal, "verify_result", e.Slot, map[string]any{"slot": e.Slot, "ok": false, "error": errString(err)}); jfe != nil {
 			return s.abort(report, journal, e.Slot, jfe.Error(), jfe)
 		}

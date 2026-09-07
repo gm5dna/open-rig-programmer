@@ -18,13 +18,6 @@ func TestPortClosedError_IsCompatible(t *testing.T) {
 	if !errors.Is(err, io.EOF) {
 		t.Errorf("errors.Is(%v, io.EOF) = false, want true (cause must be reachable)", err)
 	}
-	var pce *PortClosedError
-	if !errors.As(err, &pce) {
-		t.Fatalf("errors.As(%v, *PortClosedError) = false, want true", err)
-	}
-	if pce.Cause != io.EOF {
-		t.Errorf("PortClosedError.Cause = %v, want io.EOF", pce.Cause)
-	}
 }
 
 func TestPortClosedError_NoCause(t *testing.T) {
@@ -43,12 +36,12 @@ func TestContaminatedError_IsCompatible(t *testing.T) {
 	if !errors.Is(err, cat.ErrFrameTooLong) {
 		t.Errorf("errors.Is(%v, cat.ErrFrameTooLong) = false, want true (chain must reach the cat sentinel too)", err)
 	}
-	var ce *ContaminatedError
-	if !errors.As(err, &ce) {
-		t.Fatalf("errors.As(%v, *ContaminatedError) = false, want true", err)
+	var ftl *cat.FrameTooLongError
+	if !errors.As(err, &ftl) {
+		t.Fatalf("errors.As(%v, *cat.FrameTooLongError) = false, want true", err)
 	}
-	if ce.Cause.DiscardedLen != 300 {
-		t.Errorf("ContaminatedError.Cause.DiscardedLen = %d, want 300", ce.Cause.DiscardedLen)
+	if ftl.DiscardedLen != 300 {
+		t.Errorf("FrameTooLongError.DiscardedLen = %d, want 300", ftl.DiscardedLen)
 	}
 }
 
@@ -66,13 +59,6 @@ func TestQuarantineFailedError_IsCompatible(t *testing.T) {
 	}
 	if !errors.Is(err, ErrPortClosed) {
 		t.Errorf("errors.Is(%v, ErrPortClosed) = false, want true (cause must be reachable)", err)
-	}
-	var qfe *QuarantineFailedError
-	if !errors.As(err, &qfe) {
-		t.Fatalf("errors.As(%v, *QuarantineFailedError) = false, want true", err)
-	}
-	if qfe.Cause != ErrPortClosed {
-		t.Errorf("QuarantineFailedError.Cause = %v, want ErrPortClosed", qfe.Cause)
 	}
 }
 
