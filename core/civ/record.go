@@ -4,7 +4,8 @@ package civ
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 )
 
@@ -114,21 +115,16 @@ const (
 
 // kind reports a field's neutral kind. The bool is false for an id outside
 // the vocabulary, which is how profile validation refuses a layout naming
-// a field this package cannot store.
+// a field this package cannot store. Derived from numericFields/textFields
+// rather than its own switch, so the vocabulary is stated in one place.
 func (f FieldID) kind() (fieldKind, bool) {
-	switch f {
-	case FieldRXFrequency, FieldTXFrequency, FieldOffset,
-		FieldToneTX, FieldToneRX, FieldDTCSCode,
-		FieldProgramTuningStep, FieldAttenuator:
+	if _, ok := numericFields[f]; ok {
 		return fieldNumeric, true
-	case FieldDuplex, FieldMode, FieldFilter, FieldDataMode,
-		FieldToneMode, FieldDTCSPolarity, FieldName, FieldSelect,
-		FieldTuningStepEnabled, FieldTuningStep, FieldPreamp,
-		FieldAntenna, FieldIPPlus:
-		return fieldText, true
-	default:
-		return 0, false
 	}
+	if _, ok := textFields[f]; ok {
+		return fieldText, true
+	}
+	return 0, false
 }
 
 // AddressForm names how a model addresses a memory channel.
@@ -343,117 +339,69 @@ type MemoryRecord struct {
 	IPPlus              Optional[string]
 }
 
+// numericFields maps every numeric FieldID to an accessor reaching its
+// own MemoryRecord field, so numeric/setNumeric/kind's numeric half state
+// the vocabulary once, as data, rather than three times as parallel
+// switches that could silently drift apart.
+var numericFields = map[FieldID]func(*MemoryRecord) *Optional[uint64]{
+	FieldRXFrequency:       func(r *MemoryRecord) *Optional[uint64] { return &r.RXFreqHz },
+	FieldTXFrequency:       func(r *MemoryRecord) *Optional[uint64] { return &r.TXFreqHz },
+	FieldOffset:            func(r *MemoryRecord) *Optional[uint64] { return &r.OffsetHz },
+	FieldToneTX:            func(r *MemoryRecord) *Optional[uint64] { return &r.ToneTXDeciHz },
+	FieldToneRX:            func(r *MemoryRecord) *Optional[uint64] { return &r.ToneRXDeciHz },
+	FieldDTCSCode:          func(r *MemoryRecord) *Optional[uint64] { return &r.DTCSCode },
+	FieldProgramTuningStep: func(r *MemoryRecord) *Optional[uint64] { return &r.ProgramTuningStepHz },
+	FieldAttenuator:        func(r *MemoryRecord) *Optional[uint64] { return &r.AttenuatorDB },
+}
+
+// textFields is numericFields' text-field twin.
+var textFields = map[FieldID]func(*MemoryRecord) *Optional[string]{
+	FieldDuplex:            func(r *MemoryRecord) *Optional[string] { return &r.Duplex },
+	FieldMode:              func(r *MemoryRecord) *Optional[string] { return &r.Mode },
+	FieldFilter:            func(r *MemoryRecord) *Optional[string] { return &r.Filter },
+	FieldDataMode:          func(r *MemoryRecord) *Optional[string] { return &r.DataMode },
+	FieldToneMode:          func(r *MemoryRecord) *Optional[string] { return &r.ToneMode },
+	FieldDTCSPolarity:      func(r *MemoryRecord) *Optional[string] { return &r.DTCSPolarity },
+	FieldName:              func(r *MemoryRecord) *Optional[string] { return &r.Name },
+	FieldSelect:            func(r *MemoryRecord) *Optional[string] { return &r.Select },
+	FieldTuningStepEnabled: func(r *MemoryRecord) *Optional[string] { return &r.TuningStepEnabled },
+	FieldTuningStep:        func(r *MemoryRecord) *Optional[string] { return &r.TuningStep },
+	FieldPreamp:            func(r *MemoryRecord) *Optional[string] { return &r.Preamp },
+	FieldAntenna:           func(r *MemoryRecord) *Optional[string] { return &r.Antenna },
+	FieldIPPlus:            func(r *MemoryRecord) *Optional[string] { return &r.IPPlus },
+}
+
 // numeric returns the numeric field id names, and whether id is a numeric
 // field at all.
 func (r MemoryRecord) numeric(id FieldID) (Optional[uint64], bool) {
-	switch id {
-	case FieldRXFrequency:
-		return r.RXFreqHz, true
-	case FieldTXFrequency:
-		return r.TXFreqHz, true
-	case FieldOffset:
-		return r.OffsetHz, true
-	case FieldToneTX:
-		return r.ToneTXDeciHz, true
-	case FieldToneRX:
-		return r.ToneRXDeciHz, true
-	case FieldDTCSCode:
-		return r.DTCSCode, true
-	case FieldProgramTuningStep:
-		return r.ProgramTuningStepHz, true
-	case FieldAttenuator:
-		return r.AttenuatorDB, true
-	default:
+	acc, ok := numericFields[id]
+	if !ok {
 		return Optional[uint64]{}, false
 	}
+	return *acc(&r), true
 }
 
 // setNumeric stores v in the numeric field id names. It is a no-op for a
 // non-numeric id; callers reach it only after kind() has agreed.
 func (r *MemoryRecord) setNumeric(id FieldID, v uint64) {
-	switch id {
-	case FieldRXFrequency:
-		r.RXFreqHz = Available(v)
-	case FieldTXFrequency:
-		r.TXFreqHz = Available(v)
-	case FieldOffset:
-		r.OffsetHz = Available(v)
-	case FieldToneTX:
-		r.ToneTXDeciHz = Available(v)
-	case FieldToneRX:
-		r.ToneRXDeciHz = Available(v)
-	case FieldDTCSCode:
-		r.DTCSCode = Available(v)
-	case FieldProgramTuningStep:
-		r.ProgramTuningStepHz = Available(v)
-	case FieldAttenuator:
-		r.AttenuatorDB = Available(v)
+	if acc, ok := numericFields[id]; ok {
+		*acc(r) = Available(v)
 	}
 }
 
 // text returns the text field id names, and whether id is a text field.
 func (r MemoryRecord) text(id FieldID) (Optional[string], bool) {
-	switch id {
-	case FieldDuplex:
-		return r.Duplex, true
-	case FieldMode:
-		return r.Mode, true
-	case FieldFilter:
-		return r.Filter, true
-	case FieldDataMode:
-		return r.DataMode, true
-	case FieldToneMode:
-		return r.ToneMode, true
-	case FieldDTCSPolarity:
-		return r.DTCSPolarity, true
-	case FieldName:
-		return r.Name, true
-	case FieldSelect:
-		return r.Select, true
-	case FieldTuningStepEnabled:
-		return r.TuningStepEnabled, true
-	case FieldTuningStep:
-		return r.TuningStep, true
-	case FieldPreamp:
-		return r.Preamp, true
-	case FieldAntenna:
-		return r.Antenna, true
-	case FieldIPPlus:
-		return r.IPPlus, true
-	default:
+	acc, ok := textFields[id]
+	if !ok {
 		return Optional[string]{}, false
 	}
+	return *acc(&r), true
 }
 
 // setText stores v in the text field id names.
 func (r *MemoryRecord) setText(id FieldID, v string) {
-	switch id {
-	case FieldDuplex:
-		r.Duplex = Available(v)
-	case FieldMode:
-		r.Mode = Available(v)
-	case FieldFilter:
-		r.Filter = Available(v)
-	case FieldDataMode:
-		r.DataMode = Available(v)
-	case FieldToneMode:
-		r.ToneMode = Available(v)
-	case FieldDTCSPolarity:
-		r.DTCSPolarity = Available(v)
-	case FieldName:
-		r.Name = Available(v)
-	case FieldSelect:
-		r.Select = Available(v)
-	case FieldTuningStepEnabled:
-		r.TuningStepEnabled = Available(v)
-	case FieldTuningStep:
-		r.TuningStep = Available(v)
-	case FieldPreamp:
-		r.Preamp = Available(v)
-	case FieldAntenna:
-		r.Antenna = Available(v)
-	case FieldIPPlus:
-		r.IPPlus = Available(v)
+	if acc, ok := textFields[id]; ok {
+		*acc(r) = Available(v)
 	}
 }
 
@@ -672,12 +620,7 @@ func (d RecordDiscriminator) String() string {
 
 // sortedEnumNames returns an enum's names in a stable order.
 func sortedEnumNames(m map[byte]string) []string {
-	out := make([]string, 0, len(m))
-	for _, v := range m {
-		out = append(out, v)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Values(m))
 }
 
 // enumValueFor returns the wire value whose name is name. The enum is
@@ -685,14 +628,9 @@ func sortedEnumNames(m map[byte]string) []string {
 func enumValueFor(m map[byte]string, name string) (byte, bool) {
 	// Sorted iteration so a malformed enum that slipped past validation
 	// would at least fail the same way every run.
-	keys := make([]int, 0, len(m))
-	for k := range m {
-		keys = append(keys, int(k))
-	}
-	sort.Ints(keys)
-	for _, k := range keys {
-		if m[byte(k)] == name {
-			return byte(k), true
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		if m[k] == name {
+			return k, true
 		}
 	}
 	return 0, false
