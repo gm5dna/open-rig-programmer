@@ -23,16 +23,17 @@ import (
 //	the DIALECT's inventory (ft991a.Dialect().EXItems()) is generated from
 //	TRANSCRIPTION A (core/cat/ft991a/table2.csv) by internal/extable;
 //
-//	the FAKE's inventory (fakeft991a.EXDefaults()) is generated from
-//	TRANSCRIPTION B (internal/fakeft991a/transcription-b.csv, its own copy) by
-//	internal/fakeft991a/gen, which imports nothing project-internal at all.
+//	the FAKE's inventory (fakeft991a.EXDefaults()) is parsed at init from its
+//	own embedded copy of TRANSCRIPTION B (internal/fakeft991a/transcription-b.csv)
+//	by internal/fakeft991a/exinventory.go, which imports nothing
+//	project-internal at all.
 //
 // A and B are two independent derivations of one printed chart (manual rev
 // 1711-D, the MENU chart on folios 7-9): A layout-text-led and PDF-checked, B
 // derived PDF-primary by a quarantined agent with no repository access, no
-// sight of A and no row count. The two GENERATORS are independent too — that is
-// what the fake's recursive no-imports fence enforces, gen/ included. So a
-// mis-read row in either transcription, or a defect in either generator,
+// sight of A and no row count. The two PARSERS are independent too, not
+// generators — that is what the fake's recursive no-imports fence enforces.
+// So a mis-read row in either transcription, or a defect in either parser,
 // surfaces HERE as a mismatch rather than as two tables quietly agreeing on the
 // same wrong number.
 //
@@ -43,9 +44,9 @@ import (
 // and ten spaced hyphens for its parameter, so it names no field an EX frame
 // could read or write. Transcription A keeps the raw '-' and internal/extable's
 // ParameterlessExcluded omits the address; transcription B writes '?' — its
-// brief's token for a non-integer cell — and internal/fakeft991a/gen's
+// brief's token for a non-integer cell — and internal/fakeft991a/exinventory.go's
 // parameterlessAddrs omits the address. ONE GLYPH ON THE PAGE, two transcription
-// conventions, two generators, one absence (this milestone's plan decision P18).
+// conventions, two parsers, one absence (this milestone's plan decision P18).
 // So BOTH inventories are 152 for a 153-row chart, and
 // TestEXInventoryCrossCheck_FT991ARow087IsAbsentFromBothSides asserts the
 // absence on each side by name rather than leaving it to be inferred from the
@@ -54,7 +55,7 @@ import (
 // The width half matters here as it does on the FT-891, and for the same
 // asymmetric reason: this chart has no text row and B's three-column schema
 // carries no cell from which one could be identified
-// (internal/fakeft991a/gen/main.go's widthToken refuses rather than guessing),
+// (internal/fakeft991a/exinventory.go's widthToken refuses rather than guessing),
 // so THE DIALECT'S SIDE is where the text claim is checked. If A ever declares
 // one, TestEXInventoryCrossCheck_FT991AWidthsAndShapesAgree fails on that item
 // rather than silently accepting eight zeros where twelve spaces belong.
@@ -143,7 +144,7 @@ func TestEXInventoryCrossCheck_FT991AAddressSetsIdentical(t *testing.T) {
 //
 // The absence is reached independently: the dialect's from transcription A's
 // raw '-' through internal/extable's ParameterlessExcluded, the fake's from
-// transcription B's '?' through internal/fakeft991a/gen's parameterlessAddrs
+// transcription B's '?' through internal/fakeft991a/exinventory.go's parameterlessAddrs
 // (plan decision P18 — one printed hyphen, two transcription conventions). Its
 // neighbours are asserted present on both sides, so that an exclusion which
 // took more than the row it declares fails here rather than shrinking both
