@@ -271,8 +271,7 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 
 	// This is a NEW artefact this command produced, not a re-save of
 	// whatever produced --into — always set Generator, unconditionally
-	// (unlike read's applyDefaultGenerator, which only fills an empty
-	// one).
+	// (unlike read's own "if empty" fill).
 	base.Generator = cliGeneratorID
 
 	// caps was fetched above, ahead of the --csv/--chirp branch.

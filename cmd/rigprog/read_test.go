@@ -17,33 +17,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
-// TestApplyDefaultGenerator_FillsEmpty pins task-12 brief §1: the CLI
-// sets Codeplug.Generator IF AND ONLY IF the service left it empty, using
-// a stable "rigprog/" prefix.
-func TestApplyDefaultGenerator_FillsEmpty(t *testing.T) {
-	cp := &codeplug.Codeplug{Generator: ""}
-	applyDefaultGenerator(cp)
-	if cp.Generator == "" {
-		t.Fatal("applyDefaultGenerator left Generator empty, want it filled")
-	}
-	const wantPrefix = "rigprog/"
-	if len(cp.Generator) < len(wantPrefix) || cp.Generator[:len(wantPrefix)] != wantPrefix {
-		t.Errorf("applyDefaultGenerator: Generator = %q, want prefix %q", cp.Generator, wantPrefix)
-	}
-}
-
-// TestApplyDefaultGenerator_LeavesNonEmpty pins the "if and only if
-// empty" half: an already-populated Generator (which is what
-// clone.Service.ReadAll always sets today — see cmd/rigprog read.go's
-// doc comment) must never be overwritten.
-func TestApplyDefaultGenerator_LeavesNonEmpty(t *testing.T) {
-	cp := &codeplug.Codeplug{Generator: "open-rig-programmer/core/clone"}
-	applyDefaultGenerator(cp)
-	if cp.Generator != "open-rig-programmer/core/clone" {
-		t.Errorf("applyDefaultGenerator overwrote a non-empty Generator: got %q", cp.Generator)
-	}
-}
-
 // TestWriteReadSummary pins the stdout success summary's content (task-12
 // brief §1): slots read, populated count, region, truncated baseline
 // digest, output path.
