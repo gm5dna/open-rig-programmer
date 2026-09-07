@@ -15,7 +15,6 @@ var params = yaesu.Params{
 	Name:              "ft710",
 	Model:             modelName,
 	Dialect:           catDialect,
-	CATID:             catID,
 	DescriptorVersion: settingsDescriptorVersion,
 	// The manual charts this menu as P1 menus of P2 groups (the shared
 	// nil default), and prints each item's position as the "P1-P2-P3"

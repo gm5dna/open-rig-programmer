@@ -38,4 +38,7 @@ var params = yaesu.Params{
 	BuildMT: func(d cat.Dialect, m cat.MemoryData, tag string, _ bool) (cat.Command, error) {
 		return d.BuildMTSetCombined(m, tag)
 	},
+
+	Probe:     yaesu.ProbeMT,
+	MTRetries: 1,
 }

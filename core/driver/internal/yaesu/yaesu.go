@@ -12,11 +12,12 @@
 // implementations (DiscoveredBankSynthesizer, SettingsReader, …) and each
 // package's own error sentinels stay where callers already find them.
 //
-// A nil hook field means "not this radio", never "use a default that
-// happens to be wrong": Params.Probe nil is a radio with no 5xx/EMG
-// discovery, Params.RefuseTxClar empty is a radio whose TX clarifier is
-// writable. The two nil-means-the-majority-form fields, Group and
-// Display, are documented as such on the fields themselves.
+// AN EMPTY HOOK FIELD MEANS "NOT THIS RADIO", never "use a default that
+// happens to be wrong": Params.Probe's zero value is a radio with no
+// 5xx/EMG inventory to discover, Params.RefuseTxClar empty is a radio
+// whose TX clarifier is writable. The two fields whose nil means the
+// MAJORITY FORM rather than nothing — Group and Display — say so on
+// themselves.
 package yaesu
 
 import (
@@ -42,16 +43,6 @@ type Params struct {
 	// own dialect explicitly instead, so the FTdx101's two siblings can
 	// share one Params.
 	Dialect cat.Dialect
-	// CATID is the ID; answer this radio's Open accepts.
-	CATID string
-
-	// WantModel is WrongRadioError.WantModel. EMPTY keeps the ID-only
-	// refusal text (the FTdx10's and the FT-710's).
-	WantModel string
-	// GotModelOf names the model a foreign CAT ID belongs to, for the
-	// FTdx101's two siblings. nil means the driver cannot name what it
-	// found, and GotModel is left empty.
-	GotModelOf func(catID string) string
 	// Probe selects the discovery read Open's 5xx/EMG sweep uses. THE
 	// ZERO VALUE IS NoProbe — a radio with no such inventory to discover
 	// (the FT-991A) needs no field set, and cannot get a sweep by

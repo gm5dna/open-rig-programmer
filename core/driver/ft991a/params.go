@@ -17,7 +17,6 @@ var params = yaesu.Params{
 	Name:              "ft991a",
 	Model:             modelName,
 	Dialect:           catDialect,
-	CATID:             catID,
 	DescriptorVersion: settingsDescriptorVersion,
 	// This manual prints ONE FLAT MENU LIST with no chart hierarchy at
 	// all, so the descriptor holds a single menu and group rather than a
@@ -46,4 +45,7 @@ var params = yaesu.Params{
 	BuildMT: func(d cat.Dialect, m cat.MemoryData, tag string, _ bool) (cat.Command, error) {
 		return d.BuildMTSetCombined(m, tag)
 	},
+
+	// NoProbe, left at the zero value: this manual declares no 5xx or
+	// EMG slot, so Open has nothing to discover and sends no sweep.
 }

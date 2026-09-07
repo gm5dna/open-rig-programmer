@@ -14,7 +14,6 @@ var params = yaesu.Params{
 	Name:              "ft891",
 	Model:             modelName,
 	Dialect:           catDialect,
-	CATID:             catID,
 	DescriptorVersion: settingsDescriptorVersion,
 	// This manual charts its menu by MENU NUMBER ALONE — no second
 	// level, and no printed P1-P2-P3 form — so each P1 is one menu
@@ -39,4 +38,9 @@ var params = yaesu.Params{
 	BuildMT: func(d cat.Dialect, m cat.MemoryData, tag string, display bool) (cat.Command, error) {
 		return d.BuildMTSetCombinedDisplay(m, tag, display)
 	},
+
+	// The 5xx/EMG sweep asks with MR, not MT: this dialect refuses to
+	// build an MT read of a 5xx or EMG slot at all.
+	Probe:       yaesu.ProbeMR,
+	MRAnswerLen: mrAnswerLen,
 }

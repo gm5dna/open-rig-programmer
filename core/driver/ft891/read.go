@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -85,14 +86,7 @@ var shiftNames = map[cat.Shift]string{
 // would make a timeout's transcript two frames where the design says one. A
 // timeout is therefore ONE MT frame and then MTReadTimeoutError.
 func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
-	lo, hi, err := d.MTAnswerBounds()
-	if err != nil {
-		return transport.CommandSpec{}, fmt.Errorf("ft891: MT answer geometry: %w", err)
-	}
-	if lo != hi {
-		return transport.CommandSpec{}, fmt.Errorf("ft891: MT answer geometry: this dialect reports a %d..%d length WINDOW, but transport.CATReadSpec takes a single exact length — a windowed answer needs a spec that expresses the window, not its top", lo, hi)
-	}
-	return transport.CATReadSpec("MT", hi, 0), nil
+	return yaesu.MTSpec(d, &params)
 }
 
 // mrAnswerLen is the length of this radio's MR answer: 28 bytes, "MR" + the
@@ -284,7 +278,7 @@ var ErrSlotNotInSessionBanks = errors.New("ft891: slot did not answer this sessi
 //
 // NO FRAME IS SENT: this check runs BEFORE readDiscovered builds an MR read
 // at all, on membership Open already settled by its own discovery walk
-// (ft891.go's discoverInventory/probeSlot, matrix §3.4) — the radio is never
+// (Open's shared discovery sweep, yaesu.DiscoverInventory/ProbeSlot, matrix §3.4) — the radio is never
 // asked. That is what makes this a DIFFERENT error from
 // *MRReadRejectedForDiscoveredSlotError, not a narrower spelling of it:
 // readDiscovered's whole premise, the driver register's A DISCOVERED SLOT
@@ -440,7 +434,7 @@ func (s *Session) readMemoryOrPMS(ctx context.Context, sl cat.Slot) (codeplug.Ch
 		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: %w", sl.Wire(), err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: sl.Wire(), Answered: m.Slot.Wire()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
 	}
 
 	data, err := s.channelData(m, sl)
@@ -483,7 +477,7 @@ func (s *Session) crossCheck(ctx context.Context, sl cat.Slot) (codeplug.Channel
 		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: cross-check: %w", sl.Wire(), err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: sl.Wire(), Answered: m.Slot.Wire()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
 	}
 	// A record came back: the slot is occupied and MT refused it. Refuse
 	// the whole session read rather than reporting either a blank channel
@@ -538,7 +532,7 @@ func (s *Session) readDiscovered(ctx context.Context, sl cat.Slot) (codeplug.Cha
 		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: %w", sl.Wire(), err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: sl.Wire(), Answered: m.Slot.Wire()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
 	}
 
 	data, err := s.channelData(m, sl)
