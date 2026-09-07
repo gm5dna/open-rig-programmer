@@ -59,7 +59,7 @@
 	// would invalidate the very plan being reviewed. Pure frontend UI state
 	// — see app.svelte.js's module comment on why a component sets it.
 	$effect(() => {
-		appState.setSendDialogOpen(sendPlan !== null)
+		appState.sendDialogOpen = sendPlan !== null
 	})
 
 	// --- Read Radio / Open, with the dirty guard --------------------------

@@ -46,11 +46,11 @@ const ROWS = [
 
 beforeEach(() => {
 	appState.clearConnection()
-	appState.setUISpec(null)
+	appState.uiSpec = null
 	appState.setUnverifiedConsentPrompt(null)
-	appState.setUnverifiedConsents([])
-	appState.closeUnverifiedGrants()
-	appState.setSendDialogOpen(false)
+	appState.unverifiedConsents = []
+	appState.unverifiedGrantsOpen = false
+	appState.sendDialogOpen = false
 	appState.alerts = []
 	vi.clearAllMocks()
 	applyMock.mockResolvedValue(undefined)
@@ -118,7 +118,7 @@ describe('arming mode', () => {
 
 	it('both answers are disabled while a send dialogue is open', () => {
 		appState.setUnverifiedConsentPrompt(PROMPT)
-		appState.setSendDialogOpen(true)
+		appState.sendDialogOpen = true
 		render(UnverifiedWritesDialog, { mode: 'arm' })
 
 		expect(screen.getByRole('button', { name: 'Enable unverified writes' })).toBeDisabled()
@@ -132,7 +132,7 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('lists every supported model, hardware-verified ones included', () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
 		expect(screen.getByText('FT-710')).toBeInTheDocument()
@@ -141,7 +141,7 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('shows a hardware-verified radio as n/a, with its toggle disabled — there is no unverified write for a consent to unlock', () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
 		expect(screen.getByTestId('consent-state-FT-710').textContent).toContain('n/a')
@@ -149,7 +149,7 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('an eligible radio’s toggle reflects the recorded grant', () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
 		expect(screen.getByLabelText('Unverified writes for FTDX101D')).toBeChecked()
@@ -157,7 +157,7 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('granting an eligible radio calls the bridge with true', async () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
 		await fireEvent.click(screen.getByLabelText('Unverified writes for FTdx10'))
@@ -166,7 +166,7 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('revoking a granted radio calls the bridge with false, claiming NO knowledge of the live session', async () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
 		await fireEvent.click(screen.getByLabelText('Unverified writes for FTDX101D'))
@@ -179,7 +179,7 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('every toggle is disabled while a transfer is running, and says why', () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		appState.beginTransfer('send')
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
@@ -188,15 +188,15 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('every toggle is disabled while a send dialogue is open', () => {
-		appState.setUnverifiedConsents(ROWS)
-		appState.setSendDialogOpen(true)
+		appState.unverifiedConsents = ROWS
+		appState.sendDialogOpen = true
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
 		expect(screen.getByLabelText('Unverified writes for FTdx10')).toBeDisabled()
 	})
 
 	it('a refused change is shown inline and leaves the panel open, with the toggle back where the store says it belongs', async () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		applyMock.mockRejectedValue('app: a transfer is running')
 		appState.openUnverifiedGrants()
 		render(UnverifiedWritesDialog, { mode: 'manage' })
@@ -214,7 +214,7 @@ describe('grants panel (manage mode)', () => {
 	})
 
 	it('a refused REVOCATION likewise leaves the granted radio’s box still ticked', async () => {
-		appState.setUnverifiedConsents(ROWS)
+		appState.unverifiedConsents = ROWS
 		applyMock.mockRejectedValue('userconfig: settings.json is corrupt')
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
