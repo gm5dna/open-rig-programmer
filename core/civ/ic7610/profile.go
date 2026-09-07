@@ -122,12 +122,11 @@ var toneModeEnum = map[byte]string{0x0: "OFF", 0x1: "TONE", 0x2: "TSQL"}
 // Written out explicitly rather than left nil - which would mean the same
 // bytes - because E6's ruling is stated in terms of "the profile's Fixed
 // template", and an explicit template is what a reader checks against.
-func fixedTemplate() []byte { return make([]byte, RecordOnlyLength) }
-
-// FixedTemplate returns a fresh copy of the template, for the driver's E6
-// comparison and for tests. A copy, not the slice: a caller must not be
+//
+// FixedTemplate returns a fresh copy for the driver's E6 comparison and
+// for tests. A fresh make(), not a shared slice: a caller must not be
 // able to move the thing every write is judged against.
-func FixedTemplate() []byte { return fixedTemplate() }
+func FixedTemplate() []byte { return make([]byte, RecordOnlyLength) }
 
 // layout is the 25-byte record. EVERY OFFSET COMES FROM THE PLAN'S ONE
 // TABLE. Offsets are 0-based from the start of the RECORD, so a printed
@@ -165,7 +164,7 @@ func layout() civ.RecordLayout {
 			{Field: civ.FieldToneRX, Offset: 12, Length: 3, Encoding: civ.EncodingBCDNumber, Order: civ.OrderBigEndian, Scale: 1},
 			{Field: civ.FieldName, Offset: 15, Length: 10, Encoding: civ.EncodingName},
 		},
-		Fixed: fixedTemplate(),
+		Fixed: make([]byte, RecordOnlyLength),
 	}
 }
 

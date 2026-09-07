@@ -172,6 +172,11 @@ const duplicateBlockShift = 47
 //
 // Every byte not named below is 0x00, and V8 refuses a non-zero template
 // nibble under a mapped span, so no mapped offset appears here.
+//
+// Sliced directly (fixedTemplateBytes[:]) into the layout below rather
+// than copied first: nothing in profile construction mutates a layout's
+// Fixed, and RecordLayout.clone() (record.go) is what defensively copies
+// it for any caller outside this package.
 var fixedTemplateBytes = [RecordLength]byte{
 	// ⑭ digital squelch and ㉔ DV code squelch: one byte each, `00` in
 	// the golden. Stated rather than left to the array's zero so the two
@@ -192,13 +197,6 @@ var fixedTemplateBytes = [RecordLength]byte{
 	71: 'C', 72: 'Q', 73: 'C', 74: 'Q', 75: 'C', 76: 'Q', 77: ' ', 78: ' ',
 	79: ' ', 80: ' ', 81: ' ', 82: ' ', 83: ' ', 84: ' ', 85: ' ', 86: ' ',
 	87: ' ', 88: ' ', 89: ' ', 90: ' ', 91: ' ', 92: ' ', 93: ' ', 94: ' ',
-}
-
-// fixedTemplate returns a fresh copy of the template, so no caller can
-// reach into the package's own array.
-func fixedTemplate() []byte {
-	out := fixedTemplateBytes
-	return out[:]
 }
 
 // enumSpan is one EncodingEnum field. Nibble selects the half of the byte
@@ -360,7 +358,7 @@ var profile = civ.MustNewProfile(civ.ProfileConfig{
 	Layouts: []civ.RecordLayout{{
 		Length: RecordLength,
 		Fields: recordFields(),
-		Fixed:  fixedTemplate(),
+		Fixed:  fixedTemplateBytes[:],
 	}},
 
 	// No field on this model has a conditional printed width, so the

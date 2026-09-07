@@ -454,21 +454,36 @@ func Load(path string) (*Codeplug, error) {
 	return cp, nil
 }
 
+// decodeStrict runs the strict decode every loadVN performs before its own
+// schema-specific work: decode into v with unknown fields refused, refuse
+// trailing data after the top-level JSON value, and refuse a duplicate
+// key anywhere exempt does not excuse. One body rather than five copies,
+// so the three rules cannot drift apart between schemas — v's own type
+// selects which schema's shape is decoded, and exempt selects which
+// legacy "menus" exemption applies (menusWholeExempt for v1,
+// menusLegacyExempt for v2 onward).
+func decodeStrict(b []byte, path string, v any, exempt exemptFunc) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
+	}
+	if err := checkDuplicateKeys(b, exempt); err != nil {
+		return fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	return nil
+}
+
 // loadV5 strictly decodes the current schema through the live shape.
 // Schema 5 introduced the seven receiver fields, so the live shape is
 // exactly the versioned shape until the next schema change freezes it.
 func loadV5(b []byte, path string) (*Codeplug, error) {
 	var cp Codeplug
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cp); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &cp, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	if err := cp.Menus.Validate(); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
@@ -482,16 +497,8 @@ func loadV5(b []byte, path string) (*Codeplug, error) {
 // older file format could not express them.
 func loadV4(b []byte, path string) (*Codeplug, error) {
 	var v4 codeplugV4
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v4); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v4, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	if err := v4.Menus.Validate(); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
@@ -594,16 +601,8 @@ type codeplugV3 struct {
 // version header does not support.
 func loadV3(b []byte, path string) (*Codeplug, error) {
 	var v3 codeplugV3
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v3); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v3, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	for _, c := range v3.Channels {
 		if c.Data != nil && c.Data.FreqHz > math.MaxUint32 {
@@ -910,16 +909,8 @@ type codeplugV1 struct {
 // the result to the current schema.
 func loadV2(b []byte, path string) (*Codeplug, error) {
 	var v2 codeplugV2
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v2); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v2, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	if err := v2.Menus.Validate(); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
@@ -943,16 +934,8 @@ func loadV2(b []byte, path string) (*Codeplug, error) {
 // (schemaFor), which for a schema-1 file is schema 3 again.
 func loadV1(b []byte, path string) (*Codeplug, error) {
 	var v1 codeplugV1
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v1); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusWholeExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v1, menusWholeExempt); err != nil {
+		return nil, err
 	}
 
 	cp := &Codeplug{

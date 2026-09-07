@@ -10,4 +10,4 @@ package ic9700
 // It lives HERE, beside the identifier it aliases: a package cannot alias
 // another package's unexported symbol, so the driver's own export_test.go
 // could not have carried this one.
-var FixedTemplateForTest = fixedTemplate
+var FixedTemplateForTest = func() []byte { return fixedTemplateBytes[:] }
