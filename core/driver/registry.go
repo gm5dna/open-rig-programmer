@@ -4,7 +4,8 @@ package driver
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -93,10 +94,5 @@ func (r *Registry) Get(model string) (Driver, bool) {
 func (r *Registry) Models() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	models := make([]string, 0, len(r.drivers))
-	for m := range r.drivers {
-		models = append(models, m)
-	}
-	sort.Strings(models)
-	return models
+	return slices.Sorted(maps.Keys(r.drivers))
 }
