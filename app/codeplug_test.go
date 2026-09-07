@@ -227,14 +227,3 @@ func TestValidate_DisconnectedIsAdvisory(t *testing.T) {
 	}
 }
 
-// TestDiffAgainstRadio_NothingLoaded pins the ErrNothingLoaded guard
-// (after the connection check has already passed).
-func TestDiffAgainstRadio_NothingLoaded(t *testing.T) {
-	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(""); err != nil {
-		t.Fatalf("ConnectDemo: %v", err)
-	}
-	if _, err := a.DiffAgainstRadio(); !errors.Is(err, ErrNothingLoaded) {
-		t.Errorf("DiffAgainstRadio with nothing loaded: err = %v, want ErrNothingLoaded", err)
-	}
-}

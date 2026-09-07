@@ -30,7 +30,7 @@ func checkOperationBusy(t *testing.T, name string, err error, wantHolder string)
 
 // TestOperationBusyError_RefusesEditsAndOtherOpsWhileReserved pins Fix 2
 // (Codex M6 #2, adjudicated HIGH): while a.opBusy holds the App-level
-// exclusive-operation reservation ReadRadio/DiffAgainstRadio/PrepareSend
+// exclusive-operation reservation ReadRadio/PrepareSend
 // take for their duration, every operation the remedy names —
 // UpdateChannel(s), SaveFile(As), LoadFile (and its loadFilePath
 // direct-path variant), ImportCSV/CHIRP, ExportCSV, Disconnect, another
@@ -96,10 +96,6 @@ func TestOperationBusyError_RefusesEditsAndOtherOpsWhileReserved(t *testing.T) {
 	t.Run("ExportCSV", func(t *testing.T) {
 		_, err := a.ExportCSV()
 		checkOperationBusy(t, "ExportCSV", err, "ReadRadio")
-	})
-	t.Run("DiffAgainstRadio", func(t *testing.T) {
-		_, err := a.DiffAgainstRadio()
-		checkOperationBusy(t, "DiffAgainstRadio", err, "ReadRadio")
 	})
 	t.Run("PrepareSend", func(t *testing.T) {
 		_, err := a.PrepareSend()

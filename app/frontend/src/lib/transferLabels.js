@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Shared display labels for transfer:progress's Phase and a transfer's
-// Kind ('read'|'diff'|'prepare'|'send'|'settings') — factored out of
+// Kind ('read'|'prepare'|'send'|'settings') — factored out of
 // StatusBar.svelte (task 16) so the task-18 send dialogue's own live
 // progress view (which must show the same phase wording inside the modal,
 // not just the status bar underneath it) does not duplicate the mapping.
@@ -29,7 +29,7 @@ export function phaseLabel(phase) {
 }
 
 /** @type {Record<string, string>} */
-const KIND_LABELS = { read: 'Read', diff: 'Compare', prepare: 'Prepare', send: 'Send', settings: 'Reading settings' }
+const KIND_LABELS = { read: 'Read', prepare: 'Prepare', send: 'Send', settings: 'Reading settings' }
 
 /** @param {string | null | undefined} kind @returns {string} */
 export function kindLabel(kind) {

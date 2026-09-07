@@ -11,8 +11,6 @@ export function Connect(arg1:string,arg2:string):Promise<main.ConnectionInfo>;
 
 export function ConnectDemo(arg1:string):Promise<main.ConnectionInfo>;
 
-export function DiffAgainstRadio():Promise<main.DiffView>;
-
 export function Disconnect():Promise<void>;
 
 export function ExportCSV():Promise<string>;

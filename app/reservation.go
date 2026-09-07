@@ -6,10 +6,10 @@ import "fmt"
 
 // OperationBusyError is returned by UpdateChannel(s), SaveFile(As),
 // LoadFile (and its loadFilePath direct-path variant), ImportCSV/CHIRP,
-// ExportCSV, Disconnect, and another ReadRadio/DiffAgainstRadio/
-// PrepareSend/ReadSettingsRadio/ConfirmSend call when a.opBusy (Fix 2,
+// ExportCSV, Disconnect, and another ReadRadio/PrepareSend/
+// ReadSettingsRadio/ConfirmSend call when a.opBusy (Fix 2,
 // adjudicated HIGH remedy for Codex M6 #2) is held by a
-// concurrently-running ReadRadio/DiffAgainstRadio/PrepareSend/
+// concurrently-running ReadRadio/PrepareSend/
 // ReadSettingsRadio call (ReadSettingsRadio added by task 35) —
 // InProgress names which one. A concurrently-running SEND transfer is
 // reported via the existing, pre-existing ErrTransferRunning instead (see
@@ -17,7 +17,7 @@ import "fmt"
 // holders.
 type OperationBusyError struct {
 	// InProgress is the bound-method name holding the reservation:
-	// "ReadRadio", "DiffAgainstRadio", "PrepareSend", or
+	// "ReadRadio", "PrepareSend", or
 	// "ReadSettingsRadio" (task 35).
 	InProgress string
 }
@@ -27,7 +27,7 @@ func (e *OperationBusyError) Error() string {
 }
 
 // checkNotBusyLocked refuses if EITHER of Fix 2's two composing
-// reservations is held: a.opBusy (ReadRadio/DiffAgainstRadio/PrepareSend/
+// reservations is held: a.opBusy (ReadRadio/PrepareSend/
 // ReadSettingsRadio — a typed *OperationBusyError) or a.transfer.running
 // (ConfirmSend's own, pre-existing send-transfer reservation — the
 // existing ErrTransferRunning sentinel, unchanged wording so every caller
@@ -45,12 +45,12 @@ func (a *App) checkNotBusyLocked() error {
 	return nil
 }
 
-// reserveOpLocked reserves a.opBusy for name — used by ReadRadio,
-// DiffAgainstRadio, and ReadSettingsRadio (task 35), which (unlike
+// reserveOpLocked reserves a.opBusy for name — used by ReadRadio
+// and ReadSettingsRadio (task 35), which (unlike
 // PrepareSend) have never checked transfer.running themselves; that
 // asymmetry predates this fix (see
 // TestConfirmSend_CancelMidTransfer_AndBusyExclusion, which pins that a
-// ReadRadio/DiffAgainstRadio call made during a running send collides
+// ReadRadio call made during a running send collides
 // with clone.Service's OWN op lock instead, surfacing a friendlyErr-
 // wrapped *clone.BusyError — left unchanged here) and is deliberately
 // preserved: this checks ONLY a.opBusy, not a.transfer.running. Refuses

@@ -168,18 +168,13 @@ type DiffCounts struct {
 
 // DiffSummaryView groups a DiffResult's entries by kind (Unchanged
 // entries are never listed, only counted — matching the CLI's own
-// writeDiffReport grouping), shared by DiffView and SendPlanView so
-// both present diffs identically.
+// writeDiffReport grouping), shared by SendPlanView so PrepareSend
+// presents diffs the same way the CLI does.
 type DiffSummaryView struct {
 	Added    []DiffEntryView
 	Modified []DiffEntryView
 	Erased   []DiffEntryView
 	Counts   DiffCounts
-}
-
-// DiffView is DiffAgainstRadio's return value.
-type DiffView struct {
-	Diff DiffSummaryView
 }
 
 // SendPlanView is PrepareSend's return value.
@@ -247,7 +242,7 @@ type ReportView struct {
 // carries BOTH the original, channel-specific Slot field AND the
 // generalised Target* fields task 35 added:
 //
-//   - a channel event (ReadRadio/DiffAgainstRadio/PrepareSend/ConfirmSend's
+//   - a channel event (ReadRadio/PrepareSend/ConfirmSend's
 //     per-slot progress): Slot and TargetDisplay carry the IDENTICAL
 //     codeplug.DisplaySlot value — Slot stays exactly as it always was (JS
 //     compatibility: TestChannelProgress_TargetFieldsAndSlotCompat pins
@@ -280,7 +275,7 @@ type ProgressEvent struct {
 }
 
 // TransferDoneEvent is transfer:done's payload, emitted exactly once per
-// ReadRadio/DiffAgainstRadio/ReadSettingsRadio call and once per
+// ReadRadio/ReadSettingsRadio call and once per
 // ConfirmSend transfer (task-15 brief §2; ReadSettingsRadio added by task
 // 35). Report is nil unless Kind=="send" AND the radio was actually
 // touched (a pure pre-write refusal carries no Report, exactly like
@@ -288,7 +283,7 @@ type ProgressEvent struct {
 // therefore ALWAYS nil for Kind=="settings": a settings read never
 // produces a clone.Report at all (that type is Execute's own).
 type TransferDoneEvent struct {
-	// Kind is "read", "diff", "send", or "settings" — which bound method's
+	// Kind is "read", "send", or "settings" — which bound method's
 	// operation this event reports on. PrepareSend does NOT emit this
 	// event: it is synchronous and returns its own SendPlanView/error
 	// directly.

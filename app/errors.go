@@ -16,7 +16,7 @@ import (
 // errors.Is against these.
 var (
 	// ErrNotConnected is returned by any bound method that requires an
-	// open radio session (ReadRadio, DiffAgainstRadio, PrepareSend,
+	// open radio session (ReadRadio, PrepareSend,
 	// ConfirmSend, Disconnect, ReadSettingsRadio) when there is none.
 	ErrNotConnected = errors.New("app: not connected to a radio")
 	// ErrAlreadyConnected is returned by Connect/ConnectDemo when a
@@ -24,7 +24,7 @@ var (
 	ErrAlreadyConnected = errors.New("app: already connected; disconnect first")
 	// ErrNothingLoaded is returned by any bound method that needs a
 	// working codeplug (GetCodeplug, UpdateChannel(s), Validate,
-	// DiffAgainstRadio, PrepareSend, SaveFile(As), ImportCSV/CHIRP,
+	// PrepareSend, SaveFile(As), ImportCSV/CHIRP,
 	// ExportCSV, GetSettings, ReadSettingsRadio) before ReadRadio or
 	// LoadFile has ever populated one.
 	ErrNothingLoaded = errors.New("app: no codeplug loaded yet")

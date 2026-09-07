@@ -18,10 +18,6 @@ export function ConnectDemo(arg1) {
   return window['go']['main']['App']['ConnectDemo'](arg1);
 }
 
-export function DiffAgainstRadio() {
-  return window['go']['main']['App']['DiffAgainstRadio']();
-}
-
 export function Disconnect() {
   return window['go']['main']['App']['Disconnect']();
 }
