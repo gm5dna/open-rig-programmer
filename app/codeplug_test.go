@@ -226,4 +226,3 @@ func TestValidate_DisconnectedIsAdvisory(t *testing.T) {
 		t.Error("Validate while disconnected: Advisory = false, want true")
 	}
 }
-

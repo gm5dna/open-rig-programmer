@@ -174,4 +174,3 @@ func (a *App) Validate() (ValidationView, error) {
 	issues := codeplug.Validate(a.working, caps)
 	return ValidationView{Issues: issuesToView(issues), Advisory: advisory}, nil
 }
-
