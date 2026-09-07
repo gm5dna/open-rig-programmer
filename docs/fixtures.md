@@ -20,10 +20,11 @@ The artefacts derived from those captures are committed only when they
 carry no values: `core/cat/table2-observed.csv` carries addresses, wire
 widths and shape classes and nothing else, and
 `core/cat/table2-corrections.csv` additionally quotes the two values the
-operator explicitly consented to publish. Regenerating the observation
-CSV needs a private capture that is not in the repository;
-`internal/extable/observe` is the tool, and its own tests prove it
-cannot emit a captured value.
+operator explicitly consented to publish. The observation CSV was
+derived from a private capture by `internal/extable/observe`, a tool
+removed in v1.4.1 once its own tests had proved it could not emit a
+captured value; the committed `core/cat/table2-observed.csv` is now the
+pinned record and nothing regenerates it.
 
 ## What may be committed
 
