@@ -15,6 +15,11 @@ package fakeft891
 // line references here are citations in the sense core/cat/ft891/doc.go uses
 // them: they name where the chart is, they are not links.
 
+import (
+	"bytes"
+	"strings"
+)
+
 // --- General framing ---
 
 // rejection is the protocol's one and only NAK, "?;" — an unattributed
@@ -649,7 +654,7 @@ func (r *Radio) handleMT(body []byte) []byte {
 		// HW-confirmed rejection of a ZERO-BYTE tag Set has no analogue: a
 		// 41-byte frame always carries the full 12-byte field, so the shape
 		// does not exist on this radio to accept or refuse.
-		s.Tag = trimRightBytes(string(field), tagFill)
+		s.Tag = strings.TrimRight(string(field), string(tagFill))
 
 		r.mu.Lock()
 		defer r.mu.Unlock()
@@ -665,21 +670,6 @@ func (r *Radio) handleMT(body []byte) []byte {
 		return nil // fire-and-forget success
 	}
 	return rejection
-}
-
-// trimRightBytes returns s without its trailing runs of cut.
-//
-// strings.TrimRight would do, and this package could import strings — the
-// hard rule forbids project-internal imports, not the standard library. It is
-// four lines here so that the tag's trimming rule is visible beside the
-// storage decision it implements rather than behind a call whose second
-// argument is a cutset rather than a byte.
-func trimRightBytes(s string, cut byte) string {
-	end := len(s)
-	for end > 0 && s[end-1] == cut {
-		end--
-	}
-	return s[:end]
 }
 
 // --- MR: MEMORY CHANNEL READ (availability 164; frames 959-979) ---
@@ -845,15 +835,6 @@ func (r *Radio) handleMC(body []byte) []byte {
 
 // --- Top-level dispatch ---
 
-// toUpperASCII folds one ASCII lower-case byte to upper case and leaves every
-// other byte alone. Used on COMMAND NAMES ONLY — see handleFrame.
-func toUpperASCII(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
-	}
-	return b
-}
-
 // handleFrame parses one complete, ';'-terminated frame (as produced by
 // reassembler.push) and returns the reply to send: nil for a fire-and-forget
 // success, or a non-nil frame — a real answer, or rejection — otherwise.
@@ -883,7 +864,11 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
+	// The fold is bytes.ToUpper, which is Unicode-aware: a body whose first two
+	// bytes are not ASCII comes back re-encoded (U+FFFD) and possibly longer,
+	// so the first two bytes are taken. Such a frame matches no command name
+	// and falls to rejection below either way.
+	cmd := [2]byte(bytes.ToUpper(body[:2])[:2])
 	rest := body[2:]
 
 	switch cmd {

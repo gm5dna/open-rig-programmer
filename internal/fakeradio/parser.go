@@ -2,6 +2,10 @@
 
 package fakeradio
 
+import (
+	"bytes"
+)
+
 import "fmt"
 
 // This file is fakeradio's own, independent byte-level CAT parser and
@@ -681,7 +685,11 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
+	// The fold is bytes.ToUpper, which is Unicode-aware: a body whose first two
+	// bytes are not ASCII comes back re-encoded (U+FFFD) and possibly longer,
+	// so the first two bytes are taken. Such a frame matches no command name
+	// and falls to rejection below either way.
+	cmd := [2]byte(bytes.ToUpper(body[:2])[:2])
 	rest := body[2:]
 
 	// Reference: "the radio accepts upper or lower case" for command
@@ -705,11 +713,4 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	default:
 		return rejection
 	}
-}
-
-func toUpperASCII(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
-	}
-	return b
 }
