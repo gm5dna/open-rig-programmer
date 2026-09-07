@@ -58,7 +58,7 @@
 		// Every mutation goes through appState's own setters (see
 		// app.svelte.js's module comment) — bindings.js reads
 		// appState.selectedModel back when Connect/Demo is pressed.
-		appState.setSelectedModel(e.currentTarget.value)
+		appState.selectedModel = e.currentTarget.value ?? ''
 	}
 
 	/** @param {import('../../wailsjs/go/models').main.PortEntry} port */

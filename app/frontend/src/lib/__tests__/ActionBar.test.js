@@ -48,7 +48,7 @@ const exportCSVMock = vi.mocked(exportCSV)
 const CODEPLUG = { Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: false, BaselineStale: false }
 
 function connectAndLoad() {
-	appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+	appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 	appState.setCodeplug(CODEPLUG)
 }
 
@@ -75,7 +75,7 @@ describe('Send button gating matrix', () => {
 	})
 
 	it('disabled, explains a missing codeplug, once connected with nothing loaded', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		render(ActionBar)
 		expect(sendButton()).toBeDisabled()
 		expect(sendButton().closest('span')?.title).toMatch(/read the radio|open a codeplug/i)
@@ -338,7 +338,7 @@ describe('prepared plan and the consent surface', () => {
 	it('drops its prepared plan when one is invalidated — a consent reconnect took the backend’s own plan with it', async () => {
 		await openSendDialogue()
 
-		appState.invalidatePreparedPlan()
+		appState.preparedPlanEpoch += 1
 		await screen.findByRole('button', { name: 'Send to Radio' })
 
 		expect(screen.queryByText('Review before sending')).not.toBeInTheDocument()

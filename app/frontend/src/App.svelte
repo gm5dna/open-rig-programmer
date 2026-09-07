@@ -43,7 +43,7 @@
 	/** @param {'channels' | 'settings'} id */
 	function selectView(id) {
 		if (appState.activeView === id) return
-		appState.setActiveView(id)
+		appState.activeView = id
 	}
 
 	/** @param {KeyboardEvent} e @param {number} index */

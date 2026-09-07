@@ -104,7 +104,7 @@ let transferEventsInitialised = false
 export async function refreshUISpec() {
 	return callQuiet('loading the grid layout', async () => {
 		const spec = await App.GetUISpec()
-		appState.setUISpec(spec)
+		appState.uiSpec = spec
 		return spec
 	})
 }
@@ -127,7 +127,7 @@ export async function refreshUISpec() {
 export async function refreshSettingsSpec() {
 	return callQuiet('loading the settings layout', async () => {
 		const spec = await App.GetSettingsSpec()
-		appState.setSettingsSpec(spec)
+		appState.settingsSpec = spec
 		return spec
 	})
 }
@@ -147,7 +147,7 @@ export async function refreshSettingsSpec() {
 export async function refreshAppVersion() {
 	return callQuiet('reading the app version', async () => {
 		const version = await App.GetAppVersion()
-		appState.setAppVersion(version)
+		appState.appVersion = version
 		return version
 	})
 }
@@ -177,7 +177,7 @@ export async function listPorts() {
 	try {
 		return await call('listing ports', async () => {
 			const ports = await App.ListPorts()
-			appState.setPorts(ports)
+			appState.ports = ports ?? []
 			return ports
 		})
 	} finally {
@@ -201,7 +201,7 @@ export async function listPorts() {
 export async function refreshSupportedModels() {
 	return callQuiet('listing supported radios', async () => {
 		const models = await App.GetSupportedModels()
-		appState.setSupportedModels(models)
+		appState.supportedModels = models ?? []
 		return models
 	})
 }
@@ -240,7 +240,7 @@ async function openSession(openGoSession, context) {
 	try {
 		return await call(context, async () => {
 			const info = await openGoSession()
-			appState.setConnection(info)
+			appState.connection = info
 			await refreshUISpec()
 			await refreshSettingsSpec() // task 36: Live flips true now connected
 			await revalidateQuiet() // Fix 5: caps just became authoritative
@@ -359,7 +359,7 @@ async function raiseConsentPromptIfDue() {
 export async function refreshUnverifiedConsents() {
 	return callQuiet('listing unverified-write consents', async () => {
 		const rows = await App.ListUnverifiedWriteConsents()
-		appState.setUnverifiedConsents(rows)
+		appState.unverifiedConsents = rows ?? []
 		return rows
 	})
 }
@@ -420,7 +420,7 @@ export async function applyUnverifiedWriteConsent(model, on, known = {}) {
 	// too. Announced here, immediately after the disconnect that made it
 	// unspendable, rather than after the reconnect — it is stale from this
 	// moment whether or not the session comes back.
-	appState.invalidatePreparedPlan()
+	appState.preparedPlanEpoch += 1
 	// 3. Persist.
 	await persistUnverifiedWriteConsent(model, on)
 	await refreshUnverifiedConsents()
@@ -517,7 +517,7 @@ async function revalidateQuiet() {
 	await callQuiet('validating', async () => {
 		const result = await App.Validate()
 		appState.setIssues(result.Issues)
-		appState.setIssuesAdvisory(result.Advisory)
+		appState.issuesAdvisory = result.Advisory
 	})
 }
 
@@ -607,7 +607,10 @@ export async function saveFileAs() {
 			// (may still be true if a mutation landed mid-save), not a forced
 			// false — see saveFile's own comment.
 			appState.setDirty(await App.IsDirty())
-			appState.setWorkingPath(path)
+			// Defensive: SaveFileAs itself requires a working copy, so this
+			// should always be non-null — mirrors applyChannelEdits' same
+			// defensive null check.
+			if (appState.codeplug !== null) appState.codeplug.WorkingPath = path
 		}
 		return path
 	})
