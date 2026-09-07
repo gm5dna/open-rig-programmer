@@ -858,15 +858,14 @@ func realDriverFor(model string, consent bool) (driver.Driver, error) {
 	return ctor(consent), nil
 }
 
-// RegisterDriverError is NewRegistry's typed failure when
+// RegisterDriverError is registerDriver's typed failure when
 // driver.Registry.Register itself refuses d (e.g. a duplicate Model()).
 // Error() carries this package's own generic "wiring: ..." wording (this
 // package is shared by cmd/rigprog and app/, neither of which this
 // package should assume any wording preference for); a caller wanting a
 // DIFFERENT wording — e.g. cmd/rigprog's own pre-extraction "cmd/rigprog:
-// register driver: ..." text (Fix 7, adjudicated LOW, Codex M6 #7) —
-// should errors.As against this and Cause rather than relying on
-// Error()'s text (the same pattern internal/csvmerge's
+// register driver: ..." text — should errors.As against this and Cause
+// rather than relying on Error()'s text (the same pattern internal/csvmerge's
 // InventoryMismatchError/UnknownSlotsError use for the identical reason
 // — see cmd/rigprog/import.go's mergeCSV/mergeCHIRP aliases).
 type RegisterDriverError struct{ Cause error }
@@ -877,20 +876,19 @@ func (e *RegisterDriverError) Error() string {
 
 func (e *RegisterDriverError) Unwrap() error { return e.Cause }
 
-// NewRegistry builds a fresh driver.Registry containing exactly one
-// driver, d, registered under its own Model(). It is shared by both
-// wiring constructors (this file's OpenRealSessionFor and fake.go's
-// OpenFakeSessionFor); deliberately, it accepts only a driver.Driver —
-// never an ft710.Profile alongside a port — so it cannot become the
-// "profile + port" seam the structural-exclusivity constraint (task-11
-// brief §3) rules out. Whatever pairing a caller wants must already be
-// baked into d before this function ever sees it.
-func NewRegistry(d driver.Driver) (*driver.Registry, error) {
-	reg := driver.NewRegistry()
-	if err := reg.Register(d); err != nil {
-		return nil, &RegisterDriverError{Cause: err}
+// registerDriver validates d by registering it into a fresh, throwaway
+// driver.Registry — d's Model()/Capabilities().Model agreement,
+// Capabilities().Validate, and the ConsentedUnverified-baseline guard all
+// run inside Register — wrapping any rejection as *RegisterDriverError.
+// The registry itself is discarded: every caller (this file's
+// OpenRealSessionWith/StaticCapabilities and fake.go's OpenFakeSessionFor)
+// already holds d and uses it directly once registerDriver returns nil,
+// so there is nothing left to look up.
+func registerDriver(d driver.Driver) error {
+	if err := driver.NewRegistry().Register(d); err != nil {
+		return &RegisterDriverError{Cause: err}
 	}
-	return reg, nil
+	return nil
 }
 
 // NewRealDriver builds the ft710 driver for a real-hardware session:
@@ -995,19 +993,11 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 		return nil, nil, err
 	}
 
-	reg, err := NewRegistry(d)
-	if err != nil {
+	// registerDriver validates d (its Model()/Capabilities().Model
+	// agreement, Capabilities().Validate, the ConsentedUnverified-baseline
+	// guard) and wraps any failure as *RegisterDriverError.
+	if err := registerDriver(d); err != nil {
 		return nil, nil, err
-	}
-	drv, ok := reg.Get(model)
-	if !ok {
-		// Unreachable while TestDriverTableKeysMatchDriverModel holds: d
-		// was just registered under its own Model(), which that test pins
-		// equal to this table key. Returned rather than ignored so a
-		// future table whose key drifted from its driver's Model() fails
-		// with this package's own typed error instead of a nil-pointer
-		// panic when drv is used below.
-		return nil, nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
 	}
 
 	stopBits, err := stopBitsFor(d)
@@ -1016,10 +1006,7 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 	}
 
 	port, err := openSerial(portPath, transport.SerialConfig{
-		// The baud is the radio's, read from the driver in hand (d is
-		// the very value NewRegistry registered and reg.Get returned
-		// above as drv — TestDriverTableKeysMatchDriverModel pins the
-		// key they share).
+		// The baud is the radio's, read from the driver in hand.
 		Baud: d.Capabilities().DefaultBaud,
 		// The stop bits are the DRIVER's where the driver has something
 		// honest to say, and transport's fixed default (8-N-2) where it
@@ -1030,7 +1017,7 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 		return nil, nil, &OpenSerialError{Port: portPath, Cause: err}
 	}
 
-	sess, err := drv.Open(ctx, port, driver.Identity{Port: portPath})
+	sess, err := d.Open(ctx, port, driver.Identity{Port: portPath})
 	if err != nil {
 		// Open owns port on both outcomes: it is already closed.
 		return nil, nil, &OpenSessionError{Port: portPath, Cause: err}
@@ -1066,21 +1053,10 @@ func StaticCapabilities(model string) (spec.Capabilities, error) {
 	if err != nil {
 		return spec.Capabilities{}, err
 	}
-	reg, err := NewRegistry(d)
-	if err != nil {
+	if err := registerDriver(d); err != nil {
 		return spec.Capabilities{}, err
 	}
-	drv, ok := reg.Get(model)
-	if !ok {
-		// Unreachable while TestDriverTableKeysMatchDriverModel holds: d
-		// was just registered under its own Model(), which that test pins
-		// equal to this table key. Returned rather than ignored so a
-		// future table whose key drifted from its driver's Model() fails
-		// with this package's own typed error instead of a nil-pointer
-		// panic inside Capabilities().
-		return spec.Capabilities{}, &UnknownModelError{Model: model, Supported: SupportedModels()}
-	}
-	return drv.Capabilities(), nil
+	return d.Capabilities(), nil
 }
 
 // NeedsUnverifiedConsent reports whether model is CONSENT-ELIGIBLE: whether
