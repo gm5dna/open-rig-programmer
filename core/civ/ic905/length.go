@@ -37,19 +37,3 @@ const MaxNarrowFrequencyHz = uint64(9_999_999_999)
 // equivalence is why the record carrying no band field (matrix
 // Erratum 8) does not leave the write path guessing.
 func NeedsWideFrequency(hz uint64) bool { return hz > MaxNarrowFrequencyHz }
-
-// RecordLengthForFrequency is the record length hz would need.
-//
-// It is NOT what BuildMemorySet emits — civ.ProfileConfig.BuildLength
-// is static, and this profile declares RecordLengthShort (see
-// profile_test.go's TestBuildLengthIsTheShapeTheDiagramDraws for the
-// argument; it lives there because it needs a built Profile). It exists
-// so that core/driver/ic905 can REFUSE a wide write before the wire with
-// a named reason, and so that the one-line change ic905-R-06 would
-// authorise is already written down.
-func RecordLengthForFrequency(hz uint64) int {
-	if NeedsWideFrequency(hz) {
-		return RecordLengthWide
-	}
-	return RecordLengthShort
-}

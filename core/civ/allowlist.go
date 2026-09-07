@@ -51,7 +51,7 @@ package civ
 //
 // THE SET GRAMMAR IS RE-VALIDATED BY DECODE, VALIDATE AND RE-ENCODE. The
 // frame's record is decoded with this profile's own layout, run through
-// validateRecordFields — the SAME validator BuildMemorySet uses — and then
+// validateRecordFieldsAt — the SAME validator BuildMemorySet uses — and then
 // re-encoded; the frame is admitted only if the bytes come back identical.
 // That last step is what makes "admits ONLY builder-producible frames"
 // literally true rather than approximately: a frame whose unmapped bytes

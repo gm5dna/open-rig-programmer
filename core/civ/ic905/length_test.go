@@ -29,23 +29,19 @@ func TestRecordLengthForFrequency(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		hz   uint64
-		want int
+		wide bool
 	}{
-		{"144 MHz band floor", 144_000_000, ic905.RecordLengthShort},
-		{"the golden 68-byte vector's 144.5 MHz", 144_500_000, ic905.RecordLengthShort},
-		{"5600 band, well inside ten digits", 5_760_000_000, ic905.RecordLengthShort},
-		{"the last frequency ten BCD digits reach", 9_999_999_999, ic905.RecordLengthShort},
-		{"the 10G band floor", 10_000_000_000, ic905.RecordLengthWide},
-		{"the golden 69-byte vector's 10.25 GHz", 10_250_000_000, ic905.RecordLengthWide},
-		{"the documented ceiling", 10_500_000_000, ic905.RecordLengthWide},
+		{"144 MHz band floor", 144_000_000, false},
+		{"the golden 68-byte vector's 144.5 MHz", 144_500_000, false},
+		{"5600 band, well inside ten digits", 5_760_000_000, false},
+		{"the last frequency ten BCD digits reach", 9_999_999_999, false},
+		{"the 10G band floor", 10_000_000_000, true},
+		{"the golden 69-byte vector's 10.25 GHz", 10_250_000_000, true},
+		{"the documented ceiling", 10_500_000_000, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := ic905.RecordLengthForFrequency(tc.hz); got != tc.want {
-				t.Errorf("RecordLengthForFrequency(%d) = %d, want %d", tc.hz, got, tc.want)
-			}
-			wide := tc.want == ic905.RecordLengthWide
-			if got := ic905.NeedsWideFrequency(tc.hz); got != wide {
-				t.Errorf("NeedsWideFrequency(%d) = %v, want %v", tc.hz, got, wide)
+			if got := ic905.NeedsWideFrequency(tc.hz); got != tc.wide {
+				t.Errorf("NeedsWideFrequency(%d) = %v, want %v", tc.hz, got, tc.wide)
 			}
 		})
 	}

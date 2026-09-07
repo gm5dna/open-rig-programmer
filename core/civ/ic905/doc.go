@@ -113,10 +113,9 @@
 //	six bytes iff freqHz > 9,999,999,999
 //
 // That equivalence is why the record carrying no band field costs
-// nothing on the write path. NeedsWideFrequency and
-// RecordLengthForFrequency (length.go) pin it, so that the one-line
-// change ic905-R-06 would authorise is already written down and tested
-// even while BuildLength is 64.
+// nothing on the write path. NeedsWideFrequency (length.go) pins it, so
+// that the one-line change ic905-R-06 would authorise is already
+// written down and tested even while BuildLength is 64.
 //
 // # Encodings, and the units they carry
 //
@@ -408,7 +407,7 @@
 // must never be mapped as skip. civ.FieldSelect exists, but the neutral
 // codeplug.ChannelData has no home for it, so mapping it would make
 // BuildMemorySet demand a value the driver could only invent —
-// validateRecordFields refuses a mapped field with no value. Leaving (5)
+// validateRecordFieldsAt refuses a mapped field with no value. Leaving (5)
 // in Fixed at 0x00 is also exactly what the CALL bank requires ("* Set 0
 // for Call channel.", PDF p.19 folio 18, the (5) breakout footnote) and
 // exactly what both golden vectors carry.

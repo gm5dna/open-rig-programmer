@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestEncodeFrequencyBCD_KnownVectors(t *testing.T) {
+func TestBCDNumber_LittleEndianKnownVectors(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		hz   uint64
@@ -59,40 +59,40 @@ func TestEncodeFrequencyBCD_KnownVectors(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := EncodeFrequencyBCD(tc.hz, tc.n)
+			got, err := encodeBCDNumber(tc.hz, tc.n, OrderLittleEndian)
 			if err != nil {
-				t.Fatalf("EncodeFrequencyBCD(%d, %d) returned %v", tc.hz, tc.n, err)
+				t.Fatalf("encodeBCDNumber(%d, %d, little-endian) returned %v", tc.hz, tc.n, err)
 			}
 			if string(got) != string(tc.want) {
-				t.Fatalf("EncodeFrequencyBCD(%d, %d) = % 02x, want % 02x", tc.hz, tc.n, got, tc.want)
+				t.Fatalf("encodeBCDNumber(%d, %d, little-endian) = % 02x, want % 02x", tc.hz, tc.n, got, tc.want)
 			}
-			back, err := DecodeFrequencyBCD(got)
+			back, err := decodeBCDNumber(got, OrderLittleEndian)
 			if err != nil {
-				t.Fatalf("DecodeFrequencyBCD(% 02x) returned %v", got, err)
+				t.Fatalf("decodeBCDNumber(% 02x, little-endian) returned %v", got, err)
 			}
 			if back != tc.hz {
-				t.Fatalf("round trip: DecodeFrequencyBCD(EncodeFrequencyBCD(%d, %d)) = %d", tc.hz, tc.n, back)
+				t.Fatalf("round trip: decodeBCDNumber(encodeBCDNumber(%d, %d)) = %d", tc.hz, tc.n, back)
 			}
 		})
 	}
 }
 
-// TestFrequencyBCD_ExhaustiveRoundTrip walks EVERY value the five-byte
-// form can express at a stride that still visits every digit position, and
-// every value of a narrow window exhaustively. A BCD codec that is right
-// for a handful of hand-picked frequencies and wrong on a carry is the
-// defect this exists to catch.
-func TestFrequencyBCD_ExhaustiveRoundTrip(t *testing.T) {
+// TestBCDNumber_LittleEndianExhaustiveRoundTrip walks EVERY value the
+// five-byte form can express at a stride that still visits every digit
+// position, and every value of a narrow window exhaustively. A BCD codec
+// that is right for a handful of hand-picked frequencies and wrong on a
+// carry is the defect this exists to catch.
+func TestBCDNumber_LittleEndianExhaustiveRoundTrip(t *testing.T) {
 	// Every value 0..99_999 exhaustively: that covers all carries in the
 	// low three bytes, including the 9->0 rollovers.
 	for hz := uint64(0); hz <= 99_999; hz++ {
-		b, err := EncodeFrequencyBCD(hz, 5)
+		b, err := encodeBCDNumber(hz, 5, OrderLittleEndian)
 		if err != nil {
-			t.Fatalf("EncodeFrequencyBCD(%d, 5): %v", hz, err)
+			t.Fatalf("encodeBCDNumber(%d, 5, little-endian): %v", hz, err)
 		}
-		got, err := DecodeFrequencyBCD(b)
+		got, err := decodeBCDNumber(b, OrderLittleEndian)
 		if err != nil {
-			t.Fatalf("DecodeFrequencyBCD(% 02x) for %d: %v", b, hz, err)
+			t.Fatalf("decodeBCDNumber(% 02x, little-endian) for %d: %v", b, hz, err)
 		}
 		if got != hz {
 			t.Fatalf("round trip lost %d: got %d (% 02x)", hz, got, b)
@@ -106,13 +106,13 @@ func TestFrequencyBCD_ExhaustiveRoundTrip(t *testing.T) {
 		9_000_000, 900_000, 90_000, 9_000, 900, 90, 9,
 	} {
 		for _, n := range []int{5, 6} {
-			b, err := EncodeFrequencyBCD(hz, n)
+			b, err := encodeBCDNumber(hz, n, OrderLittleEndian)
 			if err != nil {
-				t.Fatalf("EncodeFrequencyBCD(%d, %d): %v", hz, n, err)
+				t.Fatalf("encodeBCDNumber(%d, %d, little-endian): %v", hz, n, err)
 			}
-			got, err := DecodeFrequencyBCD(b)
+			got, err := decodeBCDNumber(b, OrderLittleEndian)
 			if err != nil {
-				t.Fatalf("DecodeFrequencyBCD(% 02x): %v", b, err)
+				t.Fatalf("decodeBCDNumber(% 02x, little-endian): %v", b, err)
 			}
 			if got != hz {
 				t.Fatalf("round trip lost %d at width %d: got %d", hz, n, got)
@@ -121,7 +121,7 @@ func TestFrequencyBCD_ExhaustiveRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEncodeFrequencyBCD_Refusals(t *testing.T) {
+func TestEncodeBCDNumber_Refusals(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		hz   uint64
@@ -135,14 +135,14 @@ func TestEncodeFrequencyBCD_Refusals(t *testing.T) {
 		{"value too wide for 1 byte", 100, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got, err := EncodeFrequencyBCD(tc.hz, tc.n); err == nil {
-				t.Fatalf("EncodeFrequencyBCD(%d, %d) = % 02x, nil — want an error", tc.hz, tc.n, got)
+			if got, err := encodeBCDNumber(tc.hz, tc.n, OrderLittleEndian); err == nil {
+				t.Fatalf("encodeBCDNumber(%d, %d, little-endian) = % 02x, nil — want an error", tc.hz, tc.n, got)
 			}
 		})
 	}
 }
 
-func TestDecodeFrequencyBCD_RefusesNonBCDNibbles(t *testing.T) {
+func TestDecodeBCDNumber_RefusesNonBCDNibbles(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		in   []byte
@@ -153,10 +153,10 @@ func TestDecodeFrequencyBCD_RefusesNonBCDNibbles(t *testing.T) {
 		{"wider than the ceiling", make([]byte, maxBCDBytes+1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got, err := DecodeFrequencyBCD(tc.in); err == nil {
-				t.Fatalf("DecodeFrequencyBCD(% 02x) = %d, nil — want an error", tc.in, got)
+			if got, err := decodeBCDNumber(tc.in, OrderLittleEndian); err == nil {
+				t.Fatalf("decodeBCDNumber(% 02x, little-endian) = %d, nil — want an error", tc.in, got)
 			} else if !errors.Is(err, ErrBCD) {
-				t.Fatalf("DecodeFrequencyBCD(% 02x) error %v does not match ErrBCD", tc.in, err)
+				t.Fatalf("decodeBCDNumber(% 02x, little-endian) error %v does not match ErrBCD", tc.in, err)
 			}
 		})
 	}
@@ -164,26 +164,22 @@ func TestDecodeFrequencyBCD_RefusesNonBCDNibbles(t *testing.T) {
 
 // TestBCD2_ExhaustiveRoundTrip walks the whole two-digit domain, both
 // directions, plus every byte that is NOT a valid two-digit BCD pair.
+//
+// The encode half is built BY HAND (tens in the high nibble, units in the
+// low) rather than through a package function: nothing in this package
+// exports a BCD2 encoder — production code builds a 2-digit field through
+// encodeBCDNumber(v, 2, order), exactly as TestEncodeBCDNumber_
+// BothByteOrders exercises — so DecodeBCD2 is what this test is pinning,
+// against an independent ground truth.
 func TestBCD2_ExhaustiveRoundTrip(t *testing.T) {
 	for v := 0; v <= 99; v++ {
-		b, err := EncodeBCD2(v)
-		if err != nil {
-			t.Fatalf("EncodeBCD2(%d): %v", v, err)
-		}
-		if hi, lo := b>>4, b&0x0F; int(hi) != v/10 || int(lo) != v%10 {
-			t.Fatalf("EncodeBCD2(%d) = %#02x, want nibbles %d %d", v, b, v/10, v%10)
-		}
+		b := byte(v/10)<<4 | byte(v%10)
 		got, err := DecodeBCD2(b)
 		if err != nil {
 			t.Fatalf("DecodeBCD2(%#02x): %v", b, err)
 		}
 		if got != v {
 			t.Fatalf("round trip lost %d: got %d", v, got)
-		}
-	}
-	for _, v := range []int{-1, 100, 1000} {
-		if b, err := EncodeBCD2(v); err == nil {
-			t.Fatalf("EncodeBCD2(%d) = %#02x, nil — want an error", v, b)
 		}
 	}
 	// Every byte outside the 00..99 BCD image must be refused, and every
