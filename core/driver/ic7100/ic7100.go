@@ -45,36 +45,16 @@ type Option func(*ic7100Driver)
 // tier integration owns any later cross-model attribution.
 type SiblingLengths map[int]string
 
-// WithTransportLogger supplies transport diagnostics to opened sessions.
-func WithTransportLogger(logger transport.Logger) Option {
-	return func(d *ic7100Driver) {
-		if logger != nil {
-			d.transportLogger = logger
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records user consent for this session only.
 // The static capability set remains Unverified and FieldErase remains zero.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic7100Driver) { d.consentUnverifiedWrites = true }
-}
-
-// WithSiblingRecordLengths supplies the tier-integration attribution table.
-// It changes only diagnostic attribution; it never changes accepted lengths.
-func WithSiblingRecordLengths(lengths SiblingLengths) Option {
-	return func(d *ic7100Driver) {
-		d.siblingLengths = make(SiblingLengths, len(lengths))
-		for length, model := range lengths {
-			d.siblingLengths[length] = model
-		}
-	}
+	return func(d *ic7100Driver) { d.Consented = true }
 }
 
 // New constructs the IC-7100 driver. It intentionally returns only the
 // neutral driver seam and does not register the model.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic7100Driver{profile: profile}
+	d := &ic7100Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -82,31 +62,17 @@ func New(profile Profile, opts ...Option) driver.Driver {
 }
 
 type ic7100Driver struct {
-	profile                 Profile
-	transportLogger         transport.Logger
-	consentUnverifiedWrites bool
-	siblingLengths          SiblingLengths
+	driver.Base
+	siblingLengths SiblingLengths
 }
 
 func (d *ic7100Driver) Model() string { return "IC-7100" }
 
 func (d *ic7100Driver) Capabilities() spec.Capabilities {
-	if d.profile == Simulated {
+	if d.Profile == Simulated {
 		return CapabilitiesSimulated()
 	}
 	return CapabilitiesUnverified()
-}
-
-func (d *ic7100Driver) recognised() bool {
-	return d.profile == RealHardware || d.profile == Simulated
-}
-
-func (d *ic7100Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.recognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
 }
 
 // Open takes ownership of port, sends no Init mutation, requires an
@@ -123,11 +89,7 @@ func (d *ic7100Driver) Open(ctx context.Context, port transport.Port, id driver.
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7100: Open: CI-V framing does not report accumulator statistics")
 	}
-	var options []transport.Option
-	if d.transportLogger != nil {
-		options = append(options, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngineWith(port, framing, options...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7100: Open: %w", err)
@@ -142,7 +104,7 @@ func (d *ic7100Driver) Open(ctx context.Context, port transport.Port, id driver.
 
 func (d *ic7100Driver) open(ctx context.Context, eng *transport.Engine, stats civ.AccumulatorStatsReporter, id driver.Identity) (*Session, error) {
 	p := civic7100.Profile()
-	s := &Session{eng: eng, stats: stats, profile: p, caps: d.sessionCapabilities(), siblingLengths: d.siblingLengths}
+	s := &Session{eng: eng, stats: stats, profile: p, caps: d.SessionCaps(d.Capabilities()), siblingLengths: d.siblingLengths}
 	if err := eng.Init(ctx); err != nil {
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
 			return nil, fmt.Errorf("ic7100: Open: %w", err)
@@ -266,7 +228,7 @@ type Session struct {
 }
 
 func (s *Session) Identity() driver.Identity       { return s.id }
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 func (s *Session) Close() error                    { return s.eng.Close() }
 
 func (s *Session) CIVDiagnostics() CIVDiagnostics {
@@ -278,11 +240,7 @@ func (s *Session) CIVDiagnostics() CIVDiagnostics {
 }
 
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.stats.AccumulatorStats().Unexpected
-	if n < 0 {
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.stats.AccumulatorStats().Unexpected)}
 }
 
 func (s *Session) noteMismatch() {

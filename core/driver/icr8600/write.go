@@ -392,7 +392,7 @@ func (s *Session) validateWriteFields(slot string, d codeplug.ChannelData) error
 	if d.FreqHz > 9_999_999_999 {
 		return refuse(spec.FieldFrequency, fmt.Errorf("%d Hz exceeds the five-byte packed-BCD frequency field", d.FreqHz))
 	}
-	if !contains(s.caps.Modes, d.Mode) {
+	if !slices.Contains(s.caps.Modes, d.Mode) {
 		return refuse(spec.FieldMode, fmt.Errorf("%q is not one of this radio's modes", d.Mode))
 	}
 	if len(d.Tag) > s.caps.TagLen {
@@ -533,13 +533,4 @@ func onOff(on bool) string {
 		return "ON"
 	}
 	return "OFF"
-}
-
-func contains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
 }

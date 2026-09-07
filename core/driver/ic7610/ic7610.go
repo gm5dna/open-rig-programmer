@@ -34,7 +34,7 @@ const probeSlotCount = 10
 // driver is for is fixed by the package rather than by a value a caller
 // could get wrong.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic7610Driver{profile: profile}
+	d := &ic7610Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -43,18 +43,6 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // Option configures a driver at construction.
 type Option func(*ic7610Driver)
-
-// WithTransportLogger threads l into every session's transport.Engine at
-// Open time.
-//
-// It appends to the driver's OWN []transport.Option, built at
-// construction. A driver Option is not a transport.Option and the two must
-// not be conflated: the engine is constructed inside Open, where the
-// driver's opts are long out of scope, so the translated slice has to be
-// carried on the driver value.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic7610Driver) { d.transportOpts = append(d.transportOpts, transport.WithLogger(l)) }
-}
 
 // WithConsentedUnverifiedWrites records the user's consent to writes this
 // project has never verified against an IC-7610.
@@ -66,16 +54,12 @@ func WithTransportLogger(l transport.Logger) Option {
 // the transform (spec D4), and an unrecognised Profile is not transformed
 // at all, so no value a caller can pass produces a writable session.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic7610Driver) { d.consented = true }
+	return func(d *ic7610Driver) { d.Consented = true }
 }
 
 // ic7610Driver implements driver.Driver for the Icom IC-7610.
 type ic7610Driver struct {
-	profile   Profile
-	consented bool
-	// transportOpts are this driver's own options translated into the
-	// transport's, ready for the transport.NewEngineWith call inside Open.
-	transportOpts []transport.Option
+	driver.Base
 }
 
 // Model implements driver.Driver. It must equal Capabilities().Model and
@@ -85,7 +69,7 @@ func (d *ic7610Driver) Model() string { return "IC-7610" }
 // Capabilities implements driver.Driver: the STATIC baseline for this
 // driver's profile, before any radio has been probed.
 func (d *ic7610Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated()
 	case RealHardware:
@@ -173,9 +157,11 @@ func (e *RecordLengthMismatchError) Unwrap() []error {
 
 // ErrAnswerMismatch is the sentinel for tier ruling T2: a memory answer
 // whose decoded channel address is not the one that was asked for.
-var ErrAnswerMismatch = errors.New("ic7610: a memory answer named a channel other than the one requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports T2's failure, naming both channels.
+// AnswerMismatchError reports T2's failure, naming both channels; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
 //
 // IT EXISTS BECAUSE THE MATCHER CANNOT CATCH THIS. The landed
 // civ.Profile.MemoryAnswerMatcher is deliberately ENVELOPE-ONLY — it
@@ -186,21 +172,7 @@ var ErrAnswerMismatch = errors.New("ic7610: a memory answer named a channel othe
 // before any caching, before record mapping, before the E6 template check
 // and before a write merge. A record silently mis-attributed to the wrong
 // channel is the corruption this whole project refuses.
-//
-// core/driver/ftdx101's AnswerMismatchError is the precedent.
-type AnswerMismatchError struct {
-	// Want is the channel the driver asked about.
-	Want civ.ChannelAddress
-	// Got is the channel the answer actually named.
-	Got civ.ChannelAddress
-}
-
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic7610: asked about %s and was answered about %s — the memory-answer matcher is envelope-only, so this is the driver's check (tier ruling T2)", e.Want, e.Got)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]
 
 // Open implements driver.Driver.
 //
@@ -235,7 +207,7 @@ func (d *ic7610Driver) Open(ctx context.Context, port transport.Port, id driver.
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7610: the CI-V framing does not report accumulator stats — this driver's diagnostics require civ.AccumulatorStatsReporter")
 	}
-	eng, err := transport.NewEngineWith(port, framing, d.transportOpts...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		// NewEngineWith has not taken the port on this path (it refuses
 		// before touching it), so closing it here is Open's own ownership
@@ -350,7 +322,7 @@ func (d *ic7610Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		eng:    eng,
 		stats:  stats,
 		id:     id,
-		caps:   d.sessionCapabilities(),
+		caps:   d.SessionCaps(d.Capabilities()),
 		report: report,
 	}, nil
 }
@@ -395,31 +367,9 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 		return nil, false, fmt.Errorf("ic7610: Open: probing %s: %w", a, err)
 	}
 	if got != a {
-		return nil, false, &AnswerMismatchError{Want: a, Got: got}
+		return nil, false, &AnswerMismatchError{Model: "ic7610", Requested: a, Answered: got}
 	}
 	return raw, false, nil
-}
-
-// sessionCapabilities is the ONE place a session's effective capability
-// set is assembled: this driver's static set, then — only when the driver
-// was built with WithConsentedUnverifiedWrites AND its profile is one of
-// the declared constants — the consent transform.
-//
-// An unrecognised profile stays untransformed even with the option, so the
-// fail-safe direction survives consent. Applying the transform here,
-// before the Session exists, keeps the set WriteChannel enforces and the
-// set Capabilities() hands out the same value.
-func (d *ic7610Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if !d.consented {
-		return caps
-	}
-	switch d.profile {
-	case RealHardware, Simulated:
-		return spec.ConsentUnverifiedWrites(caps)
-	default:
-		return caps
-	}
 }
 
 // Session is one open, probed connection to an IC-7610.
@@ -455,42 +405,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // session's own value; a caller that could reach into what Capabilities
 // handed out and flip a FieldSupport would otherwise be editing the write
 // gate from outside it.
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
-
-// cloneCapabilities deep-copies a capability set: every slice freshly
-// allocated, every bank re-copied through spec.Capabilities.Bank (which
-// already returns fresh Slots and Fields), and the tone RANGE — a POINTER,
-// so `out := caps` would have aliased it — copied as a struct.
-//
-// The ok result of Bank is discarded, and what makes that safe is that b
-// came out of caps.Banks and Bank scans that same slice for b.ID, so the
-// lookup cannot miss; the only way it could serve the wrong bank is a
-// duplicate BankID, which spec.Capabilities.Validate refuses outright and
-// TestBaseline_Validate runs over both profiles.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	return out
-}
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 // Close implements driver.Session. Idempotent, because Engine.Close is.
 func (s *Session) Close() error { return s.eng.Close() }
@@ -536,10 +451,48 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // WriteChannel implements driver.Session; its body is in write.go,
 // alongside the T5-ordered refusal ladder it is made of.
 
-// Compile-time proof that this package really does implement the two
-// neutral seams it claims.
+// Compile-time proof that this package really does implement the neutral
+// seams it claims.
 var (
-	_ driver.Driver              = (*ic7610Driver)(nil)
-	_ driver.Session             = (*Session)(nil)
-	_ driver.DiagnosticsReporter = (*Session)(nil)
+	_ driver.Driver                = (*ic7610Driver)(nil)
+	_ driver.SerialFramingReporter = (*ic7610Driver)(nil)
+	_ driver.Session               = (*Session)(nil)
+	_ driver.DiagnosticsReporter   = (*Session)(nil)
 )
+
+// StopBits reports one stop bit for the CI-V link (8-N-1), per spec D3.1.
+//
+// ASSUMED, ON NO EVIDENCE FROM THIS RADIO'S DOCUMENT. The IC-7610 CI-V
+// Reference Guide says nothing about serial framing anywhere: the words
+// "stop bit", "data bit", "parity" and "8 bit" appear in none of its 17
+// pages, about any port (matrix §3.1, reproduced in full in doc.go with
+// the four-row table naming which port each rate-bearing line is about,
+// and with the mandatory hazard sentence about DATA/RTTY-port
+// "8 bit / 1 stop" lines).
+//
+// Register home: D5 entry 8, "Serial framing 8-N-1 (D3.1) per model".
+//
+// LIFT R8 — Stage R capture ic7610-framing-8n1: with an IC-7610 at its
+// factory CI-V settings, open its USB CI-V endpoint at 8-N-1 and then at
+// 8-N-2, send FE FE 98 E0 19 00 FD at each, and record which framing
+// returns a well-formed address-matched frame and which returns nothing or
+// garbage. SCOPE: that capture settles which framing THAT radio's USB CI-V
+// endpoint accepts, and nothing wider — not the [REMOTE] jack, not the
+// [LAN] port, and not any other model.
+//
+// IT IS ON THE DRIVER, NOT THE SESSION, and enabler E2 records why that is
+// forced: internal/wiring holds the driver value BEFORE the port is
+// opened, and the stop bits are chosen at open. A session-side reporter
+// could only be consulted after the framing had already been guessed.
+//
+// PROFILE-INDEPENDENT, and deliberately so: which capability set a caller
+// asked for says nothing about how the radio frames a byte on the wire. An
+// unrecognised Profile reports 1 like the rest.
+//
+// MATERIALITY: transport.DefaultStopBits is 2, so a driver that did NOT
+// implement this interface would have its port opened at 8-N-2 — the
+// silent divergence from the tier's assumed 8-N-1 that spec D3.1 exists to
+// prevent. internal/wiring consults this and REFUSES any value but 1 or 2
+// rather than substituting a default, so a zero could never quietly become
+// 8-N-2 either.
+func (d *ic7610Driver) StopBits() int { return 1 }

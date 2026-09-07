@@ -20,19 +20,6 @@ import (
 // its Open call establishes.
 type Option func(*Driver)
 
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination
-// (transport safety obligation 3: "surfaced, never silently discarded") —
-// fall into the engine's own drop-everything default. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *Driver) {
-		if l != nil {
-			d.transportLogger = l
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records that the USER has consented to
 // writing this radio's Unverified fields, and builds a driver whose
 // SESSIONS carry the consent transform: at session-capability assembly
@@ -46,7 +33,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // fail-safe even WITH the option, and spec.FieldErase is exempt inside the
 // transform itself, so no consent can mint an erase.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *Driver) { d.consentUnverifiedWrites = true }
+	return func(d *Driver) { d.Consented = true }
 }
 
 // WithFullInventoryWalk makes Open read EVERY address in this radio's
@@ -85,7 +72,7 @@ func withEngineOptions(opts ...transport.Option) Option {
 // deliberately selects the same fail-safe: the failure direction for a
 // forged or corrupted Profile is always "nothing writable".
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &Driver{profile: profile}
+	d := &Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -94,11 +81,9 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // Driver implements driver.Driver for the Icom IC-705.
 type Driver struct {
-	profile                 Profile
-	transportLogger         transport.Logger
-	consentUnverifiedWrites bool
-	fullInventoryWalk       bool
-	engineOptions           []transport.Option
+	driver.Base
+	fullInventoryWalk bool
+	engineOptions     []transport.Option
 }
 
 // Compile-time proof of the seams this driver satisfies. StopBits is the
@@ -143,7 +128,7 @@ func (d *Driver) Model() string { return capabilitiesUnverified().Model }
 // consent transform's output, because internal/wiring reads exactly this
 // value to decide whether consent is needed at all.
 func (d *Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated()
 	case RealHardware:
@@ -187,13 +172,7 @@ const probeSlots = 16
 // releases it on success, and Open itself closes it before returning an
 // error.
 func (d *Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	opts := make([]transport.Option, 0, len(d.engineOptions)+1)
-	if d.transportLogger != nil {
-		opts = append(opts, transport.WithLogger(d.transportLogger))
-	}
-	opts = append(opts, d.engineOptions...)
-
-	eng, stats, err := newEngine(port, opts...)
+	eng, stats, err := newEngine(port, d.engineOptions...)
 	if err != nil {
 		// newEngine has not taken the port on this path (civ.NewFraming
 		// refuses before the engine is constructed, and NewEngineWith
@@ -269,7 +248,7 @@ func (d *Driver) open(ctx context.Context, eng *transport.Engine, stats civ.Accu
 		eng:   eng,
 		stats: stats,
 		id:    id,
-		caps:  d.sessionCapabilities(),
+		caps:  d.SessionCaps(d.Capabilities()),
 		info:  info,
 	}
 	// The inventory walk is the LAST thing Open does, and deliberately:
@@ -370,7 +349,7 @@ func fingerprintProbe(ctx context.Context, eng *transport.Engine) (bool, error) 
 			return false, fmt.Errorf("ic705: Open: probe slot %q: %w", slot, err)
 		}
 		if got != addr {
-			return false, &AnswerMismatchError{Requested: addr, Answered: got}
+			return false, &AnswerMismatchError{Model: "ic705", Requested: addr, Answered: got}
 		}
 		if allFF(record) {
 			// The other unverified empty-channel shape (D5 entry 2(b),
@@ -398,35 +377,6 @@ func allFF(record []byte) bool {
 		}
 	}
 	return true
-}
-
-// sessionCapabilities is the ONE place a session's effective capability
-// set is assembled: this driver's static baseline, then — only when it was
-// built with WithConsentedUnverifiedWrites AND its profile is one of the
-// declared constants — the consent transform. An unrecognised profile
-// stays untransformed even with the option, so the fail-safe direction
-// survives consent.
-//
-// Applying it HERE, before the Session exists, keeps the set WriteChannel
-// enforces (s.caps) and the set Capabilities() hands out the same value.
-func (d *Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
-}
-
-// profileRecognised reports whether this driver's profile is one of the
-// declared Profile constants — the same set Capabilities' switch names
-// explicitly, restated here so the consent gate cannot drift open for a
-// profile that switch would fail safe on.
-func (d *Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
 }
 
 // SessionInfo is the MODEL surface for what a probe and an inventory walk
@@ -508,7 +458,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // Capabilities implements driver.Session: the EFFECTIVE set — the static
 // baseline, plus this radio's own materialised memory inventory, plus
 // consent if the user gave it — as a deep copy per call.
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 // SessionInfo reports what the probe and the inventory walk learned, plus
 // the counters this session accrues as it runs. See SessionInfo for why
@@ -560,22 +510,9 @@ func (s *Session) Close() error { return s.eng.Close() }
 // quarantine discipline makes a stale same-shape reply unlikely, and
 // "unlikely" is not the standard for silently relabelling one channel's
 // contents with another channel's name.
-var ErrAnswerMismatch = errors.New("ic705: memory answer names a different channel than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered address. It
-// is this PACKAGE's own typed error, in this package's own namespace: the
-// Yaesu drivers have same-shaped ones and none imports another, because a
-// caller distinguishing which radio's read went wrong needs distinct
-// types.
-type AnswerMismatchError struct {
-	Requested civ.ChannelAddress
-	Answered  civ.ChannelAddress
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic705: requested channel %v but the answer names %v — refusing to map a reply onto the wrong channel", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports the requested and the answered address; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]

@@ -863,8 +863,8 @@ func TestE2E_AnswerForAnotherChannelIsRefused(t *testing.T) {
 	if !errors.As(err, &e) {
 		t.Fatalf("ReadChannel got %v, want *AnswerMismatchError", err)
 	}
-	if e.Want.Channel != 3 || e.Got.Channel != 7 {
-		t.Errorf("AnswerMismatchError = %+v, want want-3 got-7", e)
+	if e.Requested.Channel != 3 || e.Answered.Channel != 7 {
+		t.Errorf("AnswerMismatchError = %+v, want requested-3 answered-7", e)
 	}
 	if !errors.Is(err, ErrAnswerMismatch) {
 		t.Error("the refusal does not satisfy errors.Is(err, ErrAnswerMismatch)")

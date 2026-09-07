@@ -19,23 +19,8 @@ import (
 )
 
 // Option configures the driver New builds — and, through it, every
-// Session its Open call establishes. See WithTransportLogger and
-// WithConsentedUnverifiedWrites.
+// Session its Open call establishes. See WithConsentedUnverifiedWrites.
 type Option func(*ic905Driver)
-
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it, the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination
-// (transport safety obligation 3: "surfaced, never silently discarded") —
-// fall into the engine's own drop-everything default with no way for a
-// caller of this driver to receive them. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic905Driver) {
-		if l != nil {
-			d.transportLogger = l
-		}
-	}
-}
 
 // SiblingLengths maps a record length to the model that accepts it: the
 // seam through which a Wave-4 tier check can teach this driver to
@@ -48,19 +33,6 @@ func WithTransportLogger(l transport.Logger) Option {
 // the unattributed branch, which is the honest one for a driver that
 // cannot name what it found.
 type SiblingLengths map[int]string
-
-// WithSiblingRecordLengths supplies the table above. Wave 4 populates it
-// from the registry in the same commit that registers the tier's models
-// and runs the distinctness check; until then the branch exists, is
-// reachable, and is proven by test with a synthetic table.
-func WithSiblingRecordLengths(l SiblingLengths) Option {
-	return func(d *ic905Driver) {
-		d.siblingLengths = make(SiblingLengths, len(l))
-		for n, model := range l {
-			d.siblingLengths[n] = model
-		}
-	}
-}
 
 // WithFullInventoryWalk makes Open discover the WHOLE 100 × 100 memory
 // space instead of the bounded default walk.
@@ -103,7 +75,7 @@ func WithFullInventoryWalk() Option {
 // consults writeTrialsComplete, because consent is a user accepting an
 // unverified write, not evidence that the write has been proven.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic905Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ic905Driver) { d.Consented = true }
 }
 
 // New builds the IC-905 driver for profile. RealHardware — the ZERO
@@ -117,7 +89,7 @@ func WithConsentedUnverifiedWrites() Option {
 // NewD and NewMP because it drives two; this package's model is fixed by
 // the package.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic905Driver{profile: profile}
+	d := &ic905Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -126,14 +98,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // ic905Driver implements driver.Driver for the Icom IC-905.
 type ic905Driver struct {
-	profile Profile
-	// transportLogger, when non-nil, is threaded into every Session's
-	// transport.Engine at Open time — see WithTransportLogger.
-	transportLogger transport.Logger
-	// consentUnverifiedWrites records the user's consent to unverified
-	// writes — set only by WithConsentedUnverifiedWrites, read only by
-	// sessionCapabilities. FALSE is the zero value and the default.
-	consentUnverifiedWrites bool
+	driver.Base
 	// siblingLengths is the Wave-4 attribution table — see
 	// SiblingLengths. Nil is the Wave-3 default.
 	siblingLengths SiblingLengths
@@ -156,7 +121,7 @@ func (d *ic905Driver) Model() string { return civic905.Model }
 // describes the model with, and what offline synthesis classifies
 // against — none of which has a radio to ask.
 func (d *ic905Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated()
 	case RealHardware:
@@ -186,18 +151,6 @@ func (d *ic905Driver) Capabilities() spec.Capabilities {
 	}
 }
 
-// profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set Capabilities'
-// switch names explicitly, restated here so the consent gate cannot drift
-// open for a profile that switch would fail safe on.
-func (d *ic905Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
-
 // sessionCapabilities is the ONE place a session's effective capability
 // set is assembled: effectiveCapabilities' product — the static baseline
 // with the sparse MEM bank's discovered inventory materialised — with the
@@ -221,10 +174,7 @@ func (d *ic905Driver) sessionCapabilities(discovered []string, catID string) spe
 	// stays untransformed even with the option — the fail-safe direction
 	// ("no value a caller can pass produces a writable session") survives
 	// consent.
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(caps)
 }
 
 // StopBits reports the CI-V link's stop-bit count, 8-N-1, per spec D3.1.
@@ -296,11 +246,7 @@ func (d *ic905Driver) Open(ctx context.Context, port transport.Port, id driver.I
 	// legal and Diagnostics905 handles it.
 	stats, _ := framing.(civ.AccumulatorStatsReporter)
 
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngineWith(port, framing, engOpts...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("ic905: Open: %w", err)
@@ -533,27 +479,12 @@ func (s *Session) memoryReadSpec() transport.CommandSpec {
 // 6. civ decodes the address and hands it back; comparing it is the
 // driver's job, and storing a channel under the wrong slot would corrupt
 // a codeplug silently.
-var ErrAnswerMismatch = errors.New("ic905: the memory answer names a different channel than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered address. It
-// is this PACKAGE's own typed error in this package's own namespace: the
-// other drivers have same-shaped ones and none imports another, because a
-// caller distinguishing which radio's read went wrong needs distinct
-// types.
-type AnswerMismatchError struct {
-	// Requested is the address the read asked for.
-	Requested civ.ChannelAddress
-	// Answered is the address the reply actually decoded to.
-	Answered civ.ChannelAddress
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic905: requested channel %s but the answer names %s — refusing to map a reply onto the wrong channel", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports the requested and the answered address; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]
 
 // recordAt performs ONE 1A 00 read of addr and returns its RAW record
 // bytes, undecoded.
@@ -599,7 +530,7 @@ func (s *Session) recordAt(ctx context.Context, addr civ.ChannelAddress) (record
 	}
 	if got != addr {
 		s.answerMismatches.Add(1)
-		return nil, false, &AnswerMismatchError{Requested: addr, Answered: got}
+		return nil, false, &AnswerMismatchError{Model: "ic905", Requested: addr, Answered: got}
 	}
 	return rec, true, nil
 }
@@ -722,7 +653,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // identity token), as a deep copy per call — see cloneCapabilities for
 // why the copy is load-bearing.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // Diagnostics is this driver's own point-in-time health snapshot. The
@@ -776,13 +707,7 @@ type Diagnostics struct {
 // Diagnostics implements the optional driver.DiagnosticsReporter with the
 // NEUTRAL snapshot, so the optional capability keeps its declared shape.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Diagnostics905 returns the full per-model snapshot, SUMMED LIVE from

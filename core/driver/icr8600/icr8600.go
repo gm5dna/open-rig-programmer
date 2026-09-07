@@ -21,16 +21,6 @@ import (
 // Option configures the driver and every session it opens.
 type Option func(*icr8600Driver)
 
-// WithTransportLogger exposes transport contamination and quarantine
-// diagnostics without changing protocol behaviour.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *icr8600Driver) {
-		if l != nil {
-			d.transportOptions = append(d.transportOptions, transport.WithLogger(l))
-		}
-	}
-}
-
 // WithFullInventoryWalk makes Open read the whole zero-based 100 × 100
 // memory space instead of the bounded default walk. It is opt-in because
 // 10,000 CI-V exchanges can make Open take minutes on a physical receiver.
@@ -41,12 +31,12 @@ func WithFullInventoryWalk() Option {
 // WithConsentedUnverifiedWrites records the user's session-local consent.
 // It changes no static capability and never consents FieldErase.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *icr8600Driver) { d.consented = true }
+	return func(d *icr8600Driver) { d.Consented = true }
 }
 
 // New returns the one-radio IC-R8600 driver.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &icr8600Driver{profile: profile}
+	d := &icr8600Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -54,10 +44,8 @@ func New(profile Profile, opts ...Option) driver.Driver {
 }
 
 type icr8600Driver struct {
-	profile           Profile
-	consented         bool
+	driver.Base
 	fullInventoryWalk bool
-	transportOptions  []transport.Option
 	// Non-zero only in focused tests. Production deliberately takes the
 	// transport defaults until Stage R measures this radio.
 	readTimeout time.Duration
@@ -67,7 +55,7 @@ type icr8600Driver struct {
 func (d *icr8600Driver) Model() string { return civicr8600.Model }
 
 func (d *icr8600Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return CapabilitiesSimulated()
 	case RealHardware:
@@ -75,10 +63,6 @@ func (d *icr8600Driver) Capabilities() spec.Capabilities {
 	default:
 		return CapabilitiesUnverified()
 	}
-}
-
-func (d *icr8600Driver) profileRecognised() bool {
-	return d.profile == RealHardware || d.profile == Simulated
 }
 
 func (d *icr8600Driver) sessionCapabilities(discovered []string, catID string) spec.Capabilities {
@@ -89,10 +73,7 @@ func (d *icr8600Driver) sessionCapabilities(discovered []string, catID string) s
 		}
 	}
 	caps.CATID = catID
-	if d.consented && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(caps)
 }
 
 // Open sends only the address-matched 19 00 read and 1A 00 memory reads. The
@@ -106,7 +87,7 @@ func (d *icr8600Driver) Open(ctx context.Context, port transport.Port, id driver
 		return nil, fmt.Errorf("icr8600: Open: framing: %w", err)
 	}
 	stats, _ := framing.(civ.AccumulatorStatsReporter)
-	eng, err := transport.NewEngineWith(port, framing, d.transportOptions...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("icr8600: Open: %w", err)
@@ -200,7 +181,7 @@ func (s *Session) memoryReadSpec() transport.CommandSpec {
 
 func (s *Session) Identity() driver.Identity { return s.id }
 
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 func (s *Session) Close() error { return s.eng.Close() }
 
@@ -218,7 +199,15 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 }
 
 var (
-	_ driver.Driver              = (*icr8600Driver)(nil)
-	_ driver.Session             = (*Session)(nil)
-	_ driver.DiagnosticsReporter = (*Session)(nil)
+	_ driver.Driver                = (*icr8600Driver)(nil)
+	_ driver.SerialFramingReporter = (*icr8600Driver)(nil)
+	_ driver.Session               = (*Session)(nil)
+	_ driver.DiagnosticsReporter   = (*Session)(nil)
 )
+
+// StopBits reports the ASSUMED 8-N-1 CI-V framing. Register
+// icr8600-serial-framing is lifted at Stage R by trying 19 00 at 8-N-1 and
+// 8-N-2 on an IC-R8600 and recording which produces a clean reply. The guide
+// contains no CI-V framing statement. core/serial already drives RTS/DTR low;
+// icr8600-control-lines remains an assumption and this driver changes no line.
+func (d *icr8600Driver) StopBits() int { return 1 }

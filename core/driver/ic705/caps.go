@@ -4,6 +4,7 @@ package ic705
 
 import (
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -28,24 +29,15 @@ import (
 // one-character edit unlocks nothing on its own.
 const writeTrialsComplete = false
 
-// Profile selects which capability description a driver hands out.
-//
-// The zero value is RealHardware ON PURPOSE, and every unrecognised value
-// fails safe to the same set: the failure direction for a forged or
-// corrupted Profile is always "nothing writable", never a writable set.
-type Profile int
+// Profile selects which capability description a driver hands out. Shared
+// with every other driver package (core/driver.Profile); this package
+// keeps its own Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects the all-Unverified
-	// set: reads labelled Unverified, every mapped field's Write
-	// Unverified, nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakeic705-backed sessions ONLY
-	// (the CLI's --fake mode, the GUI's demo mode): Write Supported for
-	// the thirteen fields this record expresses, so the write choreography
-	// can be exercised end to end with no hardware at risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // The two bank labels, kept beside the namespaces they describe.
@@ -344,50 +336,5 @@ func dtcsCodes() []int {
 			}
 		}
 	}
-	return out
-}
-
-// cloneCapabilities returns a deep copy of caps: every bank (with its own
-// Slots and Fields) and every top-level slice freshly allocated, sharing no
-// storage with the input.
-//
-// THE COPY IS LOAD-BEARING. A session hands its capabilities out on every
-// Capabilities() call, and the Fields maps inside are this project's
-// hardware-write gate data (spec.FieldSupport.CanWrite). A caller that
-// could reach back through a returned value and flip a label would be
-// rewriting the gate every other caller enforces — including this driver's
-// own WriteChannel, which re-checks against the session's internal copy.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// spec.Capabilities.Bank already returns a defensive copy with
-		// fresh Slots and Fields; reuse that guarantee rather than
-		// restating per-field copying here. The ok result cannot be false
-		// — b came out of caps.Banks and Bank scans that same slice — and
-		// a duplicate BankID, the only way it could serve the wrong bank,
-		// is refused by spec.Capabilities.Validate, which both profiles
-		// pass under test.
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	if caps.CTCSSToneRange != nil {
-		// A POINTER, so `out := caps` aliased it. ToneRange has no
-		// reference-typed field, so one struct copy is a complete deep
-		// copy.
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
 	return out
 }

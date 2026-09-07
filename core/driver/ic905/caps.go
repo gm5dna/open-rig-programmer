@@ -4,6 +4,7 @@ package ic905
 
 import (
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -51,20 +52,14 @@ const writeTrialsComplete = false
 // towards the simulator's, whose Supported writes are a claim about
 // internal/fakeic905 and about nothing else. Any OTHER unrecognised
 // Profile value fails the same way, through Capabilities' explicit
-// default arm.
-type Profile int
+// default arm. Shared with every other driver package
+// (core/driver.Profile); this package keeps its own Simulated selector,
+// which internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects the all-Unverified
-	// capability set: reads labelled Unverified, every candidate field's
-	// Write Unverified, nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakeic905-backed sessions
-	// ONLY (the CLI's --fake mode, the GUI's demo mode): Write Supported
-	// for the twelve fields the 1A 00 record can express, so the write
-	// choreography can be exercised end to end with no hardware at risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // dtcsCodes generates the 512 DTCS codes this radio expresses: three
@@ -508,49 +503,6 @@ func capabilitiesSimulated() spec.Capabilities {
 	return baseCapabilities(spec.FieldSupport{Read: spec.Supported, Write: spec.Supported})
 }
 
-// cloneCapabilities returns a deep copy of caps: Banks (each with fresh
-// Slots and Fields) and every other slice independently allocated, so
-// mutating the copy can never reach the original.
-//
-// Load-bearing for the write gate, exactly as in the Yaesu drivers:
-// Session.Capabilities hands copies out, and a caller mutating one must
-// never alter what WriteChannel enforces.
-//
-// CTCSSToneRange is a POINTER, so a shallow copy would share the pointee
-// and a caller could move this radio's declared tone domain out from
-// under the session's own validation. It is copied by value into a fresh
-// allocation here.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// Capabilities.Bank returns a defensive copy (fresh Slots and
-		// Fields) — reuse that guarantee rather than restating per-field
-		// copying here. The ok result is discarded safely because b came
-		// out of caps.Banks and Bank scans that same slice for b.ID, and
-		// spec.Validate refuses a duplicate BankID (TestProfiles_Validate
-		// runs it over both profiles).
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	return out
-}
-
 // effectiveCapabilities builds a Session's capability set: a deep copy of
 // the profile baseline with the MEM bank's SPARSE inventory materialised
 // from discovered.
@@ -568,7 +520,7 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 // discovered is copied, never aliased: the session must not hold a slice
 // the walk's caller can still write to.
 func effectiveCapabilities(base spec.Capabilities, discovered []string) spec.Capabilities {
-	caps := cloneCapabilities(base)
+	caps := base.Clone()
 	for i := range caps.Banks {
 		if caps.Banks[i].ID != spec.BankMemory {
 			continue

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	civic7100 "github.com/gm5dna/open-rig-programmer/core/civ/ic7100"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -14,12 +15,15 @@ func slotName(bank byte, channel int) string {
 }
 
 // Profile selects the evidence gate used by New. RealHardware is the zero
-// value so an uninitialised profile fails safe.
-type Profile int
+// value so an uninitialised profile fails safe. Shared with every other
+// driver package (core/driver.Profile); this package keeps its own
+// Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	RealHardware Profile = iota
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // writeTrialsComplete remains false until the named Stage-W hardware lifts
@@ -184,36 +188,3 @@ func CapabilitiesUnverified() spec.Capabilities { return capabilities(spec.Unver
 // CapabilitiesSimulated enables only the thirteen profile-expressible memory
 // fields so an in-package responding port can exercise the write choreography.
 func CapabilitiesSimulated() spec.Capabilities { return capabilities(spec.Supported) }
-
-func cloneCapabilities(c spec.Capabilities) spec.Capabilities {
-	out := c
-	out.Banks = make([]spec.Bank, 0, len(c.Banks))
-	for _, b := range c.Banks {
-		cp, _ := c.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), c.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), c.CTCSSTones...)
-	if c.CTCSSToneRange != nil {
-		r := *c.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	out.Bauds = append([]int(nil), c.Bauds...)
-	out.RequiredSlots = append([]string(nil), c.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), c.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), c.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), c.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), c.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), c.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), c.DTCSCodes...)
-	out.Filters = append([]string(nil), c.Filters...)
-	out.TuningSteps = append([]string(nil), c.TuningSteps...)
-	out.AttenuatorDB = append([]int(nil), c.AttenuatorDB...)
-	out.PreampOptions = append([]string(nil), c.PreampOptions...)
-	out.AntennaOptions = append([]string(nil), c.AntennaOptions...)
-	if c.ProgramTuningStepRange != nil {
-		r := *c.ProgramTuningStepRange
-		out.ProgramTuningStepRange = &r
-	}
-	return out
-}

@@ -3,9 +3,8 @@
 package ic7610
 
 import (
-	"fmt"
-
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -48,21 +47,15 @@ const writeTrialsComplete = false
 // and about nothing else. Any other unrecognised Profile value fails the
 // same way, through Capabilities' explicit default arm.
 //
-// No model dimension: this family has one member.
-type Profile int
+// No model dimension: this family has one member. Shared with every other
+// driver package (core/driver.Profile); this package keeps its own
+// Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects the all-Unverified
-	// capability set: reads labelled Unverified, every mapped field's
-	// Write Unverified, nothing writable without recorded consent.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakeic7610-backed sessions
-	// ONLY (the CLI's --fake mode, the GUI's demo mode): Read and Write
-	// Supported for exactly the seven fields the 1A 00 record maps, so the
-	// write choreography can be exercised end to end with no hardware at
-	// risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // The two numeric bounds Task 12's pre-build refusals enforce, stated once
@@ -136,13 +129,7 @@ var deliberatelyZero = map[string]string{
 // Matrix §1b — the two-byte channel selector runs 1..99 for the memories
 // (BCD "00 01".."00 99"), and civ.ProfileConfig.ChannelLo/ChannelHi carry
 // the same range. Ninety-nine, not a hundred: there is no channel 000.
-func memSlots() []string {
-	slots := make([]string, 0, 99)
-	for i := 1; i <= 99; i++ {
-		slots = append(slots, fmt.Sprintf("%03d", i))
-	}
-	return slots
-}
+func memSlots() []string { return spec.NumberedSlots(1, 99, "%03d") }
 
 // scanSlots is the SCAN bank's inventory: the two scan edges.
 //

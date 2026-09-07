@@ -58,11 +58,6 @@ var foreignRecordLengths = map[int]string{
 	45: "IC-7300MK2 (provisional)",
 }
 
-// WithTransportLogger hands the engine a logger for wire tracing.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic7300Driver) { d.transportLogger = l }
-}
-
 // StopBits is how many stop bits this radio's CI-V port expects.
 //
 // ONE, ASSUMED at spec D5 entry 8, lift `ic7300-framing`. THE HAZARD, stated
@@ -101,16 +96,12 @@ func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.
 		return nil, fmt.Errorf("ic7300: Open: the CI-V framing adapter does not report accumulator statistics — this driver's diagnostics come from the ADAPTER's counters, never from the engine's, because the accumulator has already swallowed every broadcast before the engine could count one")
 	}
 
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
 	// transport.NewEngineWith is GUARDED — internal/guards'
 	// TestNewEngineReachableOnlyFromDriver covers both constructors by
 	// name — so this call appears HERE and nowhere else in the package.
 	// Nothing local is built: no adapter, no matcher, no DrainPolicy
 	// constant copied from the CAT side.
-	eng, err := transport.NewEngineWith(port, fr, engOpts...)
+	eng, err := transport.NewEngineWith(port, fr)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7300: Open: %w", err)
@@ -195,7 +186,7 @@ func (d *ic7300Driver) open(ctx context.Context, eng *transport.Engine, fr trans
 		fr:      fr,
 		statser: statser,
 		id:      id,
-		caps:    d.sessionCapabilities(),
+		caps:    d.SessionCaps(d.Capabilities()),
 		probe:   probe,
 	}, nil
 }
@@ -244,7 +235,7 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 		// at the channel — so the address is the DRIVER's to check, here and
 		// in every other read path.
 		if got != want {
-			return &AnswerMismatchError{Requested: want.String(), Answered: got.String()}
+			return &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
 		}
 		probe.Fingerprinted = true
 		return nil
@@ -282,18 +273,6 @@ func wrongRecordLength(p civ.Profile, e *civ.RecordLengthError, observedID strin
 	}
 	return fmt.Errorf("ic7300: Open: the radio answered a %d-byte memory record, which the %s does not declare and which matches no registered sibling's length — NO model is claimed for it: %w",
 		e.Got, p.Model(), e)
-}
-
-// sessionCapabilities is the driver's static baseline plus the user's
-// consent, and consent is applied ONLY to a profile this driver recognises:
-// a forged Profile value must not pick up a consented capability set on the
-// way past.
-func (d *ic7300Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
 }
 
 // Session is one open, probed connection to an IC-7300.
@@ -337,7 +316,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // copy — including the tone RANGE, which is a pointer and would otherwise be
 // shared with every caller.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // CIVDiagnostics is this driver's MODEL-SPECIFIC diagnostics surface.
@@ -400,11 +379,7 @@ func (s *Session) CIVDiagnostics() CIVDiagnostics {
 // field it carries, taken from the ADAPTER's Unexpected count. Everything
 // else this driver knows is on CIVDiagnostics.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.statser.AccumulatorStats().Unexpected
-	if n < 0 {
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.statser.AccumulatorStats().Unexpected)}
 }
 
 // noteAnswerMismatch records one D20 refusal for the diagnostics surface.
@@ -419,15 +394,11 @@ func (s *Session) Close() error { return s.eng.Close() }
 
 // ErrAnswerMismatch is the sentinel for a memory answer that names a
 // different channel than the one requested.
-//
-// IT IS THIS DRIVER'S OWN, minted here rather than imported from
-// core/driver/ftdx101, whose ErrAnswerMismatch is the precedent for the
-// shape. No driver package imports another: a shared sentinel would make one
-// radio's diagnostics another's.
-var ErrAnswerMismatch = errors.New("ic7300: answer names a different channel than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
 // AnswerMismatchError reports that a 1A 00 answer's decoded channel address
-// was not the one asked for.
+// was not the one asked for; the shared form (driver.AnswerMismatchError)
+// carries the model name so this package needs no typed error of its own.
 //
 // THE CHECK IS THE DRIVER'S BECAUSE NOTHING BELOW IT MAKES ONE.
 // civ.Profile.MemoryAnswerMatcher is envelope-only by design — it matches
@@ -436,17 +407,4 @@ var ErrAnswerMismatch = errors.New("ic7300: answer names a different channel tha
 // codeplug would be corrupted silently. It is checked BEFORE the empty
 // recognition, the template check, the record mapping and the write merge
 // alike.
-type AnswerMismatchError struct {
-	// Requested is the channel address the read asked for.
-	Requested string
-	// Answered is the channel address the answer carried.
-	Answered string
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic7300: requested channel %s but the answer names %s — refusing to map a reply onto the wrong slot", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+type AnswerMismatchError = driver.AnswerMismatchError[string]

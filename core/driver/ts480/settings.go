@@ -213,17 +213,7 @@ func (s *Session) SettingsDescriptor() driver.SettingsDescriptor {
 // condition to branch on. errors.As on the concrete type is the whole interface
 // it needs, which is core/driver/ts590's and the FT-891's judgement on their
 // own namesakes too.
-type UnknownSettingError struct {
-	// ID is the caller-supplied setting ID that was not recognised.
-	ID string
-	// Model is the row it was asked of.
-	Model string
-}
-
-// Error implements the error interface.
-func (e *UnknownSettingError) Error() string {
-	return fmt.Sprintf("ts480: ReadSetting: %q is not a setting the %s publishes — a Kenwood menu number is three decimal digits and must be a row of this radio's own printed parameter list, whose domain is \"000 ~ 060: Menu No.\" (480:401)", e.ID, e.Model)
-}
+type UnknownSettingError = driver.UnknownSettingError
 
 // exSpec is the transport spec for one EX read of the menu address id.
 //

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
@@ -324,7 +325,7 @@ func (s *Session) mandatoryFields(slot string, d codeplug.ChannelData) error {
 	if d.Mode == "" {
 		return refuse(spec.FieldMode, "the record's mode byte (⑨) cannot be omitted and no mode was given")
 	}
-	if !contains(s.caps.Modes, d.Mode) {
+	if !slices.Contains(s.caps.Modes, d.Mode) {
 		return refuse(spec.FieldMode, "%q is not one of this radio's modes %v — mode code 06 is printed nowhere in this document and no name is invented for it", d.Mode, s.caps.Modes)
 	}
 	if d.Filter.State != codeplug.Known {
@@ -393,7 +394,7 @@ func (s *Session) preservationRead(ctx context.Context, want civ.ChannelAddress)
 	}
 	if got != want {
 		s.noteAnswerMismatch()
-		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Requested: want.String(), Answered: got.String()}
+		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
 	}
 	if allFF(raw) {
 		return civ.MemoryRecord{}, raw, false, nil
@@ -538,14 +539,4 @@ func duplexOptionValues(caps spec.Capabilities) []string {
 		out = append(out, o.Value)
 	}
 	return out
-}
-
-// contains reports whether v is in list.
-func contains(list []string, v string) bool {
-	for _, x := range list {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }
