@@ -124,23 +124,10 @@ func openRealSession(ctx context.Context, model, portPath string) (driver.Sessio
 	}
 
 	sess, closer, err := openRealSessionWith(ctx, model, portPath, opts)
-	if err == nil {
-		return sess, closer, nil
+	if err != nil {
+		return nil, nil, translateWiringErr(err)
 	}
-
-	var regErr *wiring.RegisterDriverError
-	if errors.As(err, &regErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: register driver: %w", regErr.Cause)
-	}
-	var serialErr *wiring.OpenSerialError
-	if errors.As(err, &serialErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: open serial port %q: %w", serialErr.Port, serialErr.Cause)
-	}
-	var sessionErr *wiring.OpenSessionError
-	if errors.As(err, &sessionErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: open session on %q: %w", sessionErr.Port, sessionErr.Cause)
-	}
-	return nil, nil, err
+	return sess, closer, nil
 }
 
 // openFakeSession opens a session against a fresh in-process
@@ -150,19 +137,40 @@ func openRealSession(ctx context.Context, model, portPath string) (driver.Sessio
 // openRealSession's doc comment for the full rationale).
 func openFakeSession(ctx context.Context, model string) (driver.Session, func() error, error) {
 	sess, closer, err := wiring.OpenFakeSessionFor(ctx, model)
-	if err == nil {
-		return sess, closer, nil
+	if err != nil {
+		return nil, nil, translateWiringErr(err)
 	}
+	return sess, closer, nil
+}
 
+// translateWiringErr reconstructs internal/wiring's typed session-open
+// errors into this command's ORIGINAL, pre-extraction wording (Fix 7 —
+// see openRealSession's doc comment for the full rationale). Shared by
+// openRealSession/openFakeSession: only RegisterDriverError is common to
+// both (the registry failure can arise transitively via
+// internal/wiring.NewRegistry inside either OpenRealSessionFor or
+// OpenFakeSessionFor) — checking every case unconditionally is harmless,
+// since a fake session never produces OpenSerialError/OpenSessionError,
+// and a real one never produces OpenFakeSessionError. Returns err
+// unchanged if none match.
+func translateWiringErr(err error) error {
 	var regErr *wiring.RegisterDriverError
 	if errors.As(err, &regErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: register driver: %w", regErr.Cause)
+		return fmt.Errorf("cmd/rigprog: register driver: %w", regErr.Cause)
+	}
+	var serialErr *wiring.OpenSerialError
+	if errors.As(err, &serialErr) {
+		return fmt.Errorf("cmd/rigprog: open serial port %q: %w", serialErr.Port, serialErr.Cause)
+	}
+	var sessionErr *wiring.OpenSessionError
+	if errors.As(err, &sessionErr) {
+		return fmt.Errorf("cmd/rigprog: open session on %q: %w", sessionErr.Port, sessionErr.Cause)
 	}
 	var openErr *wiring.OpenFakeSessionError
 	if errors.As(err, &openErr) {
-		return nil, nil, fmt.Errorf("cmd/rigprog: open fake session: %w", openErr.Cause)
+		return fmt.Errorf("cmd/rigprog: open fake session: %w", openErr.Cause)
 	}
-	return nil, nil, err
+	return err
 }
 
 // validateModel checks model against wiring.SupportedModels(), printing a

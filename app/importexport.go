@@ -18,6 +18,45 @@ var (
 	chirpFileFilters = []wailsruntime.FileFilter{{DisplayName: "CHIRP CSV", Pattern: "*.csv"}}
 )
 
+// pickInput runs ImportCSV/ImportCHIRP's shared preamble: refuse while
+// busy or with nothing loaded, prompt with an open dialog (title/filters
+// given by the caller), treat an empty path back from it as "the user
+// cancelled", and open the chosen file. ok=false means the caller should
+// return immediately with (result, err) exactly as given — every
+// content-level outcome this preamble can produce (cancelled, an
+// unreadable file) already has its own ImportResultView, per
+// ImportResultView's own doc comment on why those travel with a nil
+// error rather than the error return; err here is reserved for the
+// operational failures pickInput itself can hit (busy, nothing loaded,
+// the dialog itself failing). On ok=true, f is the now-open file the
+// caller owns and must eventually Close.
+func (a *App) pickInput(title string, filters []wailsruntime.FileFilter) (path string, f *os.File, result ImportResultView, err error, ok bool) {
+	a.mu.Lock()
+	if busyErr := a.checkNotBusyLocked(); busyErr != nil {
+		a.mu.Unlock()
+		return "", nil, ImportResultView{}, busyErr, false
+	}
+	working := a.working
+	a.mu.Unlock()
+	if working == nil {
+		return "", nil, ImportResultView{}, ErrNothingLoaded, false
+	}
+
+	path, err = a.dialogs.OpenFile(wailsruntime.OpenDialogOptions{Title: title, Filters: filters})
+	if err != nil {
+		return "", nil, ImportResultView{}, fmt.Errorf("app: open dialog: %w", err), false
+	}
+	if path == "" {
+		return "", nil, ImportResultView{Cancelled: true}, nil, false
+	}
+
+	f, err = os.Open(path)
+	if err != nil {
+		return path, nil, ImportResultView{Path: path, ParseError: err.Error()}, nil, false
+	}
+	return path, f, ImportResultView{}, nil, true
+}
+
 // ImportCSV prompts for a native-format CSV via an open dialog and
 // merges it onto the working copy (internal/csvmerge.MergeCSV — the
 // SAME merge semantics cmd/rigprog's "rigprog import --csv" uses: exact
@@ -34,28 +73,9 @@ var (
 // nothing structured to preserve (the dialog itself failing, an
 // unreadable file).
 func (a *App) ImportCSV() (ImportResultView, error) {
-	a.mu.Lock()
-	if err := a.checkNotBusyLocked(); err != nil {
-		a.mu.Unlock()
-		return ImportResultView{}, err
-	}
-	working := a.working
-	a.mu.Unlock()
-	if working == nil {
-		return ImportResultView{}, ErrNothingLoaded
-	}
-
-	path, err := a.dialogs.OpenFile(wailsruntime.OpenDialogOptions{Title: "Import CSV", Filters: csvFileFilters})
-	if err != nil {
-		return ImportResultView{}, fmt.Errorf("app: open dialog: %w", err)
-	}
-	if path == "" {
-		return ImportResultView{Cancelled: true}, nil
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		return ImportResultView{Path: path, ParseError: err.Error()}, nil
+	path, f, result, err, ok := a.pickInput("Import CSV", csvFileFilters)
+	if !ok {
+		return result, err
 	}
 	imported, err := csvio.Import(f)
 	_ = f.Close()
@@ -107,28 +127,9 @@ func (a *App) ImportCSV() (ImportResultView, error) {
 // for why the loss report/refusal reason travel via the returned view
 // with a nil error rather than the error return.
 func (a *App) ImportCHIRP() (ImportResultView, error) {
-	a.mu.Lock()
-	if err := a.checkNotBusyLocked(); err != nil {
-		a.mu.Unlock()
-		return ImportResultView{}, err
-	}
-	working := a.working
-	a.mu.Unlock()
-	if working == nil {
-		return ImportResultView{}, ErrNothingLoaded
-	}
-
-	path, err := a.dialogs.OpenFile(wailsruntime.OpenDialogOptions{Title: "Import CHIRP CSV", Filters: chirpFileFilters})
-	if err != nil {
-		return ImportResultView{}, fmt.Errorf("app: open dialog: %w", err)
-	}
-	if path == "" {
-		return ImportResultView{Cancelled: true}, nil
-	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		return ImportResultView{Path: path, ParseError: err.Error()}, nil
+	path, f, result, err, ok := a.pickInput("Import CHIRP CSV", chirpFileFilters)
+	if !ok {
+		return result, err
 	}
 	// Fix B2 (Codex fix-B review, MEDIUM): a.conn/a.working are guarded by
 	// a.mu (Disconnect, connect, ReadRadio, and LoadFile all mutate one or
