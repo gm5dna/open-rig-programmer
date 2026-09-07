@@ -10,7 +10,7 @@
 	// is the moment the user forms the expectation, so it belongs here too,
 	// not just in the send-review dialogue) is the `eraseNote` prop — task
 	// 42 (M9a-6): served from GetUISpec's EraseDialogNote (internal/
-	// radiotext.Text.EraseDialogNote, sourced from the FT-710 operation
+	// radiotext.Text.EraseProcedure, sourced from the FT-710 operation
 	// manual p.62 — see that package's doc comment), passed down by
 	// ChannelGrid rather than hardcoded here. ChannelGrid owns what happens
 	// on confirm.

@@ -46,6 +46,7 @@
 # Pages of the authority PDF.
 PDF p.91
 PDF p.174
+PDF p.317
 PDF p.361
 PDF p.375
 
@@ -70,6 +71,7 @@ ic7100-all-ff-record
 ic7100-broadcast-address-form
 ic7100-control-lines
 ic7100-default-baud-auto
+ic7100-dtcs-code-clamp
 ic7100-dv-mode-code
 ic7100-echo-default
 ic7100-empty-channel-fa
