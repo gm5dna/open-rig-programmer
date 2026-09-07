@@ -61,7 +61,7 @@ func TestStopBitsIsAssumedNotEvidenced(t *testing.T) {
 		wants []string
 	}{
 		{
-			file: "framing.go",
+			file: "ic7610.go",
 			wants: []string{
 				"ASSUMED",
 				"D5 entry 8",

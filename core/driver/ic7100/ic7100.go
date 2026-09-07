@@ -51,17 +51,6 @@ func WithConsentedUnverifiedWrites() Option {
 	return func(d *ic7100Driver) { d.Consented = true }
 }
 
-// WithSiblingRecordLengths supplies the tier-integration attribution table.
-// It changes only diagnostic attribution; it never changes accepted lengths.
-func WithSiblingRecordLengths(lengths SiblingLengths) Option {
-	return func(d *ic7100Driver) {
-		d.siblingLengths = make(SiblingLengths, len(lengths))
-		for length, model := range lengths {
-			d.siblingLengths[length] = model
-		}
-	}
-}
-
 // New constructs the IC-7100 driver. It intentionally returns only the
 // neutral driver seam and does not register the model.
 func New(profile Profile, opts ...Option) driver.Driver {
@@ -251,11 +240,7 @@ func (s *Session) CIVDiagnostics() CIVDiagnostics {
 }
 
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.stats.AccumulatorStats().Unexpected
-	if n < 0 {
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.stats.AccumulatorStats().Unexpected)}
 }
 
 func (s *Session) noteMismatch() {

@@ -379,11 +379,7 @@ func (s *Session) CIVDiagnostics() CIVDiagnostics {
 // field it carries, taken from the ADAPTER's Unexpected count. Everything
 // else this driver knows is on CIVDiagnostics.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.statser.AccumulatorStats().Unexpected
-	if n < 0 {
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.statser.AccumulatorStats().Unexpected)}
 }
 
 // noteAnswerMismatch records one D20 refusal for the diagnostics surface.
