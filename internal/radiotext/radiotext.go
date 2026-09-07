@@ -4,23 +4,17 @@
 // project's callers (the CLI, the GUI) print or display — erase
 // guidance, firmware advisories, grid legends, tooltip text — keyed by
 // radio model, so that a second driver can supply its own strings without
-// any caller choosing between models by import or by protocol knowledge —
-// which is exactly what the FTdx10's entry did at M9c-6 (a second key here,
-// and not one call site changed) and what the FTDX101D's and FTDX101MP's did
-// again at M9d-2 (two more keys, still not one call site).
-// None of this is a wire-protocol fact: it lives
-// here, not in core/driver or a driver subpackage, exactly because it is
-// prose a human reads, never data a protocol layer consults.
+// any caller choosing between models by import or by protocol knowledge:
+// registering a new model adds a key here and changes no call site. None
+// of this is a wire-protocol fact: it lives here, not in core/driver or a
+// driver subpackage, exactly because it is prose a human reads, never
+// data a protocol layer consults.
 //
-// Task 37 (M9a-1, the radio-neutral core refactor) introduced this
-// package with the FT-710's strings copied VERBATIM from their former
-// homes (cmd/rigprog/write.go, cmd/rigprog/probe.go, app/send.go, and
-// three of app/frontend/src/lib's Svelte components). Tasks 40-42 then
-// migrated every Go call site onto radiotext.For — cmd/rigprog's write
-// and probe commands, app/send.go, and app/uispec.go (which serves the
-// grid/dialog prose to the frontend through UISpecView) — so this package
-// is now the single authoritative home for these strings; the former Go
-// consts that once held them have been deleted. Stdlib only.
+// This package is the single authoritative home for these strings: every
+// Go call site (cmd/rigprog's write and probe commands, app/send.go, and
+// app/uispec.go, which serves the grid/dialog prose to the frontend
+// through UISpecView) reaches them through radiotext.For, and no former
+// per-string Go const survives elsewhere. Stdlib only.
 package radiotext
 
 // UnverifiedWriteWarningTemplate is the arming dialogue's body — the text
@@ -51,15 +45,15 @@ const UnverifiedWriteWarningTemplate = "This project has never written to a real
 // below is copied VERBATIM from where that string lives TODAY; see each
 // field's own doc comment for its exact source.
 //
-// A model registered LATER has no such source to copy. The FTdx10's entry
-// (M9c-6) and the FTDX101D's and FTDX101MP's (M9d-2) were written HERE
-// first, for radios this project has never connected to anything, so the
-// per-field doc comments below describe the
-// FT-710's provenance while ftdx10Text's, ftdx101dText's and
-// ftdx101mpText's own comments record what each of
-// their strings may and may not claim. The four entries share the struct,
-// not an evidence base — and the two FTdx101 entries share an evidence base
-// with each other and with nothing else, since one manual covers both.
+// A model registered LATER has no such source to copy: the FTdx10's,
+// the FTDX101D's and the FTDX101MP's entries were written HERE first,
+// for radios this project has never connected to anything, so the
+// per-field doc comments below describe the FT-710's provenance while
+// ftdx10Text's, ftdx101dText's and ftdx101mpText's own comments record
+// what each of their strings may and may not claim. The four entries
+// share the struct, not an evidence base — and the two FTdx101 entries
+// share an evidence base with each other and with nothing else, since
+// one manual covers both.
 type Text struct {
 	// EraseProcedure is the front-panel procedure for deleting a channel
 	// on the radio itself: no CAT erase command exists. Its original home
@@ -85,10 +79,9 @@ type Text struct {
 	// ToneScanSkipVerification states what is and is not hardware-verified
 	// about Tone/Scan Skip preservation across a rewrite for this radio.
 	// Verbatim: the SECOND sentence of app/frontend/src/lib/
-	// ChannelGrid.svelte's grid-legend paragraph, which task 41
-	// deliberately left behind when it captured the first (ledger minor
-	// m42a). It cannot stay in the frontend: it is a claim about THIS
-	// radio's write trials, and for a model pinned at
+	// ChannelGrid.svelte's grid-legend paragraph (GridLegendNote holds
+	// the first). It cannot stay in the frontend: it is a claim about
+	// THIS radio's write trials, and for a model pinned at
 	// writeTrialsComplete=false it would be an outright false statement
 	// about hardware.
 	ToneScanSkipVerification string
@@ -156,11 +149,10 @@ var ft710Text = Text{
 	ProbeFirmwareNote:   "Firmware version has no CAT query — check the front panel: memory CAT (read/write) requires firmware V01-10 or later.",
 }
 
-// ftdx10Text is the FTdx10's entry (M9c-6 task 6, landed with that model's
-// wiring registration — internal/wiring's
-// TestEverySupportedModelHasRadiotext refuses a registered model with no
-// prose, which is what makes this entry part of registration rather than a
-// later nicety).
+// ftdx10Text is the FTdx10's entry, landed with that model's wiring
+// registration: internal/wiring's TestEverySupportedModelHasRadiotext
+// refuses a registered model with no prose, which is what makes this
+// entry part of registration rather than a later nicety.
 //
 // THE HONESTY RULE, and it is the whole character of this entry: NOTHING
 // HERE IS INVENTED. No FTdx10 has ever been asked anything by this project
@@ -202,7 +194,7 @@ var ftdx10Text = Text{
 	// skip marking cannot travel over this frame at all, and whether the
 	// state byte means anything live is unverified. An earlier wording
 	// here claimed the frame "carries the bytes" for both fields; the
-	// M9c-6 milestone review caught it contradicting the register.
+	// later review caught it contradicting the register.
 	GridLegendNote: "Tone and Scan Skip are not read or written for the FTdx10 by this build — its memory frame has no tone-number or scan-skip field (only a CTCSS on/off state byte, unverified on real hardware) — so set both on the radio.",
 	// DELIBERATELY EMPTY, and it is the one field that must stay empty for
 	// now. It states what IS and is NOT hardware-verified about
@@ -214,7 +206,6 @@ var ftdx10Text = Text{
 	// deliberately excludes this field, naming this radio as the reason
 	// (see its doc comment). The FTdx10's own write trials are what fill
 	// it in.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as the FT-710's is: the delete
 	// dialog and the blocked-erase review answer the same question, and
 	// splitting the wording would only invite one copy to drift into a
@@ -240,11 +231,11 @@ var ftdx10Text = Text{
 	ProbeFirmwareNote: "Firmware version has no CAT query — check the front panel. No minimum version is established for the FTdx10: this build knows of none to require.",
 }
 
-// ftdx101dText and ftdx101mpText are the FTDX101D's and FTDX101MP's entries
-// (M9d-2 task 7, landed with those models' wiring registration —
-// internal/wiring's TestEverySupportedModelHasRadiotext refuses a registered
-// model with no prose, which is what makes these entries part of
-// registration rather than a later nicety).
+// ftdx101dText and ftdx101mpText are the FTDX101D's and FTDX101MP's
+// entries, landed with those models' wiring registration:
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a
+// registered model with no prose, which is what makes these entries part
+// of registration rather than a later nicety.
 //
 // THE HONESTY RULE APPLIES UNCHANGED, and doubly here. NOTHING BELOW IS
 // INVENTED. No FTDX101 of either model has ever been asked anything by this
@@ -324,7 +315,6 @@ var ftdx101dText = Text{
 	// requires EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and
 	// deliberately excludes this field; the FTDX101D's own write trials are
 	// what fill it in, and the MP's will not fill it in for the D.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as the FT-710's and the FTdx10's
 	// are: the delete dialog and the blocked-erase review answer the same
 	// question, and splitting the wording would only invite one copy to
@@ -345,13 +335,10 @@ var ftdx101dText = Text{
 	// format to exemplify.
 	FirmwarePlaceholder: "whatever the radio displays",
 	// THE TWO-PORT CAVEAT IS THE POINT OF THIS FIELD FOR THIS RADIO (matrix
-	// §3.12; the passage is at layout 75-79, exactly as the matrix cites it —
-	// 75 is the two-ports sentence quoted below, 76 "These ports offer the
-	// following functions:", 77-78 the two function bullets, 79 the worked
-	// COM5/COM6 example. An earlier version of this comment cited a lower
-	// range and flagged a discrepancy with the matrix; the M9d-2 milestone
-	// review settled it by re-measuring the extraction directly, the matrix
-	// was right, and the flag is gone): the manual states that the radio
+	// §3.12; the passage is at layout 75-79 — 75 is the two-ports sentence
+	// quoted below, 76 "These ports offer the following functions:", 77-78
+	// the two function bullets, 79 the worked COM5/COM6 example): the
+	// manual states that the radio
 	// "contains two virtual COM ports, an Enhanced COM Port and a Standard
 	// COM Port", the Enhanced one for CAT communications and the Standard
 	// one for TX control (PTT, CW keying, digital-mode operation). This
@@ -374,11 +361,10 @@ var ftdx101dText = Text{
 // The ONE thing worth restating: a capture from an FTDX101D lifts nothing
 // here. The two radios share a manual, not a serial port.
 var ftdx101mpText = Text{
-	EraseProcedure:           "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
-	FirmwareGuidance:         "No minimum firmware version is established for the FTdx101MP: nothing this project holds states one, and no FTdx101MP has been asked. Its CAT command list carries no firmware-version query either, so read the version off the radio's own display and enter it here — it travels with the send as a record, and is not weighed against a threshold nobody has set.",
-	GridLegendNote:           "Tone and Scan Skip are neither read nor written for the FTdx101MP by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101MP has ever been asked to confirm. Set both at the radio.",
-	ToneScanSkipVerification: "",
-	EraseDialogNote:          "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	EraseProcedure:   "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	FirmwareGuidance: "No minimum firmware version is established for the FTdx101MP: nothing this project holds states one, and no FTdx101MP has been asked. Its CAT command list carries no firmware-version query either, so read the version off the radio's own display and enter it here — it travels with the send as a record, and is not weighed against a threshold nobody has set.",
+	GridLegendNote:   "Tone and Scan Skip are neither read nor written for the FTdx101MP by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101MP has ever been asked to confirm. Set both at the radio.",
+	EraseDialogNote:  "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
 	PreservationTooltips: PreservationTooltips{
 		Tone:     "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
 		ScanSkip: "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
@@ -387,8 +373,8 @@ var ftdx101mpText = Text{
 	ProbeFirmwareNote:   "Firmware version has no CAT query on the FTdx101MP, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
 }
 
-// ic7610Text is the IC-7610's entry (Wave 4 task R1, this project's first
-// non-Yaesu registration), landed with that model's wiring registration —
+// ic7610Text is the IC-7610's entry — this project's first non-Yaesu
+// registration — landed with that model's wiring registration:
 // internal/wiring's TestEverySupportedModelHasRadiotext refuses a
 // registered model with no prose, which is what makes this entry part of
 // registration rather than a later nicety, exactly as it was for the
@@ -472,7 +458,6 @@ var ic7610Text = Text{
 	// requires EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and
 	// deliberately excludes this field; the IC-7610's own write trials are
 	// what fill it in.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same question,
 	// and splitting the wording would only invite one copy to drift into a
@@ -500,9 +485,9 @@ var ic7610Text = Text{
 	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7610: this build knows of none to require. This driver talks only to CI-V address 98h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is itself ASSUMED, not read off the radio, since the reference guide names six rates and marks no default. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
-// ic7300Text is the IC-7300's entry (Wave 4 task R3, this project's
-// second Icom registration and first Icom PAIR), landed with that model's
-// wiring registration for the same reason ic7610Text was: internal/wiring's
+// ic7300Text is the IC-7300's entry — this project's second Icom
+// registration and first Icom PAIR — landed with that model's wiring
+// registration for the same reason ic7610Text was: internal/wiring's
 // TestEverySupportedModelHasRadiotext refuses a registered model with no
 // prose.
 //
@@ -590,7 +575,6 @@ var ic7300Text = Text{
 	// DELIBERATELY EMPTY, exactly as every other registered model's is and
 	// for the same reason: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same question.
 	EraseDialogNote: "The IC-7300's CI-V protocol prints two erase command forms — a 1A 00 set with a SELECT byte of FF, and a separate command 0B — but this build sends neither: no IC-7300 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure printed in the IC-7300's own full operating manual.",
@@ -614,8 +598,8 @@ var ic7300Text = Text{
 }
 
 // ic7300mk2Text is the IC-7300MK2's entry, landed alongside ic7300Text in
-// the same Wave 4 task R3 registration commit — the second half of this
-// project's first Icom PAIR.
+// the same registration commit — the second half of this project's
+// first Icom PAIR.
 //
 // THE HONESTY RULE APPLIES UNCHANGED, and the pairing sharpens it rather
 // than loosening it: no IC-7300MK2 has ever been asked anything by this
@@ -697,7 +681,6 @@ var ic7300mk2Text = Text{
 	// DELIBERATELY EMPTY, on the same footing as every other registered
 	// model's: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is.
 	EraseDialogNote: "The IC-7300MK2's CI-V protocol prints two erase command forms — a 1A 00 set with a truncated data area, and a separate command 0B, whose own printed row states that P1 and P2 cannot be cleared — but this build sends neither: no IC-7300MK2 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This build does not describe a front-panel procedure either — this document is a CI-V reference guide, not a full operating manual — so follow the memory-channel clear procedure in the radio's own operating manual.",
 	// The two tooltips DIFFER, on the same footing as every other Icom
@@ -722,9 +705,9 @@ var ic7300mk2Text = Text{
 	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7300MK2: this build knows of none to require. This driver talks only to CI-V address B6h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is a conservative derivation from a wake-up-command table this document prints for an unrelated purpose — this reference guide names no baud list and no factory default at all. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
-// ic705Text is the IC-705's entry (Wave 4 task R4, this project's third
-// Icom registration, and its second LONE model since the IC-7610 — no
-// sibling, no pairing rationale to restate).
+// ic705Text is the IC-705's entry — this project's third Icom
+// registration, and its second LONE model since the IC-7610 — no
+// sibling, no pairing rationale to restate.
 //
 // THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED: no
 // IC-705 has ever been asked anything by this project
@@ -812,7 +795,6 @@ var ic705Text = Text{
 	// DELIBERATELY EMPTY, exactly as every other registered model's is
 	// and for the same reason: writeTrialsComplete is false, so there is
 	// no hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same question.
 	EraseDialogNote: "The IC-705's CI-V protocol prints two erase command forms — a 1A 00 set carrying FF at the fifth data position, and a separate command 0B — but this build sends neither: no IC-705 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This project's own copy of the IC-705 Basic Manual is admitted for three unrelated values only, so it names no front-panel clear procedure — follow the memory-channel clear procedure in the radio's own full operating manual.",
@@ -871,9 +853,9 @@ var ic705Text = Text{
 	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-705: this build knows of none to require. This driver talks only to CI-V address A4h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no baud information for the CI-V port at all, and the one related fact admitted from the Basic Manual is a negative: the microUSB CI-V port is baud-agnostic, which lowers the cost of a wrong guess without being evidence of one. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — the first ten display groups, G01 through G10, each in full — not the whole 100-group by 100-channel space: the radio's own front panel fills groups from the bottom and its ASSUMED budget is 500 channels against 10,000 addresses, so a user whose memories sit above group ten needs the fuller walk, and nothing on this build's command line or in its window offers it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes). A channel stored above group ten is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty; and a write to a slot the bounded walk never visited is refused rather than sent if the radio's own pre-write read finds a record already there. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
-// ic9700Text is the IC-9700's entry (Wave 4 task R5, this project's
-// fourth Icom registration, and its second LONE model since the IC-705 —
-// no sibling, no pairing rationale to restate).
+// ic9700Text is the IC-9700's entry — this project's fourth Icom
+// registration, and its second LONE model since the IC-705 — no
+// sibling, no pairing rationale to restate.
 //
 // THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED: no
 // IC-9700 has ever been asked anything by this project
@@ -980,7 +962,6 @@ var ic9700Text = Text{
 	// DELIBERATELY EMPTY, exactly as every other registered model's is
 	// and for the same reason: writeTrialsComplete is false, so there is
 	// no hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same question.
 	EraseDialogNote: "The IC-9700's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF at the address's data position — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
@@ -1005,10 +986,10 @@ var ic9700Text = Text{
 	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-9700: this build knows of none to require. This driver talks only to CI-V address A2h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED — the middle of the six rates this document prints, and the rate Icom most commonly ships, not a value this document itself names as the default: it defers the factory setting to the radio's own instruction manual, which this project does not hold. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
-// ic905Text is the IC-905's entry (Wave 4 task R6, this project's FIFTH
-// Icom registration, and the tier's LAST — see internal/wiring's
-// IC905Model doc comment). It is the third LONE model since the IC-705 —
-// no sibling, no pairing rationale to restate.
+// ic905Text is the IC-905's entry — this project's FIFTH Icom
+// registration, and the tier's LAST (see internal/wiring's IC905Model
+// doc comment). It is the third LONE model since the IC-705 — no
+// sibling, no pairing rationale to restate.
 //
 // THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED: no
 // IC-905 has ever been asked anything by this project
@@ -1117,7 +1098,6 @@ var ic905Text = Text{
 	// DELIBERATELY EMPTY, exactly as every other registered model's is
 	// and for the same reason: writeTrialsComplete is false, so there is
 	// no hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same question.
 	EraseDialogNote: "The IC-905's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF after the group and channel bytes, for memory groups 00 00 ~ 00 99 only, the CALL group being excluded by the document's own words — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
@@ -1165,7 +1145,7 @@ var ic905Text = Text{
 }
 
 // ic7851Text and ic7850Text are the IC-7851's and IC-7850's entries
-// (Tier 4b, the additions tier's first registration), landed with that
+// — the additions tier's first registration — landed with that
 // pair's wiring registration for the same reason every Icom entry above
 // was: internal/wiring's TestEverySupportedModelHasRadiotext fails a
 // registration whose prose is missing.
@@ -1229,7 +1209,6 @@ var ic7851Text = Text{
 	// and for the same reason: both write-trial guards are false, so
 	// there is no hardware-preservation verification of any kind to
 	// report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same
 	// question.
@@ -1266,11 +1245,10 @@ var ic7851Text = Text{
 // the whole of the reasoning, including why these two entries differ only
 // where they name the model, and why neither names the other.
 var ic7850Text = Text{
-	EraseProcedure:           "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
-	FirmwareGuidance:         "No minimum firmware version is established for the IC-7850: nothing this project holds states one, and no IC-7850 has been asked. This build implements no CI-V firmware-version query either — its whole admitted command set is the identity read and the memory record — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
-	GridLegendNote:           "Tone is read and written for the IC-7850 over CI-V by this build, but unverified against real hardware — no IC-7850 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT memory groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. The same holds for its data mode, with a wider consequence: a channel already set to DATA 1, DATA 2 or DATA 3 — or already in a SELECT group — cannot be written back by this build at all, because there is no honest value to preserve in a region it does not map.",
-	ToneScanSkipVerification: "",
-	EraseDialogNote:          "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	EraseProcedure:   "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7850: nothing this project holds states one, and no IC-7850 has been asked. This build implements no CI-V firmware-version query either — its whole admitted command set is the identity read and the memory record — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	GridLegendNote:   "Tone is read and written for the IC-7850 over CI-V by this build, but unverified against real hardware — no IC-7850 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT memory groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. The same holds for its data mode, with a wider consequence: a channel already set to DATA 1, DATA 2 or DATA 3 — or already in a SELECT group — cannot be written back by this build at all, because there is no honest value to preserve in a region it does not map.",
+	EraseDialogNote:  "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
 	PreservationTooltips: PreservationTooltips{
 		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7850 has ever answered a frame",
 		ScanSkip: "not read or written over CI-V by this build — the IC-7850's nearest wire nibble marks one of three SELECT memory groups, not a skip flag",
@@ -1279,8 +1257,8 @@ var ic7850Text = Text{
 	ProbeFirmwareNote:   "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7850: this build knows of none to require. This driver talks only to CI-V address 8Eh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED, since both of this radio's printed CI-V speed settings ship on Auto and name no number to prefer. The six speeds offered are the USB port's list: on the remote-jack path with a level converter the radio stops at 19200, and this build cannot tell which path is wired. Note too that the IC-7850 and its sibling share one address, one manual and one frame shape, and this build cannot tell them apart — the model reported is the one you selected, not one it detected. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
-// ic7760Text is the IC-7760's entry (Tier 4b, the additions tier's SECOND
-// registration), landed with that model's wiring registration for the
+// ic7760Text is the IC-7760's entry — the additions tier's SECOND
+// registration — landed with that model's wiring registration for the
 // same reason every Icom entry above was: internal/wiring's
 // TestEverySupportedModelHasRadiotext fails a registration whose prose is
 // missing.
@@ -1343,7 +1321,6 @@ var ic7760Text = Text{
 	// DELIBERATELY EMPTY, exactly as every other registered model's is
 	// and for the same reason: writeTrialsComplete is false, so there is
 	// no hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same
 	// question.
@@ -1377,8 +1354,8 @@ var ic7760Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7760: this build knows of none to require. This driver talks only to CI-V address B2h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, about any port, and its own CI-V settings block carries no speed item at all. This radio is also two boxes, and which socket you use matters: the link this build supports is the controller's rear-panel USB B connection, which enumerates as TWO virtual COM ports, and which of the two answers is a radio setting the guide prints no default for — if one port is silent, try the other before concluding the radio is wrong. The RF deck's remote jack is a second path this build does not address. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
-// ic7100Text is the IC-7100's entry (Tier 4b, the additions tier's THIRD
-// registration), landed with that model's wiring registration for the
+// ic7100Text is the IC-7100's entry — the additions tier's THIRD
+// registration — landed with that model's wiring registration for the
 // same reason every Icom entry above was: internal/wiring's
 // TestEverySupportedModelHasRadiotext fails a registration whose prose is
 // missing.
@@ -1455,7 +1432,6 @@ var ic7100Text = Text{
 	// DELIBERATELY EMPTY, exactly as every other registered model's is and
 	// for the same reason: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same question.
 	EraseDialogNote: "The IC-7100's control-command chapter prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level memory-clear command — but this build sends neither: no builder exists for either, and no IC-7100 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. On this radio there is a further reason to leave them alone: the clearing block names \"memory channel 0 to 99\" where the address field itself is printed as 0001 to 0099 and omits the bank number altogether, so the printed form does not even say WHICH of the five banks it would clear. Follow the memory-channel clear procedure in the radio's own manual instead.",
@@ -1488,9 +1464,9 @@ var ic7100Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7100: this build knows of none to require. This driver talks only to CI-V address 88h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED — it is the highest of the five speeds the manual prints, chosen because the radio's own CI-V speed item ships on Auto and names no number to prefer, and the manual warns that defaults differ between transceiver versions in any case. Two more things about this radio are worth knowing before blaming the port. Its memory list here holds the 495 ordinary channels, banks A to E, and NOTHING ELSE: the six programmed scan edges and four call channels are real channels on the radio, but the manual never says what bank number addresses them, so this build does not read them rather than guess an address. And CI-V Transceive ships ON, so the radio may be putting unsolicited frames on the bus of its own accord; they are counted and ignored, never acted on. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
-// icr8600Text is the IC-R8600's entry (Tier 4b, the additions tier's
-// FOURTH and LAST registration), landed with that model's wiring
-// registration for the same reason every Icom entry above was:
+// icr8600Text is the IC-R8600's entry — the additions tier's FOURTH
+// and LAST registration — landed with that model's wiring registration
+// for the same reason every Icom entry above was:
 // internal/wiring's TestEverySupportedModelHasRadiotext fails a
 // registration whose prose is missing.
 //
@@ -1582,7 +1558,6 @@ var icr8600Text = Text{
 	// DELIBERATELY EMPTY, exactly as every other registered model's is and
 	// for the same reason: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other model's is: the
 	// delete dialog and the blocked-erase review answer the same question.
 	EraseDialogNote: "The IC-R8600's CI-V Reference Guide DOES print a memory clear form — a memory-set frame carrying FF where the record would go — and this build does not send it: no builder exists for it, the outbound gate admits only the identity read, a memory read and a re-validated memory set, and no IC-R8600 has ever confirmed what the printed form does, so sending one risks clearing the wrong channel rather than the intended one. The printed form also excludes group 0102, the programmed scan edges, from what it may clear, which is a scope this build could not honour in any case: it does not address that group at all. Clear a memory from the receiver's own front panel instead, following the procedure in its instruction manual.",
@@ -1648,8 +1623,8 @@ var icr8600Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. Neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. Opening this receiver also discovers its Memories bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, reading the rest of a group only where its channel 00 answered — not the whole 100x100 space, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes): a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the receiver's channel is empty. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
 }
 
-// ft891Text is the FT-891's entry (Tier 1 task 7, landed with that model's
-// wiring registration — internal/wiring's TestEverySupportedModelHasRadiotext
+// ft891Text is the FT-891's entry, landed with that model's wiring
+// registration: internal/wiring's TestEverySupportedModelHasRadiotext
 // refuses a registered model with no prose, which is what makes this entry
 // part of registration rather than a later nicety).
 //
@@ -1708,10 +1683,9 @@ var icr8600Text = Text{
 // refusal a user will otherwise meet without explanation: a CHIRP file's CW,
 // CWR and RTTY rows are not imported on this radio (they resolve to CW-U,
 // CW-L and RTTY-U, which this radio's own mode legend does not print — the
-// fleet-wide resolution of that naming difference is deferred, plan decision
-// P9), and a transmit-clarifier flag arriving in another radio's file is
-// refused at the write (plan decision P5 — byte 21 of this record is printed
-// "0: (Fixed)").
+// fleet-wide resolution of that naming difference is deferred), and a
+// transmit-clarifier flag arriving in another radio's file is refused at
+// the write (byte 21 of this record is printed "0: (Fixed)").
 //
 // TestRadiotext_FT891Verbatim pins every string, and
 // TestRadiotext_FT891ProbeNote_CarriesItsThreeNamedFacts pins the three the
@@ -1730,7 +1704,6 @@ var ft891Text = Text{
 	// TestEverySupportedModelHasRadiotext requires EraseProcedure,
 	// FirmwareGuidance and ProbeFirmwareNote and deliberately excludes
 	// this one.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other entry's is.
 	EraseDialogNote: "The FT-891 has no CAT erase command, and on this radio that absence is documented rather than merely unclaimed: the CAT manual prints the whole command set in one Control Command List and no memory-erase command appears in it. A channel can therefore be cleared only at the radio itself, and this build does not describe how — no FT-891 operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel erase procedure in the radio's own operating manual.",
 	// The two tooltips DIFFER, unlike the FTdx10's identical pair, because
@@ -1750,8 +1723,8 @@ var ft891Text = Text{
 	ProbeFirmwareNote:   "Firmware version has no CAT query in this build — check the radio's display. No minimum version is established for the FT-891: this build knows of none to require. Its opening speed of 38400 is ASSUMED, not read off the radio: this radio's CAT manual prints the four rates its CAT RATE menu row offers — 4800, 9600, 19200 and 38400 — and marks none of them as the factory setting, and neither this build's command line nor its window offers a way to open at another rate, so a radio set differently has to be put back at menu 0506 before it will answer. Two more things about this radio are worth knowing before blaming the port. Its rear-panel USB socket is a built-in USB-to-dual-UART bridge, so the radio enumerates TWO serial devices, and the manual mentions the second only in the word \"Dual\" — it never says which of the two carries CAT — so if one is silent, try the other before concluding the cable or the speed is wrong. And this manual contradicts itself about READING a memory channel: its Control Command List marks the combined MEMORY WRITE & TAG command settable only, while that same command's own detail block, on the same printed page, gives it a read request and a full answer chart. This build asks the detail block's question and cross-checks the answer against the plain memory read, so a read refused for a channel that is plainly occupied is the manual's own ambiguity surfacing, not a fault in the port — one such read of a channel you know is populated is what would settle it.",
 }
 
-// ft991aText is the FT-991A's entry (Tier 1 task 15a, landed IN THE SAME
-// COMMIT as that model's wiring registration — internal/wiring's
+// ft991aText is the FT-991A's entry, landed IN THE SAME COMMIT as
+// that model's wiring registration: internal/wiring's
 // TestEverySupportedModelHasRadiotext refuses a registered model with no
 // prose, and radiotext_test.go's ownParticulars lockstep PANICS on one, so
 // neither half of the registration is green without the other).
@@ -1794,12 +1767,12 @@ var ft891Text = Text{
 //     GridLegendNote has to name the DCS CODE as radio-side beside the tone
 //     number — a sentence no sibling entry has any occasion to write.
 //   - THE PMS SLOTS ARE NUMBERS, AND THE PANEL PRINTS LETTERS (matrix
-//     §1.4.2, §3.13; plan decision P20, Stuart decision 5). Every surface
+//     §1.4.2, §3.13). Every surface
 //     shows 100-117, because those are the wire numbers; the radio's own MC
 //     legend prints the same eighteen slots as P-1L to P-9U. P20's ruling is
 //     that the divergence is TOLD rather than hidden, and this is where it
 //     is told.
-//   - THE 087 EXCLUSION IS USER-VISIBLE (matrix §3.9; plan decision P15).
+//   - THE 087 EXCLUSION IS USER-VISIBLE (matrix §3.9).
 //     The settings viewer shows 152 items for a chart printing 153 rows,
 //     because row 087 RADIO ID prints ten hyphens for its parameter and a
 //     hyphen for its width, so no answer to an EX087; could be sized. A user
@@ -1840,7 +1813,6 @@ var ft991aText = Text{
 	// TestEverySupportedModelHasRadiotext requires EraseProcedure,
 	// FirmwareGuidance and ProbeFirmwareNote and deliberately excludes
 	// this one.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other entry's is.
 	EraseDialogNote: "There is no CAT erase command for the FT-991A, and here that absence is printed rather than merely unclaimed: this radio's Control Command List is the whole of its CAT vocabulary and holds no command that clears a memory channel — the nearest entries, QMB STORE and QMB RECALL, address the quick-memory bank instead. Clearing a channel is therefore something only the radio itself can do, and this build will not describe how: no FT-991A operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than saying so. Follow the memory-channel erase procedure in the radio's own operating manual.",
 	// The two tooltips DIFFER, because this radio's two absences are
@@ -1897,7 +1869,6 @@ var ts590sText = Text{
 	// internal/wiring's TestEverySupportedModelHasRadiotext requires
 	// EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and deliberately
 	// excludes this one.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other entry's is.
 	EraseDialogNote: "The TS-590S has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route this radio's own book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590S instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
 	// The two tooltips DIFFER, and on this family they say something no
@@ -1940,7 +1911,6 @@ var ts590sgText = Text{
 	// internal/wiring's TestEverySupportedModelHasRadiotext requires
 	// EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and deliberately
 	// excludes this one.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other entry's is.
 	EraseDialogNote: "The TS-590SG has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route this radio's own book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590SG instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
 	// The two tooltips DIFFER, and on this family they say something no
@@ -1959,10 +1929,9 @@ var ts590sgText = Text{
 }
 
 // ts480Text is the TS-480's entry, and it is the ONE ENTRY IN THIS FILE WHOSE
-// MODEL IS NOT REGISTERED (plan decision P17, Stuart decision row 5).
-// core/driver/ts480 is BUILT and deliberately NOT in internal/wiring's tables
-// at this milestone's close: registering it is gated on an observation from a
-// real radio that nobody has (plan decision P3, the ten-edit list). For is
+// MODEL IS NOT REGISTERED. core/driver/ts480 is BUILT and deliberately
+// NOT in internal/wiring's tables: registering it is gated on an
+// observation from a real radio that nobody has. For is
 // consulted only for registered models, so this entry is INERT in the shipped
 // binary — no window and no command line can reach it — until the commit that
 // registers the row, at which point it is already here and already reviewed,
@@ -1992,7 +1961,6 @@ var ts480Text = Text{
 	// internal/wiring's TestEverySupportedModelHasRadiotext requires
 	// EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and deliberately
 	// excludes this one.
-	ToneScanSkipVerification: "",
 	// Byte-identical to EraseProcedure, as every other entry's is.
 	EraseDialogNote: "The TS-480 has no erase command this build will send, and this radio's own book prints no clearing route for one to send: its memory-write section ends without the shortened-frame side effect the TS-590 book prints, and the only \"clear\" anywhere in its printed command set clears the RIT offset instead. This build admits a memory-write frame of exactly 50 bytes and no other in any case, so the TS-590's short form could not be sent here either. It would refuse a channel write in any case — no channel write of any kind is sent to this radio by this build — so clearing a channel is doubly a front-panel job here. This build does not describe how: no TS-480 instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
 	// The two tooltips DIFFER, and on this family they say something no
@@ -2046,8 +2014,8 @@ var texts = map[string]Text{
 	"FT-991A":    ft991aText,
 	"TS-590S":    ts590sText,
 	"TS-590SG":   ts590sgText,
-	// THE ONE KEY HERE WHOSE MODEL internal/wiring DOES NOT REGISTER (plan
-	// decision P17, Stuart decision row 5). core/driver/ts480 is built and
+	// THE ONE KEY HERE WHOSE MODEL internal/wiring DOES NOT REGISTER.
+	// core/driver/ts480 is built and
 	// its row is deliberately absent from the driver tables until an
 	// observation from a real radio exists, so For("TS-480") answers ok
 	// while SupportedModels() does not name the model. Nothing in the
@@ -2074,7 +2042,7 @@ var texts = map[string]Text{
 //
 // MORE POPULATED KEYS THAN REGISTERED MODELS, and the mismatch
 // is deliberate rather than stale: "TS-480" is populated here and is NOT in
-// internal/wiring's SupportedModels() (plan decision P17 — see that entry's
+// internal/wiring's SupportedModels() (see that entry's
 // own doc comment and the texts map's note on the key). No count is written
 // into this sentence, because a count in prose is one registration away from
 // being false; TestEverySupportedModelHasRadiotext walks the registry and is

@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Package wiring holds the session-construction plumbing shared by every
-// composition root in this repository (cmd/rigprog, app/) — extracted
-// from cmd/rigprog/wiring.go by task-15 so the GUI (app/) has the exact
-// same registry/driver/session wiring the CLI already proved, rather
-// than a second, independently-drifting copy.
+// composition root in this repository (cmd/rigprog, app/), so the GUI and
+// the CLI share one registry/driver/session wiring rather than two
+// independently-drifting copies.
 //
-// The deliberate structural-exclusivity shape that constrained
-// cmd/rigprog/wiring.go (task-11 brief §3) is preserved EXACTLY here: two
-// fully self-contained session paths — the REAL one (this file:
+// It keeps a deliberate structural-exclusivity shape: two fully
+// self-contained, model-keyed session paths — the REAL one (this file:
 // OpenRealSessionWith, the single implementation, plus OpenRealSessionFor,
 // its zero-option delegate — two exported names over one body) and the
 // SIMULATED one (fake.go's OpenFakeSessionFor) — with no shared helper
@@ -20,35 +18,21 @@
 // — the constraint is about what can be PAIRED, and it is untouched by the
 // second name.
 //
-// EACH registered driver's simulated-profile selector — ft710.Simulated,
-// ftdx10.Simulated since M9c-6, and ftdx101.Simulated since M9d-2 (ONE
-// token for two registered models, since one driver package drives both
-// FTDX101 siblings) — is referenced in exactly ONE non-test
-// .go file repo-wide, fake.go, pinned per driver by internal/guards'
-// TestSimulatedProfileTokensConfinement (extended by task-15 to be
-// repo-wide rather than cmd/rigprog-local; folded from the single-driver
-// guard task-15 extended into this data-driven guard at Task 58, which is
-// why registering a second driver added a table ROW there rather than a
-// second test).
-//
-// Task 39 (the M9a radio-neutral core refactor) generalised this package
-// to model-keyed dispatch: the real path (this file) and
-// OpenFakeSessionFor (fake.go) are the two fully self-contained,
-// model-keyed session paths carrying the structural-exclusivity shape
-// above. They were joined, briefly, by two DefaultModel-only compatibility
-// wrappers (OpenRealSession/OpenFakeSession) so every caller outside this
-// package could compile unchanged; Tasks 40 (cmd/rigprog) and 41 (app/)
-// migrated those callers onto the -For functions, and — once neither had
-// any reference left, confirmed by grep — task 41 deleted the wrappers and
-// their UnexpectedSessionTypeError/UnexpectedFakeSessionTypeError types.
+// EACH registered driver's simulated-profile selector — e.g. ft710.Simulated,
+// ftdx10.Simulated, ftdx101.Simulated (one token for both FTDX101 siblings,
+// since one driver package drives both) — is referenced in exactly ONE
+// non-test .go file repo-wide, fake.go, pinned per driver by
+// internal/guards' TestSimulatedProfileTokensConfinement.
 package wiring
 
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -76,16 +60,14 @@ import (
 // use when a caller has not (or cannot yet) name a model explicitly: the
 // FALLBACK model, not the only registrable one. cmd/rigprog resolves it
 // when --model is absent, and app/ when the frontend passes "" (it has no
-// model picker yet — M9c-6's ledgered exclusion).
+// model picker yet).
 //
 // It stays exactly "FT-710" however many other models are registered:
-// which radio a caller gets by DEFAULT is a compatibility
-// promise about every file, snapshot and journal written before any second
-// model existed (see ResolveSnapshotDir's own model rule), not a statement
-// about how many models this package supports. Changing it would silently
-// re-point every default-model caller at a different radio. That is why
-// this comment carries no registration COUNT: the count has changed twice
-// already (M9c-6, M9d-2) and the promise has not moved.
+// which radio a caller gets by DEFAULT is a compatibility promise about
+// every file, snapshot and journal written before any second model existed
+// (see ResolveSnapshotDir's own model rule), not a statement about how many
+// models this package supports. Changing it would silently re-point every
+// default-model caller at a different radio.
 const DefaultModel = "FT-710"
 
 // FTdx10Model names the FTdx10's realDrivers/fakeDrivers key, which must
@@ -141,7 +123,7 @@ const FTdx101MPModel = "FTdx101MP"
 // string, and a typo in one alone would build a model openable for real
 // but not simulated.
 //
-// THIS IS THE FIRST NON-YAESU REGISTRATION (Wave 4, task R1). The spelling
+// THIS IS THE FIRST NON-YAESU REGISTRATION. The spelling
 // is the manufacturer's own, and it carries the hyphen ic7610.go's own
 // Model() method and Capabilities().Model both declare ("IC-7610", not
 // "IC7610" or "ic7610") — the two agreements TestDriverTableKeysMatchDriverModel
@@ -157,7 +139,7 @@ const IC7610Model = "IC-7610"
 // same string, and a typo in one alone would build a model openable for
 // real but not simulated.
 //
-// THIS IS THE SECOND ICOM REGISTRATION (Wave 4, task R3), and the FIRST
+// THIS IS THE SECOND ICOM REGISTRATION, and the FIRST
 // PAIR — the IC-7300 and IC-7300MK2 register together, in the same
 // commit, over separate driver packages and separate fakes
 // (core/driver/ic7300 / core/driver/ic7300mk2, internal/fakeic7300 /
@@ -179,7 +161,7 @@ const IC7300MK2Model = "IC-7300MK2"
 // equal ic705.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE THIRD ICOM REGISTRATION (Wave 4, task R4), and the FIRST
+// THIS IS THE THIRD ICOM REGISTRATION, and the FIRST
 // SINGLE-MODEL one since the IC-7610: a lone driver package
 // (core/driver/ic705) and a lone fake (internal/fakeic705), on the same
 // one-row footing as IC7610Model above — no sibling, no pairing rationale
@@ -190,7 +172,7 @@ const IC705Model = "IC-705"
 // equal ic9700.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE FOURTH ICOM REGISTRATION (Wave 4, task R5), and the SECOND
+// THIS IS THE FOURTH ICOM REGISTRATION, and the SECOND
 // SINGLE-MODEL one since the IC-705: a lone driver package
 // (core/driver/ic9700) and a lone fake (internal/fakeic9700), on the same
 // one-row footing as IC705Model above — no sibling, no pairing rationale
@@ -208,7 +190,7 @@ const IC9700Model = "IC-9700"
 // equal ic905.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE FIFTH ICOM REGISTRATION (Wave 4, task R6) AND THE LAST OF
+// THIS IS THE FIFTH ICOM REGISTRATION AND THE LAST OF
 // THE TIER: a lone driver package (core/driver/ic905) and a lone fake
 // (internal/fakeic905), on the same one-row footing as IC705Model and
 // IC9700Model above — no sibling, no pairing rationale to restate.
@@ -230,7 +212,7 @@ const IC905Model = "IC-905"
 // like every other Icom constant above, by
 // TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE ADDITIONS TIER'S FIRST REGISTRATION (Tier 4b, Wave 4), and
+// THIS IS THE ADDITIONS TIER'S FIRST REGISTRATION, and
 // the first Icom PAIR SHARING ONE DRIVER PACKAGE: core/driver/ic7851
 // offers New7851 and New7850 over ONE implementation, ONE civ.Profile
 // (core/civ/ic7851) and ONE fake (internal/fakeic7851), with no bare New.
@@ -267,14 +249,14 @@ const (
 // equal ic7760.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THE ADDITIONS TIER'S SECOND REGISTRATION (Tier 4b, Wave 4), and a
+// THE ADDITIONS TIER'S SECOND REGISTRATION, and a
 // SINGLE-ROW one: core/driver/ic7760 has ONE member (its caps.go says so
 // in as many words — "this family has one member"), so there is one
 // constant, one driver package, one civ.Profile and one fake, on the same
 // footing as IC7610Model above and NOT on the IC-7851 pair's. It takes
 // its profile as an ARGUMENT (ic7760.New(profile, opts...)), which is the
 // IC-7610's constructor shape rather than the IC-7851's option shape, and
-// that is what decides both NewIC7760RealDriver's body below and the
+// that is what decides both realDrivers' IC7760Model row and the
 // TOKEN internal/guards confines for this package (ic7760.Simulated, a
 // Profile constant, not an option).
 //
@@ -306,11 +288,11 @@ const IC7760Model = "IC-7760"
 // equal ic7100.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THE ADDITIONS TIER'S THIRD REGISTRATION (Tier 4b, Wave 4), and a
+// THE ADDITIONS TIER'S THIRD REGISTRATION, and a
 // single-row one again: core/driver/ic7100 has one member, one civ.Profile
 // and one fake, on the IC-7610's and IC-7760's footing rather than the
 // IC-7851 pair's. It takes its profile as an ARGUMENT
-// (ic7100.New(profile, opts...)), which decides both NewIC7100RealDriver's
+// (ic7100.New(profile, opts...)), which decides both realDrivers' IC7100Model row's
 // body below and the TOKEN internal/guards confines for this package
 // (ic7100.Simulated, a Profile constant, not an option) — checked against
 // core/driver/ic7100/ic7100.go, not assumed from the nearest precedent.
@@ -363,11 +345,11 @@ const IC7100Model = "IC-7100"
 // constant above, by TestDriverTableKeysMatchDriverModel walking both
 // tables.
 //
-// THE ADDITIONS TIER'S FOURTH AND LAST REGISTRATION (Tier 4b, Wave 4),
+// THE ADDITIONS TIER'S FOURTH AND LAST REGISTRATION,
 // and a single-row one: core/driver/icr8600 has one member, one
 // civ.Profile and one fake. It takes its profile as an ARGUMENT
 // (icr8600.New(profile, opts...)), which decides both
-// NewICR8600RealDriver's body below and the TOKEN internal/guards
+// realDrivers' ICR8600Model row and the TOKEN internal/guards
 // confines for this package (icr8600.Simulated, a Profile constant, not
 // an option) — checked against core/driver/icr8600/icr8600.go:48, not
 // assumed from the nearest precedent.
@@ -420,15 +402,14 @@ const ICR8600Model = "IC-R8600"
 // same string, and a typo in one alone would build a model openable for
 // real but not simulated.
 //
-// TIER 1's REGISTRATION, and the FIRST YAESU MODEL ADDED SINCE M9d-2 —
-// eleven Icom rows separate it from FTdx101MPModel above. It is a
+// TIER 1's REGISTRATION, the first Yaesu model added after the Icom
+// tiers above. It is a
 // single-row registration on the FTdx10's footing rather than the
 // FTdx101 pair's: core/driver/ft891 has one member, core/cat/ft891 offers
 // one bare Dialect(), and internal/fakeft891 one bare New. The spelling
 // is the manual's own, hyphen included (capability matrix §1.1).
 //
-// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS (plan
-// decision P14, spec erratum S-E2). The Go PACKAGE slug is "ft891" —
+// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS The Go PACKAGE slug is "ft891" —
 // core/driver/ft891, core/cat/ft891, internal/fakeft891, and
 // internal/extable's own profile key. ModelSlug(FT891Model), which is
 // what names this radio's snapshot and journal directory, is "ft-891":
@@ -445,7 +426,7 @@ const ICR8600Model = "IC-R8600"
 // equivalents: this radio reads them by MR alone, and MR's 28-position
 // answer carries neither a tag nor a tag-display flag, so both of those
 // fields take the ZERO FieldSupport there rather than merely an unwritable
-// one (matrix §2.5, plan decision P4). Nothing about registration itself
+// one (matrix §2.5). Nothing about registration itself
 // changes for that; it is app/uispec_test.go's own bank-shape tests that
 // have to say so, not this table.
 //
@@ -466,8 +447,7 @@ const FT891Model = "FT-891"
 // same string, and a typo in one alone would build a model openable for
 // real but not simulated.
 //
-// TIER 1's SECOND REGISTRATION, and the SECOND YAESU MODEL ADDED SINCE
-// M9d-2 — the FT-891's row above is the one it follows. It is a
+// TIER 1's SECOND REGISTRATION, following the FT-891's row above. It is a
 // single-row registration on the FT-891's own footing rather than the
 // FTdx101 pair's: core/driver/ft991a has one member, core/cat/ft991a
 // offers one bare Dialect(), and internal/fakeft991a one bare New. The
@@ -476,8 +456,7 @@ const FT891Model = "FT-891"
 // earlier Yaesu product this project does not support — so it is never a
 // key here and never a fallback for one.
 //
-// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS (plan
-// decision P13, spec erratum S-E2). The Go PACKAGE slug is "ft991a" —
+// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS The Go PACKAGE slug is "ft991a" —
 // core/driver/ft991a, core/cat/ft991a, internal/fakeft991a, and
 // internal/extable's own profile key. ModelSlug(FT991AModel), which is
 // what names this radio's snapshot and journal directory, is "ft-991a":
@@ -498,8 +477,7 @@ const FT891Model = "FT-891"
 // is therefore its static capability set exactly.
 //
 // THE PMS SLOTS ARE THE WIRE NUMBERS "100".."117", not the "P1L".."P9U"
-// every registered sibling uses (plan decision P20, matrix §1.4.2 and
-// §3.13). This dialect's PMSForm is numeric — the pair number never
+// every registered sibling uses (matrix §1.4.2 and §3.13). This dialect's PMSForm is numeric — the pair number never
 // reaches the wire — so those sibling literals are strings this radio's
 // own ParseSlot REFUSES. The radio's own MC legend prints the same slots
 // as "P-1L".."P-9U", and that divergence is TOLD to the user in
@@ -542,7 +520,7 @@ const FT991AModel = "FT-991A"
 // catch.
 //
 // TWO SLUGS EXIST HERE TOO, and they differ from the Go package slug in the
-// same way the FT-891's do (plan decision P2). The PACKAGE slug is "ts590"
+// same way the FT-891's do. The PACKAGE slug is "ts590"
 // — core/driver/ts590, core/kw/ts590, internal/fakets590, and
 // internal/extable's two profile keys "ts590s"/"ts590sg". ModelSlug, which
 // names each radio's snapshot and journal directory, gives "ts-590s" and
@@ -566,10 +544,9 @@ const FT991AModel = "FT-991A"
 // framing outright (matrix §3.1), so this is documentary rather than
 // assumed. stopBitsFor is what carries it to the port, and
 // TestStopBitsFor_EveryKenwoodDriverReportsOne is the pin — including for
-// the TS-480, which is BUILT AND NOT REGISTERED (plan decision P3) and has
-// no constant here at all. That absence is deliberate and is what task 19's
-// three-leg gate makes legible; a TS480Model constant added here without
-// the rest of the ten-edit registration list would be the beginning of a
+// the TS-480, which is BUILT AND NOT REGISTERED and has no constant here
+// at all. That absence is deliberate: a TS480Model constant added here
+// without the rest of its registration would be the beginning of a
 // half-registered radio.
 const (
 	TS590SModel  = "TS-590S"
@@ -585,13 +562,12 @@ const (
 // fake.go's own table for the simulated/demo path), never touching the
 // functions themselves.
 //
-// The FTdx10 (M9c-6 task 6) is the first model added that way, and it was
-// exactly that: this entry, one in fake.go, one radiotext entry, and not a
-// line of the functions below. Every all-registered-models test in this
-// package walks it by existing.
+// The FTdx10 was the first model added that way: this entry, one in
+// fake.go, one radiotext entry, and not a line of the functions below.
+// Every all-registered-models test in this package walks it by existing.
 //
-// The FTdx101D and FTdx101MP (M9d-2 task 7) are the second and third, and
-// they added the same three things EACH. They are SIBLINGS — one driver
+// The FTdx101D and FTdx101MP added the same three things EACH. They are
+// SIBLINGS — one driver
 // package, one dialect config, one simulator, differing in a name and a CAT
 // ID — and they still get two rows here rather than one, because this table
 // is keyed by MODEL and a user selects a radio, not a family. Sharing a row
@@ -631,55 +607,55 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return ftdx10.New(ftdx10.RealHardware, ftdx10.WithConsentedUnverifiedWrites())
 		}
-		return NewFTdx10RealDriver()
+		return ftdx10.New(ftdx10.RealHardware)
 	},
 	FTdx101DModel: func(consent bool) driver.Driver {
 		if consent {
 			return ftdx101.NewD(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
 		}
-		return NewFTdx101DRealDriver()
+		return ftdx101.NewD(ftdx101.RealHardware)
 	},
 	FTdx101MPModel: func(consent bool) driver.Driver {
 		if consent {
 			return ftdx101.NewMP(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
 		}
-		return NewFTdx101MPRealDriver()
+		return ftdx101.NewMP(ftdx101.RealHardware)
 	},
 	IC7610Model: func(consent bool) driver.Driver {
 		if consent {
 			return ic7610.New(ic7610.RealHardware, ic7610.WithConsentedUnverifiedWrites())
 		}
-		return NewIC7610RealDriver()
+		return ic7610.New(ic7610.RealHardware)
 	},
 	IC7300Model: func(consent bool) driver.Driver {
 		if consent {
 			return ic7300.New(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
 		}
-		return NewIC7300RealDriver()
+		return ic7300.New(ic7300.RealHardware)
 	},
 	IC7300MK2Model: func(consent bool) driver.Driver {
 		if consent {
 			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
 		}
-		return NewIC7300MK2RealDriver()
+		return ic7300mk2.New(ic7300mk2.RealHardware)
 	},
 	IC705Model: func(consent bool) driver.Driver {
 		if consent {
 			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
 		}
-		return NewIC705RealDriver()
+		return ic705.New(ic705.RealHardware)
 	},
 	IC9700Model: func(consent bool) driver.Driver {
 		if consent {
 			return ic9700.New(ic9700.RealHardware, ic9700.WithConsentedUnverifiedWrites())
 		}
-		return NewIC9700RealDriver()
+		return ic9700.New(ic9700.RealHardware)
 	},
 	IC905Model: func(consent bool) driver.Driver {
 		if consent {
 			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
 		}
-		return NewIC905RealDriver()
+		return ic905.New(ic905.RealHardware)
 	},
 	// TWO ROWS OVER ONE CONSTRUCTOR PAIR, and each row calls its OWN
 	// constructor: core/driver/ic7851 offers no bare New, so a
@@ -691,13 +667,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return ic7851.New7851(ic7851.WithConsentedUnverifiedWrites())
 		}
-		return NewIC7851RealDriver()
+		return ic7851.New7851()
 	},
 	IC7850Model: func(consent bool) driver.Driver {
 		if consent {
 			return ic7851.New7850(ic7851.WithConsentedUnverifiedWrites())
 		}
-		return NewIC7850RealDriver()
+		return ic7851.New7850()
 	},
 	// ONE ROW, and it names its profile explicitly: core/driver/ic7760
 	// takes the profile as New's first ARGUMENT, so this row reads like
@@ -709,7 +685,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return ic7760.New(ic7760.RealHardware, ic7760.WithConsentedUnverifiedWrites())
 		}
-		return NewIC7760RealDriver()
+		return ic7760.New(ic7760.RealHardware)
 	},
 	// ONE ROW, naming its profile explicitly for the IC-7760 row's reason:
 	// core/driver/ic7100's New takes the profile as its first ARGUMENT
@@ -722,7 +698,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return ic7100.New(ic7100.RealHardware, ic7100.WithConsentedUnverifiedWrites())
 		}
-		return NewIC7100RealDriver()
+		return ic7100.New(ic7100.RealHardware)
 	},
 	// ONE ROW, naming its profile explicitly for the IC-7760's and the
 	// IC-7100's reason: core/driver/icr8600's New takes the profile as
@@ -736,7 +712,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
 		}
-		return NewICR8600RealDriver()
+		return icr8600.New(icr8600.RealHardware)
 	},
 	// ONE ROW, naming its profile explicitly, and for once that is not a
 	// choice this table makes among alternatives: core/driver/ft891's New
@@ -756,7 +732,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
 		}
-		return NewFT891RealDriver()
+		return ft891.New(ft891.RealHardware)
 	},
 	// ONE ROW, naming its profile explicitly, on exactly the FT-891 row's
 	// terms above and for the same reason: core/driver/ft991a's New takes
@@ -774,7 +750,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return ft991a.New(ft991a.RealHardware, ft991a.WithConsentedUnverifiedWrites())
 		}
-		return NewFT991ARealDriver()
+		return ft991a.New(ft991a.RealHardware)
 	},
 	// TWO ROWS OVER ONE CONSTRUCTOR, and each names its OWN row
 	// explicitly: core/driver/ts590's New takes the ROW as its first
@@ -796,13 +772,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 		if consent {
 			return ts590.New(ts590.RowS, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}
-		return NewTS590SRealDriver()
+		return ts590.New(ts590.RowS, ts590.RealHardware)
 	},
 	TS590SGModel: func(consent bool) driver.Driver {
 		if consent {
 			return ts590.New(ts590.RowSG, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}
-		return NewTS590SGRealDriver()
+		return ts590.New(ts590.RowSG, ts590.RealHardware)
 	},
 }
 
@@ -810,12 +786,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 // session against, sorted, so a caller (a CLI listing supported radios, a
 // GUI picker) gets deterministic output.
 func SupportedModels() []string {
-	models := make([]string, 0, len(realDrivers))
-	for m := range realDrivers {
-		models = append(models, m)
-	}
-	sort.Strings(models)
-	return models
+	return slices.Sorted(maps.Keys(realDrivers))
 }
 
 // UnknownModelError is returned by every model-keyed lookup in this
@@ -858,15 +829,14 @@ func realDriverFor(model string, consent bool) (driver.Driver, error) {
 	return ctor(consent), nil
 }
 
-// RegisterDriverError is NewRegistry's typed failure when
+// RegisterDriverError is registerDriver's typed failure when
 // driver.Registry.Register itself refuses d (e.g. a duplicate Model()).
 // Error() carries this package's own generic "wiring: ..." wording (this
 // package is shared by cmd/rigprog and app/, neither of which this
 // package should assume any wording preference for); a caller wanting a
 // DIFFERENT wording — e.g. cmd/rigprog's own pre-extraction "cmd/rigprog:
-// register driver: ..." text (Fix 7, adjudicated LOW, Codex M6 #7) —
-// should errors.As against this and Cause rather than relying on
-// Error()'s text (the same pattern internal/csvmerge's
+// register driver: ..." text — should errors.As against this and Cause
+// rather than relying on Error()'s text (the same pattern internal/csvmerge's
 // InventoryMismatchError/UnknownSlotsError use for the identical reason
 // — see cmd/rigprog/import.go's mergeCSV/mergeCHIRP aliases).
 type RegisterDriverError struct{ Cause error }
@@ -877,20 +847,19 @@ func (e *RegisterDriverError) Error() string {
 
 func (e *RegisterDriverError) Unwrap() error { return e.Cause }
 
-// NewRegistry builds a fresh driver.Registry containing exactly one
-// driver, d, registered under its own Model(). It is shared by both
-// wiring constructors (this file's OpenRealSessionFor and fake.go's
-// OpenFakeSessionFor); deliberately, it accepts only a driver.Driver —
-// never an ft710.Profile alongside a port — so it cannot become the
-// "profile + port" seam the structural-exclusivity constraint (task-11
-// brief §3) rules out. Whatever pairing a caller wants must already be
-// baked into d before this function ever sees it.
-func NewRegistry(d driver.Driver) (*driver.Registry, error) {
-	reg := driver.NewRegistry()
-	if err := reg.Register(d); err != nil {
-		return nil, &RegisterDriverError{Cause: err}
+// registerDriver validates d by registering it into a fresh, throwaway
+// driver.Registry — d's Model()/Capabilities().Model agreement,
+// Capabilities().Validate, and the ConsentedUnverified-baseline guard all
+// run inside Register — wrapping any rejection as *RegisterDriverError.
+// The registry itself is discarded: every caller (this file's
+// OpenRealSessionWith/StaticCapabilities and fake.go's OpenFakeSessionFor)
+// already holds d and uses it directly once registerDriver returns nil,
+// so there is nothing left to look up.
+func registerDriver(d driver.Driver) error {
+	if err := driver.NewRegistry().Register(d); err != nil {
+		return &RegisterDriverError{Cause: err}
 	}
-	return reg, nil
+	return nil
 }
 
 // NewRealDriver builds the ft710 driver for a real-hardware session:
@@ -902,521 +871,6 @@ func NewRegistry(d driver.Driver) (*driver.Registry, error) {
 // opens a serial port (see TestNewRealDriver_HWVerifiedWriteSet).
 func NewRealDriver() driver.Driver {
 	return ft710.New(ft710.RealHardware)
-}
-
-// NewFTdx10RealDriver builds the ftdx10 driver for a real-hardware
-// session: profile ftdx10.RealHardware, the zero value — the FTdx10's
-// half of the realDrivers table, split out for the same reason
-// NewRealDriver is (a test can pin the capability set the real wiring path
-// implies without opening a port).
-//
-// What that capability set IS differs from the FT-710's in the one way
-// that matters, and it is the whole reason this entry is safe to register
-// against real hardware at all: ftdx10's writeTrialsComplete is FALSE, so
-// a RealHardware FTdx10 driver reports ftdx10.CapabilitiesUnverified —
-// every candidate field's Write spec.Unverified, nothing writable
-// anywhere. No FTdx10 has been written to by this project, and the
-// capability gate refuses before any frame is built. Registering the model
-// therefore adds a READ/probe path against real hardware and no write path
-// (see core/driver/ftdx10/doc.go's write guard, and its ASSUMED register
-// for what a Stage R session would lift).
-//
-// That is the whole truth for THIS constructor, and this constructor is
-// what realDrivers' FTdx10 row returns for every unconsented caller. The
-// CONSENTED row is a different construction — ftdx10.New(RealHardware,
-// WithConsentedUnverifiedWrites()), built only when the user's recorded
-// grant says so — and the session IT assembles re-labels those write-side
-// Unverified fields spec.ConsentedUnverified, which FieldSupport.CanWrite
-// opens. Even there the driver's STATIC Capabilities is untouched, which
-// is exactly what lets NeedsUnverifiedConsent read it to decide the radio
-// is consent-eligible at all. So "no write path" remains the answer for
-// every caller who has not asked for one, and the write path a consenting
-// user gets is one they were warned about and chose.
-func NewFTdx10RealDriver() driver.Driver {
-	return ftdx10.New(ftdx10.RealHardware)
-}
-
-// NewFTdx101DRealDriver builds the ftdx101 driver for a real-hardware
-// FTDX101D session: profile ftdx101.RealHardware, the zero value — the
-// FTdx101D's half of the realDrivers table, split out for the same reason
-// NewRealDriver and NewFTdx10RealDriver are (a test can pin the capability
-// set the real wiring path implies without opening a port).
-//
-// READ/PROBE ONLY, and by the same mechanism the FTdx10's entry is: this
-// driver's writeTrialsCompleteD is FALSE, so a RealHardware FTDX101D driver
-// reports the all-Unverified capability set — every candidate field's Write
-// spec.Unverified, nothing writable on any bank. No FTDX101D has been
-// written to by this project, and the capability gate refuses before any
-// frame is built. Registering the model therefore adds a READ/probe path
-// against real hardware and, for an UNCONSENTED session (the consent
-// exception is named at the foot of this comment), NO write path (see
-// core/driver/ftdx101/doc.go's write guard, and its ASSUMED register for
-// what a Stage W session would lift).
-//
-// The FAIL-SAFE DIRECTION is worth restating because it is what makes this
-// safe to register at all: an unrecognised Profile value selects the
-// all-Unverified set too, never the simulator's write-Supported one. There
-// is no value a caller can pass to this package that produces a
-// write-capable real-hardware FTDX101D driver — with ONE named exception,
-// which is not a value at all but a decision: SessionOptions'
-// ConsentUnverifiedWrites, spent from the user's own recorded grant, makes
-// realDrivers build the consented variant instead of this constructor's
-// product, and the SESSION that variant opens carries
-// spec.ConsentedUnverified in place of spec.Unverified and can therefore
-// write. The exception is deliberately narrow and deliberately loud: it is
-// unreachable without a stored grant, it never alters this driver's static
-// capability set, it never touches FieldErase, and it is skipped for an
-// unrecognised Profile — so the fail-safe direction above survives it
-// intact.
-func NewFTdx101DRealDriver() driver.Driver {
-	return ftdx101.NewD(ftdx101.RealHardware)
-}
-
-// NewFTdx101MPRealDriver builds the ftdx101 driver for a real-hardware
-// FTDX101MP session: profile ftdx101.RealHardware, the zero value. Same
-// reasoning as NewFTdx101DRealDriver in every respect — the MP's own write
-// guard is writeTrialsCompleteMP, and it is false for the MP's own reasons
-// (no FTDX101MP has ever been written to by this project; the D's trials
-// would not lift it, since the two radios share a manual and not a serial
-// port).
-//
-// A SEPARATE CONSTRUCTOR rather than a model parameter, deliberately: the
-// driver package fixes its exported surface as two thin constructors so
-// that a registration-table closure cannot hold a forged model value, and
-// this table's two rows are exactly the callers that shape was chosen for.
-func NewFTdx101MPRealDriver() driver.Driver {
-	return ftdx101.NewMP(ftdx101.RealHardware)
-}
-
-// NewIC7610RealDriver builds the ic7610 driver for a real-hardware
-// session: profile ic7610.RealHardware, the zero value — the IC-7610's
-// half of the realDrivers table, split out for the same reason the four
-// Yaesu constructors above are (a test can pin the capability set the
-// real wiring path implies without opening a port).
-//
-// READ/PROBE ONLY, and by the same mechanism as every Yaesu row: this
-// driver's writeTrialsComplete (core/driver/ic7610/caps.go) is FALSE, so a
-// RealHardware IC-7610 driver reports the all-Unverified capability set —
-// every mapped field's Write spec.Unverified, nothing writable on either
-// bank. No IC-7610 has been written to by this project, and the
-// capability gate refuses before any frame is built.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED BY THIS BEING A CI-V DRIVER RATHER
-// THAN A CAT ONE: an unrecognised Profile value selects the all-Unverified
-// set too (ic7610.go's Capabilities switch), never the simulator's
-// write-Supported one, and the one named exception — SessionOptions'
-// ConsentUnverifiedWrites, spent from the user's own recorded grant — is
-// exactly the mechanism the Yaesu rows use, reaching realDrivers'
-// IC7610Model row above and never this constructor.
-func NewIC7610RealDriver() driver.Driver {
-	return ic7610.New(ic7610.RealHardware)
-}
-
-// NewIC7300RealDriver builds the ic7300 driver for a real-hardware
-// session: profile ic7300.RealHardware, the zero value — the IC-7300's
-// half of the realDrivers table, split out for the same reason every
-// other model constructor above is (a test can pin the capability set the
-// real wiring path implies without opening a port).
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete (core/driver/ic7300/caps.go) is FALSE, so a
-// RealHardware IC-7300 driver reports the all-Unverified capability set —
-// every mapped field's Write spec.Unverified, nothing writable on either
-// bank. No IC-7300 has been written to by this project, and the
-// capability gate refuses before any frame is built.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too (ic7300.go's Capabilities switch),
-// never the simulator's write-Supported one, and the one named exception
-// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
-// recorded grant — is exactly the mechanism every other row uses, reaching
-// realDrivers' IC7300Model row above and never this constructor.
-func NewIC7300RealDriver() driver.Driver {
-	return ic7300.New(ic7300.RealHardware)
-}
-
-// NewIC7300MK2RealDriver builds the ic7300mk2 driver for a real-hardware
-// session: profile ic7300mk2.RealHardware, the zero value. Same reasoning
-// as NewIC7300RealDriver in every respect — the MK2's own write guard is
-// its OWN writeTrialsComplete constant (core/driver/ic7300mk2/caps.go),
-// false for the MK2's own reasons: "The registered sibling's FALSE is not
-// stated here" (that package's own comment) — no write trial on either
-// radio lifts anything for the other, since the two documents never
-// reference each other.
-//
-// A SEPARATE CONSTRUCTOR rather than a model parameter, deliberately, and
-// for the same reason NewFTdx101MPRealDriver is one rather than a
-// parameter on NewFTdx101DRealDriver: the driver package fixes its
-// exported surface as two thin constructors (ic7300.New / ic7300mk2.New,
-// each over its OWN package) so that a registration-table closure cannot
-// hold a forged model value.
-func NewIC7300MK2RealDriver() driver.Driver {
-	return ic7300mk2.New(ic7300mk2.RealHardware)
-}
-
-// NewIC705RealDriver builds the ic705 driver for a real-hardware session:
-// profile ic705.RealHardware, the zero value — the IC-705's half of the
-// realDrivers table, split out for the same reason every other model
-// constructor above is (a test can pin the capability set the real
-// wiring path implies without opening a port).
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete (core/driver/ic705/caps.go) is FALSE, so a
-// RealHardware IC-705 driver reports the all-Unverified capability set —
-// every mapped field's Write spec.Unverified, nothing writable on either
-// bank. No IC-705 has been written to by this project, and the
-// capability gate refuses before any frame is built.
-//
-// NO ic705.WithFullInventoryWalk() HERE, DELIBERATELY (side lanes fix
-// round 1, review icom-minors-review-opus.md LOW-3). Like the IC-905's
-// and IC-R8600's same-named option, it is a Go-only opt-in for callers
-// using core/driver/ic705 directly; no CLI flag or GUI control exposes
-// it. The registry therefore keeps the bounded default — the ten display
-// groups G01-G10, each in full — on the same operational grounds those
-// two rows state. internal/radiotext's IC-705 ProbeFirmwareNote and this
-// driver's own occupied-surprise refusal (write.go:354) both now lean on
-// that omission being a recorded choice rather than an oversight; this
-// comment is what makes the two agree in writing.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too (ic705.go's Capabilities switch),
-// never the simulator's write-Supported one, and the one named exception
-// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
-// recorded grant — is exactly the mechanism every other row uses, reaching
-// realDrivers' IC705Model row above and never this constructor.
-func NewIC705RealDriver() driver.Driver {
-	return ic705.New(ic705.RealHardware)
-}
-
-// NewIC9700RealDriver builds the ic9700 driver for a real-hardware
-// session: profile ic9700.RealHardware, the zero value — the IC-9700's
-// half of the realDrivers table, split out for the same reason every
-// other model constructor above is (a test can pin the capability set
-// the real wiring path implies without opening a port).
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete (core/driver/ic9700/caps.go) is FALSE, so a
-// RealHardware IC-9700 driver reports the all-Unverified capability set —
-// every mapped field's Write spec.Unverified, nothing writable on any of
-// its three banks. No IC-9700 has been written to by this project, and
-// the capability gate refuses before any frame is built.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too (ic9700.go's Capabilities switch),
-// never the simulator's write-Supported one, and the one named exception
-// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
-// recorded grant — is exactly the mechanism every other row uses, reaching
-// realDrivers' IC9700Model row above and never this constructor.
-func NewIC9700RealDriver() driver.Driver {
-	return ic9700.New(ic9700.RealHardware)
-}
-
-// NewIC905RealDriver builds the ic905 driver for a real-hardware session:
-// profile ic905.RealHardware, the zero value — the IC-905's half of the
-// realDrivers table, split out for the same reason every other model
-// constructor above is (a test can pin the capability set the real
-// wiring path implies without opening a port).
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete (core/driver/ic905/caps.go) is FALSE, so a
-// RealHardware IC-905 driver reports the all-Unverified capability set —
-// every mapped field's Write spec.Unverified, nothing writable on either
-// bank. No IC-905 has been written to by this project, and the
-// capability gate refuses before any frame is built.
-//
-// NO ic905.WithFullInventoryWalk() HERE, DELIBERATELY. That option opts a
-// session INTO the whole 100 x 100 walk instead of the bounded default
-// (group 0 in full, then one channel per group elsewhere —
-// core/driver/ic905's own discoverInventory doc comment); the registry's
-// job is to build the driver every plain `--model IC-905` session gets,
-// and that is the bounded default, on the same operational grounds the
-// driver package itself states — a complete walk is minutes of Open on a
-// sparse or empty radio, and training a user to interrupt it is exactly
-// the "codeplug full of deletions" hazard the bound exists to avoid. A
-// caller who needs the whole space still reaches the option directly
-// through core/driver/ic905, unchanged by this constructor's omission of
-// it.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too (ic905.go's Capabilities switch),
-// never the simulator's write-Supported one, and the one named exception
-// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
-// recorded grant — is exactly the mechanism every other row uses, reaching
-// realDrivers' IC905Model row above and never this constructor.
-func NewIC905RealDriver() driver.Driver {
-	return ic905.New(ic905.RealHardware)
-}
-
-// NewIC7851RealDriver builds the ic7851 driver for a real-hardware
-// IC-7851 session — the IC-7851's half of the realDrivers table, split
-// out for the same reason every other model constructor above is (a test
-// can pin the capability set the real wiring path implies without opening
-// a port).
-//
-// NO PROFILE ARGUMENT, unlike every Icom constructor above it, and that
-// is core/driver/ic7851's own shape rather than an omission here: that
-// package takes its profile through an OPTION (WithSimulatedProfile) and
-// leaves the RealHardware arm as the struct's zero value inside New7851,
-// so a real-hardware driver is what New7851 with no options builds.
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete7851 (core/driver/ic7851/caps.go) is FALSE,
-// so a RealHardware IC-7851 driver reports the all-Unverified capability
-// set — every mapped field's Write spec.Unverified, nothing writable on
-// either bank. No IC-7851 has been written to by this project, and the
-// capability gate refuses before any frame is built.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too (ic7851.go's Capabilities switch,
-// through its own explicit default arm), never the simulator's
-// write-Supported one, and the one named exception — SessionOptions'
-// ConsentUnverifiedWrites, spent from the user's own recorded grant — is
-// exactly the mechanism every other row uses, reaching realDrivers'
-// IC7851Model row above and never this constructor.
-func NewIC7851RealDriver() driver.Driver {
-	return ic7851.New7851()
-}
-
-// NewIC7850RealDriver builds the ic7851 driver for a real-hardware
-// IC-7850 session. Same reasoning as NewIC7851RealDriver in every
-// respect, over the SIBLING constructor and the SIBLING write guard
-// (writeTrialsComplete7850, which core/driver/ic7851/caps.go keeps
-// deliberately separate from the IC-7851's: evidence for one model is
-// never evidence for the other, matrix §4).
-//
-// IT IS A SECOND FUNCTION RATHER THAN A PARAMETER ON THE FIRST, for the
-// same reason NewFTdx101MPRealDriver is one: the driver package fixes its
-// model at the constructor and offers no bare New, so the choice of row
-// belongs at the call site the registry provides, where a test can pin
-// each row's capability set on its own.
-func NewIC7850RealDriver() driver.Driver {
-	return ic7851.New7850()
-}
-
-// NewIC7760RealDriver builds the ic7760 driver for a real-hardware
-// session: profile ic7760.RealHardware, the zero value — the IC-7760's
-// half of the realDrivers table, split out for the same reason every
-// other model constructor above is (a test can pin the capability set the
-// real wiring path implies without opening a port).
-//
-// A PROFILE ARGUMENT, unlike the IC-7851 pair's two constructors directly
-// above and like every Icom constructor before them: core/driver/ic7760
-// declares Profile as New's first parameter, so the real-hardware arm is
-// NAMED here rather than left to an option's absence. Its zero value is
-// RealHardware too, which is belt and braces rather than a second way of
-// saying the same thing — a caller that forgot the argument entirely
-// would still not reach the simulator's capability set.
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete (core/driver/ic7760/caps.go) is FALSE, so
-// a RealHardware IC-7760 driver reports the all-Unverified capability set
-// — every mapped field's Write spec.Unverified, nothing writable on
-// either bank. No IC-7760 has been written to by this project, and the
-// capability gate refuses before any frame is built.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too, through ic7760.go's Capabilities
-// switch and its OWN explicit default arm rather than by sharing
-// RealHardware's, never the simulator's write-Supported one. The one
-// named exception — SessionOptions' ConsentUnverifiedWrites, spent from
-// the user's own recorded grant — is exactly the mechanism every other
-// row uses, reaching realDrivers' IC7760Model row above and never this
-// constructor.
-func NewIC7760RealDriver() driver.Driver {
-	return ic7760.New(ic7760.RealHardware)
-}
-
-// NewIC7100RealDriver builds the ic7100 driver for a real-hardware
-// session: profile ic7100.RealHardware, the zero value — the IC-7100's
-// half of the realDrivers table, split out for the same reason every
-// other model constructor above is (a test can pin the capability set the
-// real wiring path implies without opening a port).
-//
-// A PROFILE ARGUMENT, like the IC-7610's, the IC-905's and the IC-7760's
-// and unlike the IC-7851 pair's two constructors: core/driver/ic7100
-// declares Profile as New's first parameter, so the real-hardware arm is
-// NAMED here rather than left to an option's absence. Its zero value is
-// RealHardware too (that package's caps.go says so in as many words —
-// "RealHardware is the zero value so an uninitialised profile fails
-// safe"), which is belt and braces rather than a second way of saying the
-// same thing.
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete (core/driver/ic7100/caps.go) is FALSE, so
-// a RealHardware IC-7100 driver reports the all-Unverified capability set
-// — every one of the thirteen mapped fields Read Unverified and Write
-// Unverified, nothing writable. No IC-7100 has been written to by this
-// project, and the capability gate refuses before any frame is built.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too, through ic7100.go's Capabilities
-// check (it asks for Simulated by name and falls through to Unverified
-// for everything else), never the simulator's write-Supported one, and
-// recognised() refuses to spend consent on a profile it does not know.
-// The one named exception — SessionOptions' ConsentUnverifiedWrites,
-// spent from the user's own recorded grant — reaches realDrivers'
-// IC7100Model row above and never this constructor.
-func NewIC7100RealDriver() driver.Driver {
-	return ic7100.New(ic7100.RealHardware)
-}
-
-// NewICR8600RealDriver builds the icr8600 driver for a real-hardware
-// session: profile icr8600.RealHardware, the zero value — the IC-R8600's
-// half of the realDrivers table, split out for the same reason every
-// other model constructor above is (a test can pin the capability set the
-// real wiring path implies without opening a port).
-//
-// A PROFILE ARGUMENT, like the IC-7610's, the IC-905's, the IC-7760's and
-// the IC-7100's and unlike the IC-7851 pair's two constructors:
-// core/driver/icr8600 declares Profile as New's first parameter
-// (icr8600.go:41), so the real-hardware arm is NAMED here rather than
-// left to an option's absence. Its zero value is RealHardware too
-// (caps.go: "The zero value is the fail-safe physical-radio profile"),
-// which is belt and braces rather than a second way of saying the same
-// thing.
-//
-// READ/PROBE ONLY, by the same mechanism as every other row: this
-// driver's writeTrialsComplete (core/driver/icr8600/caps.go) is FALSE, so
-// a RealHardware IC-R8600 driver reports the all-Unverified capability
-// set — every one of the seventeen mapped fields Read Unverified and
-// Write Unverified, nothing writable. No IC-R8600 has been written to by
-// this project, and the capability gate refuses before any frame is
-// built.
-//
-// AND IT IS A RECEIVER, which narrows the set further and does so
-// STRUCTURALLY rather than by grading: caps.Transmit is spec.ReceiveOnly,
-// so spec.Validate refuses this capability value outright if
-// tx_frequency or tone_tx is ever graded above Unsupported on any bank
-// (additions spec D4.2's invariant). Both are written-down zeros in
-// caps.go's bankFields today.
-//
-// NO icr8600.WithFullInventoryWalk() HERE, DELIBERATELY. Like the IC-905
-// option, it is a Go-only opt-in for callers using core/driver/icr8600
-// directly; no CLI flag or GUI control exposes it. The registry therefore
-// keeps the bounded default. TestRealDriverFor_DefaultPathByteIdentical pins
-// both its ordinary and consented rows without the option.
-//
-// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
-// selects the all-Unverified set too, through icr8600.go's Capabilities
-// switch (its default arm returns CapabilitiesUnverified), never the
-// simulator's write-Supported one, and profileRecognised() refuses to
-// spend consent on a profile it does not know. The one named exception —
-// SessionOptions' ConsentUnverifiedWrites, spent from the user's own
-// recorded grant — reaches realDrivers' ICR8600Model row above and never
-// this constructor.
-func NewICR8600RealDriver() driver.Driver {
-	return icr8600.New(icr8600.RealHardware)
-}
-
-// NewFT891RealDriver builds the ft891 driver for a real-hardware session:
-// profile ft891.RealHardware, the zero value — the FT-891's half of the
-// realDrivers table, split out for the same reason NewRealDriver and every
-// constructor above it is (a test can pin the capability set the real
-// wiring path implies without opening a port).
-//
-// READ/PROBE ONLY for every unconsented caller, by the same mechanism the
-// FTdx10's entry is: this driver's writeTrialsComplete is FALSE, so a
-// RealHardware FT-891 driver reports ft891.CapabilitiesUnverified — every
-// candidate field's Read AND Write spec.Unverified, nothing writable on any
-// bank. No FT-891 has been written to by this project, and no FT-891 has
-// answered a frame at all, which is why the READ labels are Unverified here
-// too rather than Supported (capability matrix §2.1, "the honest one"). The
-// capability gate refuses before any frame is built, so registering the
-// model adds a read/probe path against real hardware and, for an
-// unconsented session, no write path — see core/driver/ft891/doc.go's
-// sixteen-entry ASSUMED register for what a Stage R session would lift, and
-// its entry 7 ("MT READ IS SUPPORTED FOR MEMORY AND PMS") for the one
-// capture that would settle this radio's largest open question.
-//
-// The CONSENTED row is a different construction —
-// ft891.New(RealHardware, WithConsentedUnverifiedWrites()), built only when
-// the user's recorded grant says so — and the session IT assembles
-// re-labels the write-side Unverified fields spec.ConsentedUnverified,
-// which FieldSupport.CanWrite opens. Even there the driver's STATIC
-// Capabilities is untouched, which is what lets NeedsUnverifiedConsent read
-// it to decide the radio is consent-eligible at all.
-func NewFT891RealDriver() driver.Driver {
-	return ft891.New(ft891.RealHardware)
-}
-
-// NewFT991ARealDriver builds the ft991a driver for a real-hardware session:
-// profile ft991a.RealHardware, the zero value — the FT-991A's half of the
-// realDrivers table, split out for the same reason NewRealDriver and every
-// constructor above it is (a test can pin the capability set the real
-// wiring path implies without opening a port).
-//
-// READ/PROBE ONLY for every unconsented caller, by the same mechanism the
-// FT-891's entry is: this driver's writeTrialsComplete is FALSE, so a
-// RealHardware FT-991A driver reports ft991a.CapabilitiesUnverified — every
-// candidate field's Read AND Write spec.Unverified, nothing writable on
-// either bank. No FT-991A has been written to by this project, and no
-// FT-991A has answered a frame at all, which is why the READ labels are
-// Unverified here too rather than Supported (capability matrix §2.1). The
-// capability gate refuses before any frame is built, so registering the
-// model adds a read/probe path against real hardware and, for an
-// unconsented session, no write path — see core/driver/ft991a/doc.go's
-// eleven-entry ASSUMED register for what a Stage R session would lift, and
-// its entry "A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A
-// CHANNEL" for the one capture that would settle this radio's write path.
-//
-// The CONSENTED row is a different construction —
-// ft991a.New(RealHardware, WithConsentedUnverifiedWrites()), built only when
-// the user's recorded grant says so — and the session IT assembles
-// re-labels the write-side Unverified fields spec.ConsentedUnverified,
-// which FieldSupport.CanWrite opens. Even there the driver's STATIC
-// Capabilities is untouched, which is what lets NeedsUnverifiedConsent read
-// it to decide the radio is consent-eligible at all.
-func NewFT991ARealDriver() driver.Driver {
-	return ft991a.New(ft991a.RealHardware)
-}
-
-// NewTS590SRealDriver builds the ts590 driver for a real-hardware session
-// against the TS-590S: profile ts590.RealHardware, the zero value, with the
-// ROW named explicitly because it has no usable zero. It is the pair's half
-// of the realDrivers table, split out for the same reason every constructor
-// above it is (a test can pin the capability set the real wiring path
-// implies without opening a port).
-//
-// TWO FUNCTIONS OVER ONE PACKAGE, deliberately, and the shape is the
-// IC-7851 pair's rather than the FTdx101's: core/driver/ts590 offers no
-// per-row constructor of its own, so the sibling choice has to be made
-// somewhere, and making it HERE — once per row, in a named function — is
-// what lets each table row be compared against the exact call it is
-// supposed to make.
-//
-// READ/PROBE/SETTINGS ONLY for every unconsented caller, by the same
-// mechanism every unproven row above uses: both writeTrialsComplete guards
-// are FALSE (core/driver/ts590/caps.go keeps one per row, since evidence
-// for one sibling is never evidence for the other), so a RealHardware
-// TS-590 driver publishes every candidate field's Read AND Write as
-// spec.Unverified — nothing writable on either bank. No Kenwood radio has
-// ever answered a frame put to it by this project, which is why the READ
-// labels are Unverified here too rather than Supported (matrix §2.1). The
-// capability gate refuses before any frame is built, so registering these
-// rows adds a read, probe and menu-read path against real hardware and, for
-// an unconsented session, no write path — see core/driver/ts590/doc.go's
-// Kenwood driver register and core/kw/doc.go's ASSUMED register for what a
-// session with a real radio would lift.
-//
-// The CONSENTED row is a different construction —
-// ts590.New(row, RealHardware, WithConsentedUnverifiedWrites()), built only
-// when the user's recorded grant says so — and even then every pre-wire
-// refusal of the write ladder still fires: consent widens WHAT may be
-// attempted, never HOW carefully (matrix §2.1). The driver's STATIC
-// Capabilities is untouched, which is what lets NeedsUnverifiedConsent read
-// it to decide each row is consent-eligible at all.
-func NewTS590SRealDriver() driver.Driver {
-	return ts590.New(ts590.RowS, ts590.RealHardware)
-}
-
-// NewTS590SGRealDriver builds the TS-590SG's real-hardware driver. See
-// NewTS590SRealDriver for the pair's shared reasoning; the only difference
-// between the two calls is the row, which is the only difference between
-// the two radios this package can express — and the reason a copy-paste
-// that left both calls on ts590.RowS would build a working driver for the
-// wrong radio rather than failing.
-func NewTS590SGRealDriver() driver.Driver {
-	return ts590.New(ts590.RowSG, ts590.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
@@ -1510,19 +964,11 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 		return nil, nil, err
 	}
 
-	reg, err := NewRegistry(d)
-	if err != nil {
+	// registerDriver validates d (its Model()/Capabilities().Model
+	// agreement, Capabilities().Validate, the ConsentedUnverified-baseline
+	// guard) and wraps any failure as *RegisterDriverError.
+	if err := registerDriver(d); err != nil {
 		return nil, nil, err
-	}
-	drv, ok := reg.Get(model)
-	if !ok {
-		// Unreachable while TestDriverTableKeysMatchDriverModel holds: d
-		// was just registered under its own Model(), which that test pins
-		// equal to this table key. Returned rather than ignored so a
-		// future table whose key drifted from its driver's Model() fails
-		// with this package's own typed error instead of a nil-pointer
-		// panic when drv is used below.
-		return nil, nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
 	}
 
 	stopBits, err := stopBitsFor(d)
@@ -1531,10 +977,7 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 	}
 
 	port, err := openSerial(portPath, transport.SerialConfig{
-		// The baud is the radio's, read from the driver in hand (d is
-		// the very value NewRegistry registered and reg.Get returned
-		// above as drv — TestDriverTableKeysMatchDriverModel pins the
-		// key they share).
+		// The baud is the radio's, read from the driver in hand.
 		Baud: d.Capabilities().DefaultBaud,
 		// The stop bits are the DRIVER's where the driver has something
 		// honest to say, and transport's fixed default (8-N-2) where it
@@ -1545,7 +988,7 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 		return nil, nil, &OpenSerialError{Port: portPath, Cause: err}
 	}
 
-	sess, err := drv.Open(ctx, port, driver.Identity{Port: portPath})
+	sess, err := d.Open(ctx, port, driver.Identity{Port: portPath})
 	if err != nil {
 		// Open owns port on both outcomes: it is already closed.
 		return nil, nil, &OpenSessionError{Port: portPath, Cause: err}
@@ -1581,21 +1024,10 @@ func StaticCapabilities(model string) (spec.Capabilities, error) {
 	if err != nil {
 		return spec.Capabilities{}, err
 	}
-	reg, err := NewRegistry(d)
-	if err != nil {
+	if err := registerDriver(d); err != nil {
 		return spec.Capabilities{}, err
 	}
-	drv, ok := reg.Get(model)
-	if !ok {
-		// Unreachable while TestDriverTableKeysMatchDriverModel holds: d
-		// was just registered under its own Model(), which that test pins
-		// equal to this table key. Returned rather than ignored so a
-		// future table whose key drifted from its driver's Model() fails
-		// with this package's own typed error instead of a nil-pointer
-		// panic inside Capabilities().
-		return spec.Capabilities{}, &UnknownModelError{Model: model, Supported: SupportedModels()}
-	}
-	return drv.Capabilities(), nil
+	return d.Capabilities(), nil
 }
 
 // NeedsUnverifiedConsent reports whether model is CONSENT-ELIGIBLE: whether
@@ -1702,7 +1134,7 @@ func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool)
 // the driver's OPTIONAL driver.SerialFramingReporter, and refuse anything
 // it reports other than 1 or 2.
 //
-// STILL NOT A spec.Capabilities FIELD. The M9c-5 (E2) rule — a framing
+// STILL NOT A spec.Capabilities FIELD. The rule — a framing
 // field only with hardware evidence — is untouched, and the six
 // registered Yaesu models still reach the serial layer at
 // transport.DefaultStopBits, because none of them implements the
@@ -1729,7 +1161,7 @@ func stopBitsFor(d driver.Driver) (int, error) {
 	if !ok {
 		// The E2-owed FTdx10 verification is CLOSED, and closed as
 		// SILENCE: that radio's CAT manual makes no framing statement
-		// anywhere (M9c-6 spec D-framing), so 8-N-2 for the FTdx10 is an
+		// anywhere, so 8-N-2 for the FTdx10 is an
 		// ASSUMED entry in core/driver/ftdx10's own register with a named
 		// hardware lift — not a verified fact. Same for the other three.
 		return transport.DefaultStopBits, nil
@@ -1788,25 +1220,15 @@ func (e *OpenSessionError) Error() string {
 
 func (e *OpenSessionError) Unwrap() error { return e.Cause }
 
+// modelSlugNonAlnum matches a run of characters ModelSlug does not keep.
+var modelSlugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
+
 // ModelSlug turns a model name into a filesystem-safe directory
 // component: lowercased, with each run of non-alphanumeric characters
 // collapsed to a single "-" (e.g. "FTDX101D/MP" -> "ftdx101d-mp"). Used
 // to give each model its own snapshot/journal directory.
 func ModelSlug(model string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(model) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			dash = false
-			continue
-		}
-		if !dash && b.Len() > 0 {
-			b.WriteByte('-')
-			dash = true
-		}
-	}
-	return strings.TrimSuffix(b.String(), "-")
+	return strings.Trim(modelSlugNonAlnum.ReplaceAllString(strings.ToLower(model), "-"), "-")
 }
 
 // ResolveSnapshotDir returns the snapshot/journal directory a
@@ -1818,8 +1240,8 @@ func ModelSlug(model string) string {
 // filesystem — callers create the directory (mode 0700) on demand.
 //
 // model then decides whether that base directory is used directly or
-// namespaced (task-7, D9): DefaultModel stays at the base directory
-// unchanged — byte-identical to the pre-task-7 behaviour — so every
+// namespaced (D9): DefaultModel stays at the base directory
+// unchanged — byte-identical to the original behaviour — so every
 // snapshot written before per-model subdirectories existed is still
 // found. Any other model gets its own <base>/<model-slug>/
 // subdirectory, applied to an explicit override too, since two models
@@ -1832,10 +1254,9 @@ func ModelSlug(model string) string {
 // prevent.
 //
 // Deliberately duplicated here rather than exported from cmd/rigprog:
-// cmd/rigprog is a cmd-local package app/ must not import (task-15
-// brief §2's Connect bullet); this 3-line rule is cheap enough to
-// restate directly rather than force an import cmd/rigprog was never
-// meant to expose.
+// cmd/rigprog is a cmd-local package app/ must not import; this 3-line
+// rule is cheap enough to restate directly rather than force an import
+// cmd/rigprog was never meant to expose.
 func ResolveSnapshotDir(override, model string) (string, error) {
 	base := override
 	if base == "" {

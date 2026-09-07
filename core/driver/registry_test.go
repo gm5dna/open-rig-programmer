@@ -204,9 +204,9 @@ func TestRegistry_Register_RejectsConsentedUnverifiedBaseline(t *testing.T) {
 // explicit canary that the new check has not broken registration for a
 // driver built the way production builds them.)
 func TestRegistry_Register_RealCompositionRootStillRegisters(t *testing.T) {
-	r, err := wiring.NewRegistry(wiring.NewRealDriver())
-	if err != nil {
-		t.Fatalf("wiring.NewRegistry(wiring.NewRealDriver()): unexpected error: %v", err)
+	r := driver.NewRegistry()
+	if err := r.Register(wiring.NewRealDriver()); err != nil {
+		t.Fatalf("Register(wiring.NewRealDriver()): unexpected error: %v", err)
 	}
 	if got := r.Models(); len(got) != 1 {
 		t.Fatalf("Models() = %v, want exactly one registered model", got)
