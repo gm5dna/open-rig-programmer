@@ -20,12 +20,14 @@ import (
 func cmdPorts(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("ports", flag.ContinueOnError)
 	fs.SetOutput(io.Discard) // this function owns all usage/error output.
+	fake := fs.Bool("fake", false, "not accepted by ports; use \"rigprog probe --fake\" instead")
 
-	// No --fake flag is registered: it is simply an unrecognised flag,
-	// refused by fs.Parse itself like any other — the usage text below
-	// (portsUsageText) already explains why ("--fake is not accepted").
 	if ok, code := parseArgs(fs, args, "ports", printPortsUsage, stdout, stderr); !ok {
 		return code
+	}
+	if *fake {
+		fmt.Fprintln(stderr, "rigprog ports: --fake is not accepted (ports enumerates real serial devices only; use \"rigprog probe --fake\" to exercise the simulator)")
+		return exitUsage
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "rigprog ports: unexpected argument %q\n", fs.Arg(0))
