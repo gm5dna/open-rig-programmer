@@ -501,3 +501,30 @@ func TestValidate_NegativeBaudRejected(t *testing.T) {
 		t.Errorf("Validate() error = %q, want it to mention the negative entry", err)
 	}
 }
+
+// TestValidXxxRangeChecksCoverExactlyTheDeclaredEnum pins each validXxx
+// range check's upper bound to a literal cardinality. validSupport,
+// validShiftDirection, validDuplexDirection, validToneModeSemantics and
+// validToneSemantics all became `v >= low && v <= high` range checks
+// (finding 47) instead of an explicit case list — correct only as long as
+// `high` really is the LAST declared constant. A constant inserted before
+// it would shift its iota value with no compiler error, silently
+// widening or narrowing what the range admits; this pins that value so
+// such an insertion fails loudly here instead.
+func TestValidXxxRangeChecksCoverExactlyTheDeclaredEnum(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		last int
+		want int
+	}{
+		{"Support (validSupport, ConsentedUnverified)", int(ConsentedUnverified), 4},
+		{"ShiftDirection (validShiftDirection, ShiftDown)", int(ShiftDown), 3},
+		{"DuplexDirection (validDuplexDirection, DuplexDown)", int(DuplexDown), 3},
+		{"ToneModeSemantics (validToneModeSemantics, ToneModeCross)", int(ToneModeCross), 6},
+		{"ToneSemantics (validToneSemantics, ToneDCSEncode)", int(ToneDCSEncode), 5},
+	} {
+		if tc.last != tc.want {
+			t.Errorf("%s = %d, want %d — a constant was inserted or removed; update both this pin and the range check's bound deliberately", tc.name, tc.last, tc.want)
+		}
+	}
+}

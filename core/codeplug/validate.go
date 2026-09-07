@@ -515,26 +515,28 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 		})
 	}
 
-	// validFor pairs TierFields' order with each field's OWN validation
-	// call, in TierFields order. This cannot live in the shared table
-	// (see TierFields' doc comment): every field asks a different
-	// question of caps, from no arguments (TxFreqHz) to a vocabulary
-	// (Duplex) to the whole Capabilities (ToneTx) to a second check
-	// beyond Valid (ProgramTuningStepHz).
-	validFor := [len(TierFields)]func() error{
-		func() error { return d.TxFreqHz.Valid() },
-		func() error { return d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)) },
-		func() error { return d.OffsetHz.Valid() },
-		func() error { return d.ToneMode.Valid(toneModeValues(caps.ToneModes)) },
-		func() error { return d.ToneTx.Valid(caps) },
-		func() error { return d.ToneRx.Valid(caps) },
-		func() error { return d.DTCSCode.Valid(caps.DTCSCodes) },
-		func() error { return d.DTCSPolarity.Valid(caps.DTCSPolarities) },
-		func() error { return d.Filter.Valid(caps.Filters) },
-		func() error { return d.DataMode.Valid() },
-		func() error { return d.TuningStepEnabled.Valid() },
-		func() error { return d.TuningStep.Valid(caps.TuningSteps) },
-		func() error {
+	// validFor pairs each tier field with its OWN validation call, KEYED
+	// BY FIELD rather than by TierFields' position — so a reordering of
+	// that table can never silently pair a field with the wrong
+	// validator. This cannot live in the shared table itself (see
+	// TierFields' doc comment): every field asks a different question of
+	// caps, from no arguments (TxFreqHz) to a vocabulary (Duplex) to the
+	// whole Capabilities (ToneTx) to a second check beyond Valid
+	// (ProgramTuningStepHz).
+	validFor := map[spec.Field]func() error{
+		spec.FieldTxFrequency:       func() error { return d.TxFreqHz.Valid() },
+		spec.FieldDuplex:            func() error { return d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)) },
+		spec.FieldOffset:            func() error { return d.OffsetHz.Valid() },
+		spec.FieldToneMode:          func() error { return d.ToneMode.Valid(toneModeValues(caps.ToneModes)) },
+		spec.FieldToneTx:            func() error { return d.ToneTx.Valid(caps) },
+		spec.FieldToneRx:            func() error { return d.ToneRx.Valid(caps) },
+		spec.FieldDTCSCode:          func() error { return d.DTCSCode.Valid(caps.DTCSCodes) },
+		spec.FieldDTCSPolarity:      func() error { return d.DTCSPolarity.Valid(caps.DTCSPolarities) },
+		spec.FieldFilter:            func() error { return d.Filter.Valid(caps.Filters) },
+		spec.FieldDataMode:          func() error { return d.DataMode.Valid() },
+		spec.FieldTuningStepEnabled: func() error { return d.TuningStepEnabled.Valid() },
+		spec.FieldTuningStep:        func() error { return d.TuningStep.Valid(caps.TuningSteps) },
+		spec.FieldProgramTuningStep: func() error {
 			if err := d.ProgramTuningStepHz.Valid(); err != nil {
 				return err
 			}
@@ -543,17 +545,17 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 			}
 			return nil
 		},
-		func() error { return d.AttenuatorDB.Valid(caps.AttenuatorDB) },
-		func() error { return d.Preamp.Valid(caps.PreampOptions) },
-		func() error { return d.Antenna.Valid(caps.AntennaOptions) },
-		func() error { return d.IPPlus.Valid() },
+		spec.FieldAttenuator: func() error { return d.AttenuatorDB.Valid(caps.AttenuatorDB) },
+		spec.FieldPreamp:     func() error { return d.Preamp.Valid(caps.PreampOptions) },
+		spec.FieldAntenna:    func() error { return d.Antenna.Valid(caps.AntennaOptions) },
+		spec.FieldIPPlus:     func() error { return d.IPPlus.Valid() },
 	}
-	for i, tf := range TierFields {
+	for _, tf := range TierFields {
 		state := *tf.State(&d)
 		if !reachable(tf.Field) {
 			unreachableClaim(tf.Field, state)
 		} else if !absent(tf.Field, state) {
-			add(tf.Field, validFor[i]())
+			add(tf.Field, validFor[tf.Field]())
 		}
 	}
 	return issues
