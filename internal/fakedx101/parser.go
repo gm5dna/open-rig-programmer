@@ -3,6 +3,7 @@
 package fakedx101
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 )
@@ -211,15 +212,6 @@ func mwSettableSlot(kind slotKind) bool {
 }
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
-
-// toUpperASCII folds one ASCII lower-case letter to upper case and leaves
-// every other byte alone. Used on COMMAND NAMES ONLY — see handleFrame.
-func toUpperASCII(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
-	}
-	return b
-}
 
 // --- Field validators (wire level) ---
 //
@@ -864,7 +856,11 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
+	// The fold is bytes.ToUpper, which is Unicode-aware: a body whose first two
+	// bytes are not ASCII comes back re-encoded (U+FFFD) and possibly longer,
+	// so the first two bytes are taken. Such a frame matches no command name
+	// and falls to rejection below either way.
+	cmd := [2]byte(bytes.ToUpper(body[:2])[:2])
 	rest := body[2:]
 
 	switch cmd {

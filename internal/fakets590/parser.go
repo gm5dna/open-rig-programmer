@@ -14,6 +14,11 @@ package fakets590
 // line references here are citations in the sense core/kw/doc.go uses them:
 // they name where the chart is, they are not links.
 
+import (
+	"bytes"
+	"strings"
+)
+
 // --- General framing ---
 
 // rejection is the protocol's one and only NAK, "?;". The book's error table
@@ -136,13 +141,12 @@ func (a *reassembler) push(chunk []byte) []accEvent {
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
+// allDigits reports whether s is a non-empty run of ASCII digits. The
+// predicate is spelt out rather than taken from unicode: a wire field is ASCII
+// or it is not this radio's, and unicode.IsDigit would admit other scripts'
+// decimal digits.
 func allDigits(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if !isDigit(s[i]) {
-			return false
-		}
-	}
-	return len(s) > 0
+	return s != "" && strings.IndexFunc(s, func(r rune) bool { return r < '0' || r > '9' }) < 0
 }
 
 // --- The channel number, and the 50-byte memory record ---
@@ -631,15 +635,6 @@ func (r *Radio) handleAI(body []byte) []byte {
 
 // --- Top-level dispatch ---
 
-// toUpperASCII folds one ASCII lower-case byte to upper case and leaves every
-// other byte alone. Used on COMMAND NAMES ONLY — see handleFrame.
-func toUpperASCII(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
-	}
-	return b
-}
-
 // handleFrame parses one complete, ';'-terminated frame (as produced by
 // reassembler.push) and returns the reply to send: nil for a fire-and-forget
 // success, or a non-nil frame — a real answer, or rejection — otherwise.
@@ -664,7 +659,11 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
+	// The fold is bytes.ToUpper, which is Unicode-aware: a body whose first two
+	// bytes are not ASCII comes back re-encoded (U+FFFD) and possibly longer,
+	// so the first two bytes are taken. Such a frame matches no command name
+	// and falls to rejection below either way.
+	cmd := [2]byte(bytes.ToUpper(body[:2])[:2])
 	rest := body[2:]
 
 	switch cmd {

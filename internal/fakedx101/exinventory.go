@@ -199,7 +199,7 @@ func parseB(data []byte) ([]row, error) {
 			return nil, fmt.Errorf("line %d (%s %s / %s): %w", line, rec[colP1], rec[colP2], rec[colName], err)
 		}
 		out = append(out, row{
-			p1: twoDigits(p1), p2: twoDigits(p2), p1Label: p1Label, p2Label: p2Label,
+			p1: fmt.Sprintf("%02d", p1), p2: fmt.Sprintf("%02d", p2), p1Label: p1Label, p2Label: p2Label,
 			p3: p3, token: token, line: line,
 		})
 	}
@@ -335,13 +335,6 @@ func parseTwoDigit(s string) (int, error) {
 	}
 	return int(s[0]-'0')*10 + int(s[1]-'0'), nil
 }
-
-// twoDigits renders a validated component back to its two-digit wire spelling.
-// It exists so that the wire strings in the output come from the PARSED value
-// rather than from the CSV cell: the two are equal by construction here, and
-// routing them through the parse is what keeps them so if the cell's shape ever
-// widens.
-func twoDigits(n int) string { return string([]byte{byte('0' + n/10), byte('0' + n%10)}) }
 
 // groupRows folds rows into one group per (P1,P2), in file order, and enforces
 // every structural property the compact widths-string form depends on:
