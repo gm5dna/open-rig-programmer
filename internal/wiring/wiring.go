@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Package wiring holds the session-construction plumbing shared by every
-// composition root in this repository (cmd/rigprog, app/) — extracted
-// from cmd/rigprog/wiring.go by task-15 so the GUI (app/) has the exact
-// same registry/driver/session wiring the CLI already proved, rather
-// than a second, independently-drifting copy.
+// composition root in this repository (cmd/rigprog, app/), so the GUI and
+// the CLI share one registry/driver/session wiring rather than two
+// independently-drifting copies.
 //
-// The deliberate structural-exclusivity shape that constrained
-// cmd/rigprog/wiring.go (task-11 brief §3) is preserved EXACTLY here: two
-// fully self-contained session paths — the REAL one (this file:
+// It keeps a deliberate structural-exclusivity shape: two fully
+// self-contained, model-keyed session paths — the REAL one (this file:
 // OpenRealSessionWith, the single implementation, plus OpenRealSessionFor,
 // its zero-option delegate — two exported names over one body) and the
 // SIMULATED one (fake.go's OpenFakeSessionFor) — with no shared helper
@@ -20,27 +18,11 @@
 // — the constraint is about what can be PAIRED, and it is untouched by the
 // second name.
 //
-// EACH registered driver's simulated-profile selector — ft710.Simulated,
-// ftdx10.Simulated since M9c-6, and ftdx101.Simulated since M9d-2 (ONE
-// token for two registered models, since one driver package drives both
-// FTDX101 siblings) — is referenced in exactly ONE non-test
-// .go file repo-wide, fake.go, pinned per driver by internal/guards'
-// TestSimulatedProfileTokensConfinement (extended by task-15 to be
-// repo-wide rather than cmd/rigprog-local; folded from the single-driver
-// guard task-15 extended into this data-driven guard at Task 58, which is
-// why registering a second driver added a table ROW there rather than a
-// second test).
-//
-// Task 39 (the M9a radio-neutral core refactor) generalised this package
-// to model-keyed dispatch: the real path (this file) and
-// OpenFakeSessionFor (fake.go) are the two fully self-contained,
-// model-keyed session paths carrying the structural-exclusivity shape
-// above. They were joined, briefly, by two DefaultModel-only compatibility
-// wrappers (OpenRealSession/OpenFakeSession) so every caller outside this
-// package could compile unchanged; Tasks 40 (cmd/rigprog) and 41 (app/)
-// migrated those callers onto the -For functions, and — once neither had
-// any reference left, confirmed by grep — task 41 deleted the wrappers and
-// their UnexpectedSessionTypeError/UnexpectedFakeSessionTypeError types.
+// EACH registered driver's simulated-profile selector — e.g. ft710.Simulated,
+// ftdx10.Simulated, ftdx101.Simulated (one token for both FTDX101 siblings,
+// since one driver package drives both) — is referenced in exactly ONE
+// non-test .go file repo-wide, fake.go, pinned per driver by
+// internal/guards' TestSimulatedProfileTokensConfinement.
 package wiring
 
 import (
@@ -78,16 +60,14 @@ import (
 // use when a caller has not (or cannot yet) name a model explicitly: the
 // FALLBACK model, not the only registrable one. cmd/rigprog resolves it
 // when --model is absent, and app/ when the frontend passes "" (it has no
-// model picker yet — M9c-6's ledgered exclusion).
+// model picker yet).
 //
 // It stays exactly "FT-710" however many other models are registered:
-// which radio a caller gets by DEFAULT is a compatibility
-// promise about every file, snapshot and journal written before any second
-// model existed (see ResolveSnapshotDir's own model rule), not a statement
-// about how many models this package supports. Changing it would silently
-// re-point every default-model caller at a different radio. That is why
-// this comment carries no registration COUNT: the count has changed twice
-// already (M9c-6, M9d-2) and the promise has not moved.
+// which radio a caller gets by DEFAULT is a compatibility promise about
+// every file, snapshot and journal written before any second model existed
+// (see ResolveSnapshotDir's own model rule), not a statement about how many
+// models this package supports. Changing it would silently re-point every
+// default-model caller at a different radio.
 const DefaultModel = "FT-710"
 
 // FTdx10Model names the FTdx10's realDrivers/fakeDrivers key, which must
@@ -143,7 +123,7 @@ const FTdx101MPModel = "FTdx101MP"
 // string, and a typo in one alone would build a model openable for real
 // but not simulated.
 //
-// THIS IS THE FIRST NON-YAESU REGISTRATION (Wave 4, task R1). The spelling
+// THIS IS THE FIRST NON-YAESU REGISTRATION. The spelling
 // is the manufacturer's own, and it carries the hyphen ic7610.go's own
 // Model() method and Capabilities().Model both declare ("IC-7610", not
 // "IC7610" or "ic7610") — the two agreements TestDriverTableKeysMatchDriverModel
@@ -159,7 +139,7 @@ const IC7610Model = "IC-7610"
 // same string, and a typo in one alone would build a model openable for
 // real but not simulated.
 //
-// THIS IS THE SECOND ICOM REGISTRATION (Wave 4, task R3), and the FIRST
+// THIS IS THE SECOND ICOM REGISTRATION, and the FIRST
 // PAIR — the IC-7300 and IC-7300MK2 register together, in the same
 // commit, over separate driver packages and separate fakes
 // (core/driver/ic7300 / core/driver/ic7300mk2, internal/fakeic7300 /
@@ -181,7 +161,7 @@ const IC7300MK2Model = "IC-7300MK2"
 // equal ic705.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE THIRD ICOM REGISTRATION (Wave 4, task R4), and the FIRST
+// THIS IS THE THIRD ICOM REGISTRATION, and the FIRST
 // SINGLE-MODEL one since the IC-7610: a lone driver package
 // (core/driver/ic705) and a lone fake (internal/fakeic705), on the same
 // one-row footing as IC7610Model above — no sibling, no pairing rationale
@@ -192,7 +172,7 @@ const IC705Model = "IC-705"
 // equal ic9700.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE FOURTH ICOM REGISTRATION (Wave 4, task R5), and the SECOND
+// THIS IS THE FOURTH ICOM REGISTRATION, and the SECOND
 // SINGLE-MODEL one since the IC-705: a lone driver package
 // (core/driver/ic9700) and a lone fake (internal/fakeic9700), on the same
 // one-row footing as IC705Model above — no sibling, no pairing rationale
@@ -210,7 +190,7 @@ const IC9700Model = "IC-9700"
 // equal ic905.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE FIFTH ICOM REGISTRATION (Wave 4, task R6) AND THE LAST OF
+// THIS IS THE FIFTH ICOM REGISTRATION AND THE LAST OF
 // THE TIER: a lone driver package (core/driver/ic905) and a lone fake
 // (internal/fakeic905), on the same one-row footing as IC705Model and
 // IC9700Model above — no sibling, no pairing rationale to restate.
@@ -232,7 +212,7 @@ const IC905Model = "IC-905"
 // like every other Icom constant above, by
 // TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THIS IS THE ADDITIONS TIER'S FIRST REGISTRATION (Tier 4b, Wave 4), and
+// THIS IS THE ADDITIONS TIER'S FIRST REGISTRATION, and
 // the first Icom PAIR SHARING ONE DRIVER PACKAGE: core/driver/ic7851
 // offers New7851 and New7850 over ONE implementation, ONE civ.Profile
 // (core/civ/ic7851) and ONE fake (internal/fakeic7851), with no bare New.
@@ -269,7 +249,7 @@ const (
 // equal ic7760.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THE ADDITIONS TIER'S SECOND REGISTRATION (Tier 4b, Wave 4), and a
+// THE ADDITIONS TIER'S SECOND REGISTRATION, and a
 // SINGLE-ROW one: core/driver/ic7760 has ONE member (its caps.go says so
 // in as many words — "this family has one member"), so there is one
 // constant, one driver package, one civ.Profile and one fake, on the same
@@ -308,7 +288,7 @@ const IC7760Model = "IC-7760"
 // equal ic7100.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
 //
-// THE ADDITIONS TIER'S THIRD REGISTRATION (Tier 4b, Wave 4), and a
+// THE ADDITIONS TIER'S THIRD REGISTRATION, and a
 // single-row one again: core/driver/ic7100 has one member, one civ.Profile
 // and one fake, on the IC-7610's and IC-7760's footing rather than the
 // IC-7851 pair's. It takes its profile as an ARGUMENT
@@ -365,7 +345,7 @@ const IC7100Model = "IC-7100"
 // constant above, by TestDriverTableKeysMatchDriverModel walking both
 // tables.
 //
-// THE ADDITIONS TIER'S FOURTH AND LAST REGISTRATION (Tier 4b, Wave 4),
+// THE ADDITIONS TIER'S FOURTH AND LAST REGISTRATION,
 // and a single-row one: core/driver/icr8600 has one member, one
 // civ.Profile and one fake. It takes its profile as an ARGUMENT
 // (icr8600.New(profile, opts...)), which decides both
@@ -422,15 +402,14 @@ const ICR8600Model = "IC-R8600"
 // same string, and a typo in one alone would build a model openable for
 // real but not simulated.
 //
-// TIER 1's REGISTRATION, and the FIRST YAESU MODEL ADDED SINCE M9d-2 —
-// eleven Icom rows separate it from FTdx101MPModel above. It is a
+// TIER 1's REGISTRATION, the first Yaesu model added after the Icom
+// tiers above. It is a
 // single-row registration on the FTdx10's footing rather than the
 // FTdx101 pair's: core/driver/ft891 has one member, core/cat/ft891 offers
 // one bare Dialect(), and internal/fakeft891 one bare New. The spelling
 // is the manual's own, hyphen included (capability matrix §1.1).
 //
-// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS (plan
-// decision P14, spec erratum S-E2). The Go PACKAGE slug is "ft891" —
+// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS The Go PACKAGE slug is "ft891" —
 // core/driver/ft891, core/cat/ft891, internal/fakeft891, and
 // internal/extable's own profile key. ModelSlug(FT891Model), which is
 // what names this radio's snapshot and journal directory, is "ft-891":
@@ -447,7 +426,7 @@ const ICR8600Model = "IC-R8600"
 // equivalents: this radio reads them by MR alone, and MR's 28-position
 // answer carries neither a tag nor a tag-display flag, so both of those
 // fields take the ZERO FieldSupport there rather than merely an unwritable
-// one (matrix §2.5, plan decision P4). Nothing about registration itself
+// one (matrix §2.5). Nothing about registration itself
 // changes for that; it is app/uispec_test.go's own bank-shape tests that
 // have to say so, not this table.
 //
@@ -468,8 +447,7 @@ const FT891Model = "FT-891"
 // same string, and a typo in one alone would build a model openable for
 // real but not simulated.
 //
-// TIER 1's SECOND REGISTRATION, and the SECOND YAESU MODEL ADDED SINCE
-// M9d-2 — the FT-891's row above is the one it follows. It is a
+// TIER 1's SECOND REGISTRATION, following the FT-891's row above. It is a
 // single-row registration on the FT-891's own footing rather than the
 // FTdx101 pair's: core/driver/ft991a has one member, core/cat/ft991a
 // offers one bare Dialect(), and internal/fakeft991a one bare New. The
@@ -478,8 +456,7 @@ const FT891Model = "FT-891"
 // earlier Yaesu product this project does not support — so it is never a
 // key here and never a fallback for one.
 //
-// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS (plan
-// decision P13, spec erratum S-E2). The Go PACKAGE slug is "ft991a" —
+// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS The Go PACKAGE slug is "ft991a" —
 // core/driver/ft991a, core/cat/ft991a, internal/fakeft991a, and
 // internal/extable's own profile key. ModelSlug(FT991AModel), which is
 // what names this radio's snapshot and journal directory, is "ft-991a":
@@ -500,8 +477,7 @@ const FT891Model = "FT-891"
 // is therefore its static capability set exactly.
 //
 // THE PMS SLOTS ARE THE WIRE NUMBERS "100".."117", not the "P1L".."P9U"
-// every registered sibling uses (plan decision P20, matrix §1.4.2 and
-// §3.13). This dialect's PMSForm is numeric — the pair number never
+// every registered sibling uses (matrix §1.4.2 and §3.13). This dialect's PMSForm is numeric — the pair number never
 // reaches the wire — so those sibling literals are strings this radio's
 // own ParseSlot REFUSES. The radio's own MC legend prints the same slots
 // as "P-1L".."P-9U", and that divergence is TOLD to the user in
@@ -544,7 +520,7 @@ const FT991AModel = "FT-991A"
 // catch.
 //
 // TWO SLUGS EXIST HERE TOO, and they differ from the Go package slug in the
-// same way the FT-891's do (plan decision P2). The PACKAGE slug is "ts590"
+// same way the FT-891's do. The PACKAGE slug is "ts590"
 // — core/driver/ts590, core/kw/ts590, internal/fakets590, and
 // internal/extable's two profile keys "ts590s"/"ts590sg". ModelSlug, which
 // names each radio's snapshot and journal directory, gives "ts-590s" and
@@ -568,10 +544,9 @@ const FT991AModel = "FT-991A"
 // framing outright (matrix §3.1), so this is documentary rather than
 // assumed. stopBitsFor is what carries it to the port, and
 // TestStopBitsFor_EveryKenwoodDriverReportsOne is the pin — including for
-// the TS-480, which is BUILT AND NOT REGISTERED (plan decision P3) and has
-// no constant here at all. That absence is deliberate and is what task 19's
-// three-leg gate makes legible; a TS480Model constant added here without
-// the rest of the ten-edit registration list would be the beginning of a
+// the TS-480, which is BUILT AND NOT REGISTERED and has no constant here
+// at all. That absence is deliberate: a TS480Model constant added here
+// without the rest of its registration would be the beginning of a
 // half-registered radio.
 const (
 	TS590SModel  = "TS-590S"
@@ -587,13 +562,12 @@ const (
 // fake.go's own table for the simulated/demo path), never touching the
 // functions themselves.
 //
-// The FTdx10 (M9c-6 task 6) is the first model added that way, and it was
-// exactly that: this entry, one in fake.go, one radiotext entry, and not a
-// line of the functions below. Every all-registered-models test in this
-// package walks it by existing.
+// The FTdx10 was the first model added that way: this entry, one in
+// fake.go, one radiotext entry, and not a line of the functions below.
+// Every all-registered-models test in this package walks it by existing.
 //
-// The FTdx101D and FTdx101MP (M9d-2 task 7) are the second and third, and
-// they added the same three things EACH. They are SIBLINGS — one driver
+// The FTdx101D and FTdx101MP added the same three things EACH. They are
+// SIBLINGS — one driver
 // package, one dialect config, one simulator, differing in a name and a CAT
 // ID — and they still get two rows here rather than one, because this table
 // is keyed by MODEL and a user selects a radio, not a family. Sharing a row
@@ -1160,7 +1134,7 @@ func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool)
 // the driver's OPTIONAL driver.SerialFramingReporter, and refuse anything
 // it reports other than 1 or 2.
 //
-// STILL NOT A spec.Capabilities FIELD. The M9c-5 (E2) rule — a framing
+// STILL NOT A spec.Capabilities FIELD. The rule — a framing
 // field only with hardware evidence — is untouched, and the six
 // registered Yaesu models still reach the serial layer at
 // transport.DefaultStopBits, because none of them implements the
@@ -1187,7 +1161,7 @@ func stopBitsFor(d driver.Driver) (int, error) {
 	if !ok {
 		// The E2-owed FTdx10 verification is CLOSED, and closed as
 		// SILENCE: that radio's CAT manual makes no framing statement
-		// anywhere (M9c-6 spec D-framing), so 8-N-2 for the FTdx10 is an
+		// anywhere, so 8-N-2 for the FTdx10 is an
 		// ASSUMED entry in core/driver/ftdx10's own register with a named
 		// hardware lift — not a verified fact. Same for the other three.
 		return transport.DefaultStopBits, nil
@@ -1266,8 +1240,8 @@ func ModelSlug(model string) string {
 // filesystem — callers create the directory (mode 0700) on demand.
 //
 // model then decides whether that base directory is used directly or
-// namespaced (task-7, D9): DefaultModel stays at the base directory
-// unchanged — byte-identical to the pre-task-7 behaviour — so every
+// namespaced (D9): DefaultModel stays at the base directory
+// unchanged — byte-identical to the original behaviour — so every
 // snapshot written before per-model subdirectories existed is still
 // found. Any other model gets its own <base>/<model-slug>/
 // subdirectory, applied to an explicit override too, since two models
@@ -1280,10 +1254,9 @@ func ModelSlug(model string) string {
 // prevent.
 //
 // Deliberately duplicated here rather than exported from cmd/rigprog:
-// cmd/rigprog is a cmd-local package app/ must not import (task-15
-// brief §2's Connect bullet); this 3-line rule is cheap enough to
-// restate directly rather than force an import cmd/rigprog was never
-// meant to expose.
+// cmd/rigprog is a cmd-local package app/ must not import; this 3-line
+// rule is cheap enough to restate directly rather than force an import
+// cmd/rigprog was never meant to expose.
 func ResolveSnapshotDir(override, model string) (string, error) {
 	base := override
 	if base == "" {
