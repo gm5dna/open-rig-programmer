@@ -282,7 +282,7 @@ func openSimSession(t *testing.T, opts ...fakeradio.Option) (*fakeradio.Radio, d
 // One consequence of overriding ONLY Capabilities(), noted so no test
 // reads more into a journal than is there: the optional CONCRETE-type
 // interfaces this package reaches for by assertion — MemorySelector
-// (memory_selector.go), regioner (read.go), driver.SettingsReader
+// (memory_selector.go), driver.RegionReporter (read.go), driver.SettingsReader
 // (settings.go) — are not promoted through an embedded interface, so a
 // Service over this wrapper skips the courtesy memory-selection
 // snapshot/restore (no "mc_snapshot"/"mc_restore" lines) and reads a

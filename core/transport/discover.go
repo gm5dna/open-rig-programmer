@@ -3,6 +3,7 @@
 package transport
 
 import (
+	"cmp"
 	"fmt"
 	"sort"
 	"strings"
@@ -139,24 +140,27 @@ func rankPorts(ports []*enumerator.PortDetails) []PortInfo {
 // recording a human-readable Hint for each one that applied.
 func scoreCandidate(p *enumerator.PortDetails) PortInfo {
 	info := PortInfo{
-		Path:        p.Name,
-		Description: candidateDescription(p),
+		Path: p.Name,
+		// Description prefers the USB iProduct string, falling back to
+		// the USB configuration string, or "" if neither is present
+		// (e.g. a non-USB port).
+		Description: cmp.Or(p.Product, p.Configuration),
 		VID:         p.VID,
 		PID:         p.PID,
 		USBSerial:   p.SerialNumber,
 	}
 
 	switch {
-	case eqFold(p.VID, "10C4") && eqFold(p.PID, "EA70"):
+	case strings.EqualFold(p.VID, "10C4") && strings.EqualFold(p.PID, "EA70"):
 		info.Score += scoreCP2105
 		info.Hints = append(info.Hints, fmt.Sprintf("CP2105 VID:PID match (%s:%s) — the dual-UART bridge chip commonly used by FT-710 CAT interfaces", p.VID, p.PID))
-	case eqFold(p.VID, "0403"):
+	case strings.EqualFold(p.VID, "0403"):
 		info.Score += scoreOtherUSBSerial
 		info.Hints = append(info.Hints, "FTDI USB-serial chip (VID 0403) — could be a generic CAT cable")
-	case eqFold(p.VID, "1A86"):
+	case strings.EqualFold(p.VID, "1A86"):
 		info.Score += scoreOtherUSBSerial
 		info.Hints = append(info.Hints, "WCH CH340/CH341 USB-serial chip (VID 1A86) — could be a generic CAT cable")
-	case eqFold(p.VID, "10C4") && eqFold(p.PID, "EA60"):
+	case strings.EqualFold(p.VID, "10C4") && strings.EqualFold(p.PID, "EA60"):
 		info.Score += scoreOtherUSBSerial
 		info.Hints = append(info.Hints, "Silicon Labs CP2102/CP2109 single-UART USB-serial chip (10C4:EA60) — could be a generic CAT cable, but not the CP2105 dual-UART bridge")
 	}
@@ -181,29 +185,6 @@ func scoreCandidate(p *enumerator.PortDetails) PortInfo {
 	}
 
 	return info
-}
-
-// candidateDescription picks PortInfo.Description's source field: the USB
-// iProduct string when available, falling back to the USB configuration
-// string, or "" if neither is present (e.g. a non-USB port).
-func candidateDescription(p *enumerator.PortDetails) string {
-	switch {
-	case p.Product != "":
-		return p.Product
-	case p.Configuration != "":
-		return p.Configuration
-	default:
-		return ""
-	}
-}
-
-// eqFold reports whether a and b are equal, ignoring case — used for
-// VID/PID comparison so a library implementation on some future platform
-// that emits lower-case hex still matches (the darwin implementation this
-// package has been developed against emits upper-case, per
-// enumerator's usb_darwin.go, fmt.Sprintf("%04X", ...)).
-func eqFold(a, b string) bool {
-	return strings.EqualFold(a, b)
 }
 
 // dedupDarwinCallout drops any /dev/tty.SUFFIX entry from infos when a

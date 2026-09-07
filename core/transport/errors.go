@@ -90,9 +90,9 @@ var ErrTimeout = errors.New("transport: timed out waiting for a reply")
 // without touching the port again.
 //
 // When the closure had an underlying cause (a spontaneous disconnect, not
-// an explicit Close call), the error Do/DrainToQuiet actually return is a
-// *PortClosedError wrapping it — errors.Is(err, ErrPortClosed) still holds
-// via its Unwrap.
+// an explicit Close call), the error Do/DrainToQuiet actually return wraps
+// it via fmt.Errorf("%w: %w", ...) — errors.Is(err, ErrPortClosed) and
+// errors.Is(err, cause) both still hold.
 var ErrPortClosed = errors.New("transport: port is closed")
 
 // ErrContaminated means the framing's Accumulator reported a frame
@@ -103,8 +103,8 @@ var ErrPortClosed = errors.New("transport: port is closed")
 // DrainToQuiet call observes a full QuietPeriod of silence and clears the
 // state. See doc.go, "The CONTAMINATED state".
 //
-// The error Do/DrainToQuiet actually return for this condition is a
-// *ContaminatedError wrapping the underlying *FrameTooLongError —
+// The error Do/DrainToQuiet actually return for this condition wraps the
+// underlying *FrameTooLongError via fmt.Errorf("%w: %w", ...) —
 // errors.Is(err, ErrContaminated) still holds via its Unwrap.
 var ErrContaminated = errors.New("transport: port contaminated, awaiting DrainToQuiet")
 
@@ -140,7 +140,7 @@ var ErrInvalidSpec = errors.New("transport: invalid CommandSpec")
 // detect this specific failure mode; the underlying cause the failed
 // drain itself returned (typically ErrPortClosed, or the fresh bounded
 // context's own deadline exceeded if traffic kept resetting the quiet
-// timer) is reachable too — see QuarantineFailedError.
+// timer) is reachable too — see wrapQuarantineFailedErr.
 var ErrQuarantineFailed = errors.New("transport: entry quarantine drain failed, refusing to transmit")
 
 // ErrDisallowedCommand means cmd.Bytes() failed the Engine's injected
@@ -187,89 +187,15 @@ var ErrNoAllowlist = errors.New("transport: engine has no allowlist, refusing to
 // no gate at all.
 var ErrUnconfiguredDialect = errors.New("transport: engine was given an unconfigured dialect, refusing to construct")
 
-// PortClosedError wraps ErrPortClosed with the underlying cause, when one
-// is known: the io error (typically io.EOF) the reader goroutine observed
-// when the port went away on its own. A caller-initiated Engine.Close has
-// no such cause and is reported as the bare ErrPortClosed sentinel instead.
-type PortClosedError struct {
-	// Cause is the I/O error that triggered closure, or nil for an
-	// explicit Engine.Close call.
-	Cause error
-}
-
-// Error implements the error interface.
-func (e *PortClosedError) Error() string {
-	if e.Cause == nil {
-		return ErrPortClosed.Error()
-	}
-	return fmt.Sprintf("%s: %s", ErrPortClosed.Error(), e.Cause.Error())
-}
-
-// Unwrap lets errors.Is(err, ErrPortClosed) match (always), AND lets
-// errors.Is/errors.As reach Cause itself (e.g. errors.Is(err, io.EOF) for a
-// spontaneous disconnect) — both are part of "what this error means",
-// so both are exposed via the multi-error Unwrap form.
-func (e *PortClosedError) Unwrap() []error {
-	if e.Cause == nil {
-		return []error{ErrPortClosed}
-	}
-	return []error{ErrPortClosed, e.Cause}
-}
-
-// ContaminatedError wraps ErrContaminated with the *FrameTooLongError
-// that caused it, so a caller or logger can recover DiscardedLen.
-type ContaminatedError struct {
-	// Cause is the frame-accumulator violation that triggered
-	// contamination. Never nil.
-	Cause *FrameTooLongError
-}
-
-// Error implements the error interface.
-func (e *ContaminatedError) Error() string {
-	return fmt.Sprintf("%s: %s", ErrContaminated.Error(), e.Cause.Error())
-}
-
-// Unwrap lets errors.Is(err, ErrContaminated) match (always), AND lets
-// errors.Is(err, ErrFrameTooLong) reach through Cause — both are part
-// of "what this error means", so both are exposed via the multi-error
-// Unwrap form.
-func (e *ContaminatedError) Unwrap() []error {
-	return []error{ErrContaminated, e.Cause}
-}
-
-// QuarantineFailedError wraps ErrQuarantineFailed with the error the
-// failed entry-time suspect drain itself returned (see Engine.Do).
-type QuarantineFailedError struct {
-	// Cause is the error the failed drain-to-quiet call returned. Never
-	// nil in practice — wrapQuarantineFailedErr falls back to the bare
-	// sentinel if it ever would be.
-	Cause error
-}
-
-// Error implements the error interface.
-func (e *QuarantineFailedError) Error() string {
-	return fmt.Sprintf("%s: %s", ErrQuarantineFailed.Error(), e.Cause.Error())
-}
-
-// Unwrap lets errors.Is(err, ErrQuarantineFailed) match (always), AND
-// lets errors.Is/errors.As reach Cause itself (e.g. errors.Is(err,
-// ErrPortClosed) when the port went away mid-drain) — both are part of
-// "what this error means", so both are exposed via the multi-error
-// Unwrap form.
-func (e *QuarantineFailedError) Unwrap() []error {
-	return []error{ErrQuarantineFailed, e.Cause}
-}
-
 // wrapQuarantineFailedErr builds the error Do returns when its entry-time
 // suspect drain fails, given the error that drain itself returned. If
 // cause is nil (defensive: should not happen in practice), it falls back
-// to the bare sentinel rather than constructing a struct with a nil Cause
-// that would panic on Error().
+// to the bare sentinel rather than wrapping a nil error.
 func wrapQuarantineFailedErr(cause error) error {
 	if cause == nil {
 		return ErrQuarantineFailed
 	}
-	return &QuarantineFailedError{Cause: cause}
+	return fmt.Errorf("%w: %w", ErrQuarantineFailed, cause)
 }
 
 // wrapClosedErr builds the error Do/DrainToQuiet return for a closed
@@ -278,18 +204,17 @@ func wrapClosedErr(cause error) error {
 	if cause == nil {
 		return ErrPortClosed
 	}
-	return &PortClosedError{Cause: cause}
+	return fmt.Errorf("%w: %w", ErrPortClosed, cause)
 }
 
 // wrapContaminatedErr builds the error Do/DrainToQuiet return for a
 // contamination event, given the *FrameTooLongError that caused it. If
 // cause is nil (defensive: should not happen in practice — every caller
 // passes the FrameTooLongError that triggered contamination), it falls back
-// to the bare sentinel rather than constructing a struct with a nil Cause
-// that would panic on Error().
+// to the bare sentinel rather than wrapping a nil error.
 func wrapContaminatedErr(cause *FrameTooLongError) error {
 	if cause == nil {
 		return ErrContaminated
 	}
-	return &ContaminatedError{Cause: cause}
+	return fmt.Errorf("%w: %w", ErrContaminated, cause)
 }

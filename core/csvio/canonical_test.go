@@ -24,12 +24,12 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 			{Value: "DUP-AUTO", Direction: spec.DuplexDown},
 			{Value: "DUP-", Direction: spec.DuplexDown, Canonical: true},
 		}}
-		got, ok := duplexFor(caps, spec.DuplexDown)
+		got, ok := caps.CanonicalDuplexOption(spec.DuplexDown)
 		if !ok {
-			t.Fatal("duplexFor found no option for DuplexDown")
+			t.Fatal("CanonicalDuplexOption found no option for DuplexDown")
 		}
 		if got != "DUP-" {
-			t.Errorf("duplexFor = %q, want %q — the canonical entry, not the first declared", got, "DUP-")
+			t.Errorf("CanonicalDuplexOption = %q, want %q — the canonical entry, not the first declared", got, "DUP-")
 		}
 	})
 
@@ -37,9 +37,9 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 		caps := spec.Capabilities{DuplexOptions: []spec.DuplexOption{
 			{Value: "DUP+", Direction: spec.DuplexUp},
 		}}
-		got, ok := duplexFor(caps, spec.DuplexUp)
+		got, ok := caps.CanonicalDuplexOption(spec.DuplexUp)
 		if !ok || got != "DUP+" {
-			t.Errorf("duplexFor = %q, %v; want %q, true", got, ok, "DUP+")
+			t.Errorf("CanonicalDuplexOption = %q, %v; want %q, true", got, ok, "DUP+")
 		}
 	})
 
@@ -47,8 +47,8 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 		caps := spec.Capabilities{DuplexOptions: []spec.DuplexOption{
 			{Value: "OFF", Direction: spec.DuplexOff},
 		}}
-		if got, ok := duplexFor(caps, spec.DuplexUp); ok {
-			t.Errorf("duplexFor = %q, true; want the not-found answer", got)
+		if got, ok := caps.CanonicalDuplexOption(spec.DuplexUp); ok {
+			t.Errorf("CanonicalDuplexOption = %q, true; want the not-found answer", got)
 		}
 	})
 
@@ -61,8 +61,8 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 			{Value: "DUP-A", Direction: spec.DuplexDown},
 			{Value: "DUP-B", Direction: spec.DuplexDown},
 		}}
-		if got, ok := duplexFor(caps, spec.DuplexDown); ok {
-			t.Errorf("duplexFor = %q, true; want the not-found answer for an ambiguous vocabulary", got)
+		if got, ok := caps.CanonicalDuplexOption(spec.DuplexDown); ok {
+			t.Errorf("CanonicalDuplexOption = %q, true; want the not-found answer for an ambiguous vocabulary", got)
 		}
 	})
 
@@ -75,8 +75,8 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 			{Value: "DUP-A", Direction: spec.DuplexDown, Canonical: true},
 			{Value: "DUP-B", Direction: spec.DuplexDown, Canonical: true},
 		}}
-		if got, ok := duplexFor(caps, spec.DuplexDown); ok {
-			t.Errorf("duplexFor = %q, true; want the not-found answer for a table that marks two answers", got)
+		if got, ok := caps.CanonicalDuplexOption(spec.DuplexDown); ok {
+			t.Errorf("CanonicalDuplexOption = %q, true; want the not-found answer for a table that marks two answers", got)
 		}
 	})
 
@@ -85,8 +85,8 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 			{Value: "TONE-A", Semantics: spec.ToneModeCTCSS, Canonical: true},
 			{Value: "TONE-B", Semantics: spec.ToneModeCTCSS, Canonical: true},
 		}}
-		if got, ok := toneModeFor(caps, spec.ToneModeCTCSS); ok {
-			t.Errorf("toneModeFor = %q, true; want the not-found answer", got)
+		if got, ok := caps.CanonicalToneMode(spec.ToneModeCTCSS); ok {
+			t.Errorf("CanonicalToneMode = %q, true; want the not-found answer", got)
 		}
 	})
 
@@ -95,12 +95,12 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 			{Value: "TONE-ALT", Semantics: spec.ToneModeCTCSS},
 			{Value: "TONE", Semantics: spec.ToneModeCTCSS, Canonical: true},
 		}}
-		got, ok := toneModeFor(caps, spec.ToneModeCTCSS)
+		got, ok := caps.CanonicalToneMode(spec.ToneModeCTCSS)
 		if !ok {
-			t.Fatal("toneModeFor found no mode for ToneModeCTCSS")
+			t.Fatal("CanonicalToneMode found no mode for ToneModeCTCSS")
 		}
 		if got != "TONE" {
-			t.Errorf("toneModeFor = %q, want %q — the canonical entry, not the first declared", got, "TONE")
+			t.Errorf("CanonicalToneMode = %q, want %q — the canonical entry, not the first declared", got, "TONE")
 		}
 	})
 
@@ -108,9 +108,9 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 		caps := spec.Capabilities{ToneModes: []spec.ToneMode{
 			{Value: "TSQL", Semantics: spec.ToneModeCTCSSSquelch},
 		}}
-		got, ok := toneModeFor(caps, spec.ToneModeCTCSSSquelch)
+		got, ok := caps.CanonicalToneMode(spec.ToneModeCTCSSSquelch)
 		if !ok || got != "TSQL" {
-			t.Errorf("toneModeFor = %q, %v; want %q, true", got, ok, "TSQL")
+			t.Errorf("CanonicalToneMode = %q, %v; want %q, true", got, ok, "TSQL")
 		}
 	})
 
@@ -119,8 +119,8 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 			{Value: "TONE-A", Semantics: spec.ToneModeCTCSS},
 			{Value: "TONE-B", Semantics: spec.ToneModeCTCSS},
 		}}
-		if got, ok := toneModeFor(caps, spec.ToneModeCTCSS); ok {
-			t.Errorf("toneModeFor = %q, true; want the not-found answer for an ambiguous vocabulary", got)
+		if got, ok := caps.CanonicalToneMode(spec.ToneModeCTCSS); ok {
+			t.Errorf("CanonicalToneMode = %q, true; want the not-found answer for an ambiguous vocabulary", got)
 		}
 	})
 }
