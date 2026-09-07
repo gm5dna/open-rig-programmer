@@ -480,7 +480,7 @@ func TestMW_StoresAToneIndexOutsideThePrintedRange(t *testing.T) {
 func TestMW_AcceptsByte28EitherWayOnBothRows(t *testing.T) {
 	for _, row := range []Row{RowS, RowSG} {
 		for _, filter := range []byte{'0', '1'} {
-			r, conn := newTestRadio(t, row, WithFirmwareVersion("1.00"))
+			r, conn := newTestRadio(t, row)
 			f := newRecordFrame("MW", '0', '0', "07")
 			f.filter = filter
 			writeFrame(t, conn, f.String())
@@ -597,5 +597,25 @@ func TestMC_SelectsAnEmptyChannel(t *testing.T) {
 	assertNoReply(t, conn)
 	if got := r.CurrentChannel(); got != 55 {
 		t.Errorf("CurrentChannel = %d, want 55", got)
+	}
+}
+
+// TestUpperASCII_LeavesNonASCIIAlone pins the fold against the swap that broke
+// it: bytes.ToUpper is Unicode-aware and changes the LENGTH of what it is
+// given — "\u0131" is the two bytes C4 B1 and uppercases to the one byte "I" —
+// so a two-byte command name built from its result can panic on line noise,
+// and a non-ASCII byte comes back rewritten. This fold touches ASCII and
+// nothing else.
+func TestUpperASCII_LeavesNonASCIIAlone(t *testing.T) {
+	for _, tt := range []struct{ in, want [2]byte }{
+		{[2]byte{'m', 'r'}, [2]byte{'M', 'R'}},
+		{[2]byte{'M', 'r'}, [2]byte{'M', 'R'}},
+		{[2]byte{0xC4, 0xB1}, [2]byte{0xC4, 0xB1}},
+		{[2]byte{0x80, 'a'}, [2]byte{0x80, 'A'}},
+		{[2]byte{'{', '`'}, [2]byte{'{', '`'}},
+	} {
+		if got := upperASCII(tt.in); got != tt.want {
+			t.Errorf("upperASCII(% 02X) = % 02X, want % 02X", tt.in, got, tt.want)
+		}
 	}
 }

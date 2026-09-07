@@ -4,6 +4,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
 const RecordLen = 25
@@ -23,16 +25,15 @@ const (
 type MemState struct{ Raw []byte }
 
 type Radio struct {
-	host, fake                 net.Conn
-	addr                       byte
-	model                      string
-	recordLen                  int
-	emptyFF, echo, shortSetAck bool
-	mu                         sync.Mutex
-	slots                      map[int][]byte
-	done                       chan struct{}
-	once                       sync.Once
-	wg                         sync.WaitGroup
+	// pipe is internal/fakepipe: the net.Pipe pair and the goroutines
+	// servicing it, protocol-free (see doc.go).
+	pipe          *fakepipe.Pipe
+	addr          byte
+	model         string
+	recordLen     int
+	emptyFF, echo bool
+	mu            sync.Mutex
+	slots         map[int][]byte
 }
 
 func New(opts ...Option) *Radio {
@@ -40,26 +41,18 @@ func New(opts ...Option) *Radio {
 	for _, o := range opts {
 		o(&c)
 	}
-	h, f := net.Pipe()
-	r := &Radio{host: h, fake: f, addr: c.addr, model: c.model, recordLen: c.recordLen, emptyFF: c.emptyFF, echo: c.echo, shortSetAck: c.shortSetAck, slots: c.channels, done: make(chan struct{})}
-	r.wg.Add(1)
-	go r.serve()
+	r := &Radio{pipe: fakepipe.New(), addr: c.addr, model: c.model, recordLen: c.recordLen, emptyFF: c.emptyFF, echo: c.echo, slots: c.channels}
+	r.serve()
 	if c.flood > 0 {
-		r.wg.Add(1)
-		go r.floodLoop(0, c.flood)
+		r.pipe.Go(func() { r.floodLoop(0, c.flood) })
 	}
 	if c.addressed > 0 {
-		r.wg.Add(1)
-		go r.floodLoop(0xe0, c.addressed)
+		r.pipe.Go(func() { r.floodLoop(0xe0, c.addressed) })
 	}
 	return r
 }
-func (r *Radio) Port() net.Conn { return r.host }
-func (r *Radio) Close() error {
-	r.once.Do(func() { close(r.done); _ = r.fake.Close() })
-	r.wg.Wait()
-	return nil
-}
+func (r *Radio) Port() net.Conn { return r.pipe.Host() }
+func (r *Radio) Close() error   { return r.pipe.Close() }
 func (r *Radio) SetSlot(addr string, record []byte) {
 	ch, ok := parseChannel(addr)
 	if !ok || len(record) != r.recordLen {
@@ -87,27 +80,21 @@ func (r *Radio) ClearSlot(addr string) {
 	}
 }
 func (r *Radio) serve() {
-	defer r.wg.Done()
 	a := &reassembler{}
-	b := make([]byte, 4096)
-	for {
-		n, e := r.fake.Read(b)
-		if n > 0 {
-			for _, f := range a.push(b[:n]) {
+	r.pipe.Go(func() {
+		r.pipe.ReadLoop(func(b []byte) {
+			for _, f := range a.push(b) {
 				r.dispatch(f)
 			}
-		}
-		if e != nil {
-			return
-		}
-	}
+		})
+	})
 }
 func (r *Radio) dispatch(f wireFrame) {
 	// Echo is a property of the link, not of the addressing: a linked
 	// USB/REMOTE pair echoes whatever it carried, including frames this radio
 	// will not answer. So it happens before both filters below.
 	if r.echo {
-		_, _ = r.fake.Write(f.raw)
+		r.pipe.WriteNow(f.raw)
 	}
 	if f.to != r.addr {
 		return
@@ -121,7 +108,7 @@ func (r *Radio) dispatch(f wireFrame) {
 		return
 	}
 	if v := r.handle(f); v != nil {
-		_, _ = r.fake.Write(v)
+		r.pipe.WriteNow(v)
 	}
 }
 func (r *Radio) handle(f wireFrame) []byte {
@@ -195,10 +182,11 @@ func (r *Radio) memory(f wireFrame, p []byte) []byte {
 		}
 		return r.answer(f, append([]byte{0x1a, 0, p[1], p[2]}, b...)...)
 	}
+	// A short set, and the printed one-byte clear form, are both refused. The
+	// open edge is registered as ic7851-write-ack-fb; a
+	// WithShortSetAcknowledgement option modelled the other reading until
+	// 06/09/2026 and nothing ever called it.
 	if len(rest) == 1 && rest[0] == 0xff || len(rest) != r.recordLen {
-		if r.shortSetAck && len(rest) > 1 && !(len(rest) == 1 && rest[0] == 0xff) {
-			return r.answer(f, 0xfb)
-		}
 		return r.answer(f, 0xfa)
 	}
 	r.mu.Lock()
@@ -207,14 +195,13 @@ func (r *Radio) memory(f wireFrame, p []byte) []byte {
 	return r.answer(f, 0xfb)
 }
 func (r *Radio) floodLoop(to byte, d time.Duration) {
-	defer r.wg.Done()
 	t := time.NewTicker(d)
 	defer t.Stop()
 	for {
 		select {
 		case <-t.C:
-			_, _ = r.fake.Write(buildFrame(to, r.addr, append([]byte{0x19, 0}, []byte(r.model)...)...))
-		case <-r.done:
+			r.pipe.WriteNow(buildFrame(to, r.addr, append([]byte{0x19, 0}, []byte(r.model)...)...))
+		case <-r.pipe.Done():
 			return
 		}
 	}

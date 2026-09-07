@@ -18,22 +18,18 @@ import (
 // RULE, and its "sibling, not a refactor" section), and because that copy is
 // itself internal/fakeradio's COPIED AND EXTENDED: fakeradio's version is
 // NON-RECURSIVE, using parser.ParseDir("."), which reads one directory and
-// stops.
-//
-// That is a real hole here, not a stylistic one. internal/fakedx101/gen/ is a
-// stdlib-only generator that must be inside the fence — it is the piece most
-// likely to reach for internal/extable, the A-side machinery whose Digits
-// parsing was a known defect locus, which is exactly the import this package
-// must not have (one parser on both sides of the EX cross-check would reproduce
-// a shared parsing bug into both inventories invisibly).
-//
-// THE FENCE LANDED WITH THE PACKAGE CORE, BEFORE THAT SUBDIRECTORY EXISTED, so
-// that the generator arrived inside a fence rather than in front of one, and
-// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proved it
-// would bite before the directory was there — the same order internal/fakedx10
-// took, and the reason its own fence was already standing when its gen/ landed.
-// That subdirectory now exists, so TestNoCoreImports below scans it for real as
-// well.
+// stops.//
+// THE SCAN IS RECURSIVE, and that is not a stylistic preference: this package
+// once carried a stdlib-only generator in gen/, the piece most likely to reach
+// for internal/extable — the A-side machinery whose Digits parsing was a known
+// defect locus, and exactly the import this package must not have, because one
+// parser on both sides of the EX cross-check would reproduce a shared parsing
+// bug into both inventories invisibly. That generator is gone (the CSV is
+// embedded and projected in exinventory.go since 06/09/2026) and no
+// subdirectory remains, but the fence stays recursive so that the next one to
+// arrive lands inside it rather than in front of it.
+// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory below is the
+// fence's own red proof, run green, against a temporary tree of its own making.
 
 // modulePrefix is this project's module path (go.mod: "module
 // github.com/gm5dna/open-rig-programmer") — NOT the repository directory name
@@ -46,8 +42,19 @@ const modulePrefix = "github.com/gm5dna/open-rig-programmer/"
 // isForbiddenImport reports whether path is a project-internal import — which
 // fakedx101 must never have, in this directory or any beneath it (see doc.go,
 // THE HARD RULE): it may depend only on the standard library.
+// fakepipeImport is the ONE project-internal import this package may have.
+//
+// internal/fakepipe is PROTOCOL-FREE plumbing — the net.Pipe pair, the
+// goroutine bookkeeping, the interruptible latency wait, the raw write — and
+// nothing else: not a framing byte, not a field layout, not a reply. It is the
+// single share Stuart permitted on 06/09/2026, and it is safe precisely
+// because a bug in it cannot make a wrong codec look right; it can only stop
+// bytes moving, which this package's own tests notice at once. Everything
+// above the wire stays here, written independently (see doc.go).
+const fakepipeImport = modulePrefix + "internal/fakepipe"
+
 func isForbiddenImport(path string) bool {
-	return strings.HasPrefix(path, modulePrefix)
+	return path != fakepipeImport && strings.HasPrefix(path, modulePrefix)
 }
 
 // TestIsForbiddenImport pins isForbiddenImport's behaviour directly,
@@ -69,6 +76,7 @@ func TestIsForbiddenImport(t *testing.T) {
 		{"internal/fakedx10 — this package's structural exemplar, equally forbidden", "github.com/gm5dna/open-rig-programmer/internal/fakedx10", true},
 		{"internal/extable — gen/ must not reach for it", "github.com/gm5dna/open-rig-programmer/internal/extable", true},
 		{"fakedx101 itself", "github.com/gm5dna/open-rig-programmer/internal/fakedx101", true},
+		{"internal/fakepipe — protocol-free plumbing, the one permitted share", fakepipeImport, false},
 		{"stdlib", "io", false},
 		{"stdlib nested", "go/parser", false},
 		{"third party", "github.com/wailsapp/wails/v2", false},
@@ -218,16 +226,13 @@ func fenceTestTree(t *testing.T) string {
 
 // TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory is the
 // fence's own red proof, run green: it proves the scan WOULD bite a violation
-// placed where the EX generator will live, and that it bites there and nowhere
+// placed in a subdirectory, and that it bites there and nowhere
 // else — the _test.go file beside it and the testdata fixture are both skipped
 // by design.
 //
-// It is the whole reason this file landed a task BEFORE gen/ did: the fence
-// was proven effective against a subdirectory that did not exist yet. gen/
-// exists now (M9d-2 task 6 built it), so the proof is no longer about an
-// absent directory — but the fixture tree below is still synthetic and still
-// independent of the real gen/, which is what keeps this test a check on the
-// SCAN rather than on whatever gen/ happens to import today.
+// It is what keeps the fence meaningful with no subdirectory present at all,
+// which is the whole reason the recursive form is a property of the SCAN rather
+// than of whatever happens to sit beside it.
 func TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory(t *testing.T) {
 	root := fenceTestTree(t)
 

@@ -15,6 +15,10 @@ package fakeft891
 // line references here are citations in the sense core/cat/ft891/doc.go uses
 // them: they name where the chart is, they are not links.
 
+import (
+	"strings"
+)
+
 // --- General framing ---
 
 // rejection is the protocol's one and only NAK, "?;" — an unattributed
@@ -649,7 +653,7 @@ func (r *Radio) handleMT(body []byte) []byte {
 		// HW-confirmed rejection of a ZERO-BYTE tag Set has no analogue: a
 		// 41-byte frame always carries the full 12-byte field, so the shape
 		// does not exist on this radio to accept or refuse.
-		s.Tag = trimRightBytes(string(field), tagFill)
+		s.Tag = strings.TrimRight(string(field), string(tagFill))
 
 		r.mu.Lock()
 		defer r.mu.Unlock()
@@ -665,21 +669,6 @@ func (r *Radio) handleMT(body []byte) []byte {
 		return nil // fire-and-forget success
 	}
 	return rejection
-}
-
-// trimRightBytes returns s without its trailing runs of cut.
-//
-// strings.TrimRight would do, and this package could import strings — the
-// hard rule forbids project-internal imports, not the standard library. It is
-// four lines here so that the tag's trimming rule is visible beside the
-// storage decision it implements rather than behind a call whose second
-// argument is a cutset rather than a byte.
-func trimRightBytes(s string, cut byte) string {
-	end := len(s)
-	for end > 0 && s[end-1] == cut {
-		end--
-	}
-	return s[:end]
 }
 
 // --- MR: MEMORY CHANNEL READ (availability 164; frames 959-979) ---
@@ -845,13 +834,22 @@ func (r *Radio) handleMC(body []byte) []byte {
 
 // --- Top-level dispatch ---
 
-// toUpperASCII folds one ASCII lower-case byte to upper case and leaves every
-// other byte alone. Used on COMMAND NAMES ONLY — see handleFrame.
-func toUpperASCII(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
+// upperASCII folds the two ASCII bytes of a command name to upper case and
+// leaves every other byte alone.
+//
+// NOT bytes.ToUpper or strings.ToUpper: those are Unicode-aware, so a body
+// carrying arbitrary line noise comes back re-encoded and of a DIFFERENT
+// LENGTH — longer for an invalid byte (U+FFFD), shorter for a valid sequence
+// that case-folds to fewer bytes ("\u0131" is two bytes and uppercases to one).
+// A fake whose whole job is byte-exact wire behaviour folds ASCII and touches
+// nothing else.
+func upperASCII(name [2]byte) [2]byte {
+	for i, b := range name {
+		if b >= 'a' && b <= 'z' {
+			name[i] = b - 'a' + 'A'
+		}
 	}
-	return b
+	return name
 }
 
 // handleFrame parses one complete, ';'-terminated frame (as produced by
@@ -883,7 +881,7 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
+	cmd := upperASCII([2]byte{body[0], body[1]})
 	rest := body[2:]
 
 	switch cmd {

@@ -40,7 +40,7 @@ type Option func(*Radio)
 // without a multi-second teardown — TestClose_IsPromptDespiteAPendingLatency.
 func WithLatency(d time.Duration) Option {
 	return func(r *Radio) {
-		r.latency = d
+		r.pipe.Latency = d
 	}
 }
 

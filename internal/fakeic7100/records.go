@@ -231,8 +231,9 @@ func describeAddress(addr []byte) string {
 // 5f–51f to match your transceiver. We recommend that you set the same data as
 // (5)–(51)." The document says the data ARE the same and RECOMMENDS entering
 // them; it never says what the radio does with a set whose blocks differ. That
-// is an assumption, it is registered, and WithUnequalTransmitBlockAccepted
-// turns it off. See doc.go, entry 6 (ic7100-tx-block-mandatory).
+// is an assumption and it is registered — see doc.go, entry 6
+// (ic7100-tx-block-mandatory). It was a knob until 06/09/2026; no driver was
+// ever built against the other reading.
 func txBlockMatchesRX(record []byte) bool {
 	if len(record) != recordLength {
 		return false

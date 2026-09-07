@@ -13,7 +13,45 @@ import (
 
 const modulePrefix = "github.com/gm5dna/open-rig-programmer/"
 
-func isForbiddenImport(path string) bool { return strings.HasPrefix(path, modulePrefix) }
+// fakepipeImport is the ONE project-internal import this package may have.
+//
+// internal/fakepipe is PROTOCOL-FREE plumbing — the net.Pipe pair, the
+// goroutine bookkeeping, the interruptible latency wait, the raw write — and
+// nothing else: not a framing byte, not a field layout, not a reply. It is the
+// single share Stuart permitted on 06/09/2026, and it is safe precisely
+// because a bug in it cannot make a wrong codec look right; it can only stop
+// bytes moving, which this package's own tests notice at once. Everything
+// above the wire stays here, written independently (see doc.go).
+const fakepipeImport = modulePrefix + "internal/fakepipe"
+
+func isForbiddenImport(path string) bool {
+	return path != fakepipeImport && strings.HasPrefix(path, modulePrefix)
+}
+
+// TestIsForbiddenImport pins the predicate directly, including the one
+// carve-out and the mistake that would make the scan pass vacuously (matching
+// the repo directory name instead of the module path).
+func TestIsForbiddenImport(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"core/civ", "github.com/gm5dna/open-rig-programmer/core/civ", true},
+		{"internal/fakeradio — a sibling fake, deliberately not shared", "github.com/gm5dna/open-rig-programmer/internal/fakeradio", true},
+		{"internal/fakepipe — protocol-free plumbing, the one permitted share", fakepipeImport, false},
+		{"stdlib", "io", false},
+		{"repo dir name is not the module path", "ft710-programmer/core/civ", false},
+		{"substring collision, different module", "github.com/someone/open-rig-programmer-fork/core/civ", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isForbiddenImport(tt.path); got != tt.want {
+				t.Errorf("isForbiddenImport(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
 
 type importViolation struct{ file, path string }
 

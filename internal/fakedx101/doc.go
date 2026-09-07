@@ -73,10 +73,10 @@
 // TestNoCoreImports (imports_test.go) enforces it with a go/parser scan, and
 // that scan WALKS SUBDIRECTORIES — internal/fakedx10's deliberate improvement
 // on fakeradio's copy of the same test, whose parser.ParseDir(".") is
-// non-recursive and would leave a generator in gen/ outside the fence entirely.
+// non-recursive and would leave any subdirectory outside the fence entirely.
 // It was copied here IN THE SAME TASK THAT CREATED THE PACKAGE, before any
 // subdirectory existed, precisely so that the fence was already standing when
-// the EX inventory's generator arrived one task later: that generator (gen/) is
+// the EX inventory arrived one task later: the EX projection is
 // the piece the rule bites hardest for, because it must not reach for
 // internal/extable, the machinery that generates the DIALECT's inventory from
 // transcription A — one parser on both sides of the cross-check would reproduce
@@ -132,7 +132,7 @@
 //     explicit `text` column, and a '#'-commented provenance block — so this
 //     package's generator does neither of those things, and refuses a wrapped
 //     label cell outright. The reason is this artefact's own shape, not a
-//     judgement about that one. (gen/main.go; PROVENANCE.md)
+//     judgement about that one. (exinventory.go; PROVENANCE.md)
 //
 // WHY internal/fakedx10 SETTLED THE MIDDLE TWO DIFFERENTLY WAS A QUESTION
 // ABOUT THAT PACKAGE, and the M9d-2 milestone review answered it: that
@@ -162,6 +162,15 @@
 //     banks are OPTIONS a test asks for (With5xx, WithEMG), never regions, and
 //     core/driver/ftdx101 deliberately implements no RegionReporter.
 //   - No fault injection — see the next section.
+//
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
 //
 // # What this fake deliberately does NOT model
 //

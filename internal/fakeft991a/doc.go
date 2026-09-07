@@ -29,7 +29,7 @@
 // internal/fakeradio or any sibling fake. Standard library only, in every
 // non-test file, in this directory AND every directory beneath it. The fence
 // was RECURSIVE FROM BIRTH, ahead of the subdirectory it had to cover:
-// internal/fakeft991a/gen — the stdlib-only generator for this radio's
+// exinventory.go — the stdlib-only generator for this radio's
 // transcription B — is the piece most likely to reach for internal/extable, the
 // A-side machinery whose Digits parsing was a known defect locus, which is
 // exactly the import this package must not have (one parser on both sides of
@@ -38,7 +38,7 @@
 // TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proved the
 // fence would bite there before the directory existed, and now that it does,
 // TestNoCoreImports_ReachesTheGenerator asserts by PATH that the real scan
-// reaches the real gen/main.go.
+// reaches the real exinventory.go.
 //
 // Every byte offset, field width and validation rule below is re-derived from
 // the FT-991A CAT Operation Reference Manual's own position charts (revision
@@ -115,6 +115,15 @@
 //     Its 'E' is C4FM where the FTdx10's is PSK — one nibble, two different
 //     real modes.
 //   - No fault injection, no MW and no EX — see the next section.
+//
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
 //
 // # What this fake deliberately does NOT model
 //
@@ -411,7 +420,7 @@
 //     transcribed, not guessed, including the eight-wide one (151 PRESET
 //     FREQUENCY) that this radio's alphabet had to be widened for — and the
 //     widening is proved from the artefact rather than declared
-//     (gen/main_test.go's TestParseB_TheOnlyEightWideRowIs151, against
+//     (exinventory_test.go's TestParseB_TheOnlyEightWideRowIs151, against
 //     core/cat/ft991a/crosscheck_test.go's widestRowAddr from the other
 //     transcription).
 //     STAGE R LIFTS IT WITH: an EX read sweep of a factory-condition FT-991A.

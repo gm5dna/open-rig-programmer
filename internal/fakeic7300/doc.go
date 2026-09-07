@@ -27,6 +27,15 @@
 // nothing else in this repository. No golden file, no field ledger, no plan and
 // no production source was consulted. record.go carries the derivation.
 //
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
+//
 // # The address is not a literal
 //
 // This radio's default CI-V address is 94 and the controller's is E0, so a

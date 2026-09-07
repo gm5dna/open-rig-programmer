@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-//go:generate go run github.com/gm5dna/open-rig-programmer/internal/fakeft891/gen -csv transcription-b.csv -out exinventory_gen.go
-
 // This file is fakeft891's own, independent model of the FT-891's EX (MENU)
 // command — READ ONLY, exactly as internal/fakedx10 models the FTdx10's and
 // internal/fakeradio the FT-710's: the manual documents a Set form and this
@@ -28,10 +26,10 @@ import (
 //
 //   - the DIALECT's inventory (core/cat/ft891/exinventory_gen.go) is generated
 //     from TRANSCRIPTION A (core/cat/ft891/table2.csv) by internal/extable;
-//   - THIS inventory is generated from TRANSCRIPTION B by internal/fakeft891/gen,
+//   - THIS inventory is generated from TRANSCRIPTION B by exinventory.go,
 //     which imports nothing project-internal at all — not extable, not core/cat
-//     (the recursive fence in imports_test.go enforces it, gen/ included, and
-//     TestNoCoreImports_ReachesTheGenerator proves the scan really gets there);
+//     (the recursive fence in imports_test.go enforces it for this directory
+//     and every one beneath it);
 //   - core/transport/ex_crosscheck_ft891_test.go proves the two agree, address
 //     for address and width for width, and drives every address over the wire.
 //
@@ -75,7 +73,7 @@ import (
 // EXAddressPair, which exists to carry exactly this).
 // Answer frame: "EX" + address(4) + P4(n) + ";", where n is the address's own
 // width: 1-5 raw ASCII digits. There is no text item on this chart, and its
-// transcription carries no column that could describe one (gen/main.go's
+// transcription carries no column that could describe one (exinventory.go's
 // widthToken).
 // Set frame: same shape with a P4 payload — NOT modelled; see handleEX.
 
@@ -100,14 +98,14 @@ const exDefaultDigit = '0'
 // exactly two rows — 0803 OTHER DISP and 0804 OTHER SHIFT, whose signed
 // "-3000 Hz - 0 - +3000 Hz" parameter counts its sign as a digit — and both
 // sides of the evidence pin those two addresses independently:
-// gen/main_test.go's TestParseB_TheOnlyFiveWideRowsAre0803And0804 from B, and
+// exinventory_test.go's TestParseB_TheOnlyFiveWideRowsAre0803And0804 from B, and
 // core/cat/ft891/crosscheck_test.go's widestRowAP1/AP2/BP1/BP2 literals from A.
 //
 // THERE IS NO 'T' TOKEN AND NO exTextWidth. The FTdx10's inventory has a
 // twelve-byte text item (MY CALL.) that answers spaces rather than zeros; this
 // chart has no such row, and — the sharper point — its transcription carries no
 // column from which one could be identified, so the generator refuses a width
-// it cannot classify rather than inventing a token. gen/main.go's widthToken
+// it cannot classify rather than inventing a token. exinventory.go's widthToken
 // states what that does and does not claim.
 const exMaxWidth = 5
 
@@ -118,16 +116,16 @@ const exMaxWidth = 5
 // factory-image constants (image.go). exGroups is a generated package-level
 // table, so a token outside '1'..'5' is a defect in the generator or a
 // hand-edit of its output — a programming error to catch at init, never a
-// runtime input. gen/main.go's widthToken REFUSES to emit one (with the
+// runtime input. exinventory.go's widthToken REFUSES to emit one (with the
 // offending CSV line named, which is why the '5' is proved there rather than
-// discovered here), and gen/main_test.go's staleness check refuses a generated
+// discovered here), and exinventory_test.go's staleness check refuses a generated
 // file that has drifted from the CSV, so reaching this panic means one of those
 // two was bypassed.
 func buildEXDefaults() map[string]string {
 	out := make(map[string]string)
 	for _, g := range exGroups {
 		// Indexed by BYTE, not by rune: g.widths is one ASCII digit per item
-		// (gen/main.go's widthToken, the '1'..'5' alphabet), so a byte index is
+		// (exinventory.go's widthToken, the '1'..'5' alphabet), so a byte index is
 		// the intended item position and `range` over the string would give a
 		// rune index instead — the same value here because the alphabet is
 		// ASCII, but not what the loop means to compute.
@@ -136,7 +134,7 @@ func buildEXDefaults() map[string]string {
 			p2 := fmt.Sprintf("%02d", i+1)
 			addr := exAddr(g.p1, p2)
 			if w < '1' || w > '0'+exMaxWidth {
-				panic(fmt.Sprintf("fakeft891: exGroups P1=%s item %d: malformed width token %q — regenerate with `go generate ./internal/fakeft891`", g.p1, i+1, w))
+				panic(fmt.Sprintf("fakeft891: exGroups P1=%s item %d: malformed width token %q — a defect in this package's projection of transcription B (exinventory.go)", g.p1, i+1, w))
 			}
 			out[addr] = strings.Repeat(string(exDefaultDigit), int(w-'0'))
 		}

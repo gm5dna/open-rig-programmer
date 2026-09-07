@@ -4,9 +4,10 @@ package fakeic7300mk2
 
 import (
 	"io"
-	"net"
 	"sync"
 	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
 // Radio is a simulated Icom IC-7300MK2: an in-memory duplex pipe presenting
@@ -18,15 +19,17 @@ import (
 // Close may all be called from goroutines other than whatever is reading or
 // writing Port() (run the tests with -race).
 type Radio struct {
-	hostConn net.Conn // returned by Port(); the caller's end
-	fakeConn net.Conn // serviced by serve(); the radio's own end
+	// pipe is the in-memory duplex connection and the goroutines servicing
+	// it: internal/fakepipe, the one package the fakes share. It carries the
+	// net.Pipe pair, the interruptible latency wait and the raw write, and NO
+	// protocol at all — see doc.go's "A SIBLING, not a refactor".
+	pipe *fakepipe.Pipe
 
 	// The fields below are populated only while New's options run, before any
 	// goroutine starts, and are never mutated afterwards. They may therefore
 	// be read without mu.
 	addr      byte          // this radio's CI-V address; see WithRadioAddress
 	idToken   []byte        // the 19 00 answer's data area; nil means "the address"
-	latency   time.Duration // per-answer delay
 	echo      bool          // echo every complete frame seen, bus-fashion
 	broadcast time.Duration // WithTransceiveBroadcasts period; 0 disables
 	flood     time.Duration // WithAddressedFlood period; 0 disables
@@ -36,20 +39,10 @@ type Radio struct {
 	received [][]byte
 	sent     [][]byte
 
-	// wmu serialises writes to fakeConn. serve() is not the only writer: the
+	// wmu serialises writes to the radio's pipe end. serve() is not the only writer: the
 	// broadcast and flood goroutines write too, and two interleaved frames
 	// would be an unparseable stream rather than a hard radio to talk to.
 	wmu sync.Mutex
-
-	// shutdown is closed (exactly once, by closePipes) when the radio goes
-	// away. Every wait in this package selects against it instead of calling
-	// bare time.Sleep, so Close never has to wait out a scripted latency or a
-	// broadcast period before its wg.Wait can return.
-	shutdown chan struct{}
-
-	closeOnce sync.Once
-	closeErr  error
-	wg        sync.WaitGroup
 }
 
 // New constructs a simulated IC-7300MK2 and starts its goroutines. The radio
@@ -57,81 +50,38 @@ type Radio struct {
 // FAIL frame until something has been written to it, whether by a 1A 00 set on
 // the wire or by WithChannel / WithRawChannel at construction.
 func New(opts ...Option) *Radio {
-	hostConn, fakeConn := net.Pipe()
 	r := &Radio{
-		hostConn: hostConn,
-		fakeConn: fakeConn,
+		pipe:     fakepipe.New(),
 		addr:     defaultRadioAddr,
 		channels: make(map[string][]byte),
-		shutdown: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)
 	}
 
-	r.wg.Add(1)
-	go r.serve()
+	r.serve()
 
 	if r.broadcast > 0 {
-		r.wg.Add(1)
-		go r.unsolicited(0x00, r.broadcast)
+		r.pipe.Go(func() { r.unsolicited(0x00, r.broadcast) })
 	}
 	if r.flood > 0 {
-		r.wg.Add(1)
-		go r.unsolicited(controllerAddr, r.flood)
+		r.pipe.Go(func() { r.unsolicited(controllerAddr, r.flood) })
 	}
 	return r
 }
 
 // Port returns the HOST end of the fake's in-memory duplex connection.
 // Repeated calls return the same connection.
-func (r *Radio) Port() io.ReadWriteCloser { return r.hostConn }
+func (r *Radio) Port() io.ReadWriteCloser { return r.pipe.Host() }
 
 // Close shuts the fake radio down: it closes the RADIO's own end of the pipe
 // and waits for the servicing goroutines to exit. Safe to call more than once.
 //
-// It deliberately closes only fakeConn, not hostConn. net.Pipe reports
-// io.ErrClosedPipe to a Read or Write made against the end YOU closed, while a
-// Read on the other (still-open) end sees io.EOF — which is exactly the signal
-// a host should get from "the radio went away". Closing hostConn here too
-// would turn that into io.ErrClosedPipe for the caller, a worse signal. A
-// caller that wants to release its own Port() handle may call
-// r.Port().Close().
-func (r *Radio) Close() error {
-	err := r.closePipes()
-	r.wg.Wait()
-	return err
-}
-
-// closePipes is the idempotent, race-safe close of the radio's own pipe end.
-// Factored out of Close() so anything running INSIDE a serving goroutine can
-// shut the pipe without deadlocking on r.wg.
-func (r *Radio) closePipes() error {
-	r.closeOnce.Do(func() {
-		// shutdown FIRST: a goroutine parked in a latency or period wait wakes
-		// immediately, before (or regardless of) noticing the pipe close.
-		close(r.shutdown)
-		r.closeErr = r.fakeConn.Close()
-	})
-	return r.closeErr
-}
-
-// sleepInterruptible waits d, returning early (false) if the radio's shutdown
-// channel closes first. It returns true when the full d genuinely elapsed;
-// d <= 0 returns true at once.
-func (r *Radio) sleepInterruptible(d time.Duration) bool {
-	if d <= 0 {
-		return true
-	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return true
-	case <-r.shutdown:
-		return false
-	}
-}
+// It is prompt despite a scripted latency or a broadcast period, and it
+// deliberately leaves the HOST end open, so a read there sees io.EOF — exactly
+// the signal a host should get from "the radio went away". See
+// internal/fakepipe's Shutdown for why that direction matters.
+func (r *Radio) Close() error { return r.pipe.Close() }
 
 // ---------------------------------------------------------------------------
 // Transcript and stored state
@@ -238,24 +188,17 @@ func (r *Radio) loadChannel(slot string) ([]byte, bool) {
 // The serving goroutines
 // ---------------------------------------------------------------------------
 
-// serve is the Radio's reading goroutine: it reads from fakeConn, reassembles
+// serve starts the Radio's reading goroutine: it reads the pipe, reassembles
 // frames and handles each one.
 func (r *Radio) serve() {
-	defer r.wg.Done()
-
 	acc := &reassembler{max: maxFrameBytes}
-	buf := make([]byte, 512)
-	for {
-		n, err := r.fakeConn.Read(buf)
-		if n > 0 {
-			for _, frame := range acc.push(buf[:n]) {
+	r.pipe.Go(func() {
+		r.pipe.ReadLoop(func(b []byte) {
+			for _, frame := range acc.push(b) {
 				r.handleFrame(frame)
 			}
-		}
-		if err != nil {
-			return
-		}
-	}
+		})
+	})
 }
 
 // handleFrame records one complete frame and answers it if it is addressed to
@@ -282,7 +225,7 @@ func (r *Radio) handleFrame(frame []byte) {
 	if answer == nil {
 		return
 	}
-	if !r.sleepInterruptible(r.latency) {
+	if !r.pipe.Sleep(r.pipe.Latency) {
 		return
 	}
 	r.writeWire(answer, 0)
@@ -376,9 +319,8 @@ func (r *Radio) token() []byte {
 // long as the radio lives. It is the engine behind WithTransceiveBroadcasts
 // (to = 00) and WithAddressedFlood (to = E0).
 func (r *Radio) unsolicited(to byte, period time.Duration) {
-	defer r.wg.Done()
 	for {
-		if !r.sleepInterruptible(period) {
+		if !r.pipe.Sleep(period) {
 			return
 		}
 		frame := r.frameTo(to, []byte{cmdTransceive}, broadcastPayload)
@@ -388,7 +330,7 @@ func (r *Radio) unsolicited(to byte, period time.Duration) {
 		// real bus does with a frame nobody was listening for.
 		if !r.writeWire(frame, floodWriteDeadline(period)) {
 			select {
-			case <-r.shutdown:
+			case <-r.pipe.Done():
 				return
 			default:
 			}
@@ -422,11 +364,10 @@ func (r *Radio) writeWire(frame []byte, deadline time.Duration) bool {
 	defer r.wmu.Unlock()
 
 	if deadline > 0 {
-		_ = r.fakeConn.SetWriteDeadline(time.Now().Add(deadline))
-		defer func() { _ = r.fakeConn.SetWriteDeadline(time.Time{}) }()
+		_ = r.pipe.Conn().SetWriteDeadline(time.Now().Add(deadline))
+		defer func() { _ = r.pipe.Conn().SetWriteDeadline(time.Time{}) }()
 	}
-	n, err := r.fakeConn.Write(frame)
-	if err != nil || n != len(frame) {
+	if !r.pipe.WriteNow(frame) {
 		return false
 	}
 	r.recordSent(frame)

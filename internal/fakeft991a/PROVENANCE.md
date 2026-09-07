@@ -18,8 +18,8 @@ That is the same hash `core/cat/ft991a/crosscheck_test.go`'s
 fact, and this note records it a second time only so that a reader of THIS
 directory can check the copy without first learning the dialect's test layout.
 
-It is the ONLY source of this package's EX (MENU) inventory. The generator under
-`gen/` reads it and emits `exinventory_gen.go`; `ex.go` expands that into the
+It is the ONLY source of this package's EX (MENU) inventory. `exinventory.go`
+embeds it and projects it at init; `ex.go` expands that into the
 address → raw-P4 map the fake answers EX reads from.
 
 ## What the artefact is
@@ -46,7 +46,7 @@ that names no field at all.**
 
 `internal/fakeft891` is this package's architectural exemplar, and its own
 transcription B carries the **same three column names**, because both were
-produced under one brief. That resemblance is the reason `gen/main.go` is
+produced under one brief. That resemblance is the reason `exinventory.go` is
 written rather than copied: three structural facts differ, and each is a
 property of the printed chart rather than a choice made here.
 
@@ -72,7 +72,7 @@ property of the printed chart rather than a choice made here.
   FREQUENCY`, whose `00030000 ~ 47000000` parameter is eight digits wide. The
   FT-891's alphabet stops at 5 and the FTdx10's at 4. Four rows are five wide
   (`027`, `064`, `065`, `083`). `core/cat/ft991a/crosscheck_test.go` pins the
-  widest address and width from the **A** side as literals; `gen/main_test.go`'s
+  widest address and width from the **A** side as literals; `exinventory_test.go`'s
   `TestParseB_TheOnlyEightWideRowIs151` pins them from the **B** side.
 
 The fourth fact is shared, and it is a silence rather than a difference:
@@ -101,7 +101,7 @@ conventions:
 | side | source | spelling of 087's Digits | who keys on it |
 | --- | --- | --- | --- |
 | dialect | transcription **A** (`table2.csv`) | `-`, the raw glyph | `internal/extable`'s `ParameterlessExcluded`, `ft991aProfile.ParameterlessAddresses` |
-| this fake | transcription **B** (this file) | `?`, the brief's token for a non-integer cell | `gen/main.go`'s `parameterlessToken` and `parameterlessAddrs` |
+| this fake | transcription **B** (this file) | `?`, the brief's token for a non-integer cell | `exinventory.go`'s `parameterlessToken` and `parameterlessAddrs` |
 
 Both are right, and neither is consulted from the other. **Each generator reads
 the spelling of the artefact it generates from** — the project's standing rule
@@ -114,7 +114,7 @@ cross-check of the two transcriptions normalises `?` to `-` on this one address
 at comparison time — never by editing either artefact.
 
 The rule is enforced in **both** directions, with a red proof each way
-(`gen/main_test.go`): a `?` on `087` is excluded; a `?` on any other address is
+(`exinventory_test.go`): a `?` on `087` is excluded; a `?` on any other address is
 **refused**. A third direction is enforced too — `087` with a numeric cell is
 refused — so that a declaration which no longer describes its artefact fails
 loudly instead of silently dropping a real address.
@@ -133,7 +133,7 @@ not an accident of layout:
 | side | source | generator |
 | --- | --- | --- |
 | dialect (`core/cat/ft991a/exinventory_gen.go`) | transcription **A** (`table2.csv`) | `internal/extable` |
-| this fake (`exinventory_gen.go`) | transcription **B** (this file) | `internal/fakeft991a/gen` (stdlib only) |
+| this fake (`exItems`) | transcription **B** (this file) | `exinventory.go` (stdlib only) |
 
 `core/transport/ex_crosscheck_ft991a_test.go` then proves the two inventories
 agree — address for address and width for width, and over the wire. Because the
@@ -142,10 +142,9 @@ either transcription, or in either generator, surfaces as a **cross-check
 mismatch**. If this fake derived its inventory from A, from the dialect, or with
 `extable`'s parser, both sides would rest on one reading of the chart and one
 parser, and a shared mistake would reproduce itself identically into both tables
-and be invisible. That is why `gen/` is stdlib-only, why `imports_test.go`'s
-`TestNoCoreImports` walks subdirectories, and why
-`TestNoCoreImports_ReachesTheGenerator` asserts by path that the walk really
-reached `gen/main.go`.
+and be invisible. That is why `exinventory.go` is stdlib-only and why
+`imports_test.go`'s `TestNoCoreImports` walks this directory and every one
+beneath it.
 
 **If the cross-check fires, report the diff — do not edit either table to make
 it pass.** Which side is wrong, or whether the printed chart itself is, is an

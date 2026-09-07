@@ -1,25 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package main
+package fakets480
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 )
 
-// The two artefacts of this generator, as the //go:generate directive in
-// ../ex.go names them, with ".." prepended because `go test` runs here.
+// This file is the CI guard for the EX projection in exinventory.go: it runs
+// the REAL parse over the REAL committed CSV and states, as literals, what that
+// artefact structurally contains.
 //
-// render writes only the CSV's BASE NAME into its output, so reading the file
-// through "../" still produces the bytes the directive produces from
-// "transcription-b-480.csv" — which is what makes the staleness comparison
-// below a byte comparison rather than a path lottery.
+// It used to live in this package's gen/ directory and compare rendered bytes
+// with a committed generated file. There is no generated file any more — the
+// CSV is embedded and projected at init (06/09/2026) — so staleness cannot
+// happen and the render tests went with it. What remains is the part that was
+// always the real check: the printed row count, the red proofs and every
+// refusal. The width perturbation, which used to compare rendered bytes,
+// now compares the PROJECTION itself against the one the package holds.
+
+// The committed artefact, read by name rather than through the embedded
+// transcriptionB480 — so that reading the file the //go:embed directive names
+// proves the directive points where this test thinks it does.
 const (
-	csvPath = "../transcription-b-480.csv"
-	outPath = "../exinventory_gen.go"
+	csvPath = "transcription-b-480.csv"
 
 	// menus is the number of rows this chart's own book prints, written as a
 	// literal from the EX block's printed domain ("000 ~ 060: Menu No.",
@@ -27,74 +33,6 @@ const (
 	// thing it counts proves nothing.
 	menus = 61
 )
-
-// renderCommitted runs the whole projection over the committed CSV and
-// returns the generated file's bytes.
-func renderCommitted(t *testing.T) []byte {
-	t.Helper()
-	data, err := os.ReadFile(csvPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", csvPath, err)
-	}
-	return renderData(t, data)
-}
-
-// renderData is renderCommitted over supplied bytes, for the perturbation
-// proofs.
-func renderData(t *testing.T, data []byte) []byte {
-	t.Helper()
-	rows, err := parseB(data)
-	if err != nil {
-		t.Fatalf("parseB: %v", err)
-	}
-	widths, err := projectWidths(rows)
-	if err != nil {
-		t.Fatalf("projectWidths: %v", err)
-	}
-	out, err := render(widths, rows, csvPath)
-	if err != nil {
-		t.Fatalf("render: %v", err)
-	}
-	return out
-}
-
-// TestGeneratedFileIsNotStale is the staleness gate: the committed generated
-// file must be byte-identical to what this generator produces from the
-// committed CSV beside it.
-//
-// It is what makes "DO NOT EDIT" true rather than merely asked for. A
-// hand-edit of the generated table — or a CSV corrected without regenerating —
-// would otherwise leave the fake answering one thing while the artefact it
-// claims to be a projection of says another, which is exactly the drift the
-// two-source cross-check assumes cannot happen on this side.
-func TestGeneratedFileIsNotStale(t *testing.T) {
-	want, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", outPath, err)
-	}
-	if got := renderCommitted(t); !bytes.Equal(got, want) {
-		t.Errorf("%s is stale (%d bytes committed, %d bytes generated): run `go generate ./internal/fakets480`", outPath, len(want), len(got))
-	}
-}
-
-// TestGenerationIsIdempotent: two runs over equal input produce byte-identical
-// output. Without it the staleness test above could fail intermittently for a
-// reason that had nothing to do with the CSV.
-func TestGenerationIsIdempotent(t *testing.T) {
-	if first, second := renderCommitted(t), renderCommitted(t); !bytes.Equal(first, second) {
-		t.Error("two runs over the same CSV produced different bytes")
-	}
-}
-
-// TestTheCommittedArtefactCarriesThePrintedRowCount pins the projection's
-// length against the domain the book prints, from a literal. It is what makes
-// the staleness test above impossible to satisfy with a truncated CSV.
-func TestTheCommittedArtefactCarriesThePrintedRowCount(t *testing.T) {
-	rows := parseCommitted(t)
-	if len(rows) != menus {
-		t.Errorf("%s carries %d rows, and this chart's printed domain is %d menus (480:401)", csvPath, len(rows), menus)
-	}
-}
 
 // parseCommitted parses the committed CSV, failing the test if it will not
 // parse.
@@ -109,6 +47,16 @@ func parseCommitted(t *testing.T) []row {
 		t.Fatalf("parseB: %v", err)
 	}
 	return rows
+}
+
+// TestTheCommittedArtefactCarriesThePrintedRowCount pins the projection's
+// length against the domain the book prints, from a literal. It is what makes
+// the staleness test above impossible to satisfy with a truncated CSV.
+func TestTheCommittedArtefactCarriesThePrintedRowCount(t *testing.T) {
+	rows := parseCommitted(t)
+	if len(rows) != menus {
+		t.Errorf("%s carries %d rows, and this chart's printed domain is %d menus (480:401)", csvPath, len(rows), menus)
+	}
 }
 
 // TestTheTwoDigitMenusAreTheOnesTheGridPrints pins the width distribution
@@ -136,8 +84,6 @@ func TestTheTwoDigitMenusAreTheOnesTheGridPrints(t *testing.T) {
 		t.Errorf("the two-digit menus are %v, want %v (480:411 plus the menu 034 erratum)", got, want)
 	}
 }
-
-// --- The red proofs: what a perturbed artefact does ---
 
 // TestRedProof_ADroppedRowIsRefused. A row lost from a transcription is the
 // defect this compact form is most exposed to, because the string's index IS
@@ -184,7 +130,7 @@ func TestRedProof_ADroppedRowIsRefused(t *testing.T) {
 // side, which comes from the other transcription.
 //
 // This proof pins the first half: change one digits cell and nothing else, and
-// the generated bytes differ from the committed ones. If they did not, the
+// the projection differs from the one this package holds. If it did not, the
 // cross-check would have nothing to compare.
 func TestRedProof_AWidthOnlyPerturbationChangesTheProjection(t *testing.T) {
 	data, err := os.ReadFile(csvPath)
@@ -212,16 +158,18 @@ func TestRedProof_AWidthOnlyPerturbationChangesTheProjection(t *testing.T) {
 		t.Fatalf("no row starts %q — the perturbation did nothing", prefix)
 	}
 
-	want, err := os.ReadFile(outPath)
+	rows, err := parseB([]byte(strings.Join(lines, "\n")))
 	if err != nil {
-		t.Fatalf("reading %s: %v", outPath, err)
+		t.Fatalf("parseB after widening menu 010: %v", err)
 	}
-	if got := renderData(t, []byte(strings.Join(lines, "\n"))); bytes.Equal(got, want) {
-		t.Error("widening menu 010 from one digit to two produced byte-identical output — the projection does not depend on the digits column")
+	got, err := projectWidths(rows)
+	if err != nil {
+		t.Fatalf("projectWidths after widening menu 010: %v", err)
+	}
+	if got == exWidths480 {
+		t.Error("widening menu 010 from one digit to two produced an identical projection — it does not depend on the digits column")
 	}
 }
-
-// --- What the parser refuses, and why each refusal is a refusal ---
 
 // TestParseB_RefusesAMalformedArtefact. Every case is a shape this committed,
 // hash-frozen artefact could only acquire by being edited or mis-delivered, so
@@ -329,18 +277,5 @@ func TestRecordLines_CountsAQuotedCellCorrectly(t *testing.T) {
 				t.Errorf("recordLines(%q) = %v, want %v", tt.csv, got, tt.want)
 			}
 		})
-	}
-}
-
-// TestRender_WritesOnlyTheCSVsBaseName, which is what lets this test file read
-// the artefact through "../" and still compare bytes with the file the
-// //go:generate directive produced from a bare filename.
-func TestRender_WritesOnlyTheCSVsBaseName(t *testing.T) {
-	out := renderCommitted(t)
-	if !bytes.Contains(out, []byte("transcription-b-480.csv")) {
-		t.Error("the generated file does not name its source CSV")
-	}
-	if bytes.Contains(out, []byte("../")) {
-		t.Error("the generated file carries a relative path — where the generator was invoked from has leaked into the committed bytes")
 	}
 }

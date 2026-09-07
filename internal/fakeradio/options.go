@@ -13,7 +13,7 @@ type Option func(*Radio)
 // with this).
 func WithLatency(d time.Duration) Option {
 	return func(r *Radio) {
-		r.latency = d
+		r.pipe.Latency = d
 	}
 }
 

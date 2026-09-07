@@ -4,9 +4,9 @@ package fakeradio
 
 import (
 	"io"
-	"net"
 	"sync"
-	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
 // Radio is a simulated FT-710: an in-memory duplex pipe presenting the
@@ -16,14 +16,16 @@ import (
 // from goroutines other than whatever is reading/writing Port() (run
 // tests with -race).
 type Radio struct {
-	hostConn net.Conn // returned by Port(); the caller's end
-	fakeConn net.Conn // serviced by serve(); the radio's own end
+	// pipe is the in-memory duplex connection and the goroutine servicing
+	// it: internal/fakepipe, the one package the fakes share. It carries
+	// the net.Pipe pair, the interruptible latency wait and the raw write,
+	// and NO protocol at all — see doc.go's sibling section.
+	pipe *fakepipe.Pipe
 
 	// faults is populated only while New's options run, then never
 	// mutated again — see faultConfig's doc comment for why serve() may
 	// read it without r.mu.
-	faults  faultConfig
-	latency time.Duration
+	faults faultConfig
 
 	mu             sync.Mutex
 	slots          map[string]MemState
@@ -31,127 +33,62 @@ type Radio struct {
 	currentChannel string
 	ai             byte // '0' or '1'; reference: "AI resets to OFF at radio power-off"
 	exchangeN      int
-
-	// shutdown is closed (exactly once, by closePipes) when the radio
-	// goes away — a Close call, or a FaultDisconnect firing. Every
-	// scripted delay (WithLatency, FaultDelayedReply,
-	// FaultDelayedRejection) selects against it (sleepInterruptible)
-	// instead of calling bare time.Sleep, so Close never has to wait out
-	// a pending multi-second scripted delay before its wg.Wait on
-	// serve() can return (M3 Codex-review fix wave, Fix 8).
-	shutdown chan struct{}
-
-	closeOnce sync.Once
-	closeErr  error
-	wg        sync.WaitGroup
 }
 
 // New constructs a *Radio and starts its servicing goroutine. Without a
 // WithFactoryImage option, the slot map defaults to ImageUK.
 func New(opts ...Option) *Radio {
-	hostConn, fakeConn := net.Pipe()
 	r := &Radio{
-		hostConn:       hostConn,
-		fakeConn:       fakeConn,
+		pipe:           fakepipe.New(),
 		slots:          ImageUK(),
 		exSettings:     EXRuntimeDefaults(),
 		currentChannel: "000",
 		ai:             '0',
-		shutdown:       make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)
 	}
 
-	r.wg.Add(1)
-	go r.serve()
+	r.serve()
 	return r
 }
 
 // Port returns the host end of the fake's in-memory duplex connection.
 // Repeated calls return the same connection.
-func (r *Radio) Port() io.ReadWriteCloser { return r.hostConn }
+func (r *Radio) Port() io.ReadWriteCloser { return r.pipe.Host() }
 
 // Close shuts the fake radio down: closes the RADIO's own end of the pipe
 // and waits for the servicing goroutine to exit. Safe to call more than
 // once (and safe to call after a FaultDisconnect has already closed the
 // pipe from inside serve()).
 //
-// Deliberately closes only fakeConn, not hostConn: net.Pipe's Close()
-// only reports io.ErrClosedPipe to a Read/Write call made against the END
-// YOU YOURSELF closed — a pending or subsequent Read on the OTHER
-// (still-open) end instead sees io.EOF, exactly the signal a host should
-// get from "the radio went away". Closing hostConn here too would flip
-// that to io.ErrClosedPipe for the caller, which is a worse, less
-// consistent signal (and would no longer match FaultDisconnect's
-// identical, EOF-producing internal close). A caller that wants to
-// release its own Port() handle explicitly may still call
-// r.Port().Close() itself.
-func (r *Radio) Close() error {
-	err := r.closePipes()
-	r.wg.Wait()
-	return err
-}
+// It is prompt despite a pending scripted delay (WithLatency,
+// FaultDelayedReply, FaultDelayedRejection), and it deliberately leaves the
+// HOST end open, so a pending or subsequent read there sees io.EOF — exactly
+// the signal a host should get from "the radio went away", and the same
+// signal FaultDisconnect's internal close produces. See internal/fakepipe's
+// Shutdown for why that direction matters.
+func (r *Radio) Close() error { return r.pipe.Close() }
 
-// closePipes is the idempotent, race-safe close of the radio's own pipe
-// end. It is called both by the public Close() and, internally, by
-// serve() when FaultDisconnect fires — serve() must NEVER call the
-// public Close() itself, since Close() waits on r.wg, which only reaches
-// zero once serve() returns; calling it from inside serve() would
-// deadlock.
-func (r *Radio) closePipes() error {
-	r.closeOnce.Do(func() {
-		// Close shutdown FIRST: a serve goroutine currently parked in a
-		// sleepInterruptible delay wakes immediately, before (or
-		// regardless of) noticing the pipe itself closing.
-		close(r.shutdown)
-		r.closeErr = r.fakeConn.Close()
-	})
-	return r.closeErr
-}
-
-// sleepInterruptible waits d, returning early (false) if the radio's
-// shutdown channel closes first — see Radio.shutdown (Fix 8). Returns
-// true when the full d genuinely elapsed. d <= 0 returns true at once.
-func (r *Radio) sleepInterruptible(d time.Duration) bool {
-	if d <= 0 {
-		return true
-	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return true
-	case <-r.shutdown:
-		return false
-	}
-}
-
-// serve is the Radio's own goroutine: it reads from fakeConn, reassembles
+// serve starts the Radio's own goroutine: it reads the pipe, reassembles
 // frames, and drives command handling and replies. It is the ONLY
-// goroutine that ever reads or writes fakeConn (see rawWrite), so no
+// goroutine that ever reads or writes the pipe (see rawWrite), so no
 // synchronisation is needed around the connection itself — only around
 // the shared state in Radio.mu, which SlotState/CurrentChannel also
 // touch from test goroutines.
 func (r *Radio) serve() {
-	defer r.wg.Done()
-
 	acc := newReassembler(maxAccumulatorBytes)
-	buf := make([]byte, 4096)
-	for {
-		n, err := r.fakeConn.Read(buf)
-		if n > 0 {
-			for _, ev := range acc.push(buf[:n]) {
-				stop := r.handleEvent(ev)
-				if stop {
+	stopped := false
+	r.pipe.Go(func() {
+		r.pipe.ReadLoop(func(b []byte) {
+			for _, ev := range acc.push(b) {
+				if stopped {
 					return
 				}
+				stopped = r.handleEvent(ev)
 			}
-		}
-		if err != nil {
-			return
-		}
-	}
+		})
+	})
 }
 
 // handleEvent processes one reassembler event (a complete frame, or an
@@ -184,14 +121,14 @@ func (r *Radio) handleEvent(ev accEvent) (stop bool) {
 	// "the reply". Interruptible (Fix 8): a Close mid-delay skips the
 	// reply — the pipe is gone, so it could never arrive anyway.
 	if r.faults.delayedReplyN == n && r.faults.delayedReplyD > 0 {
-		if !r.sleepInterruptible(r.faults.delayedReplyD) {
+		if !r.pipe.Sleep(r.faults.delayedReplyD) {
 			return true
 		}
 	}
 
 	switch {
 	case r.faults.delayedRejectionN == n:
-		if !r.sleepInterruptible(r.faults.delayedRejectionD) {
+		if !r.pipe.Sleep(r.faults.delayedRejectionD) {
 			return true
 		}
 		r.rawWrite(rejection)
@@ -208,7 +145,7 @@ func (r *Radio) handleEvent(ev accEvent) (stop bool) {
 	}
 
 	if r.faults.disconnectAfterN > 0 && n == r.faults.disconnectAfterN {
-		r.closePipes()
+		r.pipe.Shutdown()
 		return true
 	}
 	return false
@@ -233,20 +170,17 @@ func garbleReply(b []byte) []byte {
 // interruptible (Fix 8): a Close mid-wait abandons the write — the pipe
 // is gone, so the bytes could never arrive anyway.
 func (r *Radio) rawWrite(data []byte) {
-	if r.latency > 0 && !r.sleepInterruptible(r.latency) {
-		return
-	}
 	size := r.faults.chunkedSize
 	if size <= 0 {
-		_, _ = r.fakeConn.Write(data)
+		r.pipe.Write(data)
+		return
+	}
+	if !r.pipe.Sleep(r.pipe.Latency) {
 		return
 	}
 	for i := 0; i < len(data); i += size {
-		end := i + size
-		if end > len(data) {
-			end = len(data)
-		}
-		if _, err := r.fakeConn.Write(data[i:end]); err != nil {
+		end := min(i+size, len(data))
+		if !r.pipe.WriteNow(data[i:end]) {
 			return
 		}
 	}
