@@ -2,7 +2,10 @@
 
 package spec
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Transmit describes whether the radio has transmit hardware. It is a
 // radio-level fact: FieldSupport still describes each protocol field.
@@ -279,4 +282,99 @@ func (c Capabilities) FieldSupport(bank BankID, f Field) FieldSupport {
 		return FieldSupport{}
 	}
 	return b.Fields[f]
+}
+
+// Clone returns a deep copy of c: every slice, map and pointer field is
+// freshly allocated, so a caller mutating the copy — appending a mode,
+// tweaking a bank's FieldSupport, moving a tone bound — can never be
+// observed through c or through any other copy of it.
+//
+// It is the shared successor to the seventeen hand-rolled
+// cloneCapabilities functions the driver packages each carried, and it
+// exists because those seventeen copied SEVENTEEN DIFFERENT SUBSETS of
+// this struct: the oldest Yaesu ones stopped at ShiftOptions, the D4
+// Icom ones stopped at Filters, and only the Tier 4b ones reached the
+// receiver vocabularies — so on some models a "defensive copy" still
+// aliased the very slice that carries the write gate. One function
+// copies every field, and Clone's test walks this struct by reflection
+// so a field added later cannot be forgotten silently.
+//
+// A nil slice/map/pointer stays nil (slices.Clone's own rule): the
+// zero-value distinction callers depend on is preserved, exactly as
+// copyBank preserves it for a Bank.
+func (c Capabilities) Clone() Capabilities {
+	out := c
+	if c.Banks != nil {
+		out.Banks = make([]Bank, len(c.Banks))
+		for i, b := range c.Banks {
+			out.Banks[i] = copyBank(b)
+		}
+	}
+	out.Modes = slices.Clone(c.Modes)
+	out.CTCSSTones = slices.Clone(c.CTCSSTones)
+	out.Bauds = slices.Clone(c.Bauds)
+	out.RequiredSlots = slices.Clone(c.RequiredSlots)
+	out.ShiftOptions = slices.Clone(c.ShiftOptions)
+	out.CTCSSStates = slices.Clone(c.CTCSSStates)
+	out.DuplexOptions = slices.Clone(c.DuplexOptions)
+	out.ToneModes = slices.Clone(c.ToneModes)
+	out.DTCSPolarities = slices.Clone(c.DTCSPolarities)
+	out.DTCSCodes = slices.Clone(c.DTCSCodes)
+	out.Filters = slices.Clone(c.Filters)
+	out.TuningSteps = slices.Clone(c.TuningSteps)
+	out.AttenuatorDB = slices.Clone(c.AttenuatorDB)
+	out.PreampOptions = slices.Clone(c.PreampOptions)
+	out.AntennaOptions = slices.Clone(c.AntennaOptions)
+	if c.CTCSSToneRange != nil {
+		r := *c.CTCSSToneRange
+		out.CTCSSToneRange = &r
+	}
+	if c.ProgramTuningStepRange != nil {
+		r := *c.ProgramTuningStepRange
+		out.ProgramTuningStepRange = &r
+	}
+	return out
+}
+
+// BankOf reports which bank of c claims slot, and whether any does.
+//
+// A linear walk over Banks in declaration order, so the first bank
+// listing slot wins; a slot no bank lists is not this radio's, and the
+// false result is what a write path refuses on rather than gating the
+// field against a bank that does not exist. It is the shared form of the
+// per-driver bankFor (core/driver/ftdx10/write.go and its siblings),
+// which walked the SESSION's effective banks — pass those same
+// capabilities here and the answer is identical.
+//
+// Membership of Slots, deliberately, NOT Bank.WithinSpace: bankFor's
+// question is "which bank materialised this slot?", not "where could a
+// channel be added?".
+func (c Capabilities) BankOf(slot string) (BankID, bool) {
+	for _, b := range c.Banks {
+		for _, s := range b.Slots {
+			if s == slot {
+				return b.ID, true
+			}
+		}
+	}
+	return "", false
+}
+
+// NumberedSlots builds a bank's canonical slot inventory as
+// fmt.Sprintf(format, i) for every i from lo to hi INCLUSIVE — the
+// "001".."099" loop every driver's memSlots writes out by hand
+// (core/driver/ic7300, core/driver/ic7610 and thirteen more).
+//
+// hi < lo yields nil rather than panicking on a negative capacity: an
+// empty range is a legitimate thing for a caller to compute, and it is
+// not this function's business to decide it was a mistake.
+func NumberedSlots(lo, hi int, format string) []string {
+	if hi < lo {
+		return nil
+	}
+	slots := make([]string, 0, hi-lo+1)
+	for i := lo; i <= hi; i++ {
+		slots = append(slots, fmt.Sprintf(format, i))
+	}
+	return slots
 }
