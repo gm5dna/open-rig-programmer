@@ -219,8 +219,10 @@ func TestRedProof990S_ATextRowOfAnUndeclaredWidthIsRefused(t *testing.T) {
 	if p.TextRowPolicy != extable.TextRowsAllowed {
 		t.Fatalf("TextRowPolicy = %v, want TextRowsAllowed", p.TextRowPolicy)
 	}
-	// A row of this chart's own shape, flagged text at a width the profile
-	// does not declare.
+	// A row flagged text at a width the profile does not declare. P2/P3 are
+	// left unpadded ("0,0,0", not this chart's own "0,00,06"): harmless only
+	// because the TextWidths refusal below fires first, ahead of any width
+	// or padding check on the address itself.
 	const row = "0,0,0,,,Screen Saver Message,Up to 12 alphanumeric characters,12,true,1778\n"
 	_, err := extable.ParseCSV(p, []byte(row))
 	if err == nil {
