@@ -527,18 +527,3 @@ func NewFramingFor(l Layout) (transport.Framing, error) {
 	}
 	return kw.NewFramingWithGate(l.Book(), l.AllowedCommand)
 }
-
-// AllowedCommand is THE OUTBOUND GATE'S PLACEHOLDER, and it admits nothing.
-//
-// TASK 8 REPLACES THIS METHOD WITH THE REAL ROSTER, in allowlist.go: the
-// seven grammars across five opcodes spec decision 5 admits — ID read, AI
-// read, AI Set to 0 only, FV read, EX read, MA0 read, MA0 Set — with the EX
-// arm asking the same inventory membership question BuildEXRead asks. DELETE
-// THIS METHOD AND ITS TEST IN THAT COMMIT.
-//
-// IT REFUSES EVERYTHING UNTIL THEN, WHICH IS THE ONLY HONEST PLACEHOLDER.
-// NewFramingFor exists at this task and a session built through it would
-// otherwise carry a gate that had never been designed; the gate is the last
-// defence before a physical radio, so its unwritten state is "nothing
-// passes", not "everything does".
-func (l Layout) AllowedCommand(frame []byte) bool { return false }

@@ -428,24 +428,6 @@ func testLayoutWithEXItems(t *testing.T, items []kw.EXItem) Layout {
 	return l
 }
 
-// TestAllowedCommand_IsStillTheFAILCLOSEDPLACEHOLDER pins the placeholder
-// gate for exactly as long as it exists.
-//
-// DELETE THIS TEST WITH THE PLACEHOLDER. The real gate — the seven-grammar
-// roster of spec decision 5 — is task 8's allowlist.go, and this method's
-// only job until then is to keep NewFramingFor honest: a framing whose gate
-// admitted anything before the roster was written would be a session that
-// could put an unreviewed frame on a physical radio.
-func TestAllowedCommand_IsStillTheFAILCLOSEDPLACEHOLDER(t *testing.T) {
-	for _, l := range []Layout{Layout890(), Layout990(), {}} {
-		for _, frame := range []string{"ID;", "AI0;", "FV;", "MA0000;", ""} {
-			if l.AllowedCommand([]byte(frame)) {
-				t.Errorf("%q: the placeholder gate admitted %q — until task 8 lands the roster, this gate admits nothing", l.Model(), frame)
-			}
-		}
-	}
-}
-
 // TestLayout890Config_IsAcceptedUnspoiled is the refusal table's positive
 // control: without it every row above could pass on a config that was
 // invalid to begin with.
