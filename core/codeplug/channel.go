@@ -181,32 +181,28 @@ func (d ChannelData) tierFieldsRepresentableByOmission() bool {
 //
 // It is the "every tier-added field is Unavailable" half of the file
 // writer's lowest-schema rule (design D4), and it is a method on
-// ChannelData rather than a loop in file.go, so that a later field added
-// to this struct is one edit away from being accounted for here.
+// ChannelData rather than a loop in file.go so that file.go's callers ask
+// one question rather than seventeen. The loop is over TierFields, so a
+// later field is accounted for here by its table row and nothing else.
 func (d ChannelData) icomTierFieldsRepresentableByOmission() bool {
-	return d.TxFreqHz.State.RepresentableByOmission() &&
-		d.Duplex.State.RepresentableByOmission() &&
-		d.OffsetHz.State.RepresentableByOmission() &&
-		d.ToneMode.State.RepresentableByOmission() &&
-		d.ToneTx.State.RepresentableByOmission() &&
-		d.ToneRx.State.RepresentableByOmission() &&
-		d.DTCSCode.State.RepresentableByOmission() &&
-		d.DTCSPolarity.State.RepresentableByOmission() &&
-		d.Filter.State.RepresentableByOmission() &&
-		d.DataMode.State.RepresentableByOmission()
+	for _, tf := range TierFields {
+		if !tf.Receiver && !tf.State(&d).RepresentableByOmission() {
+			return false
+		}
+	}
+	return true
 }
 
 // receiverFieldsRepresentableByOmission is the D8 half of the
 // lowest-schema rule. An FT-710 read must not become schema 5 merely
 // because it positively says these seven fields are Unavailable.
 func (d ChannelData) receiverFieldsRepresentableByOmission() bool {
-	return d.TuningStepEnabled.State.RepresentableByOmission() &&
-		d.TuningStep.State.RepresentableByOmission() &&
-		d.ProgramTuningStepHz.State.RepresentableByOmission() &&
-		d.AttenuatorDB.State.RepresentableByOmission() &&
-		d.Preamp.State.RepresentableByOmission() &&
-		d.Antenna.State.RepresentableByOmission() &&
-		d.IPPlus.State.RepresentableByOmission()
+	for _, tf := range TierFields {
+		if tf.Receiver && !tf.State(&d).RepresentableByOmission() {
+			return false
+		}
+	}
+	return true
 }
 
 // Empty reports whether c is an empty slot. Data == nil is the sole test:

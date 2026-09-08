@@ -10,6 +10,6 @@
     "companyName": "Open Rig Programmer",
     "productName": "Open Rig Programmer",
     "copyright": "Licensed under the GNU General Public License v3.0 or later",
-    "comments": "Memory-channel programmer for the Yaesu FT-710"
+    "comments": "A free memory-channel programmer for Yaesu, Icom and Kenwood radios."
   }
 }

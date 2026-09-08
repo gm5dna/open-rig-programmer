@@ -311,16 +311,17 @@ that cannot be compared cannot be shown to be a 1.xx one; the session
 still reads normally. The TS-590SG has no such condition and sets the
 filter normally.
 
-**CHIRP import is not available on either radio in v1.4.0: every row is
-blocked.** A CHIRP file's blank `Duplex` column means simplex, and these
-radios declare no shift vocabulary at all — their memory record carries
-no duplex selector — so every ordinary row is refused on that column and
-the import writes nothing. (`CW`, `CWR` and `RTTY` rows are refused a
-second time besides, on the mode: they resolve to names these radios'
-own mode list does not print, which prints `CW`, `CW-R`, `FSK` and
-`FSK-R`.) The program's own CSV import and export are unaffected; only
-the CHIRP direction is closed, and opening it is a change to the shared
-importer every supported radio goes through rather than a Kenwood one.
+**A CHIRP file's ordinary rows import on both radios.** A CHIRP file's
+blank `Duplex` column means simplex, and these radios declare no shift
+vocabulary at all — their memory record carries no duplex selector — but
+a blank column asks for nothing they cannot do, so such a row imports as
+simplex and nothing is reported. Two kinds of row are still refused: a
+`Duplex` column reading `off`, which asserts "no duplex configured" as
+distinct from simplex and has nowhere in the record to go, and `CW`,
+`CWR` and `RTTY` rows, which resolve to names these radios' own mode
+list does not print — it prints `CW`, `CW-R`, `FSK` and `FSK-R`. The
+program's own CSV import and export are unaffected. In v1.4.1 and earlier the
+blank `Duplex` column was refused too and no row imported at all.
 
 Channels cannot be deleted.
 
