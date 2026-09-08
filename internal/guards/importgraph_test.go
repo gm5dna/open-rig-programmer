@@ -420,8 +420,9 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		//
 		// NARROWED at M9c-4 (task 1), and the condition below now says so
 		// literally: core/cat/dialecttest is a NON-test file calling all
-		// three, so it is EXEMPT BY NAME instead of being swept in by
-		// prefix, and NOTHING else under core/cat is exempt at all. That
+		// three of core/cat's builders, so it is EXEMPT BY NAME instead
+		// of being swept in by prefix, and NOTHING else under core/cat
+		// is exempt at all. That
 		// is the property this milestone's data-only model packages rest
 		// on — see the doc comment, and the recorded red-proof in
 		// docs/superpowers/m9c4-red-proofs.md, which fires this very check
@@ -430,17 +431,19 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		// the same two reasons: core/kw is the Kenwood builders' own package
 		// (its outbound gate re-validates an MW through its own BuildMWSet,
 		// exactly as core/cat's does), and core/kw/kwtest is that family's
-		// NON-test exported conformance suite (dialecttest's reason). No
-		// other core/kw subpackage is exempt: core/kw/ts590 and core/kw/ts480
-		// are data-only layout packages and are swept like every other.
+		// NON-test exported conformance suite (dialecttest's reason). Of
+		// the other core/kw subpackages only core/kw/ma is exempt, and
+		// only for the first of those reasons (below): core/kw/ts590 and
+		// core/kw/ts480 are data-only layout packages and are swept like
+		// every other.
 		// WIDENED AGAIN at Kenwood pair 2 Stage 0 (08/09/2026), by name and for
 		// the FIRST of those two reasons: core/kw/ma is the MA family's own
 		// builder package — it mints BuildMA0Set, the memory-write Set builder
 		// for the 890S/990S grid, and its outbound gate re-validates an MA0 Set
 		// through it, exactly as core/kw's does for MW. It is named here BEFORE
-		// the package exists, and the guard is inert until it does; core/kw/ma's
-		// own conformance suite, if it grows one, is a SIXTH name and not
-		// covered by this one.
+		// the package exists, and the exemption is inert until it does;
+		// core/kw/ma's own conformance suite, if it grows one, is a
+		// sixth package and not covered by this one.
 		if !(pf.relDir == "core/cat" || pf.relDir == "core/cat/dialecttest" ||
 			pf.relDir == "core/kw" || pf.relDir == "core/kw/kwtest" ||
 			pf.relDir == "core/kw/ma") {
@@ -483,7 +486,11 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 	// task 2 there is one — core/driver/ftdx10's write path, whose whole
 	// choreography is a single combined MT Set. BuildMA0Set is in that
 	// position now: it joined the family at Kenwood pair 2 Stage 0 with no
-	// call site anywhere, core/kw/ma being a stage away. The disjunction stays
+	// call site anywhere, core/kw/ma being a stage away. A core/driver
+	// source that calls .BuildMA0Set is the fence's PERMITTED consumer
+	// (inDriver, above) and sets this flag rather than failing the fence,
+	// so the fence's own negative proof for BuildMA0Set has to come from a
+	// decoy outside core/driver, not one inside it. The disjunction stays
 	// anyway, and not because the schedule caught up: demanding each name
 	// separately would assert WHICH radios this build carries, where the
 	// property actually wanted is that the walk and its filters can see
