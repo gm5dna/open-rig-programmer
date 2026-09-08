@@ -206,6 +206,19 @@ func TestBuildMA0Set890_EmitsTheGridAndPadsNothing(t *testing.T) {
 	if got, want := len(mustBuild(t, l, short)), 41; got != want {
 		t.Errorf("a one-character name built %d bytes, want %d — this grid pads nothing", got, want)
 	}
+
+	// LOW-4 / A1: a trailing space cannot survive the round trip — the
+	// terminator floats straight after the name, so "AB " builds the wire
+	// form "AB ;" and parses back as "AB".
+	trailing := rec
+	trailing.Name = "AB "
+	if got, want := string(mustBuild(t, l, trailing)), frame890("AB "); got != want {
+		t.Errorf("BuildMA0Set with a trailing-space name = %q, want %q", got, want)
+	}
+	back, err := l.ParseMA0Answer(mustBuild(t, l, trailing))
+	if err != nil || back.Name != "AB" {
+		t.Errorf("round trip of a trailing-space name = %+v, %v, want Name %q", back, err, "AB")
+	}
 }
 
 func TestBuildMA0Set890_Refusals(t *testing.T) {
