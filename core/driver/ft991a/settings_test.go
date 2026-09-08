@@ -288,7 +288,8 @@ func TestSettingsDescriptor_ItemsAreTheInventoryInOrder(t *testing.T) {
 // radio's EX address is a cat.EXAddressSingle (core/cat/ft991a/dialect.go,
 // layout 520) and cat.Dialect.EXWire renders it accordingly. A three-digit
 // ID is STORABLE only because core/codeplug's isSettingIDWidth admits
-// exactly three, four or six ASCII digits — the Kenwood base dependency —
+// exactly three, four, five or six ASCII digits — the Kenwood base
+// dependency —
 // and padding a menu number to four digits, printing an ID no FT-991A
 // document contains, is forbidden (plan P9). The clone preflight in
 // TestCloneReadSettings_WalksTheWholeDescriptor is where that rule bites.
@@ -985,15 +986,15 @@ func TestReadSetting_IsAtomicUnderOpMu(t *testing.T) {
 // sibling — for widths the preflight actually catches. core/clone/settings.go
 // probes an all-MenuUnsupported codeplug.MenuSnapshot built from the
 // descriptor's item IDs BEFORE any wire exchange, and
-// codeplug.MenuSnapshot.Validate requires every ID to be EXACTLY 3, 4 or 6
-// ASCII digits (core/codeplug/menus.go's isSettingIDWidth). THIS IS THE
+// codeplug.MenuSnapshot.Validate requires every ID to be EXACTLY 3, 4, 5 or
+// 6 ASCII digits (core/codeplug/menus.go's isSettingIDWidth). THIS IS THE
 // FIRST RADIO IN THE FLEET TO USE THE THREE-DIGIT ARM, which exists only
 // because of the Kenwood base dependency this milestone consumes — so a
-// descriptor padded to FIVE or SEVEN digits, printing an ID no FT-991A
+// descriptor padded to SEVEN digits, printing an ID no FT-991A
 // document contains, would still pass every assertion in this file and fail
-// HERE, with zero frames sent. A FOUR-digit pad would not: four is a legal
-// snapshot width, so it sails through this preflight and is refused one
-// layer down instead, by this driver's own ParseEXAddress — zero frames
+// HERE, with zero frames sent. A FOUR- or FIVE-digit pad would not: both are
+// legal snapshot widths, so they sail through this preflight and are refused
+// one layer down instead, by this driver's own ParseEXAddress — zero frames
 // either way, but a different gate (plan P9 erratum; probes D/E). Neither
 // package-level test can see the width classes this preflight DOES catch:
 // the driver's own tests validate the descriptor but know nothing of the
