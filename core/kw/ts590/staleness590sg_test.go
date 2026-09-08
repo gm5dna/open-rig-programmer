@@ -160,12 +160,16 @@ func TestParseCSV590SG_RefusesANonZeroP2OrP3(t *testing.T) {
 // TestParseCSV590SG_RefusesASecondTextWidth is the reason menu 000 is
 // digits=4 text=false rather than a text row.
 //
-// This profile's TextWidths names ONE width and this chart prints strings of
-// two: 000 "Version information (4 ASCII characters) read only" and 001
-// "Power on Message (up to 8 ASCII characters)". Flagging both as text is what
-// ParseCSV refuses — so the choice was never "which of the two is the text
-// row" left to a transcriber's taste; the validator settles it, and the
-// repository's existing treatment of a version string (the FT-891's
+// Profile carries a SET of text widths and ParseCSV refuses any text row
+// whose Digits the set does not name (the type can hold more than one now —
+// TextWidths is []int, not one int). This profile's own declaration keeps
+// that set at ONE width, {8}, because the SG's registered inventory is
+// frozen: this chart prints strings of two, 000 "Version information (4
+// ASCII characters) read only" and 001 "Power on Message (up to 8 ASCII
+// characters)", so flagging both as text is what ParseCSV refuses. The
+// choice was never "which of the two is the text row" left to a
+// transcriber's taste; THIS PROFILE'S one-entry declaration settles it, and
+// the repository's existing treatment of a version string (the FT-891's
 // 18/01/00 MAIN VERSION, digits=4 text=false) says which one gives way.
 func TestParseCSV590SG_RefusesASecondTextWidth(t *testing.T) {
 	p := sgProfile(t)

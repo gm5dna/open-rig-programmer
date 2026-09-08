@@ -403,8 +403,9 @@ type Observed struct {
 // FT-710, core/cat/table2-observed.csv, but the path is the profile's
 // ObservedCSV, not this one — into observations keyed by THIS PROFILE'S
 // OWN address form (S0-close review's MEDIUM-2 finding): six digits under
-// AddressTriple, e.g. "010321", four under AddressPair, e.g. "0801", or
-// three under AddressSingle, e.g. "008". The key follows p.Addresses for the same
+// AddressTriple, e.g. "010321", four under AddressPair, e.g. "0801", three
+// under AddressSingle, e.g. "008", or five under AddressGrouped, e.g.
+// "10203". The key follows p.Addresses for the same
 // reason RenderGo's lookup does (see that function's matching comment) — it
 // is a CSV join token, not a wire render, but the two sides of the join must
 // agree on its shape or a complete narrow-form observation CSV can never be
@@ -718,7 +719,13 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 		// two agree by construction after parseRecord, but RenderGo is a
 		// separate entry point and a caller may hand it rows it did not
 		// parse; keying on the set means the omitted row is the DECLARED
-		// one, never merely a row that happened to arrive flagged.
+		// one, never merely a row that happened to arrive flagged. THE
+		// GROUPED ARM BELOW IS THE ONE WHOSE KEY WIDTH ALSO DEPENDS ON A
+		// PARSE-TIME BOUND, not only on the row's own address: its "%d" P1
+		// digit stays one character only because parseRecord's
+		// groupedP1Ceiling stays at or below 9, the one-digit field's
+		// capacity, which TestParseCSV_AddressGroupedP1DomainIs0To1 pins —
+		// a caller handing RenderGo an unparsed row is not re-checked here.
 		if isParameterlessAddress(p, r.P1, r.P2, r.P3) {
 			continue
 		}

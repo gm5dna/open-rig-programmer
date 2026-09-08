@@ -16,18 +16,28 @@ import "bytes"
 // to hold rather than three. NO ARITHMETIC PRODUCES IT.
 //
 // WHAT IS KENWOOD'S IS THE CHECK THAT THE SHARED NUMBER IS BIG ENOUGH HERE.
-// The widest frame either book prints is the 50-byte MR answer / MW set
-// (590:1440-1461, 590:1518-1536; 480:923-943, 480:955-976). Every other
-// frame this milestone builds or parses is far narrower: ID read 3 and
-// answer 6, FV read 3 and answer 7, TY read 3 and answer 6, MC read 3 and
-// Set/Answer 6, MR read 7, EX read 10. The ONE frame with no printed
-// ceiling is the EX ANSWER, whose P5 is declared "variable length" with no
-// upper bound anywhere (590:555-556, 480:409-411) — recorded as A19, whose
-// lift is an exhaustive EX sweep. So no bound is DERIVABLE from these
-// documents at all; 256 is ADEQUATE rather than derived — comfortably above
-// every printed Kenwood frame, with 246 bytes of margin left for a P5 the
-// parameter lists never print anywhere near that wide, and still small
-// enough to refuse to buffer a wedged or noisy line without limit.
+// The widest frame the two RECORD-DESCRIBING books print — the 590 pair's
+// and the TS-480's, NewLayout's two, not all four — is the 50-byte MR
+// answer / MW set (590:1440-1461, 590:1518-1536; 480:923-943,
+// 480:955-976). Every other frame this milestone builds or parses is far
+// narrower: ID read 3 and answer 6, FV read 3 and answer 7, TY read 3 and
+// answer 6, MC read 3 and Set/Answer 6, MR read 7, EX read 10. The ONE
+// frame with no printed ceiling in THOSE two books is the EX ANSWER, whose
+// P5 is declared "variable length" with no upper bound anywhere
+// (590:555-556, 480:409-411) — recorded as A19, whose lift is an exhaustive
+// EX sweep. So no bound is DERIVABLE from these documents at all; 256 is
+// ADEQUATE rather than derived — comfortably above every printed Kenwood
+// frame, with 246 bytes of margin left for a P5 the parameter lists never
+// print anywhere near that wide, and still small enough to refuse to
+// buffer a wedged or noisy line without limit.
+//
+// THE WIDEST FRAME THE FAMILY PRINTS, AFTER KENWOOD PAIR 2, IS WIDER STILL:
+// the TS-990S's MA0 answer, at 57 bytes (the TS-890S's is 40-50). 256 still
+// clears it, by 199 bytes rather than 206. Establishing that bound as a
+// Kenwood fact — not merely as "256 happens to be more" — is core/kw/ma's
+// to do at Stage 1 (T6/T7), on its own accumulator seam; nothing here is
+// derived from the MA grid and this constant does not move to accommodate
+// it.
 //
 // TestDefaultMaxFrame_ExceedsTheWidestPrintedFrame pins the ONE relation
 // that holds — the bound exceeds the 50-byte frame — and pins nothing more,

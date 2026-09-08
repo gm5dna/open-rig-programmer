@@ -29,16 +29,18 @@ const (
 
 // MenuEntry is one menu/EX setting captured in a MenuSnapshot.
 type MenuEntry struct {
-	// ID is the stable menu identifier: exactly 3, 4 or 6 ASCII digits —
+	// ID is the stable menu identifier: exactly 3, 4, 5 or 6 ASCII digits —
 	// the EX address in its dialect's wire form (P1P2P3 under
 	// EXAddressTriple, P1P2 under EXAddressPair, bare P1 under
 	// EXAddressSingle — the FT-991A; cat.Dialect.EXWire renders each of
-	// those three Yaesu forms — or a bare Kenwood MENU number under
-	// core/kw).
+	// those three Yaesu forms — a bare Kenwood MENU number under core/kw,
+	// or the grouped P1 P2P2 P3P3 EX address the TS-890S and TS-990S use
+	// (core/kw/ma, landing at Stage 1).
 	// Not always six: the S0-close review's LOW-4 finding was this comment
 	// still promising P1P2P3 unconditionally after the FT-891's narrower
-	// wire form was added, and the Kenwood line narrowed it again. See
-	// isSettingIDWidth, which is the only place the width is judged.
+	// wire form was added, and the Kenwood line has since narrowed it twice
+	// more. See isSettingIDWidth, which is the only place the width is
+	// judged.
 	ID string `json:"id"`
 	// Value is the raw canonical P4 value (see MenuEntryState for when it
 	// is populated).
@@ -81,34 +83,56 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 	return &out
 }
 
-// isSettingIDWidth reports whether id is exactly THREE, exactly FOUR or
-// exactly SIX ASCII digits.
+// isSettingIDWidth reports whether id is exactly THREE, exactly FOUR,
+// exactly FIVE or exactly SIX ASCII digits.
 //
 // A menu setting ID is a radio's EX address rendered as wire digits, so its
-// width belongs to the RADIO and not to this package. All three widths the
-// project's dialects express are admitted: six for a (P1,P2,P3) MENU Number
+// width belongs to the RADIO and not to this package. Every width the
+// project's dialects express is admitted: six for a (P1,P2,P3) MENU Number
 // — the FT-710, FTdx10 and FTdx101, core/cat's EXAddressTriple — four for a
-// (P1,P2) one, core/cat's EXAddressPair — and three for either a bare P1
+// (P1,P2) one, core/cat's EXAddressPair — three for either a bare P1
 // under core/cat's EXAddressSingle (the FT-991A) or a Kenwood MENU number,
-// which core/kw addresses as its own bare three-digit field. This is a
-// validator rule only: no serialised field changed and the schema did not
-// move. TestMenuSnapshotValidate_SettingIDWidths and
-// TestMenuSnapshotValidate_ThreeDigitIDs pin the three widths and the
-// edges either side of each.
+// which core/kw addresses as its own bare three-digit field — and five for
+// the grouped P1 P2P2 P3P3 EX address of the TS-890S and TS-990S, which
+// will be rendered as one five-character field (core/kw/ma, landing at
+// Stage 1). This is a validator rule only: no serialised field changed and
+// the schema did not move.
+// TestMenuSnapshotValidate_SettingIDWidths and
+// TestMenuSnapshotValidate_ThreeDigitIDs pin every admitted width and the
+// edges either side of the set.
 //
-// FIVE STAYS REFUSED, and that is the whole reason this is three exact
-// widths rather than a 3..6 range. The rule exists to catch a mis-shaped ID
-// before it is written to a file or put to a radio, and a range would admit
-// precisely the truncated (P1,P2,P3) address it was written to catch —
-// which is what the second row of TestMenuSnapshotValidate_ThreeDigitIDs'
-// "five digits" case pins.
+// FIVE IS NOW ADMITTED, AND THAT SPENDS THE ARGUMENT THIS PARAGRAPH USED TO
+// MAKE. It said the widths were named one by one rather than as a 3..6
+// range precisely so that five — the shape a (P1,P2,P3) address that lost
+// one digit takes — stayed refused. The TS-890S and TS-990S address a
+// setting by a five-character EX field, so admitting five is what "the
+// width belongs to the radio" now requires, and the admitted set runs
+// unbroken from three to six: a range in all but name. The truncation
+// guard this rule was written to be is therefore VESTIGIAL, and the cost is
+// published here rather than argued away.
 //
-// WHAT ADMITTING THREE COSTS, named rather than left for a later reader to
-// discover: it re-opens that same failure mode one width down, and it does
-// so twice. A (P1,P2) Pair address truncated from four digits to three now
-// validates, and so does a (P1,P2,P3) Triple address truncated to three —
-// the very form the paragraph above names as what the rule was written to
-// catch. Neither validated before.
+// WHAT STILL CATCHES A TRUNCATED ADDRESS IS INVENTORY MEMBERSHIP, but at a
+// DIFFERENT LAYER and LATER than this rule ever ran. This package is
+// radio-neutral and holds no inventory; membership is consulted by the
+// DRIVER, when an ID is parsed back into an address
+// (cat.Dialect.ParseEXAddress, core/cat/exinventory.go:186), pinned per
+// radio by TestSession_ReadSetting_ErrorTyping (Yaesu; zero frames, both
+// the four- and now the five-digit rows) and
+// TestReadSetting_AnUnknownIDIsRefusedBeforeAnyFrame (Kenwood). So the
+// catch moves down a layer and later: a MenuSnapshot — a codeplug file on
+// load, or clone's before-wire preflight — carrying a truncated five-digit
+// Yaesu address now validates clean, and nothing refuses it until the
+// radio is asked for that setting. That is where the check belonged in any
+// case: neither of the two books this widening serves prints a contiguous
+// EX domain to bound an address against, so a width rule could only ever
+// have been a proxy for membership — and a poor one, since the widths of
+// two radios in the same fleet may coincide.
+//
+// WHAT ADMITTING THREE COST, kept because it is the same ledger and the
+// three-digit entry is still true: it re-opened the truncation failure mode
+// one width down, and twice. A (P1,P2) Pair address truncated from four
+// digits to three validates, and so does a (P1,P2,P3) Triple address
+// truncated to three. Neither validated before.
 //
 // The mitigation is partial, and is recorded as partial. A Kenwood setting
 // ID is never DERIVED from a Yaesu one — the inventories come from
@@ -116,14 +140,12 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 // different radios — so no CROSS-FAMILY path produces a truncated address
 // that this widened validator would then accept. That argument does not
 // reach the within-family case: a driver that renders one of its own
-// radio's addresses into the wrong width, three digits where it meant six,
-// is a formatting bug inside a single inventory, and this widening stops
-// the validator catching it. What the rule still reaches after this change
-// is narrow in any case — five-digit and seven-or-more-digit shapes — and
-// a six-to-four truncation already passed before this milestone. Three
-// exact widths, not a range, is what keeps five refused.
+// radio's addresses into the wrong width is a formatting bug inside a
+// single inventory, and this rule no longer catches any of those. What it
+// reaches now is two-or-fewer and seven-or-more digits, and a non-digit at
+// any width.
 func isSettingIDWidth(id string) bool {
-	if len(id) != 3 && len(id) != 4 && len(id) != 6 {
+	if n := len(id); n < 3 || n > 6 {
 		return false
 	}
 	return strings.IndexFunc(id, func(r rune) bool { return r < '0' || r > '9' }) < 0
@@ -138,7 +160,7 @@ func isSettingIDWidth(id string) bool {
 //   - a Known entry must have a non-empty Value; an Unavailable entry must
 //     have an empty Value; an Unsupported entry's Value is preserved
 //     verbatim and may be empty;
-//   - every ID is exactly 3, 4 or 6 ASCII digits — the three EX address
+//   - every ID is exactly 3, 4, 5 or 6 ASCII digits — the four EX address
 //     widths, see isSettingIDWidth — and no ID repeats;
 //   - a Complete snapshot contains no Unavailable and no Unsupported
 //     entries (those two states are precisely the ways a read was NOT
@@ -150,7 +172,7 @@ func (m *MenuSnapshot) Validate() error {
 	seen := make(map[string]bool, len(m.Entries))
 	for i, e := range m.Entries {
 		if !isSettingIDWidth(e.ID) {
-			return &MenuEntryError{Index: i, ID: e.ID, Reason: "id must be exactly 3, 4 or 6 ASCII digits"}
+			return &MenuEntryError{Index: i, ID: e.ID, Reason: "id must be exactly 3, 4, 5 or 6 ASCII digits"}
 		}
 		if seen[e.ID] {
 			return &DuplicateMenuIDError{ID: e.ID}
