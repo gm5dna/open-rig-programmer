@@ -284,8 +284,8 @@ func (l Layout) buildSecond890(what string, rec Record) (string, error) {
 		// The printed zeroed form (890:3217-3218, A16). A record claiming
 		// it while carrying split content is refused rather than half
 		// emitted.
-		if rec.TXFreqHz != 0 || rec.TXFMNarrow {
-			return "", newParseError(nil, "%s: this record has no second side mode but carries split transmission content (P8 = %d, P10 = %v); a single memory channel's whole split side is zero (890:3217-3218)", what, rec.TXFreqHz, rec.TXFMNarrow)
+		if rec.TXFreqHz != 0 || rec.TXFMNarrow || rec.Split {
+			return "", newParseError(nil, "%s: this record has no second side mode but carries split transmission content (P8 = %d, P10 = %v, P11 = %v); a single memory channel's whole split side is zero, which a split P11 contradicts (890:3201-3203, 890:3217-3218)", what, rec.TXFreqHz, rec.TXFMNarrow, rec.Split)
 		}
 		return strings.Repeat("0", ma0FreqDigits+2), nil
 	}
