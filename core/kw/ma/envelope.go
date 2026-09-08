@@ -56,13 +56,17 @@ const (
 	exAddrOff = 2
 	exAddrLen = 5
 
-	// exP4Off is position 8, the configuration classification. In an ANSWER
-	// it is always a space: "Response is always a space" (890:1915,
-	// 990:1741). The READ form carries no P4 at all.
+	// exP4Off is position 8, the configuration classification, on BOTH
+	// books' own position rulers (890:1898-1900 Set, 890:1909-1910 Answer;
+	// 990:1721-1723 Set, 990:1738-1740 Answer). The READ form carries no P4
+	// at all.
 	exP4Off = 7
-	// exP4Answer is that space, named once because the parser requires it
-	// and erratum E14 records how easily a chart's "Unused (1 digit)"
-	// wording invites a builder to emit '0' into such a field instead.
+	// exP4Answer is the literal ASCII space an ANSWER carries there:
+	// "Response is always a space" (890:1912-1915, 990:1737-1741). It is
+	// DOCUMENTED and not assumed — both books print it — and it is named
+	// once because the parser requires it and because erratum E14 records
+	// how easily a chart's "Unused (1 digit)" wording invites a builder to
+	// emit '0' into such a field instead.
 	exP4Answer = ' '
 
 	// exP5Off is position 9, where P5 begins in an answer.
@@ -74,12 +78,16 @@ const (
 	// nine-byte answer is a printed form and not a truncation.
 	exAnswerMinLen = exP5Off + 1
 
-	// ex990AnswerLen is the TS-990S's PRINTED answer length. Its Set and
-	// Answer grids are both drawn to position 24 — positions 21-23 are P5
-	// and the ';' is nailed to 24 (990:1732 for the Set row, 990:1747 for
-	// the Answer row) — which puts P5 in a FIXED 15-wide window at
-	// positions 9-23. The TS-890S's terminator floats instead: its ruler
-	// head is a literal "x" with the ';' beneath it (890:1902, 890:1912).
+	// ex990AnswerLen is the TS-990S's PRINTED answer length, and the whole
+	// of ERRATUM E19. That book's EX Set and Answer grids are both drawn to
+	// position 24 — the ruler holds P5 to exactly fifteen bytes at
+	// positions 9-23 and nails ';' to 24 (990:1719-1732 Set, 990:1738-1747
+	// Answer) — while the SAME chart's P5 note is the variable-length one
+	// both books print (990:1742-1756). The diagram and the note beside it
+	// disagree, so this codec admits both readings; see ParseEXAnswer. The
+	// TS-890S's diagram is honest about the variability instead: its ruler
+	// reads "9~" and the terminator's header cell is the letter "x", never
+	// a number (890:1898-1904 Set, 890:1909-1913 Answer).
 	ex990AnswerLen = 24
 	// ex990P5Window is that window's width, 24 - 8 - 1.
 	ex990P5Window = ex990AnswerLen - exAnswerMinLen
@@ -343,16 +351,19 @@ func (l Layout) BuildEXRead(addr kw.EXAddress) (Command, error) {
 // chart, and a SHORTER answer is admitted: A19 claims a maximum and nothing
 // else.
 //
-// AND THE 990S HAS A SECOND ADMITTED FORM, READ OFF ITS PRINTED RULER. Its
-// Set and Answer grids are both drawn to position 24, with P5 at positions
-// 9-23 and the ';' nailed to 24 (990:1732, 990:1747), while its PROSE prints
-// the same variable-length P5 classes as the 890S (990:1746-1752). The two
-// readings cannot both be literal, so both are admitted: the printed
-// twenty-four-byte frame with P5 filling its fifteen-wide window, and a
-// shorter frame carrying the row's own printed width. A length between them
-// is refused, because neither reading produces one. The TS-890S has no fixed
-// form at all — its terminator floats under a ruler head printed "x"
-// (890:1902, 890:1912) — so this arm is inert on that row.
+// AND THE 990S HAS A SECOND ADMITTED FORM, WHICH IS ERRATUM E19. Its Set and
+// Answer grids are both drawn to position 24, with P5 at positions 9-23 and
+// the ';' nailed to 24 (990:1719-1732 Set, 990:1738-1747 Answer), while the
+// same chart's own P5 note prints the variable-length classes both books give
+// (990:1742-1756). The two readings cannot both be literal, so BOTH are
+// admitted and both are pinned: the printed twenty-four-byte frame with P5
+// filling its fifteen-wide window, and a shorter frame carrying the row's own
+// printed width. A length between them is refused, because neither reading
+// produces one. A parser built to the diagram alone would refuse or mis-scan
+// every item class narrower than the widest, which is what E19 exists to stop
+// a later reader doing. The TS-890S has no fixed form at all — its terminator
+// floats under a ruler head printed "x" (890:1898-1904, 890:1909-1913) — so
+// this arm is inert on that row.
 //
 // P5 IS RETURNED VERBATIM, INCLUDING ANY TRAILING SPACES. Neither book states
 // a padding rule for P5 — A1's rule is the MA0 name field's and is scoped to
@@ -407,7 +418,7 @@ func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 		return "", newParseError(frame, "EX answer: this frame answers menu %s and the read asked for menu %s — every menu address answers with a frame starting \"EX\", so the whole address is what correlates an answer to its read", got, want)
 	}
 	if frame[exP4Off] != exP4Answer {
-		return "", newParseError(frame, "EX answer: P4 is %q, and both books print \"Response is always a space\" (890:1915, 990:1741)", frame[exP4Off])
+		return "", newParseError(frame, "EX answer: P4 is %q, and both books print \"Response is always a space\" (890:1912-1915, 990:1737-1741)", frame[exP4Off])
 	}
 
 	p5 := frame[exP5Off : len(frame)-1]
@@ -433,12 +444,12 @@ func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 func (l Layout) checkEXP5Width(frame, p5 []byte, item kw.EXItem) error {
 	if l.book == kw.Book990 {
 		if len(frame) == ex990AnswerLen && len(p5) == ex990P5Window {
-			// The printed fixed form: P5 fills its window (990:1732,
-			// 990:1747). The pad is returned verbatim.
+			// The printed fixed form: P5 fills its window (E19,
+			// 990:1719-1732, 990:1738-1747). The pad is returned verbatim.
 			return nil
 		}
 		if len(frame) > ex990AnswerLen {
-			return newParseError(frame, "EX answer: the frame is %d bytes and this book draws its EX Answer to %d, with P5 in a %d-wide window at positions 9-%d (990:1747)", len(frame), ex990AnswerLen, ex990P5Window, exP5Off+ex990P5Window)
+			return newParseError(frame, "EX answer: the frame is %d bytes and this book draws its EX Answer to %d, with P5 in a %d-wide window at positions 9-%d (E19; 990:1738-1747)", len(frame), ex990AnswerLen, ex990P5Window, exP5Off+ex990P5Window)
 		}
 	}
 	if len(p5) > item.Digits {
