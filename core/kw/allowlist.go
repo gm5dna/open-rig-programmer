@@ -306,10 +306,13 @@ func (l Layout) validEXRead(frame []byte) bool {
 // NewFraming is the whole of it. NewFraming(book) knows which document a
 // session speaks and therefore which cause sentence an "O;" carries (E13),
 // but it does not know which RADIO — the layout axes are per row — so its
-// Allow can only be the envelope both books print: a terminator, exactly
-// one, as the last byte; two upper-case name bytes; printable interior; no
-// radio-to-host token; no frame past DefaultMaxFrame. That is a true
-// statement about what a Kenwood frame looks like and it is not a grammar.
+// Allow can only be the envelope all four books print (terminator
+// 890:93-96, 990:96-99; command-name floor 890:76-80, 990:77-83; see
+// framing.go's envelopeAllows for the full citation set): a terminator,
+// exactly one, as the last byte; two upper-case name bytes; printable
+// interior; no radio-to-host token; no frame past DefaultMaxFrame. That is
+// a true statement about what a Kenwood frame looks like and it is not a
+// grammar.
 // A session opened through it would admit, for instance, the 42-byte erase
 // shape of 590:1579-1581 — a frame the book really prints and this programme
 // really never builds.
@@ -363,6 +366,13 @@ func NewFramingFor(l Layout) (transport.Framing, error) {
 // later defensive nil check quietly degrading the gate to the envelope
 // alone. Refusing at construction is the same door NewFraming shuts on an
 // unset book.
+//
+// THAT IS A GUARDED RULE AND NOT ONLY A SENTENCE, exactly as NewFraming's
+// own doc says of itself: internal/guards' TestKenwoodDriversUseNewFramingFor
+// fails on any non-test file under core/driver that calls this constructor
+// directly. The two constructors a driver MAY use are kw.NewFramingFor
+// (layout) and ma.NewFramingFor (layout) — this one is the shared seam
+// those two build on, not a third front door.
 func NewFramingWithGate(book Book, allow func([]byte) bool) (transport.Framing, error) {
 	if allow == nil {
 		return nil, fmt.Errorf("%w: no outbound gate was supplied, and a framing whose gate defaulted to the envelope alone would be a weaker gate reached by forgetting something", ErrLayoutInvalid)
