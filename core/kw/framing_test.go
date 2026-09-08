@@ -34,7 +34,7 @@ func TestNewFraming_RefusesAnUnsetBook(t *testing.T) {
 // TestNewFraming_BothBooksBuild pins the positive control that the refusal
 // above is not vacuous.
 func TestNewFraming_BothBooksBuild(t *testing.T) {
-	for _, b := range []Book{Book590, Book480} {
+	for _, b := range []Book{Book590, Book480, Book890, Book990} {
 		f, err := NewFraming(b)
 		if err != nil {
 			t.Fatalf("NewFraming(%v): unexpected error: %v", b, err)
@@ -58,7 +58,7 @@ func TestNewFraming_BothBooksBuild(t *testing.T) {
 // could only ever fire in company with the equality check — it is gone,
 // because a test line that cannot fail alone reads as coverage and is not.
 func TestFraming_InitSequenceIsAI0AndNothingElse(t *testing.T) {
-	for _, b := range []Book{Book590, Book480} {
+	for _, b := range []Book{Book590, Book480, Book890, Book990} {
 		f, err := NewFraming(b)
 		if err != nil {
 			t.Fatalf("NewFraming(%v): %v", b, err)
