@@ -59,7 +59,7 @@
 // # The one variable-length frame — a negative fact, stated because it is
 // # load-bearing
 //
-// THE EX ANSWER IS THE ONLY VARIABLE-LENGTH FRAME THIS MILESTONE PARSES.
+// THE EX ANSWER IS THE ONLY VARIABLE-LENGTH FRAME THIS CODEC PARSES.
 // Its P5 is declared "String of alphanumeric characters for the Menu
 // setting (variable length)" (590:555-556) and "A string of characters
 // (Variable length). Normally 1-digit for the TS-480. Menu No. 32, 35 and

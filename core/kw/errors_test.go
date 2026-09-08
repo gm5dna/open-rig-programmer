@@ -11,8 +11,10 @@ import (
 )
 
 // TestStreamError_CarriesEachBooksOwnCauseSentence is erratum E13 made
-// falsifiable: the two documents give the SAME token DIFFERENT causes, and
-// a diagnostic that quotes the wrong one quotes the wrong document.
+// falsifiable: the books do not all give the SAME token the same cause —
+// the TS-480 diverges from the other three, which is E13 at its true
+// width, and a diagnostic that quotes the wrong sentence quotes the wrong
+// document.
 func TestStreamError_CarriesEachBooksOwnCauseSentence(t *testing.T) {
 	tests := []struct {
 		token    string
@@ -158,7 +160,7 @@ func TestRejectionError_NamesBothCausesAndTheTransientSentence(t *testing.T) {
 // `cite := "590:..."; if e.Book == Book480 { ... }`, a value that names no
 // document quoted the TS-590's line numbers — the exact fail-open
 // ErrUnconfiguredBook exists to prevent, in the one package whose headline
-// erratum (E13) is that the two books disagree. An error that cannot name
+// erratum (E13) is that the books disagree about `O;`. An error that cannot name
 // its document must cite no lines at all and SAY that it cannot.
 func TestTypedErrors_QuoteNoDocumentTheyWereNotGiven(t *testing.T) {
 	for _, tt := range []struct {
@@ -169,7 +171,7 @@ func TestTypedErrors_QuoteNoDocumentTheyWereNotGiven(t *testing.T) {
 		{"timeout", (&TimeoutError{Book: BookUnset, Command: "MR0007;"}).Error()},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, forbidden := range []string{"590:", "480:"} {
+			for _, forbidden := range []string{"590:", "480:", "890:", "990:"} {
 				if strings.Contains(tt.msg, forbidden) {
 					t.Errorf("Error() = %q — it quotes %s though it was given no document to speak for", tt.msg, forbidden)
 				}
