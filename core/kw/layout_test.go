@@ -96,6 +96,47 @@ func TestNewLayout_RefusesAnUnsetAxis(t *testing.T) {
 	}
 }
 
+// TestNewLayout_RefusesTheTwoBooksThisRecordDoesNotDescribe is the door the
+// Book widening opens in the OPPOSITE direction to decision 1's.
+//
+// core/kw now READS four books, because all four print the same envelope and
+// the same error-message table. It DESCRIBES two: this file's 50-byte MR/MW
+// record is the 590 pair's and the TS-480's. Without the refusal below,
+// NewLayout's only book test is Book.valid(), so a caller could mint
+// kw.NewLayout(LayoutConfig{Book: kw.Book890, …}) and hold a kw.Layout
+// claiming to speak the TS-890S document — one whose eight-opcode
+// AllowedCommand admits MR, MW, MC and TY for a radio that has none of them,
+// whose hard-wiring checks would be satisfied by 590-shaped data, and whose
+// MRAnswerMatcher would correlate 50-byte frames. It is reached by a
+// plausible mistake rather than by a type error.
+//
+// kwtest's own switch catches it only for a layout somebody remembers to
+// pass to kwtest, and no ma.Layout ever will.
+func TestNewLayout_RefusesTheTwoBooksThisRecordDoesNotDescribe(t *testing.T) {
+	for _, book := range []Book{Book890, Book990} {
+		t.Run(book.String(), func(t *testing.T) {
+			cfg := validLayoutConfig()
+			cfg.Book = book
+			l, err := NewLayout(cfg)
+			if err == nil {
+				t.Fatalf("NewLayout accepted %v — a 50-byte MR/MW layout must not claim a document that prints no such record", book)
+			}
+			if !errors.Is(err, ErrLayoutInvalid) {
+				t.Errorf("errors.Is(err, ErrLayoutInvalid) = false for %v", err)
+			}
+			// BY NAME, and pointing at the package that does describe
+			// these two radios: a refusal reading "Book is unset" would
+			// send a reader looking for a missing field.
+			if !strings.Contains(err.Error(), "core/kw/ma") {
+				t.Errorf("the refusal reads %v — it must name core/kw/ma, which is where these two radios' memory channel lives", err)
+			}
+			if l.Configured() {
+				t.Error("NewLayout returned a Configured Layout alongside its error")
+			}
+		})
+	}
+}
+
 // TestNewLayout_RefusesAPrintedFixedSetThatContradictsAnAxis pins the
 // cross-check: byte 4, byte 28 and byte 41 each have BOTH an axis and a
 // possible entry in the printed-fixed set, and the two must agree. A bound
