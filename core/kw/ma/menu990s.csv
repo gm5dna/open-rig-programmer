@@ -76,13 +76,15 @@
 #     signed setting value it corresponds to.
 #  4. The 18 PF-key rows 0/00/15 to 0/00/32 share one prose cell, "Refer to
 #     the list of function allotment numbers for the PF key" (:1793-1810).
-#     It states no width, so the width is the column headers' three
-#     characters as in judgement 1: digits 3, text false. THE BOOK'S EX
-#     COMMAND PAGE DISAGREES — "PF key settings use 4 digits (refer to the
-#     PF Key assignment ID lists)" (:1747-1748), and that list — "PF Key
-#     Assignment Lists" (:2287) — prints four-digit IDs up to 9999 (:2341).
-#     That disagreement is recorded, not resolved here: this file
-#     transcribes the chart, and the chart's own cell gives no width.
+#     It states no width, so the width cannot come from the cell. This leg
+#     read it as the column headers' three characters (judgement 1) and
+#     recorded that THE BOOK'S EX COMMAND PAGE DISAGREES — "PF key settings
+#     use 4 digits (refer to the PF Key assignment ID lists)" (:1747-1748),
+#     and that list — "PF Key Assignment Lists" (:2287) — prints four-digit
+#     IDs up to 9999 (:2341). THE ORCHESTRATOR RULED IT 4 (ruling R-B,
+#     08/09/2026), on those two citations and against a cell that states no
+#     width at all: these rows now carry digits 4, text false. The profile's
+#     MaxDigits stays 8 — the 28 Fixed Mode band-limit rows are wider.
 #  5. Menu 0/00/14's Function is "Operating Band (High/Low & Shift/Width
 #     Controls)". The layout text splits it as ":1790 Operating Band
 #     (High/Low & Shift/Width and" and ":1792 Controls)", where the "and"
@@ -118,24 +120,24 @@
 0,00,12,,,Long Press Duration of Panel Keys,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1785
 0,00,13,,,Touchscreen Tuning,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1788
 0,00,14,,,Operating Band (High/Low & Shift/Width Controls),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1791
-0,00,15,,,PF A: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1793
-0,00,16,,,PF B: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1794
-0,00,17,,,Voice (Main Band): Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1795
-0,00,18,,,Voice (Sub Band): Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1796
-0,00,19,,,External PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1797
-0,00,20,,,External PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1798
-0,00,21,,,External PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1799
-0,00,22,,,External PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1800
-0,00,23,,,External PF 5: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1801
-0,00,24,,,External PF 6: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1802
-0,00,25,,,External PF 7: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1803
-0,00,26,,,External PF 8: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1804
-0,00,27,,,Microphone PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1805
-0,00,28,,,Microphone PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1806
-0,00,29,,,Microphone PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1807
-0,00,30,,,Microphone PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1808
-0,00,31,,,Microphone Down: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1809
-0,00,32,,,Microphone Up: Key Assignment,Refer to the list of function allotment numbers for the PF key,3,false,1810
+0,00,15,,,PF A: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1793
+0,00,16,,,PF B: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1794
+0,00,17,,,Voice (Main Band): Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1795
+0,00,18,,,Voice (Sub Band): Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1796
+0,00,19,,,External PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1797
+0,00,20,,,External PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1798
+0,00,21,,,External PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1799
+0,00,22,,,External PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1800
+0,00,23,,,External PF 5: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1801
+0,00,24,,,External PF 6: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1802
+0,00,25,,,External PF 7: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1803
+0,00,26,,,External PF 8: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1804
+0,00,27,,,Microphone PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1805
+0,00,28,,,Microphone PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1806
+0,00,29,,,Microphone PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1807
+0,00,30,,,Microphone PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1808
+0,00,31,,,Microphone Down: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1809
+0,00,32,,,Microphone Up: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1810
 0,00,33,,,Automatic Power Off,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1811
 0,00,34,,,Data Mode Numbers <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1813
 0,01,00,,,Beep Volume,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1816
