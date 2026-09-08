@@ -63,9 +63,10 @@ const (
 //
 // PrefixLenMatcher's exactLen <= 0 BRANCH IS DELIBERATELY NOT USED, and
 // core/kw's own doc.go is why: it records that a second variable-length user
-// of that branch "is a sign that somebody has mis-read a chart", and the same
-// file already names this radio — "The TS-890S's floating MA0 terminator is
-// not in this pair." A bare unbounded matcher would also correlate a
+// of that branch "is a sign that somebody has mis-read a chart", while
+// scoping that sentence to the MR/MW codec and naming this row's answer "a
+// genuine second variable-length frame … matched by core/kw/ma's own
+// matcher" (core/kw/doc.go:70-80). A bare unbounded matcher would also correlate a
 // two-hundred-byte run of noise that happened to start with the right six
 // bytes. A range matcher correlates what the book can produce and refuses
 // what it cannot, and still delivers a corrupt-but-plausible frame to the

@@ -92,7 +92,10 @@ func (s Slot) IsZero() bool { return s.class == kw.SlotClassInvalid }
 // suffix to separate the two. Both books print P1 as three cells over "000 ~
 // 119" (890:3166-3169, 990:2893-2896), and A5 records that the ANSWER
 // direction spells it back the same way rather than space-padding as the
-// 590's MC does.
+// 590's MC does. The dual role is safe because every builder re-measures the
+// assembled frame against its printed length (codec890.go:262,
+// codec990.go:251, shared.go:321), so a future suffix would fail loudly
+// rather than ship a malformed P1.
 func (s Slot) String() string {
 	if s.IsZero() {
 		return "<invalid slot>"
@@ -160,8 +163,11 @@ func (l Layout) slotSpaceText() string {
 // parser that read it as one would refuse every unsplit channel on the radio.
 // So a zero TXMode says "this record's secondary side is the printed zeroed
 // form"; the decoder sets it on recognising that window and the encoder
-// re-emits the window whole. A record claiming it while carrying secondary
-// content is refused rather than half-emitted.
+// re-emits the window whole. THE SENTINEL IS SAFE RATHER THAN FORCED — a
+// HasSecond bool was available too — because no legal Record can carry
+// TXMode == 0 with secondary content: both builders refuse exactly that
+// pairing (buildSecond890, buildSecond990, and MED-1's Split/DualRecv
+// extension of the same guard).
 type Record struct {
 	// Slot is the channel this record is for, resolved to its class.
 	Slot Slot
