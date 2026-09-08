@@ -1355,3 +1355,577 @@ func withAddr(m map[chartAddr]chartRow, addr chartAddr, row chartRow) map[chartA
 	out[addr] = row
 	return out
 }
+
+// --- evidence leg G: the geometry vectors, replayed ------------------------
+//
+// The eleven *-890/-990.golden files are forty-nine hand-derived wire frames,
+// counted off the two books' printed position rulers by a quarantined agent
+// that never opened this repository: no code, no generator, no fixture and no
+// other document, only renders of the charts and their parameter legends.
+// Every field width, every position boundary and every assumption that had to
+// be inherited rather than read is itemised in testdata/provenance.md and
+// repeated in each file's own header block, which the roster below cites for
+// the lengths it hardcodes.
+//
+// A GOLDEN-VS-CODEC MISMATCH IS A STOP for orchestrator arbitration AGAINST
+// THE PDF — either the hand derivation or the codec misreads the book — which
+// is why every failure below prints both sides and both lengths: the failure
+// output is the arbitration's input. No vector is ever edited to make a test
+// pass.
+//
+// # What "replayed" means here, and why some frames are not built
+//
+// Each vector carries its disposition. replayBuild means this package produces
+// those exact bytes; replayParse means it decodes them into the fields pinned
+// below; replayNone means it has NO entry point for that frame BY DESIGN, and
+// the roster records which standing rule says so. The three sets are pinned
+// together with the roster, so a frame sliding from "built" to "no builder" —
+// or the reverse, which would be a new frame reaching a radio — moves a
+// literal in this file.
+//
+// # Hardware status
+//
+// UNVERIFIED, for all forty-nine. Neither radio has ever been asked anything
+// by this project (A19). Green here means the frames satisfy the grammars both
+// books print, as one agent read those books, and NOT that any radio accepts
+// these bytes.
+
+type replay int
+
+const (
+	replayBuild replay = iota
+	replayParse
+	replayNone
+)
+
+func (r replay) String() string {
+	switch r {
+	case replayBuild:
+		return "built"
+	case replayParse:
+		return "parsed"
+	}
+	return "no entry point"
+}
+
+// goldenVector is one roster entry: the file, the vector's name, the frame
+// length the DERIVER COUNTED off the printed ruler, and how this package
+// replays it.
+//
+// THE LENGTHS ARE LITERALS, transcribed from each file's own "COUNTED FRAME
+// LENGTHS" block or from the per-vector comment beside the frame, and the
+// vectors are the independent side: a length computed from the bytes it checks
+// would prove nothing.
+type goldenVector struct {
+	File       string
+	Name       string
+	CountedLen int
+	How        replay
+	Why        string // replayNone only: the rule that says this package builds no such frame
+}
+
+// The three reasons a frame in this evidence is not replayed through an entry
+// point, each a standing rule of this repository rather than an omission.
+const (
+	whyNoTransceiveSet = "the standing no-transceive-set rule: this programme turns auto-information OFF at init " +
+		"and never on, so AI2; and AI4; have no builder. The answer forms are the same four bytes as the sets " +
+		"and are not correlated either — nothing here ever reads an AI answer."
+	whyNoEXWrite = "the EX Set direction is not built at all in this milestone: settings write is a later " +
+		"milestone's scope, and an omitted config semantic is REFUSED rather than defaulted. P4 = '9' " +
+		"(initial value setting) is doubly out of scope — it is a factory-reset write."
+	whyMNOffTheRoster = "decision 5 removed MN from the outbound roster in both directions: the MA0 Read carries " +
+		"its own channel number (A18), so no channel-select frame is needed, and one that was built would be a " +
+		"frame this programme has no use for reaching a radio."
+)
+
+// goldenRoster is every vector in every file, in the order its file prints
+// them. Order is part of the pin: the walk below requires the roster and the
+// files to be the same list, so a vector added, removed or reordered fails
+// here rather than being quietly skipped.
+var goldenRoster = []goldenVector{
+	// AI — Set 4, Read 3, Answer 4 on both books; AI-990's header records the
+	// geometry as identical to the 890S's.
+	{"AI-890.golden", "set_off", 4, replayBuild, ""},
+	{"AI-890.golden", "set_on_not_backed_up", 4, replayNone, whyNoTransceiveSet},
+	{"AI-890.golden", "set_on_backed_up", 4, replayNone, whyNoTransceiveSet},
+	{"AI-890.golden", "read", 3, replayBuild, ""},
+	{"AI-890.golden", "answer_off", 4, replayBuild, ""},
+	{"AI-890.golden", "answer_on_not_backed_up", 4, replayNone, whyNoTransceiveSet},
+	{"AI-890.golden", "answer_on_backed_up", 4, replayNone, whyNoTransceiveSet},
+	{"AI-990.golden", "set_off", 4, replayBuild, ""},
+	{"AI-990.golden", "set_on_not_backed_up", 4, replayNone, whyNoTransceiveSet},
+	{"AI-990.golden", "set_on_backed_up", 4, replayNone, whyNoTransceiveSet},
+	{"AI-990.golden", "read", 3, replayBuild, ""},
+	{"AI-990.golden", "answer_off", 4, replayBuild, ""},
+	{"AI-990.golden", "answer_on_not_backed_up", 4, replayNone, whyNoTransceiveSet},
+	{"AI-990.golden", "answer_on_backed_up", 4, replayNone, whyNoTransceiveSet},
+
+	// EX — Read 8 on both. The 890S Set/Answer is 8 + len(P5) + 1 under a
+	// ruler whose terminator cell is headed "x", so a 3-digit P5 gives 12; the
+	// 990S's is a FIXED 24 with P5 filling positions 9-23. That is erratum
+	// E19, and G's 990S vectors are in the fixed form, which ParseEXAnswer
+	// admits alongside the shorter one.
+	{"EX-890.golden", "read", 8, replayBuild, ""},
+	{"EX-890.golden", "set_normal", 12, replayNone, whyNoEXWrite},
+	{"EX-890.golden", "answer_normal", 12, replayParse, ""},
+	{"EX-890.golden", "set_initialize", 12, replayNone, whyNoEXWrite},
+	{"EX-990.golden", "read", 8, replayBuild, ""},
+	{"EX-990.golden", "set_normal", 24, replayNone, whyNoEXWrite},
+	{"EX-990.golden", "answer_normal", 24, replayParse, ""},
+	{"EX-990.golden", "set_initialize", 24, replayNone, whyNoEXWrite},
+
+	// FV — Read 3, Answer 7 on both.
+	{"FV-890.golden", "read", 3, replayBuild, ""},
+	{"FV-890.golden", "answer_printed_example", 7, replayParse, ""},
+	{"FV-990.golden", "read", 3, replayBuild, ""},
+	{"FV-990.golden", "answer_printed_example", 7, replayParse, ""},
+
+	// ID — Read 3, Answer 6 on both.
+	{"ID-890.golden", "read", 3, replayBuild, ""},
+	{"ID-890.golden", "answer", 6, replayParse, ""},
+	{"ID-990.golden", "read", 3, replayBuild, ""},
+	{"ID-990.golden", "answer", 6, replayParse, ""},
+
+	// MA0 — Read 7 on both. The 890S Set/Answer is 40 + len(name) under the
+	// floating "x" terminator, so the four answer lengths its own comments
+	// record are 50, 40, 43 and 46; the 990S's is a FIXED 57 whatever the name
+	// length. Those two rules are the whole of spec decision 10.
+	{"MA0-890.golden", "read_ch000", 7, replayBuild, ""},
+	{"MA0-890.golden", "read_ch119", 7, replayBuild, ""},
+	{"MA0-890.golden", "answer_name_full10", 50, replayParse, ""},
+	{"MA0-890.golden", "answer_name_empty", 40, replayParse, ""},
+	{"MA0-890.golden", "answer_name_short3", 43, replayParse, ""},
+	{"MA0-890.golden", "answer_tone_split", 46, replayParse, ""},
+	{"MA0-890.golden", "set_name_full10", 50, replayBuild, ""},
+	{"MA0-890.golden", "set_tone_split", 46, replayBuild, ""},
+	{"MA0-990.golden", "read_ch000", 7, replayBuild, ""},
+	{"MA0-990.golden", "read_ch119", 7, replayBuild, ""},
+	{"MA0-990.golden", "answer_name_full10", 57, replayParse, ""},
+	{"MA0-990.golden", "answer_name_empty", 57, replayParse, ""},
+	{"MA0-990.golden", "answer_name_short3", 57, replayParse, ""},
+	{"MA0-990.golden", "answer_tone_dual_split", 57, replayParse, ""},
+	{"MA0-990.golden", "set_name_full10", 57, replayBuild, ""},
+	{"MA0-990.golden", "set_tone_dual_split", 57, replayBuild, ""},
+
+	// MN — Set 7, Read 4, Answer 7. The TS-890S book prints MN too; leg G
+	// derived it for the 990S only, which is the row this book gives a
+	// Main/Sub pointer.
+	{"MN-990.golden", "set", 7, replayNone, whyMNOffTheRoster},
+	{"MN-990.golden", "read", 4, replayNone, whyMNOffTheRoster},
+	{"MN-990.golden", "answer", 7, replayNone, whyMNOffTheRoster},
+}
+
+// TestGoldenVectors_RosterAndCountedLengths pins the roster against the files
+// and each frame against the length its own derivation counted.
+func TestGoldenVectors_RosterAndCountedLengths(t *testing.T) {
+	byFile := map[string][]goldenVector{}
+	var order []string
+	for _, v := range goldenRoster {
+		if _, seen := byFile[v.File]; !seen {
+			order = append(order, v.File)
+		}
+		byFile[v.File] = append(byFile[v.File], v)
+	}
+
+	present, err := filepath.Glob(filepath.Join(goldenDir, "*-89?.golden"))
+	if err != nil {
+		t.Fatalf("globbing %s: %v", goldenDir, err)
+	}
+	more, err := filepath.Glob(filepath.Join(goldenDir, "*-99?.golden"))
+	if err != nil {
+		t.Fatalf("globbing %s: %v", goldenDir, err)
+	}
+	present = append(present, more...)
+	if len(present) != len(order) {
+		t.Errorf("leg G holds %d vector files and the roster names %d — every file must be rostered", len(present), len(order))
+	}
+
+	for _, file := range order {
+		got := loadVectors(t, filepath.Join(goldenDir, file))
+		want := byFile[file]
+		if len(got) != len(want) {
+			t.Errorf("%s carries %d vectors and the roster names %d", file, len(got), len(want))
+			continue
+		}
+		for i, v := range want {
+			if got[i].Name != v.Name {
+				t.Errorf("%s vector %d is %q, the roster names %q — the roster is the file's order, not a set", file, i, got[i].Name, v.Name)
+				continue
+			}
+			if len(got[i].Frame) != v.CountedLen {
+				t.Errorf("%s/%s is %d bytes; the deriver COUNTED %d off the printed ruler. This is a STOP for arbitration against the PDF, not a literal to adjust:\n  %q",
+					file, v.Name, len(got[i].Frame), v.CountedLen, got[i].Frame)
+			}
+		}
+	}
+}
+
+// TestGoldenVectors_EveryVectorIsOneFrameToTheSplitter replays all forty-nine
+// through the envelope both books print, independently of whether any grammar
+// here recognises them.
+//
+// It is the leg that still holds when a grammar is widened, which is when it
+// matters most, and it is the only mechanical statement the replayNone
+// vectors get: those frames are well-formed to this family's own framing even
+// though nothing here builds or reads them.
+func TestGoldenVectors_EveryVectorIsOneFrameToTheSplitter(t *testing.T) {
+	for _, v := range goldenRoster {
+		frame := goldenFrame(t, v)
+		frames, rest := kw.SplitFrames([]byte(frame))
+		if len(frames) != 1 || string(frames[0]) != frame || len(rest) != 0 {
+			t.Errorf("%s/%s is not exactly one frame to the ';' splitter: %d frame(s), %d trailing bytes — an embedded terminator is two frames to the radio's own parser:\n  %q",
+				v.File, v.Name, len(frames), len(rest), frame)
+		}
+	}
+}
+
+// TestGoldenVectors_TheUnbuiltFramesRecordWhyNot requires every replayNone
+// entry to name the rule that keeps it unbuilt, and every replayed one to name
+// none — so "we did not get to it" cannot pass as "the rules forbid it".
+func TestGoldenVectors_TheUnbuiltFramesRecordWhyNot(t *testing.T) {
+	none := 0
+	for _, v := range goldenRoster {
+		if v.How == replayNone {
+			none++
+			if v.Why == "" {
+				t.Errorf("%s/%s has no entry point in this package and records no reason", v.File, v.Name)
+			}
+			continue
+		}
+		if v.Why != "" {
+			t.Errorf("%s/%s is %s and still carries a no-builder reason", v.File, v.Name, v.How)
+		}
+	}
+	// Stated out loud so that the set emptying — every frame suddenly
+	// buildable — is a visible change rather than a quiet one.
+	if want := 15; none != want {
+		t.Errorf("%d vectors have no entry point here, want %d (four AI ON sets and their answers less answer_off's Set twin, four EX Set forms, three MN forms)", none, want)
+	}
+}
+
+// TestGoldenVectors_EveryBuiltFrameIsBuiltByteForByte is the outbound half of
+// the replay: for each replayBuild vector, this package's own builder produces
+// exactly the bytes leg G counted.
+//
+// THE AI ANSWER FORM IS BUILT ON PURPOSE. "AI0;" is what both books print for
+// the Set AND for the Answer (890:3-4 charts, 990's the same), so answer_off
+// is byte-identical to the frame this package's init sequence sends; the pin
+// says so rather than leaving the coincidence unremarked.
+func TestGoldenVectors_EveryBuiltFrameIsBuiltByteForByte(t *testing.T) {
+	for _, v := range goldenRoster {
+		if v.How != replayBuild {
+			continue
+		}
+		t.Run(v.File+"/"+v.Name, func(t *testing.T) {
+			frame := goldenFrame(t, v)
+			got, err := buildGoldenFrame(t, v)
+			if err != nil {
+				t.Fatalf("building %s/%s: %v", v.File, v.Name, err)
+			}
+			if v.File+"/"+v.Name == a14DummyByteVector {
+				// Reproduced everywhere except the one byte this book calls a
+				// dummy; the exception is pinned whole by
+				// TestGoldenVectors_The990SSetVectorDiffersOnlyInA14sDummyByte
+				// rather than waved through here.
+				if string(got) == frame {
+					t.Errorf("the A14 exception for %s is STALE: the built frame now matches the vector byte for byte, so the exception is removed rather than left standing", a14DummyByteVector)
+				}
+				return
+			}
+			if string(got) != frame {
+				t.Errorf("BUILT BYTES DIFFER FROM THE COUNTED VECTOR — a STOP for arbitration against the PDF:\n  built    (%d bytes) %q\n  vector   (%d bytes) %q",
+					len(got), got, len(frame), frame)
+			}
+		})
+	}
+}
+
+// buildGoldenFrame produces one replayBuild vector through this package's own
+// builder. The MA0 Set vectors are built from the record their byte-identical
+// ANSWER parses to, which is the round trip the two grids' geometry rules
+// actually have to satisfy.
+func buildGoldenFrame(t *testing.T, v goldenVector) ([]byte, error) {
+	t.Helper()
+	l890, l990 := ma.Layout890(), ma.Layout990()
+	menu000 := kw.EXAddress{P1: 0, P2: 0, P3: 0}
+
+	var (
+		cmd ma.Command
+		err error
+	)
+	switch v.File + "/" + v.Name {
+	case "AI-890.golden/read":
+		cmd, err = l890.BuildAIRead()
+	case "AI-990.golden/read":
+		cmd, err = l990.BuildAIRead()
+	case "AI-890.golden/set_off", "AI-890.golden/answer_off":
+		cmd, err = l890.BuildAISetOff()
+	case "AI-990.golden/set_off", "AI-990.golden/answer_off":
+		cmd, err = l990.BuildAISetOff()
+	case "ID-890.golden/read":
+		cmd, err = l890.BuildIDRead()
+	case "ID-990.golden/read":
+		cmd, err = l990.BuildIDRead()
+	case "FV-890.golden/read":
+		cmd, err = l890.BuildFVRead()
+	case "FV-990.golden/read":
+		cmd, err = l990.BuildFVRead()
+	case "EX-890.golden/read":
+		cmd, err = l890.BuildEXRead(menu000)
+	case "EX-990.golden/read":
+		cmd, err = l990.BuildEXRead(menu000)
+	case "MA0-890.golden/read_ch000":
+		cmd, err = l890.BuildMA0Read(mustSlot(t, l890, 0))
+	case "MA0-890.golden/read_ch119":
+		cmd, err = l890.BuildMA0Read(mustSlot(t, l890, 119))
+	case "MA0-990.golden/read_ch000":
+		cmd, err = l990.BuildMA0Read(mustSlot(t, l990, 0))
+	case "MA0-990.golden/read_ch119":
+		cmd, err = l990.BuildMA0Read(mustSlot(t, l990, 119))
+	case "MA0-890.golden/set_name_full10":
+		cmd, err = rebuildMA0(t, l890, "MA0-890.golden", "answer_name_full10")
+	case "MA0-890.golden/set_tone_split":
+		cmd, err = rebuildMA0(t, l890, "MA0-890.golden", "answer_tone_split")
+	case "MA0-990.golden/set_name_full10":
+		cmd, err = rebuildMA0(t, l990, "MA0-990.golden", "answer_name_full10")
+	case "MA0-990.golden/set_tone_dual_split":
+		cmd, err = rebuildMA0(t, l990, "MA0-990.golden", "answer_tone_dual_split")
+	default:
+		t.Fatalf("%s/%s is rostered as built and this switch has no arm for it", v.File, v.Name)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return cmd.Bytes(), nil
+}
+
+// rebuildMA0 parses one MA0 answer vector and re-emits it as a Set.
+func rebuildMA0(t *testing.T, l ma.Layout, file, answer string) (ma.Command, error) {
+	t.Helper()
+	rec, err := l.ParseMA0Answer([]byte(goldenFrameNamed(t, file, answer)))
+	if err != nil {
+		t.Fatalf("parsing %s/%s to rebuild its Set: %v", file, answer, err)
+	}
+	return l.BuildMA0Set(rec)
+}
+
+// a14DummyByteVector is the ONE replayBuild vector whose bytes this package
+// does not reproduce exactly. See the test below for why, and for the pin.
+const a14DummyByteVector = "MA0-990.golden/set_tone_dual_split"
+
+// TestGoldenVectors_The990SSetVectorDiffersOnlyInA14sDummyByte is the one
+// replayBuild vector whose bytes this package does NOT reproduce, isolated so
+// that the exception is a pinned fact rather than a widened comparison.
+//
+// MA0-990's set_tone_dual_split carries P2 = '1' at position 7. That byte is
+// the channel type, and this book says of it: "The memory channel type is
+// decided while setting the P9 and P10 values, so this parameter is ignored.
+// Enter a dummy value" (990:2901-2903). The deriver's own header records its
+// choice as ASSUMED and says it "matches what a corresponding Answer would
+// plausibly report"; this codec's choice is '0', which is A14 and the
+// milestone's only defaulted byte. TWO DIFFERENT ASSUMED DUMMIES, in a
+// position the book says is ignored — not a disagreement about the chart.
+//
+// The pin is the whole frame: EXACTLY ONE byte differs, and it is that one.
+func TestGoldenVectors_The990SSetVectorDiffersOnlyInA14sDummyByte(t *testing.T) {
+	const classPos = 6 // P2, position 7 (990:2897-2903)
+	l990 := ma.Layout990()
+	want := goldenFrameNamed(t, "MA0-990.golden", "set_tone_dual_split")
+
+	cmd, err := rebuildMA0(t, l990, "MA0-990.golden", "answer_tone_dual_split")
+	if err != nil {
+		t.Fatalf("rebuilding the 990S split Set: %v", err)
+	}
+	got := string(cmd.Bytes())
+	if len(got) != len(want) {
+		t.Fatalf("the rebuilt frame is %d bytes and the vector is %d", len(got), len(want))
+	}
+	var differ []int
+	for i := range want {
+		if got[i] != want[i] {
+			differ = append(differ, i)
+		}
+	}
+	if len(differ) != 1 || differ[0] != classPos {
+		t.Errorf("the rebuilt Set differs from the vector at byte offsets %v, want exactly [%d] — every other position must be reproduced byte for byte:\n  built  %q\n  vector %q",
+			differ, classPos, got, want)
+		return
+	}
+	if got[classPos] != '0' || want[classPos] != '1' {
+		t.Errorf("P2 is %q in the built frame and %q in the vector; A14 records this codec's dummy as '0' and the deriver's as the answer's own value", got[classPos], want[classPos])
+	}
+}
+
+// TestGoldenVectors_EveryAnswerParsesToItsPinnedFields is the inbound half:
+// each replayParse vector decoded field by field, against values read off the
+// vector file's own annotations.
+func TestGoldenVectors_EveryAnswerParsesToItsPinnedFields(t *testing.T) {
+	l890, l990 := ma.Layout890(), ma.Layout990()
+	menu000 := kw.EXAddress{P1: 0, P2: 0, P3: 0}
+
+	// The two envelope answers whose value is a string.
+	for _, tc := range []struct {
+		file, name string
+		parse      func(frame []byte) (string, error)
+		want       string
+		why        string
+	}{
+		{"ID-890.golden", "answer", l890.ParseIDAnswer, l890.CATID(),
+			"the ID legend prints exactly one model/number pair, \"024: TS-890S\" (890:2733), and that is this row's own CAT ID"},
+		{"ID-990.golden", "answer", l990.ParseIDAnswer, l990.CATID(),
+			"the 990S book prints its ID bare, \"022\" (990:2612); the binding of that token to a model is this project's, and it is this row's own CAT ID"},
+		{"FV-890.golden", "answer_printed_example", l890.ParseFVAnswer, "1.00",
+			"the books' only format statement is one worked example, \"FV1.00;\" (890:2657, 990:2533) — A13: the WIDTH is pinned and the grammar is not"},
+		{"FV-990.golden", "answer_printed_example", l990.ParseFVAnswer, "1.00", "as the 890S; both books print the same example"},
+	} {
+		t.Run(tc.file+"/"+tc.name, func(t *testing.T) {
+			got, err := tc.parse([]byte(goldenFrameNamed(t, tc.file, tc.name)))
+			if err != nil {
+				t.Fatalf("parsing: %v — %s", err, tc.why)
+			}
+			if got != tc.want {
+				t.Errorf("parsed %q, want %q — %s", got, tc.want, tc.why)
+			}
+		})
+	}
+
+	// The two EX answers. BOTH ARE MENU 0/00/00, which each book's own chart
+	// prints, so each is parsed against the inventory row that would have read
+	// it. The 990S's is the FIXED 24-byte form of erratum E19: P5 fills its
+	// fifteen-wide window and the pad is returned VERBATIM, because neither
+	// book says which byte the pad is and trimming would be this codec making
+	// the caller's assumption for it.
+	for _, tc := range []struct {
+		file, name string
+		layout     ma.Layout
+		want       string
+	}{
+		{"EX-890.golden", "answer_normal", l890, "000"},
+		{"EX-990.golden", "answer_normal", l990, "000            "},
+	} {
+		t.Run(tc.file+"/"+tc.name, func(t *testing.T) {
+			item, ok := tc.layout.EXItem(menu000)
+			if !ok {
+				t.Fatalf("menu %v is not in the %s's inventory", menu000, tc.layout.Model())
+			}
+			got, err := tc.layout.ParseEXAnswer([]byte(goldenFrameNamed(t, tc.file, tc.name)), item)
+			if err != nil {
+				t.Fatalf("parsing: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("P5 parsed as %q (%d bytes), want %q (%d bytes)", got, len(got), tc.want, len(tc.want))
+			}
+			if item.Digits != 3 {
+				t.Errorf("the inventory row for %v declares %d digits; both charts print menu 0/00/00 as an ordinary 3-digit row, which is what makes the 990S's 15-byte P5 the FIXED form rather than a wide value", menu000, item.Digits)
+			}
+		})
+	}
+
+	// The eight MA0 answers, decoded field by field. Every value below is read
+	// off the vector file's own per-vector comment and position map.
+	for _, tc := range []struct {
+		file, name string
+		layout     ma.Layout
+		want       ma.Record
+	}{{
+		"MA0-890.golden", "answer_name_full10", l890,
+		ma.Record{Slot: mustSlot(t, l890, 0), FreqHz: 14_250_000, Mode: '2', ToneType: '0', Name: "HOMEBASE10"},
+	}, {
+		// The name window is ZERO bytes wide: the terminator floats to x = 40.
+		"MA0-890.golden", "answer_name_empty", l890,
+		ma.Record{Slot: mustSlot(t, l890, 1), FreqHz: 7_074_000, Mode: '6', ToneType: '0', Name: ""},
+	}, {
+		"MA0-890.golden", "answer_name_short3", l890,
+		ma.Record{Slot: mustSlot(t, l890, 119), FreqHz: 50_313_000, Mode: '4', FMNarrow: true, ToneType: '0', Lockout: true, Name: "SIX"},
+	}, {
+		// P5 = 1 Tone, P6 = 08 (88.5 Hz), P7 = 12 (100.0 Hz), P11 = 1 Split.
+		"MA0-890.golden", "answer_tone_split", l890,
+		ma.Record{Slot: mustSlot(t, l890, 100), FreqHz: 29_600_000, Mode: '4', ToneType: '1', ToneIndex: 8, CTCSSIndex: 12,
+			TXFreqHz: 29_500_000, TXMode: '4', Split: true, Name: "REPEAT"},
+	}, {
+		// Class '0' is P2, Single Memory channel, and it is a PARSER OUTPUT.
+		// P17 = '1' is Scan Lockout OFF on this radio — erratum E8.
+		"MA0-990.golden", "answer_name_full10", l990,
+		ma.Record{Slot: mustSlot(t, l990, 0), Class: '0', FreqHz: 14_250_000, Mode: '2', ToneType: '0', Name: "HOMEBASE10"},
+	}, {
+		// The name window is a FIXED ten bytes of ASCII space here, which is
+		// A1's pad rule; the parser right-trims it to "".
+		"MA0-990.golden", "answer_name_empty", l990,
+		ma.Record{Slot: mustSlot(t, l990, 1), Class: '0', FreqHz: 7_074_000, Mode: '6', ToneType: '0', Name: ""},
+	}, {
+		"MA0-990.golden", "answer_name_short3", l990,
+		ma.Record{Slot: mustSlot(t, l990, 119), Class: '0', FreqHz: 50_313_000, Mode: '4', FMNarrow: true, ToneType: '0', Lockout: true, Name: "ABC"},
+	}, {
+		// The whole second tuple this radio has and the 890S does not: P12 = 2
+		// CTCSS for frequency 2, P14 = 21 (136.5 Hz), P16 = 1 dual reception.
+		"MA0-990.golden", "answer_tone_dual_split", l990,
+		ma.Record{Slot: mustSlot(t, l990, 100), Class: '1', FreqHz: 29_600_000, Mode: '4', ToneType: '1', ToneIndex: 8, CTCSSIndex: 12,
+			TXFreqHz: 29_500_000, TXMode: '4', TXToneType: '2', TXCTCSSIndex: 21, Split: true, DualRecv: true, Lockout: true, Name: "REPEAT"},
+	}} {
+		t.Run(tc.file+"/"+tc.name, func(t *testing.T) {
+			got, err := tc.layout.ParseMA0Answer([]byte(goldenFrameNamed(t, tc.file, tc.name)))
+			if err != nil {
+				t.Fatalf("parsing: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("PARSED RECORD DIFFERS FROM THE VECTOR'S OWN ANNOTATION — a STOP for arbitration against the PDF:\n  parsed %+v\n  want   %+v", got, tc.want)
+			}
+			if got.Empty {
+				t.Error("the record is marked EMPTY; none of these vectors is a blank channel — leg G's headers record that the blank case is not represented at all")
+			}
+		})
+	}
+}
+
+func mustSlot(t *testing.T, l ma.Layout, n int) ma.Slot {
+	t.Helper()
+	s, err := l.NewSlot(n)
+	if err != nil {
+		t.Fatalf("NewSlot(%d): %v", n, err)
+	}
+	return s
+}
+
+// vector is one parsed line of a leg G file.
+type vector struct{ Name, Frame string }
+
+// loadVectors reads a golden file's vectors: "name<TAB>frame", with '#' lines
+// and blank lines skipped. A frame's bytes are taken VERBATIM, spaces and all.
+func loadVectors(t *testing.T, path string) []vector {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+	var out []vector
+	for i, line := range strings.Split(string(data), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, frame, ok := strings.Cut(line, "\t")
+		if !ok {
+			t.Fatalf("%s line %d is neither a comment nor a name<TAB>frame vector: %q", path, i+1, line)
+		}
+		out = append(out, vector{Name: name, Frame: frame})
+	}
+	if len(out) == 0 {
+		t.Fatalf("%s carries no vectors", path)
+	}
+	return out
+}
+
+func goldenFrame(t *testing.T, v goldenVector) string {
+	t.Helper()
+	return goldenFrameNamed(t, v.File, v.Name)
+}
+
+func goldenFrameNamed(t *testing.T, file, name string) string {
+	t.Helper()
+	for _, v := range loadVectors(t, filepath.Join(goldenDir, file)) {
+		if v.Name == name {
+			return v.Frame
+		}
+	}
+	t.Fatalf("%s carries no vector named %q", file, name)
+	return ""
+}
