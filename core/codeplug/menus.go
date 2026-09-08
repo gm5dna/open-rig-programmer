@@ -34,8 +34,8 @@ type MenuEntry struct {
 	// EXAddressTriple, P1P2 under EXAddressPair, bare P1 under
 	// EXAddressSingle — the FT-991A; cat.Dialect.EXWire renders each of
 	// those three Yaesu forms — a bare Kenwood MENU number under core/kw,
-	// or the grouped P1 P2P2 P3P3 EX address core/kw/ma renders for the
-	// TS-890S and TS-990S).
+	// or the grouped P1 P2P2 P3P3 EX address the TS-890S and TS-990S use
+	// (core/kw/ma, landing at Stage 1).
 	// Not always six: the S0-close review's LOW-4 finding was this comment
 	// still promising P1P2P3 unconditionally after the FT-891's narrower
 	// wire form was added, and the Kenwood line has since narrowed it twice
@@ -94,8 +94,9 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 // under core/cat's EXAddressSingle (the FT-991A) or a Kenwood MENU number,
 // which core/kw addresses as its own bare three-digit field — and five for
 // the grouped P1 P2P2 P3P3 EX address of the TS-890S and TS-990S, which
-// core/kw/ma renders as one five-character field. This is a validator rule
-// only: no serialised field changed and the schema did not move.
+// will be rendered as one five-character field (core/kw/ma, landing at
+// Stage 1). This is a validator rule only: no serialised field changed and
+// the schema did not move.
 // TestMenuSnapshotValidate_SettingIDWidths and
 // TestMenuSnapshotValidate_ThreeDigitIDs pin every admitted width and the
 // edges either side of the set.
@@ -110,14 +111,22 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 // guard this rule was written to be is therefore VESTIGIAL, and the cost is
 // published here rather than argued away.
 //
-// WHAT STILL CATCHES A TRUNCATED ADDRESS IS INVENTORY MEMBERSHIP. An
-// address that is not in the radio's own generated EX inventory is not a
-// setting on that radio, and every driver looks an address up there before
-// minting an ID from it. That is where the check belonged in any case:
-// neither of the two books this widening serves prints a contiguous EX
-// domain to bound an address against, so a width rule could only ever have
-// been a proxy for membership — and a poor one, since the widths of two
-// radios in the same fleet may coincide.
+// WHAT STILL CATCHES A TRUNCATED ADDRESS IS INVENTORY MEMBERSHIP, but at a
+// DIFFERENT LAYER and LATER than this rule ever ran. This package is
+// radio-neutral and holds no inventory; membership is consulted by the
+// DRIVER, when an ID is parsed back into an address
+// (cat.Dialect.ParseEXAddress, core/cat/exinventory.go:186), pinned per
+// radio by TestSession_ReadSetting_ErrorTyping (Yaesu; zero frames, both
+// the four- and now the five-digit rows) and
+// TestReadSetting_AnUnknownIDIsRefusedBeforeAnyFrame (Kenwood). So the
+// catch moves down a layer and later: a MenuSnapshot — a codeplug file on
+// load, or clone's before-wire preflight — carrying a truncated five-digit
+// Yaesu address now validates clean, and nothing refuses it until the
+// radio is asked for that setting. That is where the check belonged in any
+// case: neither of the two books this widening serves prints a contiguous
+// EX domain to bound an address against, so a width rule could only ever
+// have been a proxy for membership — and a poor one, since the widths of
+// two radios in the same fleet may coincide.
 //
 // WHAT ADMITTING THREE COST, kept because it is the same ledger and the
 // three-digit entry is still true: it re-opened the truncation failure mode

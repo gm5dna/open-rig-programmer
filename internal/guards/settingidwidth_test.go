@@ -164,7 +164,7 @@ var settingIDWidthScopedDirs = []string{
 }
 
 // settingIDWidthAllowlist is every in-scope site that states a width other
-// than the admitted three and is CORRECT as written, keyed by
+// than the admitted set and is CORRECT as written, keyed by
 // repository-relative file:line and justified entry by entry.
 //
 // Both entries are MODEL-SPECIFIC statements about the FT-710 in a
@@ -196,7 +196,7 @@ var settingIDWidthAllowlist = map[string]string{
 	"core/driver/settings.go:61": "SettingItem.ID's doc comment, naming the FT-710's own width as an example of an opaque token",
 }
 
-// admittedRe matches a statement of the THREE admitted widths, in any of
+// admittedRe matches a statement of the FOUR admitted widths, in any of
 // the spellings this repository uses for them. Occurrences are blanked
 // before staleRe runs — see this file's doc comment for why the two-pass
 // shape is necessary rather than merely tidy.
@@ -338,9 +338,9 @@ func TestNoStaleSettingIDWidthProse(t *testing.T) {
 // carried at some point or an escape demonstrated against the
 // phrasing-list version of staleRe. The "want no hit" samples are
 // statements the repository carries now, or close paraphrases of them,
-// with one exception: "TargetID is three, four or six ASCII digits" is a
-// spelling the tree does not use, kept because the spelled three-width
-// form must not fire if someone writes it.
+// with one exception: "TargetID is three, four, five or six ASCII digits"
+// is a spelling the tree does not use, kept as the spelled form of the
+// admitted set.
 func TestSettingIDWidthPatterns(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
