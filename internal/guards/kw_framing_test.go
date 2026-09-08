@@ -137,9 +137,9 @@ func callsKWNewFraming(f *ast.File) bool {
 // result would be indistinguishable from a predicate that never says yes.
 //
 // The five sources are the five ways this has to come out: the plain call,
-// the aliased call, the gate-hook constructor added at Kenwood pair 2 Stage 0
-// (spec decision 4), the constructor a driver SHOULD use, and core/civ's
-// same-named constructor that the Icom drivers really do call.
+// the aliased call, the constructor a driver SHOULD use, the gate-hook
+// constructor added at Kenwood pair 2 Stage 0 (spec decision 4), and
+// core/civ's same-named constructor that the Icom drivers really do call.
 func TestCallsKWNewFramingDetector(t *testing.T) {
 	for _, tc := range []struct {
 		name string
