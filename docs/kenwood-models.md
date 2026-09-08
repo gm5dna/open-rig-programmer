@@ -117,19 +117,17 @@ widens what may be attempted, never how carefully it is attempted.
   requires one, which is a per-session port setting this program does not
   vary by baud (matrix §1.11, erratum M-E4).
 
-- **CHIRP import is not available for the TS-590S/SG in v1.4.0: every row
-  is blocked.** A CHIRP file's blank `Duplex` column means simplex, and
-  this family declares no shift vocabulary at all — the 50-byte record
-  carries no duplex selector, so `ShiftOptions` is empty
-  (`core/driver/ts590/caps.go`, matrix §1.16) — so every ordinary row is
-  refused with a blocking entry on that column and the import writes
-  nothing. Reading, writing and this programme's own CSV import and
-  export are unaffected; only the CHIRP direction is closed. Making that
-  refusal non-blocking would be a change to the shared importer that
-  every registered radio goes through, so it is a fleet question recorded
-  as a roadmap follow-up rather than a Kenwood one
-  (`core/csvio/chirp_test.go`'s
-  `TestImportCHIRP_TS590PairBlocksCWAndRTTYRows`).
+- **A CHIRP file's ordinary rows import on the TS-590S/SG.** A CHIRP
+  file's blank `Duplex` column means simplex, and this family declares no
+  shift vocabulary at all — the 50-byte record carries no duplex
+  selector, so `ShiftOptions` is empty (`core/driver/ts590/caps.go`,
+  matrix §1.16). A blank column nevertheless asks for nothing the radio
+  cannot do, so such a row imports as simplex and nothing is reported.
+  A `Duplex` column reading `off` is still refused: that asserts "no
+  duplex configured" as distinct from simplex, which this record cannot
+  carry (`core/csvio/chirp_test.go`'s
+  `TestImportCHIRP_TS590PairBlocksCWAndRTTYRows`). In v1.4.1 and earlier the
+  blank column was refused too and no row imported at all.
 
 - **A CHIRP file's `CW`, `CWR` and `RTTY` rows are refused a second time,
   on the `Mode` column.** Those resolve to the sideband-specific names

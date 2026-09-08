@@ -649,9 +649,10 @@ func consumedByThisRadio(caps spec.Capabilities, bank spec.BankID, column string
 	}
 }
 
-// importCHIRPDuplexShift is the pre-Icom-tier Duplex mapping, unchanged
-// and still the one every registered radio takes: CHIRP's Duplex becomes
-// a repeater SHIFT, asked for by direction rather than named here,
+// importCHIRPDuplexShift is the pre-Icom-tier Duplex mapping, the one
+// every radio whose memory bank does not reach spec.FieldDuplex takes:
+// CHIRP's Duplex becomes a repeater SHIFT, asked for by direction rather
+// than named here,
 // "split" is refused because a Yaesu memory channel has no independent
 // transmit frequency, and a non-zero Offset is dropped because the shift
 // magnitude is a global menu setting.
@@ -661,6 +662,20 @@ func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.C
 	case "", "off":
 		v, ok := shiftFor(caps, spec.ShiftNone)
 		if !ok {
+			// A radio with NO shift vocabulary at all reads a BLANK
+			// Duplex cell as its own only state, not as a loss: CHIRP's
+			// blank says nothing, data.Shift stays "" — what
+			// core/driver/ts590/read.go produces on read and what its
+			// write.go treats as "not requested" — and nothing was
+			// dropped, so nothing is reported. "off" is different: it
+			// asserts "no duplex configured" as distinct from simplex,
+			// which such a radio cannot say, so it still blocks. Pinned
+			// by chirp_test.go's TS-590-pair subtests "the five one-name
+			// rows import as simplex with no Duplex entry" and "an off
+			// Duplex row still blocks".
+			if duplexRaw == "" {
+				break
+			}
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
 				Detail: fmt.Sprintf("%s expresses no simplex shift option", caps.Model),

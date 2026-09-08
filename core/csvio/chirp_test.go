@@ -2507,9 +2507,9 @@ func TestChirpFixtures_CoverEveryRegisteredModel(t *testing.T) {
 // question is settled the change shows up here as a deliberate edit rather
 // than as a baseline that silently moved.
 //
-// THE FIVE ONE-NAME ROWS ARE THE OTHER HALF, and they are what stops this
-// test passing because the import refuses everything: FM, NFM, AM, USB and
-// LSB each map to a name both rows' legends do print.
+// THE FIVE ONE-NAME ROWS ARE THE OTHER HALF, and since the 07/09/2026 fleet
+// ruling they IMPORT: FM, NFM, AM, USB and LSB each map to a name both rows'
+// legends do print, and their blank Duplex cells are no longer a refusal.
 //
 // BOTH ROWS, not one: the two share a mode legend today, so the second
 // subtest is a coincidence of one book rather than a derived fact, and a
@@ -2586,31 +2586,22 @@ func TestImportCHIRP_TS590PairBlocksCWAndRTTYRows(t *testing.T) {
 				}
 			})
 
-			// THE FIVE ONE-NAME ROWS BLOCK TOO, on the Duplex column
-			// rather than the Mode one, and that is why this family
-			// imports NOTHING at all in v1.4.0. A CHIRP row with a blank
-			// Duplex cell is CHIRP's ordinary simplex row; it asks
-			// importCHIRPDuplexShift for a ShiftNone option, this family
-			// publishes none (core/driver/ts590/caps.go's ShiftOptions is
-			// nil — the 50-byte record carries no duplex selector at all),
-			// and the ShiftNone arm at chirp.go's importCHIRPDuplexShift
-			// refuses BLOCKING. rigprog import then exits 3 without
-			// writing anything.
+			// THE FIVE ONE-NAME ROWS NOW IMPORT, and that is the whole of
+			// the 07/09/2026 fleet ruling: a blank CHIRP Duplex cell on a
+			// radio that publishes NO shift vocabulary at all is not a
+			// loss, it is the radio's only state. This family's 50-byte
+			// record carries no duplex selector (core/driver/ts590/caps.go's
+			// ShiftOptions is nil), so importCHIRPDuplexShift's ShiftNone
+			// arm now reports NOTHING rather than refusing: data.Shift stays
+			// "", which is exactly what core/driver/ts590/read.go produces
+			// on read and what write.go treats as "not requested".
 			//
-			// This subtest is the pin the T20 mutation M15b showed was
-			// missing: flipping that arm's Blocking to false used to
-			// survive this package, because the only HasBlocking()
-			// assertion nearby was satisfied by the CW row's own entry.
-			// Every mode name below is one this radio's legend DOES
-			// print, so a Mode entry here would mean the mode arm had
-			// changed; the Duplex entry is the whole outcome.
-			//
-			// Making that arm non-blocking would let these rows import,
-			// and is the recorded fleet follow-up rather than this
-			// family's business: it is shared core/csvio code and a
-			// capability-vocabulary decision, and it re-opens byte
-			// identity for every registered model.
-			t.Run("the five one-name rows block on the blank Duplex column", func(t *testing.T) {
+			// "off" STAYS BLOCKING on the same fixture — the third subtest
+			// below is that pin, and the two together are the T20 mutation
+			// M15b guard in its new shape: re-adding an entry to the blank
+			// arm fails the zero-entry assertion here, and flipping the
+			// "off" arm's Blocking to false fails the next subtest.
+			t.Run("the five one-name rows import as simplex with no Duplex entry", func(t *testing.T) {
 				const csv = "Location,Name,Frequency,Mode\n" +
 					"1,SIMPLEX,145.500000,FM\n" +
 					"2,NARROW,145.525000,NFM\n" +
@@ -2618,34 +2609,61 @@ func TestImportCHIRP_TS590PairBlocksCWAndRTTYRows(t *testing.T) {
 					"4,UPPER,14.250000,USB\n" +
 					"5,LOWER,7.100000,LSB\n"
 
+				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if report.HasBlocking() {
+					t.Fatalf("HasBlocking() = true, want false — a blank Duplex cell on a radio with no shift vocabulary is simplex, not a loss: %+v", report.Entries)
+				}
+				if len(channels) != 5 {
+					t.Fatalf("imported %d channels, want 5", len(channels))
+				}
+				// Lines 2-6: the header is line 1.
+				for line := 2; line <= 6; line++ {
+					for _, e := range entriesForLine(report, line) {
+						if e.Column == "Duplex" || e.Column == "Mode" {
+							t.Errorf("line %d: entry %+v — these five names ARE in this radio's legend, and its blank Duplex cell is its only state, so neither column may report anything", line, e)
+						}
+					}
+				}
+				for i, ch := range channels {
+					if ch.Data == nil {
+						t.Fatalf("channels[%d].Data = nil", i)
+					}
+					if ch.Data.Shift != "" {
+						t.Errorf("channels[%d].Shift = %q, want \"\" — this radio publishes no shift value to store, and \"\" is what its own read produces", i, ch.Data.Shift)
+					}
+				}
+			})
+
+			// "off" is the OTHER side of the same arm and still blocks:
+			// CHIRP's "off" asserts "no duplex configured" as distinct from
+			// simplex, and that distinction is one this record cannot
+			// carry, so refusing it is honest where agreeing with a blank
+			// cell is not.
+			t.Run("an off Duplex row still blocks", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Duplex,Mode\n" +
+					"1,OFFDUP,145.500000,off,FM\n"
+
 				_, report, err := ImportCHIRP(strings.NewReader(csv), caps)
 				if err != nil {
 					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
 				}
 				if !report.HasBlocking() {
-					t.Fatalf("HasBlocking() = false, want true — this family publishes no simplex shift option, so every ordinary CHIRP row blocks: %+v", report.Entries)
+					t.Fatalf("HasBlocking() = false, want true — CHIRP's \"off\" says something this radio cannot say: %+v", report.Entries)
 				}
-				// Lines 2-6: the header is line 1.
-				for line := 2; line <= 6; line++ {
-					var duplex, mode []LossEntry
-					for _, e := range entriesForLine(report, line) {
-						switch e.Column {
-						case "Duplex":
-							duplex = append(duplex, e)
-						case "Mode":
-							mode = append(mode, e)
-						}
+				var duplex []LossEntry
+				for _, e := range entriesForLine(report, 2) {
+					if e.Column == "Duplex" {
+						duplex = append(duplex, e)
 					}
-					if len(mode) != 0 {
-						t.Errorf("line %d: %+v — these five names ARE in this radio's legend, so no Mode entry is expected", line, mode)
-					}
-					if len(duplex) != 1 {
-						t.Errorf("line %d: %d Duplex entries, want exactly 1: %+v", line, len(duplex), duplex)
-						continue
-					}
-					if e := duplex[0]; e.Action != ActionUnsupported || !e.Blocking || e.Value != "" {
-						t.Errorf("line %d: Duplex entry = %+v, want a Blocking ActionUnsupported one on the blank cell", line, e)
-					}
+				}
+				if len(duplex) != 1 {
+					t.Fatalf("%d Duplex entries, want exactly 1: %+v", len(duplex), duplex)
+				}
+				if e := duplex[0]; e.Action != ActionUnsupported || !e.Blocking || e.Value != "off" {
+					t.Errorf("Duplex entry = %+v, want a Blocking ActionUnsupported one carrying the \"off\" cell", e)
 				}
 			})
 		})
@@ -2670,11 +2688,12 @@ func TestImportCHIRP_TS590PairBlocksCWAndRTTYRows(t *testing.T) {
 // rows would silently start importing Unknown with a loss entry, and the
 // mode test above would not notice.
 //
-// WHAT IT IS NOT is a claim that either row imports. Both rows' blank Duplex
-// cells block (see the mode test's second subtest), so an actual
-// `rigprog import --chirp` of this file exits 3 and writes nothing; the
-// assertion below pins that alongside the scan_skip branch, so that the day
-// the blocking arm changes this test says so rather than quietly widening.
+// BOTH ROWS NOW IMPORT. Their blank Duplex cells used to block, and since the
+// 07/09/2026 fleet ruling they do not: a radio publishing no shift vocabulary
+// reads a blank CHIRP Duplex cell as its own simplex state rather than as a
+// loss (see the mode test's second subtest). The assertion below pins that
+// nothing at all blocks here, so the day either arm widens again this test
+// says so rather than quietly following.
 func TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch(t *testing.T) {
 	const csv = "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
 		"1,BLANK,145.500000,,,,,FM,\n" +
@@ -2707,8 +2726,8 @@ func TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch(t *testing.T) {
 			if entries := skipEntries(report); len(entries) != 0 {
 				t.Errorf("Skip entries = %+v, want none — nothing is lost when the radio can carry the flag", entries)
 			}
-			if !report.HasBlocking() {
-				t.Errorf("HasBlocking() = false, want true — the Skip column is carried, but both rows' blank Duplex cells still block, so neither row reaches a radio: %+v", report.Entries)
+			if report.HasBlocking() {
+				t.Errorf("HasBlocking() = true, want false — the Skip column is carried and the blank Duplex cells are this radio's own simplex state, so both rows reach a radio: %+v", report.Entries)
 			}
 		})
 	}
