@@ -31,9 +31,9 @@ func TestNewFraming_RefusesAnUnsetBook(t *testing.T) {
 	}
 }
 
-// TestNewFraming_BothBooksBuild pins the positive control that the refusal
+// TestNewFraming_EveryBookBuilds pins the positive control that the refusal
 // above is not vacuous.
-func TestNewFraming_BothBooksBuild(t *testing.T) {
+func TestNewFraming_EveryBookBuilds(t *testing.T) {
 	for _, b := range []Book{Book590, Book480, Book890, Book990} {
 		f, err := NewFraming(b)
 		if err != nil {
