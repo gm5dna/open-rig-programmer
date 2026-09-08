@@ -452,8 +452,8 @@ func TestCrossCheck_TheChartShapePolicies(t *testing.T) {
 //     SG's 000 "Version information (4 ASCII characters) read only" is
 //     transcribed digits=4 text=false BY DESIGN DECISION, recorded in
 //     menu590sg.csv's own "THE VERSION ROW IS NOT A TEXT ROW" block and
-//     following the FT-891's treatment of its MAIN VERSION row; the profile
-//     carries ONE exact TextWidth and this chart prints strings of two widths.
+//     following the FT-891's treatment of its MAIN VERSION row; the profile's
+//     TextWidths names ONE width and this chart prints strings of two.
 //   - B applied a STRUCTURAL test — "prose printed across the grid instead of
 //     cells" — and so also flagged the SG's 000
 //     (testdata/transcription-b-590sg.md, "TEXT rows (prose across the grid)

@@ -160,8 +160,8 @@ func TestParseCSV590SG_RefusesANonZeroP2OrP3(t *testing.T) {
 // TestParseCSV590SG_RefusesASecondTextWidth is the reason menu 000 is
 // digits=4 text=false rather than a text row.
 //
-// Profile carries ONE exact TextWidth and this chart prints strings of two
-// widths: 000 "Version information (4 ASCII characters) read only" and 001
+// This profile's TextWidths names ONE width and this chart prints strings of
+// two: 000 "Version information (4 ASCII characters) read only" and 001
 // "Power on Message (up to 8 ASCII characters)". Flagging both as text is what
 // ParseCSV refuses — so the choice was never "which of the two is the text
 // row" left to a transcriber's taste; the validator settles it, and the
@@ -175,7 +175,7 @@ func TestParseCSV590SG_RefusesASecondTextWidth(t *testing.T) {
 	}
 	const versionAsText = "0,0,0,,,Firmware Version,Version information (4 ASCII characters) read only,4,true,749\n"
 	if _, err := extable.ParseCSV(p, []byte(versionAsText)); err == nil {
-		t.Errorf("ParseCSV accepted a text row of width 4 alongside a profile whose TextWidth is %d; want a refusal", p.TextWidth)
+		t.Errorf("ParseCSV accepted a text row of width 4 alongside a profile whose TextWidths is %v; want a refusal", p.TextWidths)
 	}
 	// And the version row as this transcription actually carries it — the same
 	// width, NOT flagged text — parses, because a non-text row is bounded by

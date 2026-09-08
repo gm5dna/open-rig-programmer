@@ -61,7 +61,7 @@ import (
 //     there is nothing to normalise: the FTdx10's "NN (LABEL)" wrapper
 //     adjudication has no counterpart. The ledger accordingly groups by the
 //     bare two-digit PREFIX, not by a labelled subgroup.
-//   - THERE IS NO TEXT ROW. TextRowsAbsent, TextWidth 0: every A row's text
+//   - THERE IS NO TEXT ROW. TextRowsAbsent, TextWidths empty: every A row's text
 //     flag is false and B carries no such column to reconstruct.
 //
 // What DOES carry over is that names are compared VERBATIM, byte for byte,
