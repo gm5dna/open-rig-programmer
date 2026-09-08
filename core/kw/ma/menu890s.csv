@@ -2,7 +2,7 @@
 #
 # BOOK: "TS-890S PC CONTROL COMMAND Reference Guide", January/30/2019,
 # (c) 2019 B5A-2944-00/01 - the title, date and code as printed on the cover
-# and the last page (layout lines 1-7 and 5936).
+# and the last page (layout lines 1-8 and 5936).
 #
 # SOURCE: docs/fixtures-private/manuals/ts890s_pc_rev1_layout.txt, the chart
 # at layout lines 1934-2283 - the "Menu" list (P1=0, lines 1939-2204) and the
@@ -33,12 +33,16 @@
 #               always blank: this chart prints no group-label columns at all
 #               (confirmed on renders of PDF pages 26-30), so the profile
 #               registers LabelsAbsent.
-#   name        the Function column VERBATIM. Where the cell wraps, the
-#               printed lines are joined with ONE space and nothing else, so
-#               a word Kenwood broke across lines mid-token keeps the space
-#               the join puts in it - "TX Filter Low Cut (SSB-DATA/AM- DATA)"
-#               and "FM Mode Frequency Step Size (Multi/ Channel Control)"
-#               are transcribed, not repaired.
+#   name        the Function column VERBATIM, wrapped lines joined with one
+#               space - except that a break INSIDE a word is closed up
+#               rather than joined with a space, because the space would be
+#               one the book does not print: the seven cells that break
+#               after "(Multi/" are "(Multi/Channel Control)", which the
+#               chart itself prints unbroken at 0/03/05 (layout 2046-2047),
+#               and the two cells that break after "AM-" are
+#               "(SSB-DATA/AM-DATA)", the hyphen being the compound's own.
+#               Where the book prints a space mid-line it is kept: 0/05/16
+#               "CW/ Voice Message Retransmit Interval Time" (layout 2114).
 #   p4          the book's own description of this row's P5 field. It is the
 #               row's printed P5 cell where that cell is prose spanning the
 #               whole width (the two message rows, the seventeen PF-key rows,
@@ -77,6 +81,11 @@
 # settling it, which is what a transcription leg should do; this line
 # records who settled it and on what. The profile's MaxDigits stays 4: the
 # two numeric-legend rows above already carried that width.
+#
+# 0/03/07's Function cell is "Tuning Control :" - the book itself prints
+# this cell truncated (layout 2049, render-confirmed on printed page 26,
+# between "MHz Step" and "Tuning Speed Control"), and it is transcribed as
+# printed.
 0,00,00,,,Color Display Pattern,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1939
 0,00,01,,,Function Key Style,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1940
 0,00,02,,,Font Style (Frequency Display),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1941
@@ -135,11 +144,11 @@
 0,02,15,,,CW/RTTY/PSK Time Stamp,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2019
 0,02,16,,,Clock (CW/RTTY/PSK Time Stamp),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2022
 0,02,17,,,Waterfall when Tuning (RTTY/PSK Audio Scope),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2024
-0,03,00,,,Frequency Rounding Off (Multi/ Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2027
+0,03,00,,,Frequency Rounding Off (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2027
 0,03,01,,,SSB Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2030
 0,03,02,,,CW/FSK/PSK Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2033
-0,03,03,,,FM Mode Frequency Step Size (Multi/ Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2037
-0,03,04,,,AM Mode Frequency Step Size (Multi/ Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2042
+0,03,03,,,FM Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2037
+0,03,04,,,AM Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2042
 0,03,05,,,9 kHz Step in AM Broadcast Band (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2046
 0,03,06,,,MHz Step,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2048
 0,03,07,,,Tuning Control :,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2049
@@ -180,8 +189,8 @@
 0,06,05,,,ID Beep,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2122
 0,06,06,,,TX Filter Low Cut (SSB/AM),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2123
 0,06,07,,,TX Filter High Cut (SSB/AM),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2125
-0,06,08,,,TX Filter Low Cut (SSB-DATA/AM- DATA),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2128
-0,06,09,,,TX Filter High Cut (SSB-DATA/AM- DATA),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2131
+0,06,08,,,TX Filter Low Cut (SSB-DATA/AM-DATA),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2128
+0,06,09,,,TX Filter High Cut (SSB-DATA/AM-DATA),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2131
 0,06,10,,,RX Filter Numbers,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2133
 0,06,11,,,Filter Control in SSB Mode (High/Low and Shift/Width),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2135
 0,06,12,,,Filter Control in SSB-DATA Mode (High/Low and Shift/Width),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2137
