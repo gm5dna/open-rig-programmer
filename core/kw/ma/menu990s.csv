@@ -1,0 +1,304 @@
+# TS-990S EX menu transcription — TRANSCRIPTION A.
+#
+# SOURCE, and the only document consulted: the book whose cover prints
+# "TS-990S / PC CONTROL COMMAND / Reference Guide" over the date
+# "January/30/2019", carrying the document number "B5A-3170-00" on its last
+# page (docs/fixtures-private/manuals/ts990s_pc_rev2_layout.txt:1-3, :8,
+# :5351). The book prints NO revision number of its own; the "rev2" in the
+# fixture's filename is the fixture's name, not the book's, and is recorded
+# here as such rather than transcribed as a revision.
+#
+# CHART: "EX Command Parameter Lists" — BOTH printed lists, the "Menu" list
+# (P1=0) and the "Advanced Menu" list (P1=1). Layout lines 1764-2283; the
+# heading is at :1764, the P1=0 table's first row at :1769, the P1=1 table's
+# heading "Advanced Menu" at :2194 and its first row at :2200, and the last
+# addressed row at :2271.
+#
+# METHOD: layout-led, PDF-checked. Every row was taken from the layout text
+# and then read back against 300-dpi renders of the PDF pages that carry the
+# chart — printed pages 22, 23, 24, 25, 26 and 27, which are PDF pages 23-28
+# — plus PDF page 22 (printed page 21, the EX command definitions page that
+# JUDGEMENTS 2 and 4 cite) (`pdftoppm -r 300 -f 22 -l 28`). The renders are
+# what settle the Function
+# column: the layout text interleaves a row's Function fragments with the P5
+# cells beside them, so joining its lines alone would have produced text the
+# book does not print (menu 0/00/14 is the worked example — see JUDGEMENTS).
+#
+# COLUMNS: p1,p2,p3,p1_label,p2_label,name,p4,digits,text,manual_line.
+#   p1,p2,p3    the chart's printed P1/P2/P3, verbatim including leading
+#               zeros. All three are on the wire, so all three are carried.
+#   p1_label,p2_label   BLANK on every row: this chart prints no group-label
+#               columns at all. Its two tables are titled "Menu" and
+#               "Advanced Menu" (:1765, :2194), which is the P1 enumeration
+#               the EX command page gives ("0: Menu  1: Advanced Menu",
+#               :1720-1723) and not a per-row label.
+#   name        the Function cell VERBATIM, wrapped lines joined with one
+#               space (see JUDGEMENTS for the two exceptions).
+#   p4          the row's printed P5 parameter description: the cell the
+#               chart spans across the P5 columns where it prints one,
+#               otherwise the chart's P5 column-header row, prefixed
+#               "P5 column headers".
+#   digits      the width of the largest P5 code printed for the row.
+#   text        true only for a row whose prose states a character count.
+#   manual_line the layout-text line the row's address is printed on.
+#
+# ROW COUNT: 194 addressed rows — 167 with P1=0 and 27 with P1=1. The four
+# rows the chart prints with a dash in every address column (Touchscreen
+# Calibration, Software License Agreement, Important Notices Concerning Free
+# Open Source, About Various Software License Agreements — :2272-2279, each
+# with "Does not correspond to a command" across its P5 columns) are NOT
+# rows of this inventory: an unaddressed row names no EX address. No
+# ADDRESSED row carries that sentence, and no addressed row's parameter
+# cells are drawn as hyphens, so this chart prints no parameterless row.
+#
+# JUDGEMENTS (every one of them; the report of task 9b carries them too):
+#  1. digits 3 on 145 rows. The P5 column headers are the codes and they are
+#     three characters wide — "000 001 002 003 004 005 006 ~" (:1768) — so a
+#     row whose parameters are the printed enumeration has a largest code of
+#     three characters however many columns it fills. That includes the rows
+#     that spell extra codes out in the last column: menu 0/03/02 and
+#     0/03/03 reach "009: 100" (:1886-1895), 0/05/13 reaches "008: Ch 8"
+#     (:1977-1980), 0/08/03 reaches "009: 2200 [Hz]" (:2058-2066), 0/09/01
+#     reaches "010: Italian" (:2173-2186) and 1/00/00 reaches "006: SWR"
+#     (:2199) — all three characters.
+#  2. TEXT rows, digits from the stated character count: 0/00/06 "Up to 10
+#     alphanumeric characters" (:1778) is text with digits 10, and 0/00/07
+#     "Up to 15 alphanumeric characters" (:1779) is text with digits 15.
+#     They are the chart's only two, and the EX command page corroborates
+#     both widths: "A power-on message can vary in length from 0 to 15
+#     characters." / "Screen saver text can vary in length from 0 to 10
+#     characters." (:1751-1752).
+#  3. NUMERIC-LEGEND rows are NOT text. 0/05/11 Contest Number prints
+#     "0001 ~ 9999 (Must be a 4-digit number)" (:1972) — digits 4, text
+#     false. The 28 Fixed Mode band-limit rows 0/08/05 to 0/08/32 print
+#     "8-digit frequency (in Hz) with unused digits entered as 0 (in steps
+#     of 1 kHz)" (:2070-2159) — digits 8, text false. 1/00/05 prints
+#     "Parameter value of 000 ~ 510 ..." (:2215-2216) and 1/00/07
+#     "Parameter value of 000 ~ 040 ..." (:2221-2222) — digits 3, text
+#     false, the width being that of the printed value and not of the
+#     signed setting value it corresponds to.
+#  4. The 18 PF-key rows 0/00/15 to 0/00/32 share one prose cell, "Refer to
+#     the list of function allotment numbers for the PF key" (:1793-1810).
+#     It states no width, so the width cannot come from the cell. This leg
+#     read it as the column headers' three characters (judgement 1) and
+#     recorded that THE BOOK'S EX COMMAND PAGE DISAGREES — "PF key settings
+#     use 4 digits (refer to the PF Key assignment ID lists)" (:1747-1748),
+#     and that list — "PF Key Assignment Lists" (:2287) — prints four-digit
+#     IDs up to 9999 (:2341). THE ORCHESTRATOR RULED IT 4 (ruling R-B,
+#     08/09/2026), on those two citations and against a cell that states no
+#     width at all: these rows now carry digits 4, text false. The profile's
+#     MaxDigits stays 8 — the 28 Fixed Mode band-limit rows are wider.
+#  5. Menu 0/00/14's Function is "Operating Band (High/Low & Shift/Width
+#     Controls)". The layout text splits it as ":1790 Operating Band
+#     (High/Low & Shift/Width and" and ":1792 Controls)", where the "and"
+#     belongs to the P5 cell "Main and Sub Bands" beside it, not to the
+#     Function. The render of printed page 22 is what settles it.
+#  6. Two Function cells break INSIDE a word, and the break is closed up
+#     rather than joined with a space, because the space would be one the
+#     book does not print: 1/00/08 "TX Power Down with Transverter En-" /
+#     "abled" (:2223-2225) is "TX Power Down with Transverter Enabled", and
+#     the seven cells that break after "(Multi/" are "(Multi/Channel
+#     Control)" — which the chart itself prints unbroken at 0/03/05
+#     (:1900). Where the book prints a space after a slash it is kept:
+#     0/05/15 "CW/ Voice Message Retransmit Interval Time" (:1983-1985) and
+#     0/08/34 "(SSB/ CW/ FSK/ PSK)" (:2165).
+#  7. Menu 0/03/01 is ONE addressed row whose Function cell is ruled into
+#     two firmware variants (:1879-1885). Its address is printed alone on
+#     :1882, between them. The two blocks are joined with one space in
+#     printed order, so the row's name carries both.
+#
+# Transcribed 08/09/2026. No other document was consulted.
+0,00,00,,,Color Display Pattern (Main screen),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1769
+0,00,01,,,Color Display Pattern (Sub screen),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1771
+0,00,02,,,Font Style (Frequency display),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1772
+0,00,03,,,Dial Color Pattern,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1773
+0,00,04,,,Screen Saver,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1774
+0,00,05,,,Screen Saver Wait Time,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1776
+0,00,06,,,Screen Saver Message,Up to 10 alphanumeric characters,10,true,1778
+0,00,07,,,Power-on Message,Up to 15 alphanumeric characters,15,true,1779
+0,00,08,,,FM Mode S-meter Sensitivity,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1780
+0,00,09,,,Meter Response Speed,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1781
+0,00,10,,,Meter Display Pattern,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1782
+0,00,11,,,Meter Display Peak Hold,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1783
+0,00,12,,,Long Press Duration of Panel Keys,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1785
+0,00,13,,,Touchscreen Tuning,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1788
+0,00,14,,,Operating Band (High/Low & Shift/Width Controls),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1791
+0,00,15,,,PF A: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1793
+0,00,16,,,PF B: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1794
+0,00,17,,,Voice (Main Band): Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1795
+0,00,18,,,Voice (Sub Band): Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1796
+0,00,19,,,External PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1797
+0,00,20,,,External PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1798
+0,00,21,,,External PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1799
+0,00,22,,,External PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1800
+0,00,23,,,External PF 5: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1801
+0,00,24,,,External PF 6: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1802
+0,00,25,,,External PF 7: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1803
+0,00,26,,,External PF 8: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1804
+0,00,27,,,Microphone PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1805
+0,00,28,,,Microphone PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1806
+0,00,29,,,Microphone PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1807
+0,00,30,,,Microphone PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1808
+0,00,31,,,Microphone Down: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1809
+0,00,32,,,Microphone Up: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1810
+0,00,33,,,Automatic Power Off,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1811
+0,00,34,,,Data Mode Numbers <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1813
+0,01,00,,,Beep Volume,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1816
+0,01,01,,,Voice Message Volume (Play),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1819
+0,01,02,,,Sidetone Volume,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1823
+0,01,03,,,Voice Guidance Volume,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1827
+0,01,04,,,Voice Guidance Speed,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1839
+0,01,05,,,User Interface Language (Voice Guidance & Messages),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1841
+0,01,06,,,Automatic Voice Guidance,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1843
+0,01,07,,,Headphones Mixing Balance,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1845
+0,01,08,,,Headphones Left/Right Reverse,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1847
+0,02,00,,,FFT Scope Averaging (RTTY Decode),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1849
+0,02,01,,,RX UOS,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1851
+0,02,02,,,Newline Code,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1852
+0,02,03,,,Diddle,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1854
+0,02,04,,,TX UOS,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1855
+0,02,05,,,Automatic Newline Insertion,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1856
+0,02,06,,,FSK Spacing,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1857
+0,02,07,,,FSK Keying Polarity,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1858
+0,02,08,,,FSK Tone Frequency,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1859
+0,02,09,,,FFT Scope Averaging (PSK Decode),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1861
+0,02,10,,,PSK AFC Tuning Range,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1863
+0,02,11,,,PSK Tone Frequency,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1864
+0,02,12,,,CW/RTTY/PSK Log File Format <Rename with firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1866
+0,02,13,,,CW/RTTY/PSK Time Stamp <Rename with firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1870
+0,02,14,,,Clock (CW/RTTY/PSK Time Stamp) <Rename with firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1874
+0,03,00,,,Frequency Rounding Off (Multi/Channel Control),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1877
+0,03,01,,,SSB Mode Frequency Step Size (Multi/Channel Control) <Firmware version 1.20 or later> SSB/CW/FSK/PSK Mode Frequency Step Size (Multi/Channel Control) <Firmware version 1.13 or lower>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1882
+0,03,02,,,AM Mode Frequency Step Size (Multi/Channel Control),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1888
+0,03,03,,,FM Mode Frequency Step Size (Multi/Channel Control),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1893
+0,03,04,,,Frequency Step Size (Up/Down Keys),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1897
+0,03,05,,,9 kHz Step in AM Broadcast Band (Multi/Channel Control),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1899
+0,03,06,,,Tuning Control (Main): Number of Steps per Revolution,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1902
+0,03,07,,,Tuning Control (Sub): Number of Steps per Revolution,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1904
+0,03,08,,,Number of Band Memories,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1906
+0,03,09,,,CW/FSK/PSK Mode Frequency Step Size (Multi/Channel Control) <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1908
+0,03,10,,,Lock Function <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1923
+0,03,11,,,Tuning Speed Control (Main) <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1928
+0,03,12,,,Sensitivity (Main) <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1932
+0,03,13,,,Tuning Speed Control (Sub) <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1936
+0,03,14,,,Tuning Speed Control Sensitivity (Sub) <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1940
+0,04,00,,,Number of Quick Memory Channels,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1942
+0,04,01,,,Temporary Change (Memory Channel Configurations),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1944
+0,04,02,,,Program Slow Scan,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1946
+0,04,03,,,Program Slow Scan Range,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1947
+0,04,04,,,Scan Hold,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1948
+0,04,05,,,Scan Resume,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1950
+0,05,00,,,Paddle Jack Configuration (Front),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1952
+0,05,01,,,Key Jack Configuration (Rear),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1955
+0,05,02,,,Electronic Keyer Squeeze Mode,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1957
+0,05,03,,,Dot and Dash Reversed Keying,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1958
+0,05,04,,,Paddle (Microphone Up/Down Keys),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1959
+0,05,05,,,Automatic CW TX with Keying in SSB Mode,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1961
+0,05,06,,,Carrier Frequency Offset (SSB Mode to CW Mode),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1964
+0,05,07,,,CW Keying Weight Ratio,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1967
+0,05,08,,,CW Keying Reversed Weight Ratio,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1969
+0,05,09,,,Interrupt Keying,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1970
+0,05,10,,,CW Message Entry,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1971
+0,05,11,,,Contest Number,0001 ~ 9999 (Must be a 4-digit number),4,false,1972
+0,05,12,,,Contest Number Format,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1974
+0,05,13,,,Channel Number (Count-up Message),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1978
+0,05,14,,,CW Rise Time,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1981
+0,05,15,,,CW/ Voice Message Retransmit Interval Time,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1984
+0,06,00,,,Playback Time (Full-time Recording),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1988
+0,06,01,,,Recorded Audio File Storage Location,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1989
+0,06,02,,,Time-out Timer,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1990
+0,06,03,,,TX Inhibit,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1991
+0,06,04,,,Transmit Power Step Size,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1992
+0,06,05,,,TX Filter Numbers,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1993
+0,06,06,,,RX Filter Numbers,P5 column headers 000 001 002 003 004 005 006 ~,3,false,1994
+0,06,07,,,Filter Control in SSB Mode (High/Low and Shift/Width),P5 column headers 000 001 002 003 004 005 006 ~,3,false,1996
+0,06,08,,,Filter Control in SSB-Data Mode (High/Low and Shift/Width),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2006
+0,06,09,,,VOX Voice Delay (Microphone),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2007
+0,06,10,,,VOX Voice Delay (except Microphone),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2008
+0,07,00,,,Baud Rate (COM Port),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2010
+0,07,01,,,Baud Rate (USB Port),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2012
+0,07,02,,,Quick Data Transfer,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2013
+0,07,03,,,Overwrite Location (Quick Data Transfer),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2015
+0,07,04,,,Overwrite Location (DX Packet Cluster Tuned Data),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2017
+0,07,05,,,USB: Audio Input Level,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2019
+0,07,06,,,ACC 2: Audio Input Level,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2022
+0,07,07,,,Optical: Audio Input Level,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2025
+0,07,08,,,USB: Audio Output Level (Main Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2028
+0,07,09,,,USB: Audio Output Level (Sub Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2031
+0,07,10,,,ACC 2: Audio Output Level (Main Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2034
+0,07,11,,,ACC 2: Audio Output Level (Sub Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2037
+0,07,12,,,Optical: Audio Output Level (Main Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2040
+0,07,13,,,Optical: Audio Output Level (Sub Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2043
+0,07,14,,,Audio Output Type (Rear Connectors),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2046
+0,07,15,,,Speaker Output Configuration,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2048
+0,07,16,,,USB: Audio Output Configuration,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2049
+0,07,17,,,ACC2: Audio Output Configuration,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2050
+0,07,18,,,Optical: Audio Output Configuration,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2051
+0,07,19,,,Antenna Numbers <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2053
+0,08,00,,,Bandscope Display During TX,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2055
+0,08,01,,,TX Audio Signal Waveform Display,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2056
+0,08,02,,,Bandscope Maximum Hold,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2057
+0,08,03,,,Marker Offset Frequency (SSB Mode),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2062
+0,08,04,,,Frequency Scale (Center Mode),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2068
+0,08,05,,,Fixed Mode LF Band Lower Limit (min. 0.03 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2070
+0,08,06,,,Fixed Mode LF Band Upper Limit (max. 0.300 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2073
+0,08,07,,,Fixed Mode MF Band 1 Lower Limit (min. 0.300 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2076
+0,08,08,,,Fixed Mode MF Band 1 Upper Limit (max. 0.522 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2079
+0,08,09,,,Fixed Mode MF Band 2 Lower Limit (min. 0.522 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2082
+0,08,10,,,Fixed Mode MF Band 2 Upper Limit (max. 1.705 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2085
+0,08,11,,,Fixed Mode 1.8 MHz Band Lower Limit (min. 1.705 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2088
+0,08,12,,,Fixed Mode 1.8 MHz Band Upper Limit (max. 2.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2099
+0,08,13,,,Fixed Mode 3.5 MHz Band Lower Limit (min. 2.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2102
+0,08,14,,,Fixed Mode 3.5 MHz Band Upper Limit (max. 4.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2105
+0,08,15,,,Fixed Mode 5 MHz Band Lower Limit (min. 4.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2108
+0,08,16,,,Fixed Mode 5 MHz Band Upper Limit (max. 6.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2111
+0,08,17,,,Fixed Mode 7 MHz Band Lower Limit (min. 6.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2114
+0,08,18,,,Fixed Mode 7 MHz Band Upper Limit (max. 8.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2117
+0,08,19,,,Fixed Mode 10 MHz Band Lower Limit (min. 8.0 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2120
+0,08,20,,,Fixed Mode 10 MHz Band Upper Limit (max. 11 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2123
+0,08,21,,,Fixed Mode 14 MHz Band Lower Limit (min. 11 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2126
+0,08,22,,,Fixed Mode 14 MHz Band Upper Limit (max. 15 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2129
+0,08,23,,,Fixed Mode 18 MHz Band Lower Limit (min. 15 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2132
+0,08,24,,,Fixed Mode 18 MHz Band Upper Limit (max. 20 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2135
+0,08,25,,,Fixed Mode 21 MHz Band Lower Limit (min. 20 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2138
+0,08,26,,,Fixed Mode 21 MHz Band Upper Limit (max. 22 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2141
+0,08,27,,,Fixed Mode 24 MHz Band Lower Limit (min. 22 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2144
+0,08,28,,,Fixed Mode 24 MHz Band Upper Limit (max. 26 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2147
+0,08,29,,,Fixed Mode 28 MHz Band Lower Limit (min. 26 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2150
+0,08,30,,,Fixed Mode 28 MHz Band Upper Limit (max. 30 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2153
+0,08,31,,,Fixed Mode 50 MHz Band Lower Limit (min. 30 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2156
+0,08,32,,,Fixed Mode 50 MHz Band Upper Limit (max. 60 MHz),8-digit frequency (in Hz) with unused digits entered as 0 (in steps of 1 kHz),8,false,2159
+0,08,33,,,Waterfall Pause when Tuning (Center Mode) <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2162
+0,08,34,,,Touchscreen Tuning Step Correction (SSB/ CW/ FSK/ PSK) <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2165
+0,08,35,,,Waterfall Color Type <Firmware version 1.20 or later>,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2168
+0,09,00,,,Send Message by Function Keys (USB Keyboard),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2171
+0,09,01,,,Keyboard Language (USB Keyboard),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2179
+0,09,02,,,Repeat Delay Time (USB Keyboard),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2187
+0,09,03,,,Repeat Speed (USB Keyboard),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2189
+1,00,00,,,Indication Signal Type (Main Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2200
+1,00,01,,,Indication Signal Type (Sub Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2203
+1,00,02,,,Output Level (Main Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2208
+1,00,03,,,Output Level (Sub Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2212
+1,00,04,,,REF I/O Connector Configuration,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2214
+1,00,05,,,Reference Oscillator Calibration,"Parameter value of 000 ~ 510, corresponding to setting values of -255 ~ +255 (in steps of 1)",3,false,2216
+1,00,06,,,Bandwidth (Additional Roofing Filter),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2219
+1,00,07,,,Attenuation (Additional Roofing Filter),"Parameter value of 000 ~ 040, corresponding to setting values of -20 ~ +20 (in steps of 1)",3,false,2222
+1,00,08,,,TX Power Down with Transverter Enabled,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2224
+1,00,09,,,TX Hold After Antenna Tuning,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2226
+1,00,10,,,Antenna Tuner During RX,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2227
+1,00,11,,,Linear Amplifier Control (HF Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2232
+1,00,12,,,Linear Amplifier Control (50 MHz Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2241
+1,00,13,,,Microphone Gain (FM Mode),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2247
+1,00,14,,,PKS Polarity Reverse,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2249
+1,00,15,,,TX Inhibit While Busy,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2250
+1,00,16,,,CTCSS Unmute for Internal Speaker (Main Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2252
+1,00,17,,,CTCSS Unmute for Internal Speaker (Sub Band),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2255
+1,00,18,,,MSQ Logic State,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2257
+1,00,19,,,SSQ Logic State,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2258
+1,00,20,,,MSQ Reverse Condition,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2260
+1,00,21,,,SSQ Reverse Condition,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2263
+1,00,22,,,Standby State Low Power Consumption,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2266
+1,00,23,,,Cooling Fan Control After Shutdown,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2268
+1,00,24,,,MSQ/PKS Pin Assignment,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2269
+1,00,25,,,External Display,P5 column headers 000 001 002 003 004 005 006 ~,3,false,2270
+1,00,26,,,Resolution (External Display),P5 column headers 000 001 002 003 004 005 006 ~,3,false,2271
