@@ -243,8 +243,16 @@ func TestMA0RoundTrip_GoldenFrames(t *testing.T) {
 			if err != nil {
 				t.Fatalf("BuildMA0Set: %v", err)
 			}
-			if got := cmd.Bytes(); string(got) != string(want) {
+			got := cmd.Bytes()
+			if string(got) != string(want) {
 				t.Fatalf("BuildMA0Set =\n %q\nwant\n %q", got, want)
+			}
+			// NIT: a direct pin on P10's own offset (890:3197-3200). This
+			// golden is the one 890S vector with the split side populated,
+			// so it is the only place ma890TXNarrowOff is checked by its own
+			// position rather than by comparison with P4 at f[18].
+			if tt.file == "ma0-890s-name10.golden" && got[36] != '1' {
+				t.Errorf("P10 (offset 36) = %q, want '1' — narrow on both sides", got[36])
 			}
 
 			back, err := tt.layout.ParseMA0Answer(want)

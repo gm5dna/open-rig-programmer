@@ -191,6 +191,13 @@ func TestBuildMA0Set990_PadsTheNameWindowAndEmitsP2AsZero(t *testing.T) {
 	if back.Name != "GB3" {
 		t.Errorf("Name = %q, want %q — trailing pad is not part of the name (A1)", back.Name, "GB3")
 	}
+	// LOW-3: Class is normalised, not refused — the type follows P9/P10
+	// (990:2901-2903), so a record read as Dual still emits P2 = '0'.
+	dual := rec
+	dual.Class = '1'
+	if got := mustBuild(t, l, dual)[6]; got != '0' {
+		t.Errorf("P2 = %q, want '0': the type follows P9/P10 (990:2901-2903), A14", got)
+	}
 }
 
 func TestBuildMA0Set990_Refusals(t *testing.T) {
