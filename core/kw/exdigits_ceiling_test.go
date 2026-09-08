@@ -10,8 +10,8 @@ import (
 
 // kwImportPath is the ImportPath a profile carries when it renders into
 // this package. It is how the ceiling test below selects the Kenwood
-// profiles without naming them: three land at T9 and the test must bite on
-// all three the moment they do, including a fourth nobody has planned.
+// profiles without naming them: five have landed and the test must bite on
+// all five, including a sixth nobody has planned.
 const kwImportPath = "github.com/gm5dna/open-rig-programmer/core/kw"
 
 // TestMaxEXDigits_IsDerivedFromThisPackagesOwnFrameBound pins the
@@ -57,12 +57,17 @@ func TestMaxEXDigits_IsNotCoreCatsCeiling(t *testing.T) {
 // MaxEXDigits and each Kenwood stanza transcribes the value — and without
 // this pin they could drift silently.
 //
-// THE THREE STANZAS HAVE LANDED — ts590s, ts590sg and ts480 — so this loop
-// runs over three profiles and the count check below requires exactly that.
-// ZERO IS NOT A LEGITIMATE OUTCOME any more: it would mean all three Kenwood
-// registrations had been dropped, and a pin that reported that as success
-// would be the decay it exists to catch. The selector is ImportPath, not a
-// name list, so a fourth Kenwood profile nobody planned is caught too.
+// FIVE STANZAS HAVE LANDED — ts590s, ts590sg and ts480 from pair 1, and
+// ts890s and ts990s from pair 2 — so this loop runs over five profiles and
+// the count check below requires exactly that. ZERO IS NOT A LEGITIMATE
+// OUTCOME: it would mean every Kenwood registration had been dropped, and a
+// pin that reported that as success would be the decay it exists to catch.
+//
+// THE SELECTOR DID NOT MOVE, AND THAT IS THE POINT OF THE ONE-LINE EDIT. It
+// is the exact ImportPath at :15, not a name list, so the two new profiles
+// were inside this population from the moment they registered: pair 2's
+// arrival changed the COUNT and nothing else, and a sixth Kenwood profile
+// nobody planned would be caught the same way.
 func TestExtableCeilingMatchesKenwoodBound(t *testing.T) {
 	seen := 0
 	for _, np := range extable.RegisteredProfiles() {
@@ -76,7 +81,7 @@ func TestExtableCeilingMatchesKenwoodBound(t *testing.T) {
 	}
 	// The expected population, stated so this test says out loud what it
 	// covers rather than passing quietly over a set that has emptied.
-	if seen != 3 {
-		t.Errorf("%d profiles render into core/kw, want 3 (ts590s, ts590sg, ts480) — a stanza was dropped, or one landed that nobody accounted for", seen)
+	if seen != 5 {
+		t.Errorf("%d profiles render into core/kw, want 5 (ts590s, ts590sg, ts480, ts890s, ts990s) — a stanza was dropped, or one landed that nobody accounted for", seen)
 	}
 }
