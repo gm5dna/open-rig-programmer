@@ -1850,6 +1850,22 @@ func TestSanitizeCHIRPName(t *testing.T) {
 			}
 		})
 	}
+
+	// The default-charset sentence must be BYTE-IDENTICAL to v1.4.1's —
+	// L2 widens sanitizeCHIRPName's PREDICATE to a radio's published
+	// charset, it does not change what a default-charset radio (the
+	// FT-710 among them) says when it rejects a byte.
+	t.Run("default-charset Detail is byte-identical to v1.4.1", func(t *testing.T) {
+		_, entries := sanitizeCHIRPName(1, "A\x07B", ft710LikeCapabilities())
+		if len(entries) != 1 {
+			t.Fatalf("%d LossEntries, want 1: %+v", len(entries), entries)
+		}
+		const want = `Name contained a byte outside the FT-710 tag charset (printable ASCII 0x20-0x7E, excluding ';'); replaced with a space`
+		if got := entries[0].Detail; got != want {
+			t.Errorf("Detail = %q, want %q", got, want)
+		}
+		t.Logf("Detail = %q", entries[0].Detail)
+	})
 }
 
 // --- line endings and the byte-order mark (decision 8) ---
@@ -2338,6 +2354,11 @@ func TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord(t *testing.T) {
 //     that arm refuses BLOCKING. Every CHIRP row therefore blocks on these
 //     two radios — the outcome
 //     TestImportCHIRP_TS590PairBlocksCWAndRTTYRows' second subtest pins.
+//  4. spec.FieldTxFrequency on the MEM bank — graded (bankFields' txFreq,
+//     core/driver/ts590/caps.go:399) because it decides what a row this
+//     branch says nothing about must leave TxFreqHz: this radio has the
+//     field, so Unknown, never the zero value the map would otherwise leave
+//     it at (see importCHIRPDuplexShift's own comment).
 //
 // Everything else — the tone chart, the CTCSS-state vocabulary, the tag
 // charset — is ft710LikeCapabilities' and is NOT a claim about a Kenwood
@@ -2379,6 +2400,9 @@ func ts590LikeCapabilities(model, catID string) spec.Capabilities {
 			// carries a channel-lockout flag, so a CHIRP Skip cell imports
 			// literally rather than being dropped with a loss entry.
 			spec.FieldScanSkip: rw,
+			// Graded on the MEM bank only, as the real driver's bankFields
+			// does — see the doc comment's mirrored item 4.
+			spec.FieldTxFrequency: rw,
 			// No per-channel clarifier field, no shift selector and no
 			// ctcss_state/ctcss_tone pair anywhere in the 47 accounted
 			// parameter bytes: this record expresses tone as a mode selector
@@ -2675,6 +2699,18 @@ func TestImportCHIRP_TS590PairBlocksCWAndRTTYRows(t *testing.T) {
 					if ch.Data.Shift != "" {
 						t.Errorf("channels[%d].Shift = %q, want \"\" — this radio publishes no shift value to store, and \"\" is what its own read produces", i, ch.Data.Shift)
 					}
+					// TS-590S/SG reach spec.FieldTxFrequency, so a row this
+					// branch says nothing about must leave TxFreqHz UNKNOWN
+					// (mirroring importCHIRPDuplexIcom's own rule), never
+					// ABSENT — Absent is what codeplug.Validate reports as
+					// an error, and a row that never mentioned split is not
+					// an invalid channel.
+					if ch.Data.TxFreqHz.State != codeplug.Unknown {
+						t.Errorf("channels[%d].TxFreqHz.State = %v, want codeplug.Unknown", i, ch.Data.TxFreqHz.State)
+					}
+				}
+				if issues := validateImported(t, channels, caps); codeplug.HasErrors(issues) {
+					t.Errorf("codeplug.Validate reported an error on a row that never mentioned split: %+v", issues)
 				}
 			})
 

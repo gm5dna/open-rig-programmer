@@ -17,17 +17,19 @@ import "github.com/gm5dna/open-rig-programmer/core/spec"
 // ones asking a question no column here carries.
 //
 // THE COLUMNS ARE THE ONES AT LEAST TWO OF THOSE FUNCTIONS NEED, and no
-// more. What is deliberately NOT here: a per-field Valid closure (only
+// more. What is deliberately NOT here is a per-field Valid closure — only
 // validateTierFields asks, and every field asks a different question of
-// spec.Capabilities), and a per-field cell renderer/parser.
-//
-// THE RENDERER AND PARSER DO NOW EXIST — the eighteenth-field hazard is
-// exactly as real for a CSV column as for a diff — but as core/csvio's own
-// tierFieldCells, keyed by spec.Field so a row here finds its pair. They
-// stay there because both are made of that package's file format: its
-// reserved state spellings ("n/a", "absent") and its column-named parse
-// diagnostics. Hoisting them here would move the CSV format into the model
-// package, which is a worse trade than one map lookup.
+// spec.Capabilities. A per-field cell RENDERER AND PARSER DO exist — the
+// eighteenth-field hazard is exactly as real for a CSV column as for a
+// diff — but as core/csvio's own tierFieldCells, keyed by spec.Field so a
+// row here finds its pair, and not here: both are made of that package's
+// file format, its reserved state spellings ("n/a", "absent") and its
+// column-named parse diagnostics, and hoisting them here would move the
+// CSV format into the model package, which is a worse trade than one map
+// lookup. A field added to TierFields with no matching tierFieldCells
+// entry is a nil-func panic on export or import, not a silent omission —
+// TestTierFieldCells_RoundTripEveryField's first check catches it, with a
+// message naming the missing field.
 type TierField struct {
 	// Name is the ChannelData struct field's own Go name, e.g.
 	// "TxFreqHz". It names the thing the accessors below reach, which

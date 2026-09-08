@@ -26,7 +26,18 @@ tag. The full release notes for each version are on the
   to the six Icom models whose memory bank carries no duplex field
   either — the IC-7300, IC-7300MK2, IC-7610, IC-7760, IC-7850 and
   IC-7851 — none of which published a shift vocabulary for a blank
-  column to land in. No other radio's CHIRP outcome moves.
+  column to land in. No other radio's blank-`Duplex` outcome moves.
+- **A CHIRP file's `Name` is now sanitised against each radio's own
+  published tag charset, not one literal rule for every radio.** A radio
+  that publishes its own charset (nine Icom driver packages, covering
+  the eleven registered IC-705, IC-7100, IC-7300, IC-7300MK2, IC-7610,
+  IC-7760, IC-7850, IC-7851, IC-905, IC-9700 and IC-R8600 rows) is now
+  judged by that charset rather than the printable-ASCII-excluding-`;`
+  default; every one of those charsets contains `;`, so a `;` in a
+  `Name` is now kept on all eleven rows instead of being replaced with a
+  space. A radio with no published charset — every Yaesu and Kenwood
+  row — is unaffected: the default rule, and the loss message's wording,
+  are unchanged.
 
 ## [1.4.1] - 2026-09-07
 

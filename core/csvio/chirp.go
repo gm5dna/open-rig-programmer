@@ -305,9 +305,10 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 	for i := 0; i < len(b); i++ {
 		// caps.TagByteOK, never a literal here: printable ASCII
 		// excluding ';' is only the DEFAULT rule, and a radio publishing
-		// its own charset (nine Icom rows do; the IC-7760's, IC-7851's
-		// and IC-R8600's each contain ';') must be judged by that.
-		// Pinned by TestSanitizeCHIRPName's two published-charset cases.
+		// its own charset (nine Icom drivers do, covering eleven
+		// registered model rows, and every one of those charsets
+		// contains ';') must be judged by that. Pinned by
+		// TestSanitizeCHIRPName's two published-charset cases.
 		if !caps.TagByteOK(b[i]) {
 			b[i] = ' '
 			sanitized = true
@@ -316,7 +317,7 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 	if sanitized {
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Name", Value: name, Action: ActionApproximated, Blocking: false,
-			Detail: fmt.Sprintf("Name contained a byte the %s cannot hold in a tag (must be %s); replaced with a space", caps.Model, caps.TagCharsetDescription()),
+			Detail: fmt.Sprintf("Name contained a byte outside the %s tag charset (%s); replaced with a space", caps.Model, caps.TagCharsetDescription()),
 		})
 	}
 	if len(b) > caps.TagLen {
@@ -584,7 +585,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	if reaches(caps, memBank.ID, spec.FieldDuplex) {
 		entries = append(entries, importCHIRPDuplexIcom(line, cell, data, caps, memBank.ID)...)
 	} else {
-		entries = append(entries, importCHIRPDuplexShift(line, cell, data, caps)...)
+		entries = append(entries, importCHIRPDuplexShift(line, cell, data, caps, memBank.ID)...)
 	}
 
 	// Tone/rToneFreq/cToneFreq (and, on a radio that has them,
@@ -650,8 +651,19 @@ func consumedByThisRadio(caps spec.Capabilities, bank spec.BankID, column string
 // "split" is refused because a Yaesu memory channel has no independent
 // transmit frequency, and a non-zero Offset is dropped because the shift
 // magnitude is a global menu setting.
-func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities) []LossEntry {
+//
+// A field this radio reaches but this row does not speak to (the TS-590
+// pair's spec.FieldTxFrequency, graded on the MEM bank though this branch
+// never writes it) is left UNKNOWN, never invented, mirroring
+// importCHIRPDuplexIcom's own rule: the zero value is ABSENT, which
+// codeplug.Validate reports as an error on a channel the file never said
+// anything invalid about. Pinned by chirp_test.go's TS-590-pair "the five
+// one-name rows import as simplex with no Duplex entry" subtest.
+func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) []LossEntry {
 	var entries []LossEntry
+	if reaches(caps, bank, spec.FieldTxFrequency) {
+		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
+	}
 	switch duplexRaw := cell("Duplex"); duplexRaw {
 	case "", "off":
 		v, ok := shiftFor(caps, spec.ShiftNone)
