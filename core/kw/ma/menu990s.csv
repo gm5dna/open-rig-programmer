@@ -17,7 +17,9 @@
 # METHOD: layout-led, PDF-checked. Every row was taken from the layout text
 # and then read back against 300-dpi renders of the PDF pages that carry the
 # chart — printed pages 22, 23, 24, 25, 26 and 27, which are PDF pages 23-28
-# (`pdftoppm -r 300 -f 22 -l 28`). The renders are what settle the Function
+# — plus PDF page 22 (printed page 21, the EX command definitions page that
+# JUDGEMENTS 2 and 4 cite) (`pdftoppm -r 300 -f 22 -l 28`). The renders are
+# what settle the Function
 # column: the layout text interleaves a row's Function fragments with the P5
 # cells beside them, so joining its lines alone would have produced text the
 # book does not print (menu 0/00/14 is the worked example — see JUDGEMENTS).
@@ -34,7 +36,8 @@
 #               space (see JUDGEMENTS for the two exceptions).
 #   p4          the row's printed P5 parameter description: the cell the
 #               chart spans across the P5 columns where it prints one,
-#               otherwise the chart's P5 column-header row verbatim.
+#               otherwise the chart's P5 column-header row, prefixed
+#               "P5 column headers".
 #   digits      the width of the largest P5 code printed for the row.
 #   text        true only for a row whose prose states a character count.
 #   manual_line the layout-text line the row's address is printed on.
@@ -49,7 +52,7 @@
 # cells are drawn as hyphens, so this chart prints no parameterless row.
 #
 # JUDGEMENTS (every one of them; the report of task 9b carries them too):
-#  1. digits 3 on 163 rows. The P5 column headers are the codes and they are
+#  1. digits 3 on 145 rows. The P5 column headers are the codes and they are
 #     three characters wide — "000 001 002 003 004 005 006 ~" (:1768) — so a
 #     row whose parameters are the printed enumeration has a largest code of
 #     three characters however many columns it fills. That includes the rows
