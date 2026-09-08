@@ -1053,3 +1053,80 @@ func validateImported(t *testing.T, channels []codeplug.Channel, caps spec.Capab
 	}
 	return codeplug.Validate(cp, caps)
 }
+
+// TestTierFieldCells_RoundTripEveryField is the check tierFieldCells needs
+// and nothing else in this package provides: that a row's Cell and Parse
+// closures agree WITH EACH OTHER.
+//
+// Every other test here goes through a whole file, so a row whose Cell
+// rendered TxFreqHz while its Parse filled OffsetHz would still produce a
+// well-formed CSV and a well-formed import — the two mistakes would cancel
+// only if they happened to be the same pair, and would otherwise show up as
+// a distant, badly-explained mismatch in a fixture. Rendering each field
+// from a fully-Known channel and parsing the cell straight back into an
+// empty one catches it at the row.
+//
+// It also pins the two column lists against the table they are rendered
+// from: tierColumns and receiverColumns are hand-written literals (they are
+// the FILE FORMAT, not derived from the model), and the export loop walks
+// codeplug.TierFields, so a disagreement in order between the two would put
+// every cell under the wrong header.
+func TestTierFieldCells_RoundTripEveryField(t *testing.T) {
+	// A value for every one of the seventeen, all Known, none of them
+	// spelled like a reserved state cell.
+	full := codeplug.ChannelData{
+		TxFreqHz:            codeplug.FreqField{State: codeplug.Known, Value: 145500000},
+		Duplex:              codeplug.StringField{State: codeplug.Known, Value: "DUP-"},
+		OffsetHz:            codeplug.FreqField{State: codeplug.Known, Value: 600000},
+		ToneMode:            codeplug.StringField{State: codeplug.Known, Value: "TONE"},
+		ToneTx:              codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)},
+		ToneRx:              codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(1000)},
+		DTCSCode:            codeplug.IntField{State: codeplug.Known, Value: 23},
+		DTCSPolarity:        codeplug.StringField{State: codeplug.Known, Value: "NN"},
+		Filter:              codeplug.StringField{State: codeplug.Known, Value: "FIL1"},
+		DataMode:            codeplug.BoolField{State: codeplug.Known, Value: true},
+		TuningStepEnabled:   codeplug.BoolField{State: codeplug.Known, Value: true},
+		TuningStep:          codeplug.StringField{State: codeplug.Known, Value: "12.5k"},
+		ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Known, Value: 12500},
+		AttenuatorDB:        codeplug.IntField{State: codeplug.Known, Value: 12},
+		Preamp:              codeplug.StringField{State: codeplug.Known, Value: "P.AMP1"},
+		Antenna:             codeplug.StringField{State: codeplug.Known, Value: "ANT2"},
+		IPPlus:              codeplug.BoolField{State: codeplug.Known, Value: false},
+	}
+
+	for _, tf := range codeplug.TierFields {
+		t.Run(tf.Name, func(t *testing.T) {
+			fc, ok := tierFieldCells[tf.Field]
+			if !ok {
+				t.Fatalf("tierFieldCells has no entry for %s — every codeplug.TierFields row needs one, or its column silently exports and imports as nothing", tf.Name)
+			}
+			if s := fc.Cell(full); s == "" || s == cellUnavailable || s == cellAbsent {
+				t.Fatalf("Cell(full) = %q — the fixture sets every field Known, so this row is rendering some OTHER field, or none", s)
+			}
+			var got codeplug.ChannelData
+			if err := fc.Parse(&got, fc.Cell(full)); err != nil {
+				t.Fatalf("Parse(Cell(full)) = %v, want no error — a row's own rendering must be one its own parser accepts", err)
+			}
+			if !tf.Equal(full, got) {
+				t.Errorf("round trip through %q did not restore %s — Cell and Parse name different fields, or render and parse the same one differently", fc.Cell(full), tf.Name)
+			}
+		})
+	}
+
+	// Every field is accounted for in exactly one column list, in the
+	// same order the export loop walks.
+	var wantTier, wantReceiver []string
+	for _, tf := range codeplug.TierFields {
+		if tf.Receiver {
+			wantReceiver = append(wantReceiver, tf.Column)
+		} else {
+			wantTier = append(wantTier, tf.Column)
+		}
+	}
+	if !reflect.DeepEqual(tierColumns, wantTier) {
+		t.Errorf("tierColumns = %v,\nwant the non-Receiver codeplug.TierFields columns in order, %v", tierColumns, wantTier)
+	}
+	if !reflect.DeepEqual(receiverColumns, wantReceiver) {
+		t.Errorf("receiverColumns = %v,\nwant the Receiver codeplug.TierFields columns in order, %v", receiverColumns, wantReceiver)
+	}
+}

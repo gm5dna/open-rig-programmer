@@ -192,59 +192,13 @@ func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 // the same way it always did for the fields that were always in it.
 func tierFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	var bad []spec.Field
-	bothKnown := func(a, b codeplug.FieldState) bool {
-		return a == codeplug.Known && b == codeplug.Known
-	}
-	if bothKnown(want.TxFreqHz.State, got.TxFreqHz.State) && want.TxFreqHz.Value != got.TxFreqHz.Value {
-		bad = append(bad, spec.FieldTxFrequency)
-	}
-	if bothKnown(want.Duplex.State, got.Duplex.State) && want.Duplex.Value != got.Duplex.Value {
-		bad = append(bad, spec.FieldDuplex)
-	}
-	if bothKnown(want.OffsetHz.State, got.OffsetHz.State) && want.OffsetHz.Value != got.OffsetHz.Value {
-		bad = append(bad, spec.FieldOffset)
-	}
-	if bothKnown(want.ToneMode.State, got.ToneMode.State) && want.ToneMode.Value != got.ToneMode.Value {
-		bad = append(bad, spec.FieldToneMode)
-	}
-	if bothKnown(want.ToneTx.State, got.ToneTx.State) && want.ToneTx.Value != got.ToneTx.Value {
-		bad = append(bad, spec.FieldToneTx)
-	}
-	if bothKnown(want.ToneRx.State, got.ToneRx.State) && want.ToneRx.Value != got.ToneRx.Value {
-		bad = append(bad, spec.FieldToneRx)
-	}
-	if bothKnown(want.DTCSCode.State, got.DTCSCode.State) && want.DTCSCode.Value != got.DTCSCode.Value {
-		bad = append(bad, spec.FieldDTCSCode)
-	}
-	if bothKnown(want.DTCSPolarity.State, got.DTCSPolarity.State) && want.DTCSPolarity.Value != got.DTCSPolarity.Value {
-		bad = append(bad, spec.FieldDTCSPolarity)
-	}
-	if bothKnown(want.Filter.State, got.Filter.State) && want.Filter.Value != got.Filter.Value {
-		bad = append(bad, spec.FieldFilter)
-	}
-	if bothKnown(want.DataMode.State, got.DataMode.State) && want.DataMode.Value != got.DataMode.Value {
-		bad = append(bad, spec.FieldDataMode)
-	}
-	if bothKnown(want.TuningStepEnabled.State, got.TuningStepEnabled.State) && want.TuningStepEnabled.Value != got.TuningStepEnabled.Value {
-		bad = append(bad, spec.FieldTuningStepEnabled)
-	}
-	if bothKnown(want.TuningStep.State, got.TuningStep.State) && want.TuningStep.Value != got.TuningStep.Value {
-		bad = append(bad, spec.FieldTuningStep)
-	}
-	if bothKnown(want.ProgramTuningStepHz.State, got.ProgramTuningStepHz.State) && want.ProgramTuningStepHz.Value != got.ProgramTuningStepHz.Value {
-		bad = append(bad, spec.FieldProgramTuningStep)
-	}
-	if bothKnown(want.AttenuatorDB.State, got.AttenuatorDB.State) && want.AttenuatorDB.Value != got.AttenuatorDB.Value {
-		bad = append(bad, spec.FieldAttenuator)
-	}
-	if bothKnown(want.Preamp.State, got.Preamp.State) && want.Preamp.Value != got.Preamp.Value {
-		bad = append(bad, spec.FieldPreamp)
-	}
-	if bothKnown(want.Antenna.State, got.Antenna.State) && want.Antenna.Value != got.Antenna.Value {
-		bad = append(bad, spec.FieldAntenna)
-	}
-	if bothKnown(want.IPPlus.State, got.IPPlus.State) && want.IPPlus.Value != got.IPPlus.Value {
-		bad = append(bad, spec.FieldIPPlus)
+	for _, tf := range codeplug.TierFields {
+		// Both sides Known, then TierField.Equal: Equal compares the
+		// whole tri-state struct, so with both states already Known the
+		// only way it can be false is a differing value.
+		if *tf.State(&want) == codeplug.Known && *tf.State(&got) == codeplug.Known && !tf.Equal(want, got) {
+			bad = append(bad, tf.Field)
+		}
 	}
 	return bad
 }

@@ -292,17 +292,6 @@ func containsMode(caps spec.Capabilities, mode string) bool {
 	return slices.Contains(caps.Modes, mode)
 }
 
-// chirpTagByteOK reports whether b is a legal tag byte for this radio
-// family: printable ASCII 0x20-0x7E, excluding ';' (0x3B). Printable
-// ASCII excluding ';' is a family-wide CAT fact — ';' is the protocol
-// terminator, not a per-model choice — so this needs no capability. This
-// restates codeplug's validTagByte (which is unexported) rather than
-// reaching into that package for it — core/csvio depends only on
-// core/codeplug's exported surface, core/spec, and stdlib.
-func chirpTagByteOK(b byte) bool {
-	return b >= 0x20 && b <= 0x7E && b != ';'
-}
-
 // sanitizeCHIRPName turns a CHIRP Name into a radio tag: any byte outside
 // the radio's tag charset is replaced with a space (byte for byte, so
 // this never has to worry about splitting a multi-byte UTF-8 rune), and
@@ -314,7 +303,13 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 	b := []byte(name)
 	sanitized := false
 	for i := 0; i < len(b); i++ {
-		if !chirpTagByteOK(b[i]) {
+		// caps.TagByteOK, never a literal here: printable ASCII
+		// excluding ';' is only the DEFAULT rule, and a radio publishing
+		// its own charset (nine Icom drivers do, covering eleven
+		// registered model rows, and every one of those charsets
+		// contains ';') must be judged by that. Pinned by
+		// TestSanitizeCHIRPName's two published-charset cases.
+		if !caps.TagByteOK(b[i]) {
 			b[i] = ' '
 			sanitized = true
 		}
@@ -322,7 +317,7 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 	if sanitized {
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Name", Value: name, Action: ActionApproximated, Blocking: false,
-			Detail: fmt.Sprintf("Name contained a byte outside the %s tag charset (printable ASCII 0x20-0x7E, excluding ';'); replaced with a space", caps.Model),
+			Detail: fmt.Sprintf("Name contained a byte outside the %s tag charset (%s); replaced with a space", caps.Model, caps.TagCharsetDescription()),
 		})
 	}
 	if len(b) > caps.TagLen {
@@ -590,7 +585,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	if reaches(caps, memBank.ID, spec.FieldDuplex) {
 		entries = append(entries, importCHIRPDuplexIcom(line, cell, data, caps, memBank.ID)...)
 	} else {
-		entries = append(entries, importCHIRPDuplexShift(line, cell, data, caps)...)
+		entries = append(entries, importCHIRPDuplexShift(line, cell, data, caps, memBank.ID)...)
 	}
 
 	// Tone/rToneFreq/cToneFreq (and, on a radio that has them,
@@ -649,18 +644,44 @@ func consumedByThisRadio(caps spec.Capabilities, bank spec.BankID, column string
 	}
 }
 
-// importCHIRPDuplexShift is the pre-Icom-tier Duplex mapping, unchanged
-// and still the one every registered radio takes: CHIRP's Duplex becomes
-// a repeater SHIFT, asked for by direction rather than named here,
+// importCHIRPDuplexShift is the pre-Icom-tier Duplex mapping, the one
+// every radio whose memory bank does not reach spec.FieldDuplex takes:
+// CHIRP's Duplex becomes a repeater SHIFT, asked for by direction rather
+// than named here,
 // "split" is refused because a Yaesu memory channel has no independent
 // transmit frequency, and a non-zero Offset is dropped because the shift
 // magnitude is a global menu setting.
-func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities) []LossEntry {
+//
+// A field this radio reaches but this row does not speak to (the TS-590
+// pair's spec.FieldTxFrequency, graded on the MEM bank though this branch
+// never writes it) is left UNKNOWN, never invented, mirroring
+// importCHIRPDuplexIcom's own rule: the zero value is ABSENT, which
+// codeplug.Validate reports as an error on a channel the file never said
+// anything invalid about. Pinned by chirp_test.go's TS-590-pair "the five
+// one-name rows import as simplex with no Duplex entry" subtest.
+func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) []LossEntry {
 	var entries []LossEntry
+	if reaches(caps, bank, spec.FieldTxFrequency) {
+		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
+	}
 	switch duplexRaw := cell("Duplex"); duplexRaw {
 	case "", "off":
 		v, ok := shiftFor(caps, spec.ShiftNone)
 		if !ok {
+			// A radio with NO shift vocabulary at all reads a BLANK
+			// Duplex cell as its own only state, not as a loss: CHIRP's
+			// blank says nothing, data.Shift stays "" — what
+			// core/driver/ts590/read.go produces on read and what its
+			// write.go treats as "not requested" — and nothing was
+			// dropped, so nothing is reported. "off" is different: it
+			// asserts "no duplex configured" as distinct from simplex,
+			// which such a radio cannot say, so it still blocks. Pinned
+			// by chirp_test.go's TS-590-pair subtests "the five one-name
+			// rows import as simplex with no Duplex entry" and "an off
+			// Duplex row still blocks".
+			if duplexRaw == "" {
+				break
+			}
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
 				Detail: fmt.Sprintf("%s expresses no simplex shift option", caps.Model),
