@@ -249,4 +249,21 @@ func TestBuildMA0Set990_TheAbsentSecondSideIsEmittedAsThePrintedZeroedForm(t *te
 	} else {
 		assertParseRefusal(t, err, "second side")
 	}
+
+	// MED-1: Split or DualRecv true with a zeroed second side contradicts
+	// P9-P14's printed single-channel form (990:2946-2951, 990:2964-2965).
+	splitZeroed := rec
+	splitZeroed.Split = true
+	if _, err := l.BuildMA0Set(splitZeroed); err == nil {
+		t.Error("a Split record with a zeroed second side was built")
+	} else {
+		assertParseRefusal(t, err, "P15")
+	}
+	dualZeroed := rec
+	dualZeroed.DualRecv = true
+	if _, err := l.BuildMA0Set(dualZeroed); err == nil {
+		t.Error("a DualRecv record with a zeroed second side was built")
+	} else {
+		assertParseRefusal(t, err, "P16")
+	}
 }

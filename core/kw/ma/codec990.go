@@ -262,8 +262,8 @@ func (l Layout) buildMA0Set990(rec Record) (Command, error) {
 // content is refused rather than half emitted.
 func (l Layout) buildSecond990(what string, rec Record) (string, error) {
 	if rec.TXMode == 0 {
-		if rec.TXFreqHz != 0 || rec.TXFMNarrow || rec.TXToneType != 0 || rec.TXToneIndex != 0 || rec.TXCTCSSIndex != 0 {
-			return "", newParseError(nil, "%s: this record has no second side mode but carries frequency-2 content (P9 = %d, P11 = %v, P12 = %q, P13 = %d, P14 = %d); a single memory channel's whole frequency-2 side is zero (990:2964-2965)", what, rec.TXFreqHz, rec.TXFMNarrow, rec.TXToneType, rec.TXToneIndex, rec.TXCTCSSIndex)
+		if rec.TXFreqHz != 0 || rec.TXFMNarrow || rec.TXToneType != 0 || rec.TXToneIndex != 0 || rec.TXCTCSSIndex != 0 || rec.Split || rec.DualRecv {
+			return "", newParseError(nil, "%s: this record has no second side mode but carries frequency-2 content (P9 = %d, P11 = %v, P12 = %q, P13 = %d, P14 = %d, P15 = %v, P16 = %v); a single memory channel's whole frequency-2 side is zero, which a split P15 or a dual-reception P16 contradicts (990:2946-2951, 990:2964-2965)", what, rec.TXFreqHz, rec.TXFMNarrow, rec.TXToneType, rec.TXToneIndex, rec.TXCTCSSIndex, rec.Split, rec.DualRecv)
 		}
 		return strings.Repeat("0", ma990SecondHi-ma990SecondLo+1), nil
 	}

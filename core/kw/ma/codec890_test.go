@@ -305,4 +305,16 @@ func TestBuildMA0Set890_EmittedP10EqualsEmittedP4(t *testing.T) {
 	if got := string(f[24:38]); got != "000000000000"+"00" {
 		t.Errorf("an unsplit candidate emitted P8-P11 = %q, want the printed zeroed split side (890:3217-3218)", got)
 	}
+
+	// MED-1: a record marked Split with a zeroed secondary side contradicts
+	// itself — P11 says split (890:3201-3203) while P8-P10 print the single
+	// memory channel's own zeroed form (890:3217-3218) — and must be
+	// refused, not built.
+	splitZeroed := unsplit
+	splitZeroed.Split = true
+	if _, err := l.BuildMA0Set(splitZeroed); err == nil {
+		t.Error("a Split record with a zeroed secondary side was built")
+	} else {
+		assertParseRefusal(t, err, "P11")
+	}
 }
