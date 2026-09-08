@@ -375,9 +375,28 @@ var commonHardWiring = []FixedField{
 // somewhere other than its own datum is this repository's standing hazard;
 // here the two would be one edit apart and, without this check, nothing
 // would fail.
+//
+// THE BOOK IS TESTED TWICE, AND THE SECOND TEST IS NOT REDUNDANT.
+// Book.valid() asks "has this package read that document" — four books —
+// and the second asks "does that document print the record this type IS",
+// which is two. The refusal is BY NAME rather than by a widened valid()
+// because valid() is also what framing, IsFatal and the typed errors
+// consult, and they legitimately speak for all four.
+//
+// IT IS ALSO WHAT KEEPS THE TREE'S OTHER Book SWITCHES CORRECT WITHOUT ARMS
+// OF THEIR OWN: kwtest's layout self-consistency switch and
+// golden_test.go's replayLayout both list Book590 and Book480 and treat
+// anything else as a failure. Both stay right precisely because Book890 and
+// Book990 are unreachable from any kw.Layout. Without this refusal a later
+// reader "finishes the job" by giving them arms — which would need fake
+// 50-byte layouts for two radios whose books print no such record.
+// TestNewLayout_RefusesTheTwoBooksThisRecordDoesNotDescribe is the pin.
 func NewLayout(cfg LayoutConfig) (Layout, error) {
 	if !cfg.Book.valid() {
 		return Layout{}, fmt.Errorf("%w: Book is unset — a layout that names no document cannot quote a cause sentence (got %v)", ErrLayoutInvalid, cfg.Book)
+	}
+	if cfg.Book != Book590 && cfg.Book != Book480 {
+		return Layout{}, fmt.Errorf("%w: %v is a document this package READS but whose memory channel it does not DESCRIBE — this Layout is the 50-byte MR/MW record, printed only by the 590 pair's book and the TS-480's, and the TS-890S/TS-990S channel is core/kw/ma's own layout type", ErrLayoutInvalid, cfg.Book)
 	}
 	if cfg.Model == "" {
 		return Layout{}, fmt.Errorf("%w: Model is empty — every refusal this layout produces names the row it speaks for", ErrLayoutInvalid)

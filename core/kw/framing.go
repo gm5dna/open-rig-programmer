@@ -17,14 +17,25 @@ import (
 // of the import direction — the cycle-free one, and the one core/civ's own
 // framing.go already takes. core/transport knows nothing of core/kw.
 
-// Book names which of the two PC-command documents a session speaks to.
+// Book names which of the FOUR PC-command documents a session speaks to.
 //
-// IT IS NOT DECORATION AND IT HAS NO DEFAULT. The two books give the SAME
+// IT IS NOT DECORATION AND IT HAS NO DEFAULT. The books give the SAME
 // stream-health token DIFFERENT causes — "O;" is "A receive buffer overrun
-// error occurred" on the 590 pair (590:113) and "Receive data was sent but
-// processing was not completed" on the TS-480 (480:143-144), erratum E13 —
-// so a diagnostic that names the wrong sentence names the wrong document.
-// The zero value describes no document and NewFraming refuses it.
+// error occurred" on the 590 pair (590:113), the TS-890S (890:121-123) and
+// the TS-990S (990:121), and "Receive data was sent but processing was not
+// completed" on the TS-480 (480:143-144), erratum E13 — so a diagnostic
+// that names the wrong sentence names the wrong document. The zero value
+// describes no document and NewFraming refuses it.
+//
+// valid() NOW ANSWERS TWO DIFFERENT QUESTIONS AND ONLY ONE OF THEM IS
+// NewLayout'S. It says "a document this package has READ", which is what
+// framing, the typed errors and IsFatal need: all four books print the same
+// envelope and the same error-message table, so this package can speak for
+// all four at the stream level. It does NOT say "a document this package's
+// 50-byte RECORD describes" — that is two books, the 590 pair's and the
+// TS-480's, and NewLayout tests for those two BY NAME rather than through
+// valid() (layout.go). The TS-890S and TS-990S memory channel is
+// core/kw/ma's, whose layout type is not a kw.Layout at all.
 //
 // It is a BOOK, not a registry row. The TS-590S and the TS-590SG are two
 // registry rows sharing one document (590:*), and nothing in this file
@@ -42,6 +53,10 @@ const (
 	Book590
 	// Book480 is the TS-480 PC control command reference (480:LINE).
 	Book480
+	// Book890 is the TS-890S PC control command reference (890:LINE).
+	Book890
+	// Book990 is the TS-990S PC control command reference (990:LINE).
+	Book990
 )
 
 // String renders a Book for diagnostics.
@@ -51,13 +66,21 @@ func (b Book) String() string {
 		return "TS-590S/SG PC command reference"
 	case Book480:
 		return "TS-480 PC command reference"
+	case Book890:
+		return "TS-890S PC command reference"
+	case Book990:
+		return "TS-990S PC command reference"
 	default:
 		return "unset PC command reference"
 	}
 }
 
-// valid reports whether b names a document this package has read.
-func (b Book) valid() bool { return b == Book590 || b == Book480 }
+// valid reports whether b names a document this package has READ — see the
+// type's doc comment for why that is not the same question as "a document
+// this package's 50-byte record describes", which is NewLayout's.
+func (b Book) valid() bool {
+	return b == Book590 || b == Book480 || b == Book890 || b == Book990
+}
 
 // DrainIdleGap and DrainCap are the Kenwood DrainPolicy. The cap is a
 // NAMED DECISION (plan P20), not transport's default, and the arithmetic is
@@ -215,7 +238,7 @@ func (f framing) IsRejection(frame []byte) bool { return IsRejection(frame) }
 // so no frame can leave whatever this returns.
 // TestFraming_ZeroValueFailsClosed pins all three doors together.
 //
-// TestFatalTokens_FourStatesTwoTokensTwoBooks is the injection matrix;
+// TestFatalTokens_FourStatesTwoTokens is the injection matrix;
 // TestFatalTokens_SameChunk_SuppressesTheAnswerItArrivedWith and
 // TestFatalTokens_PostPurgeRace_NoFrameLeavesAfterAReceivedFatalFrame are
 // core/transport's two adversarial pins re-run through this accumulator and

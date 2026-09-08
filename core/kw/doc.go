@@ -121,7 +121,9 @@
 // A token is NEVER matched as an answer, NEVER collapsed into ErrRejected,
 // and NEVER retried. core/kw/fatalframer_test.go carries the four-state
 // injection matrix — read wait, write error-window, drain, no command
-// outstanding, times two tokens, times two books — and re-runs
+// outstanding, times two tokens, times EVERY book this package reads (the
+// axis is the whole set because newStreamError's default arm is a panic on
+// a goroutine with no recover) — and re-runs
 // core/transport's two adversarial pins through this accumulator and this
 // typed cause.
 //
