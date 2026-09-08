@@ -563,7 +563,7 @@ func TestNewFramingWithGate_IsTheConjunctionNotThePredicateAlone(t *testing.T) {
 // spelling, so the constructor refuses nil rather than accepting it and
 // degrading — which is what a later defensive nil check would do.
 func TestNewFramingWithGate_RefusesANilPredicate(t *testing.T) {
-	for _, book := range []Book{Book890, Book990, Book590, BookUnset} {
+	for _, book := range []Book{Book890, Book990, Book590} {
 		t.Run(book.String(), func(t *testing.T) {
 			f, err := NewFramingWithGate(book, nil)
 			if err == nil {

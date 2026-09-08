@@ -325,7 +325,8 @@ func (l Layout) validEXRead(frame []byte) bool {
 // perfectly usable value whose gate had silently fallen back to the envelope
 // — a weaker gate reached by forgetting something, which is the failure
 // shape this package refuses everywhere else. Here the only way to hold a
-// layoutFraming is to have passed a gate to a constructor that refuses none.
+// layoutFraming is to have passed a gate to a constructor that refuses a
+// missing one.
 //
 // IT DELEGATES TO NewFramingWithGate BUT IS NOT "A ONE-LINE CALLER": the
 // Configured check and its own refusal sentence stay here, because a zero
@@ -351,9 +352,9 @@ func NewFramingFor(l Layout) (transport.Framing, error) {
 // artefact and so passes every byte-identity leg untouched. The reason the
 // conjunction is right is the one stated above: the grammars sit in FRONT of
 // the envelope rather than replacing it, so the envelope's rules stay in
-// force on the day a grammar is widened. TestNewFramingWithGate_IsThe
-// ConjunctionNotThePredicateAlone is the pin, and it drives an
-// envelope-illegal frame that the supplied predicate admits.
+// force on the day a grammar is widened.
+// TestNewFramingWithGate_IsTheConjunctionNotThePredicateAlone is the pin,
+// and it drives an envelope-illegal frame that the supplied predicate admits.
 //
 // A NIL PREDICATE IS REFUSED, wrapping ErrLayoutInvalid. A function-valued
 // parameter is the optional field this file has already refused, spelt
