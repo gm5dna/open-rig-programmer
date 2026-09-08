@@ -31,6 +31,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"go/format"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,8 +46,8 @@ const numColumns = 10
 // manual's parameter-description column (retained for the audit trail, not
 // emitted into the generated Go); Digits is the manual's Digits column:
 // within the profile's MinDigits..MaxDigits for a numeric field, or exactly
-// the profile's TextWidth for a text item (1..4 and 12 respectively for the
-// FT-710); Text marks those text items; Parameterless marks the rows whose
+// one of the profile's TextWidths for a text item (1..4 and 12 respectively
+// for the FT-710); Text marks those text items; Parameterless marks the rows whose
 // chart line names no field at all; and ManualLine is the source line in the
 // manual extract the row was transcribed from.
 type Row struct {
@@ -84,11 +85,12 @@ const parameterlessDigits = "-"
 // ManualLine, a duplicate (P1,P2,P3) triple, a non-zero P3 under
 // AddressPair, a non-zero P2 or P3 under AddressSingle, a text row under
 // TextRowsAbsent, a non-text row whose Digits falls outside the profile's
-// MinDigits..MaxDigits, a text row whose Digits is not the profile's
-// TextWidth, an address component outside the DOMAIN THIS PROFILE'S OWN FORM
-// gives it (0..99 per component under AddressTriple and AddressPair; 0..999
-// for P1 under AddressSingle, whose field is three digits wide), a hyphen
-// Digits cell on an
+// MinDigits..MaxDigits, a text row whose Digits is named by none of the
+// profile's TextWidths, an address component outside the DOMAIN THIS
+// PROFILE'S OWN FORM gives it (0..99 per component under AddressTriple and
+// AddressPair; 0..999 for P1 under AddressSingle, whose field is three digits
+// wide; 0..1 for P1 under AddressGrouped, which is the menu-type enumeration
+// and not its one-digit field's capacity), a hyphen Digits cell on an
 // address the profile's ParameterlessAddresses does not name (or under
 // ParameterlessRefused at all), and a numeric Digits cell on an address it
 // does name, each fail with a non-nil
@@ -156,7 +158,7 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 	// A SWITCH, not an if/else with an implicit AddressTriple arm — the
 	// shape ParseObservedCSV below already takes, and for the same reason:
 	// Profile.Validate (profile.go) has already required p.Addresses to be
-	// one of the three known forms, but THIS is the site that reads it, and an
+	// one of the four known forms, but THIS is the site that reads it, and an
 	// omitted config semantic is refused here too rather than defaulted to
 	// the permissive arm.
 	//
@@ -167,8 +169,10 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 	// nothing recorded having changed.
 	//
 	// THE COMPONENT DOMAIN IS CHECKED INSIDE THIS SWITCH, not before it,
-	// because it is the FORM'S fact: a component's bound is the capacity of
-	// the field it renders into, and the three forms have three fields.
+	// because it is the FORM'S fact: three of the four forms bound a
+	// component by the capacity of the field it renders into, and the four
+	// forms have four fields. AddressGrouped's P1 is the exception and its
+	// arm says why.
 	// It sat above the switch while every form's components were two digits
 	// wide, which made 0..99 look like a property of an address rather than
 	// of a wire field, and made rows 100-153 of a single-number chart
@@ -211,6 +215,26 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 		}
 		if row.P3 != 0 {
 			return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
+		}
+	case AddressGrouped:
+		// ALL THREE components are on the wire — one digit, then two, then
+		// two — so this arm refuses none of them. The zero rules the two
+		// arms above carry would refuse every row of a grouped chart;
+		// TestParseCSV_AddressGroupedCarriesAllThreeComponents is the pin.
+		//
+		// P1's bound is checked FIRST and it is the only one in this switch
+		// that is not a field's capacity: the manuals enumerate the two
+		// menu-type values, so 0..1 is narrower than the one-digit field's
+		// 0..9 (see AddressGrouped's own doc comment). The two-digit sweep
+		// then runs over all three, which is a second no-op pass on a P1
+		// this arm has already bounded more tightly, and is what gives P2
+		// and P3 the SHIPPED two-digit refusal sentence rather than a
+		// grouped copy of it.
+		if row.P1 < 0 || row.P1 > groupedP1Ceiling {
+			return Row{}, fmt.Errorf("address component P1 must be 0..%d under %v, got %d", groupedP1Ceiling, p.Addresses, row.P1)
+		}
+		if err := checkTwoDigitComponents(row); err != nil {
+			return Row{}, err
 		}
 	default:
 		return Row{}, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
@@ -289,8 +313,13 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 		if p.TextRowPolicy == TextRowsAbsent {
 			return Row{}, fmt.Errorf("row (%s) is flagged text under %v — this model's chart prints no free-text row, so a text row is a transcription error", row.Name, p.TextRowPolicy)
 		}
-		if row.Digits != p.TextWidth {
-			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
+		// MEMBERSHIP, not equality: a chart may print text rows at more
+		// than one width, and the refusal names the whole declared set
+		// because a sentence quoting one number would be false of such a
+		// chart. TestParseCSV_TextRowMatchesAnyDeclaredWidth pins both
+		// halves.
+		if !slices.Contains(p.TextWidths, row.Digits) {
+			return Row{}, fmt.Errorf("text row (%s) must have digits %v, got %d", row.Name, p.TextWidths, row.Digits)
 		}
 	} else if !row.Parameterless && (row.Digits < p.MinDigits || row.Digits > p.MaxDigits) {
 		// The MinDigits..MaxDigits check is skipped for a parameterless row
@@ -313,6 +342,13 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 // The FT-991A's own chart stops at 153. That is not this bound: membership
 // refuses 154, and this refuses the address the FIELD could never carry.
 const singleP1Ceiling = 999
+
+// groupedP1Ceiling is the largest P1 an AddressGrouped chart may print. It is
+// the ENUMERATION the manuals give the menu-type digit — 0: Menu, 1: Advanced
+// Menu — and NOT the capacity of the one-digit field it renders into, which
+// is 9. It is the only component bound in this file that is not a field's
+// capacity, and AddressGrouped's doc comment carries the citations.
+const groupedP1Ceiling = 1
 
 // checkTwoDigitComponents applies the two-digit component domain — the one
 // AddressTriple and AddressPair render every component into — to all three of
@@ -379,22 +415,24 @@ type Observed struct {
 // Parsing is strict for privacy as much as correctness: each address
 // component must be exactly two digits — EXCEPT p1 under AddressSingle,
 // whose field is three digits wide and whose column must therefore be
-// exactly three, with its own refusal sentence, because a sentence saying
-// "two" would be simply false of the only component that form puts on the
-// wire — each width an integer in 1..the
+// exactly three, and p1 under AddressGrouped, whose menu-type field is one
+// digit wide and whose column must therefore be exactly one, each with its
+// own refusal sentence, because a sentence saying "two" would be simply
+// false of them — each width an integer in 1..the
 // profile's MaxObservedWidth, and each shape one of the three known
 // classes, so a row cannot carry free text. Under AddressPair the p3
 // column must additionally be "0" — and under AddressSingle the p2 column
 // as well — mirroring parseRecord's own rules for the inventory CSV, and
 // neither is part of the key: those forms' wire fields carry P1 and P2, or
 // P1 alone, so a component the wire can never express must be refused, not
-// silently folded into a wider key nothing else can produce.
+// silently folded into a wider key nothing else can produce. AddressGrouped
+// puts all three on the wire and so requires no zero of any of them.
 // Duplicates are rejected. Error text names the
 // row and address only — never another field — so a malformed artefact
 // cannot leak captured content through a build log.
 //
 // That bound is hardware-evidence policy and is deliberately independent of
-// the manual-schema widths in MinDigits/MaxDigits/TextWidth — the two
+// the manual-schema widths in MinDigits/MaxDigits/TextWidths — the two
 // categories can disagree, as table2-corrections.csv records.
 func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 	// Same self-validation as ParseCSV: nothing forces a caller through the
@@ -419,6 +457,17 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 		// — the two-digit one below is SHIPPED TEXT and is what the other two
 		// forms (and this form's own p2/p3 columns) still refuse with.
 		for c := 0; c < 3; c++ {
+			if c == 0 && p.Addresses == AddressGrouped {
+				// One digit, because that is the width of the field this
+				// form's P1 renders into — the capacity, as the two- and
+				// three-digit sentences are, even though the VALUE domain
+				// parseRecord enforces is narrower. Its sentence names P1
+				// and the form, on the AddressSingle arm's precedent.
+				if !isOneDigit(rec[c]) {
+					return nil, fmt.Errorf("extable: observation row %d: address component P1 must be exactly one digit under %v", i+1, p.Addresses)
+				}
+				continue
+			}
 			if c == 0 && p.Addresses == AddressSingle {
 				if !isThreeDigits(rec[c]) {
 					// "P1", not the loop's 0-based c: this arm runs for c ==
@@ -437,7 +486,7 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 		// The key follows p.Addresses — RenderGo's lookup key's own form,
 		// not always six digits (S0-close review, MEDIUM-2). A switch, not
 		// an AddressTriple-shaped default: p.Validate above has already
-		// required p.Addresses to be one of the three known forms, but this
+		// required p.Addresses to be one of the four known forms, but this
 		// switch is the site that actually reads it, and an omitted config
 		// semantic is refused here too, not defaulted to the wider key.
 		var addr string
@@ -473,6 +522,13 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 				return nil, fmt.Errorf("extable: observation row %d: p3 must be 0 under %v, got %q", i+1, p.Addresses, rec[2])
 			}
 			addr = rec[0]
+		case AddressGrouped:
+			// All three columns, verbatim: the shape checks above have
+			// required exactly one, two and two digits, so concatenating
+			// them IS the five-character fixed-width token RenderGo's own
+			// "%d%02d%02d" renders. No component is dropped, because none is
+			// off the wire.
+			addr = rec[0] + rec[1] + rec[2]
 		default:
 			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 		}
@@ -499,6 +555,14 @@ func isTwoDigits(s string) bool {
 		return false
 	}
 	return s[0] >= '0' && s[0] <= '9' && s[1] >= '0' && s[1] <= '9'
+}
+
+// isOneDigit reports whether s is exactly one ASCII digit — the p1 column's
+// shape under AddressGrouped, whose menu-type field is one digit wide. A
+// sibling of isTwoDigits and isThreeDigits, for the reason they are siblings
+// of each other: each form's own arm names its own width.
+func isOneDigit(s string) bool {
+	return len(s) == 1 && s[0] >= '0' && s[0] <= '9'
 }
 
 // isThreeDigits reports whether s is exactly three ASCII digits — the p1
@@ -671,7 +735,7 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 		// through that renderer.
 		// A SWITCH, not an if/else with an implicit AddressPair arm, for the
 		// reason parseRecord's own switch above gives: Profile.Validate has
-		// already required one of the three known forms, and this site
+		// already required one of the four known forms, and this site
 		// refuses an unset one rather than quietly rendering a key of the
 		// wrong width.
 		var addr string
@@ -691,6 +755,23 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 			// TestRenderGo_SingleProfileKeysObservationsByThreeDigitForm goes
 			// through both sides of the join, so a disagreement fails there.
 			addr = fmt.Sprintf("%03d", r.P1)
+		case AddressGrouped:
+			// One digit, two, two — five characters, all three components,
+			// matching the token ParseObservedCSV builds from the three
+			// columns it has required to be exactly those widths, so the
+			// zero group keys "00005" and not "0005".
+			//
+			// "%d" is a MINIMUM width, and it is one character here only
+			// because parseRecord has already bounded P1 by groupedP1Ceiling
+			// — the two are COUPLED, and widening that constant past 9 would
+			// silently widen this key while the observation CSV's one-digit
+			// column kept producing the old one. That is the AddressSingle
+			// "%02d" failure in a new place;
+			// TestParseCSV_AddressGroupedP1DomainIs0To1 is what holds the
+			// bound that makes it unreachable.
+			// TestRenderGo_GroupedProfileKeysObservationsByFiveDigitForm goes
+			// through both sides of the join, so a disagreement fails there.
+			addr = fmt.Sprintf("%d%02d%02d", r.P1, r.P2, r.P3)
 		default:
 			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 		}
