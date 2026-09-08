@@ -1329,29 +1329,18 @@ var ts480Profile = Profile{
 //     can vary in length from 0 to 15 characters. Screen saver text can vary
 //     in length from 0 to 10 characters." (1920-1921).
 //
-//   - MinDigits 3 / MaxDigits 4. The P5 column HEADINGS are the codes
-//     themselves and every one of them is three characters wide, so a row
-//     that enumerates values is 3. Nineteen rows are four wide. Two print a
-//     numeric legend: 0/05/12 Contest Number, "0001 ~ 9999 (Must be a
-//     4-digit number)" (2108), and 1/00/05 Reference Oscillator
-//     Calibration, "Parameter value of 0000 ~ 1000, corresponding to setting
-//     values of -500 ~ +500" (2235-2236). Neither is a text row: a numeric
-//     legend states a width, not a string. The other seventeen are the
-//     PF-key rows 0/00/15 to 0/00/31, whose own cell states no width and
-//     whose width the EX command page prints instead — "PF key settings use
-//     4 digits (refer to the PF Key assignment ID lists)" (1918-1919), the
-//     lists themselves running to four-character IDs (2292-2342). The
-//     transcription leg read those rows as 3 and recorded the disagreement;
-//     ORCHESTRATOR RULING R-B settled it at 4. MaxDigits did not move.
+//   - MinDigits 3 / MaxDigits 4: the P5 column headings give every
+//     enumerating row 3, and RULING R-B settles the seventeen PF-key rows
+//     at 4, on the EX command page's own citation (1918-1919); see
+//     core/kw/ma/menu890s.csv's own provenance header for the rest of this
+//     transcription's judgements.
 //
-//   - ParameterlessExcluded over FOUR addresses — 1/00/23 Touchscreen
-//     Calibration (2273), 1/00/24 Software License Agreement (2274),
-//     1/00/25 Important Notices concerning Free Open Source (2276) and
-//     1/00/26 About Various Software License Agreements (2279). Each prints
-//     "Does not correspond to a command" where a parameter table would be.
-//     They are transcribed and COUNTED — ExpectedRows includes them — and
-//     omitted from the inventory by address, because a menu line that names
-//     no field is not an address an EX frame may read or write.
+//   - ParameterlessExcluded over the four addresses ParameterlessAddresses
+//     names below, each of which prints "Does not correspond to a command"
+//     where a parameter table would be. They are transcribed and COUNTED —
+//     ExpectedRows includes them — and omitted from the inventory by
+//     address, because a menu line that names no field is not an address
+//     an EX frame may read or write.
 //
 // THE CEILING IS TRANSCRIBED, AS THE OTHER KENWOOD STANZAS' ARE. 246 is
 // core/kw.MaxEXDigits (core/kw/exdigits.go), and it cannot be written here
