@@ -344,11 +344,17 @@ func TestReadSettings_MalformedDescriptorRefusedBeforeWire(t *testing.T) {
 
 // TestReadSettings_BadItemIDShapeRefusedBeforeWire (Codex M8b #5): a stub
 // SettingsReader whose descriptor is structurally valid (non-empty, unique
-// IDs, so SettingsDescriptor.Validate passes) but whose item ID is five
-// digits — none of the three widths a MenuSnapshot requires, which are
-// exactly 3, 4 or 6 ASCII digits — is refused BEFORE any read.
+// IDs, so SettingsDescriptor.Validate passes) but whose item ID is seven
+// digits — none of the four widths a MenuSnapshot requires, which are
+// exactly 3, 4, 5 or 6 ASCII digits — is refused BEFORE any read.
 // Without the item-ID preflight this failed only AFTER every read, when the
 // built snapshot was validated.
+//
+// THE WIDTH HAD TO MOVE, not merely its description. This fixture used a
+// five-digit ID, and five became an admitted width with the TS-890S/TS-990S
+// grouped EX address; re-wording the comment alone would have left a test
+// that no longer exercises the preflight at all, because its descriptor
+// would now be accepted.
 func TestReadSettings_BadItemIDShapeRefusedBeforeWire(t *testing.T) {
 	var calls int
 	sess := &stubSettingsSession{
@@ -360,7 +366,7 @@ func TestReadSettings_BadItemIDShapeRefusedBeforeWire(t *testing.T) {
 				Groups: []driver.SettingGroup{{
 					ID: "0101", Label: "G1",
 					Items: []driver.SettingItem{
-						{ID: "01011", Label: "A (5 chars, not a valid snapshot ID)"},
+						{ID: "0101101", Label: "A (7 chars, not a valid snapshot ID)"},
 					},
 				}},
 			}},
@@ -655,20 +661,22 @@ func TestPrepareSend_PerformsNoSettingsTraffic(t *testing.T) {
 }
 
 // TestReadSettings_FourDigitItemIDPassesThePreflight is the positive control
-// for the preflight above, at a SECOND of the three EX address widths.
+// for the preflight above, at a SECOND of the four EX address widths.
 //
 // A radio whose MENU Number is a (P1,P2) pair renders four-digit setting IDs
-// (core/cat's EXAddressPair), and MenuSnapshot.Validate accepts exactly 3, 4
-// or 6 ASCII digits. Without this the preflight could be narrowed back to six
-// alone and only the five-digit negative above would notice — which it would
-// not, since five is refused either way.
+// (core/cat's EXAddressPair), and MenuSnapshot.Validate accepts exactly 3, 4,
+// 5 or 6 ASCII digits. Without this the preflight could be narrowed back to
+// the triple width alone and only the seven-digit negative above would
+// notice — which it would not, since seven is refused either way.
 //
-// THE THIRD WIDTH HAS NO CONTROL AT THIS PREFLIGHT. Three-digit IDs (the
-// Kenwood MENU number) are pinned where the rule lives — core/codeplug's
-// TestMenuSnapshotValidate_ThreeDigitIDs — so a narrowing of the preflight
-// to four-or-six would pass this file. The sibling of this test at width
-// three is the cheap way to close that, and this comment must not be read
-// as claiming it exists.
+// THE THREE- AND FIVE-DIGIT FORMS HAVE NO CONTROL HERE. Three-digit IDs (the
+// Kenwood MENU number) and five-digit ones (the TS-890S/TS-990S grouped EX
+// address) are pinned where the rule lives — core/codeplug's
+// TestMenuSnapshotValidate_ThreeDigitIDs and
+// TestMenuSnapshotValidate_KenwoodGroupedSnapshot — so a narrowing of the
+// preflight to four-or-six would pass this file. A sibling of this test at
+// either width is the cheap way to close that, and this comment must not be
+// read as claiming one exists.
 func TestReadSettings_FourDigitItemIDPassesThePreflight(t *testing.T) {
 	var calls int
 	sess := &stubSettingsSession{
