@@ -92,13 +92,16 @@ func (t TypeRefPolicy) String() string {
 // THEY ARE extable's OWN TYPES, not core/cat's. This package imports no
 // core/cat — it is build-time tooling that RENDERS core/cat source text, and
 // an import would make the transcoder depend on the package it generates
-// into. All three correspond ONE-FOR-ONE with core/cat's forms —
-// AddressTriple with EXAddressTriple, AddressPair with EXAddressPair,
-// AddressSingle with EXAddressSingle — and each correspondence is a fact
-// about the radios' charts rather than a type relationship: a Pair
+// into. THREE OF THE FOUR address forms correspond ONE-FOR-ONE with
+// core/cat's — AddressTriple with EXAddressTriple, AddressPair with
+// EXAddressPair, AddressSingle with EXAddressSingle — and each correspondence
+// is a fact about the radios' charts rather than a type relationship: a Pair
 // profile's CSV carries P3 == 0 on every row and a Single profile's carries
 // P2 AND P3 == 0, which is exactly what core/cat's rule V12 requires of a
-// Pair and a Single dialect's inventory. This comment used to say
+// Pair and a Single dialect's inventory. AddressGrouped has NO core/cat
+// counterpart and is not owed one: no Yaesu chart in this repository prints
+// its shape, and the absence of a counterpart is not a gap to be filled by
+// inventing one. This comment used to say
 // AddressSingle had no core/cat counterpart and rendered through a separate
 // Kenwood package; cat.EXAddressSingle is the seam the FT-991A milestone
 // added, and the generated ft991a inventory is what consumes it (Codex
@@ -138,6 +141,37 @@ const (
 	// moved from "08" to "008" with the rest, which is the half a "wider
 	// domain is a superset" argument does not cover.
 	AddressSingle
+	// AddressGrouped: the chart prints a (P1,P2,P3) triple whose components
+	// are ONE, TWO and TWO digits — five wire characters. All three are on
+	// the wire, so unlike AddressPair and AddressSingle this form refuses no
+	// component; TestParseCSV_AddressGroupedCarriesAllThreeComponents is the
+	// discriminating pin, because an arm that copied its neighbours' "must
+	// be 0" rules would refuse every row of a real chart.
+	//
+	// P1's DOMAIN IS 0..1, AND IT IS THE ONE BOUND IN THIS TYPE THAT IS NOT
+	// A FIELD'S CAPACITY. A one-digit field carries 0..9; the manuals
+	// enumerate the values instead — "P1 (Menu type number) 0: Menu 1:
+	// Advanced Menu" (docs/fixtures-private/manuals/ts890s_pc_rev1_layout.txt:1898-1900,
+	// ts990s_pc_rev2_layout.txt:1721-1723) — so the domain is the
+	// enumeration and a P1 of 2 names a group no chart prints.
+	// TestParseCSV_AddressGroupedP1DomainIs0To1 pins it, including the 9 a
+	// capacity argument would have admitted. P2 and P3 keep the two-digit
+	// domain and its SHIPPED refusal sentence, because their fields really
+	// are two digits wide.
+	//
+	// The observation key is "%d%02d%02d" — five characters, one token per
+	// component, on both sides of the join
+	// (TestRenderGo_GroupedProfileKeysObservationsByFiveDigitForm).
+	//
+	// REUSING AddressTriple WAS REJECTED. Its components' domains are 0..99
+	// each and its wire width is six. Narrowing P1 to 0..1 for some profiles
+	// and not others would make the domain a PER-PROFILE width datum — this
+	// member with a worse name and a shared enum constant — and the
+	// observation key's width would move for the Yaesu rows that use the
+	// form, silently, which is exactly the failure AddressSingle's comment
+	// above records from the FT-991A widening: widening one side alone makes
+	// every observation miss, on a complete CSV, with nothing to see.
+	AddressGrouped
 )
 
 func (a AddressForm) String() string {
@@ -148,6 +182,8 @@ func (a AddressForm) String() string {
 		return "AddressPair"
 	case AddressSingle:
 		return "AddressSingle"
+	case AddressGrouped:
+		return "AddressGrouped"
 	default:
 		return fmt.Sprintf("AddressForm(%d)", int(a))
 	}
@@ -434,7 +470,7 @@ func (p Profile) Validate() error {
 		return fmt.Errorf("extable: profile %s: TypeRefPolicy %v must be set explicitly", p.Model, p.Types)
 	}
 	switch p.Addresses {
-	case AddressTriple, AddressPair, AddressSingle:
+	case AddressTriple, AddressPair, AddressSingle, AddressGrouped:
 	default:
 		return fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 	}

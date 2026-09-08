@@ -37,6 +37,7 @@ func TestPolicyStrings(t *testing.T) {
 		// next form's missing String() case should be obvious from this one
 		// table, not from having to remember a form has its own file too.
 		{AddressSingle.String(), "AddressSingle"},
+		{AddressGrouped.String(), "AddressGrouped"},
 		{AddressForm(0).String(), "AddressForm(0)"},
 		{LabelsRequired.String(), "LabelsRequired"},
 		{LabelsAbsent.String(), "LabelsAbsent"},
