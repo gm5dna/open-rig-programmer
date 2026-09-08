@@ -406,14 +406,23 @@ func TestMenuSnapshotValidate_KenwoodGroupedSnapshot(t *testing.T) {
 		t.Errorf("Validate() on duplicate five-digit IDs = %v, want *DuplicateMenuIDError", err)
 	}
 
+	// errors.As alone does not discriminate here: a *MenuEntryError is also
+	// what a reverted (pre-widening) isSettingIDWidth would return for this
+	// five-digit ID, for the width reason rather than this one — checking
+	// Reason is what pins "refused for THIS rule", as the width table above
+	// already pins the width rule itself.
 	empty := &MenuSnapshot{Entries: []MenuEntry{{ID: "10203", State: MenuKnown}}}
-	if err := empty.Validate(); err == nil {
-		t.Error("Validate() accepted a Known five-digit entry with an empty value")
+	var eme *MenuEntryError
+	wantEmptyReason := "a known entry must have a non-empty value"
+	if err := empty.Validate(); !errors.As(err, &eme) || eme.Reason != wantEmptyReason {
+		t.Errorf("Validate() on a Known five-digit entry with an empty value = %v, want *MenuEntryError{Reason: %q}", err, wantEmptyReason)
 	}
 
 	complete := &MenuSnapshot{Complete: true, Entries: []MenuEntry{{ID: "10203", State: MenuUnavailable}}}
-	if err := complete.Validate(); err == nil {
-		t.Error("Validate() accepted a Complete snapshot carrying an Unavailable five-digit entry")
+	var cme *MenuEntryError
+	wantCompleteReason := "a complete snapshot must not contain an unavailable entry"
+	if err := complete.Validate(); !errors.As(err, &cme) || cme.Reason != wantCompleteReason {
+		t.Errorf("Validate() on a Complete snapshot carrying an Unavailable five-digit entry = %v, want *MenuEntryError{Reason: %q}", err, wantCompleteReason)
 	}
 
 	wide := &MenuSnapshot{Entries: []MenuEntry{{ID: "1020304", Value: "1", State: MenuKnown}}}

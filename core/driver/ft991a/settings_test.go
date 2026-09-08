@@ -645,6 +645,14 @@ func TestSession_ReadSetting_ErrorTyping(t *testing.T) {
 			// carried an FT-891 or FTdx10 setting ID across must be refused
 			// rather than have its digits quietly dropped or padded.
 			{"the FT-891's four-digit address", "0101"},
+			// A five-digit pad is a legal MenuSnapshot width since the
+			// TS-890S/TS-990S widening (isSettingIDWidth), so this is the
+			// row that pins the claim at :996-997 below: ParseEXAddress's
+			// EXAddressSingle arm checks len(wire) != 3 exactly
+			// (core/cat/exinventory.go:207-209), so five is refused here,
+			// zero frames, on the same shape check as the four-digit row
+			// above.
+			{"a five-digit pad, admitted by the snapshot rule and refused here", "01010"},
 			{"the FTdx10's six-digit address", "010101"},
 			// The chart's own excluded row: printed, counted, and carrying
 			// no parameter at all (layout 623).
