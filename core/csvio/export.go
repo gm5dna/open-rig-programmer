@@ -125,43 +125,29 @@ func exportIntField(f codeplug.IntField) string {
 	return strconv.Itoa(f.Value)
 }
 
-// tierCells renders one channel's ten version-2 columns, in tierColumns
-// order. An EMPTY slot gets ten empty cells, exactly as it gets an empty
-// cell for every other data column — so the "all data cells empty means
-// an empty channel" rule Import applies is unchanged.
-func tierCells(ch codeplug.Channel) []string {
-	if ch.Empty() {
-		return make([]string, len(tierColumns))
+// tierCellsFor renders one channel's cells for ONE of the two appended
+// column groups: receiver false is version 2's ten D4 columns, true is
+// version 3's seven D8 ones. Both come out in codeplug.TierFields order,
+// which is the order tierColumns and receiverColumns are written in —
+// TestTierFieldCells_RoundTripEveryField pins that agreement, since the
+// header is a literal and this loop is not.
+//
+// An EMPTY slot gets an empty cell for each, exactly as it gets one for
+// every other data column — so the "all data cells empty means an empty
+// channel" rule Import applies is unchanged.
+func tierCellsFor(ch codeplug.Channel, receiver bool) []string {
+	var cells []string
+	for _, tf := range codeplug.TierFields {
+		if tf.Receiver != receiver {
+			continue
+		}
+		if ch.Empty() {
+			cells = append(cells, "")
+			continue
+		}
+		cells = append(cells, tierFieldCells[tf.Field].Cell(*ch.Data))
 	}
-	d := ch.Data
-	return []string{
-		exportFreqField(d.TxFreqHz),
-		exportStringField(d.Duplex),
-		exportFreqField(d.OffsetHz),
-		exportStringField(d.ToneMode),
-		exportToneField(d.ToneTx, true),
-		exportToneField(d.ToneRx, true),
-		exportIntField(d.DTCSCode),
-		exportStringField(d.DTCSPolarity),
-		exportStringField(d.Filter),
-		exportBoolField(d.DataMode, true),
-	}
-}
-
-func receiverCells(ch codeplug.Channel) []string {
-	if ch.Empty() {
-		return make([]string, len(receiverColumns))
-	}
-	d := ch.Data
-	return []string{
-		exportBoolField(d.TuningStepEnabled, true),
-		exportStringField(d.TuningStep),
-		exportFreqField(d.ProgramTuningStepHz),
-		exportIntField(d.AttenuatorDB),
-		exportStringField(d.Preamp),
-		exportStringField(d.Antenna),
-		exportBoolField(d.IPPlus, true),
-	}
+	return cells
 }
 
 // needsTierColumns reports whether any channel carries a D4 field whose
@@ -342,10 +328,10 @@ func exportRow(ch codeplug.Channel, tier, receiver bool) []string {
 	}
 
 	if tier {
-		row = append(row, tierCells(ch)...)
+		row = append(row, tierCellsFor(ch, false)...)
 	}
 	if receiver {
-		row = append(row, receiverCells(ch)...)
+		row = append(row, tierCellsFor(ch, true)...)
 	}
 
 	for i, cell := range row {
