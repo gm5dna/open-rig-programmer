@@ -325,12 +325,48 @@ func (l Layout) validEXRead(frame []byte) bool {
 // perfectly usable value whose gate had silently fallen back to the envelope
 // — a weaker gate reached by forgetting something, which is the failure
 // shape this package refuses everywhere else. Here the only way to hold a
-// layoutFraming is to have passed a configured layout to this constructor.
+// layoutFraming is to have passed a gate to a constructor that refuses none.
+//
+// IT DELEGATES TO NewFramingWithGate BUT IS NOT "A ONE-LINE CALLER": the
+// Configured check and its own refusal sentence stay here, because a zero
+// Layout's AllowedCommand is a perfectly non-nil method value and the
+// constructor below cannot tell it from a real gate.
 func NewFramingFor(l Layout) (transport.Framing, error) {
 	if !l.Configured() {
 		return nil, fmt.Errorf("%w: the layout is unconfigured and describes no radio, so its outbound gate would speak for none", ErrLayoutInvalid)
 	}
-	base, err := NewFraming(l.Book())
+	return NewFramingWithGate(l.Book(), l.AllowedCommand)
+}
+
+// NewFramingWithGate returns the transport.Framing for book with allow as
+// its per-radio outbound gate, for a codec in this family whose record type
+// is not a kw.Layout — core/kw/ma's TS-890S/TS-990S memory channel.
+//
+// ITS Allow IS THE CONJUNCTION allow(frame) && the documented envelope,
+// NEVER THE PREDICATE ALONE, and that is the whole reason this is a
+// constructor rather than a struct literal. NewFramingFor is a caller, so a
+// version returning the predicate by itself would silently strip the
+// envelope half from the SHIPPING TS-590/TS-480 gate — a behaviour change in
+// the last defence before a physical radio that moves no byte of any
+// artefact and so passes every byte-identity leg untouched. The reason the
+// conjunction is right is the one stated above: the grammars sit in FRONT of
+// the envelope rather than replacing it, so the envelope's rules stay in
+// force on the day a grammar is widened. TestNewFramingWithGate_IsThe
+// ConjunctionNotThePredicateAlone is the pin, and it drives an
+// envelope-illegal frame that the supplied predicate admits.
+//
+// A NIL PREDICATE IS REFUSED, wrapping ErrLayoutInvalid. A function-valued
+// parameter is the optional field this file has already refused, spelt
+// differently: pass nil and the result is a panic on the write path (the
+// engine stores Allow at open and calls it before every write) or, worse, a
+// later defensive nil check quietly degrading the gate to the envelope
+// alone. Refusing at construction is the same door NewFraming shuts on an
+// unset book.
+func NewFramingWithGate(book Book, allow func([]byte) bool) (transport.Framing, error) {
+	if allow == nil {
+		return nil, fmt.Errorf("%w: no outbound gate was supplied, and a framing whose gate defaulted to the envelope alone would be a weaker gate reached by forgetting something", ErrLayoutInvalid)
+	}
+	base, err := NewFraming(book)
 	if err != nil {
 		return nil, err
 	}
@@ -338,10 +374,15 @@ func NewFramingFor(l Layout) (transport.Framing, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: NewFraming returned a %T", ErrLayoutInvalid, base)
 	}
-	return layoutFraming{framing: f, layout: l}, nil
+	return layoutFraming{framing: f, allow: allow}, nil
 }
 
-// layoutFraming is the book framing with the per-radio outbound gate.
+// layoutFraming is the book framing with a LAYOUT'S outbound gate in front
+// of it. NewFramingFor supplies this package's Layout.AllowedCommand;
+// core/kw/ma supplies its own layout's, which is why the field is a
+// predicate rather than a Layout — the two record types are deliberately
+// unrelated (no ma.Layout is a kw.Layout) and this seam is where a family
+// fact, the envelope, is shared without sharing a record.
 //
 // It EMBEDS framing rather than reimplementing it, so IsRejection, IsFatal,
 // InitSequence, DrainPolicy, NoteSent and NewAccumulator are the shipping
@@ -349,7 +390,7 @@ func NewFramingFor(l Layout) (transport.Framing, error) {
 // compiler assertions below are what say so.
 type layoutFraming struct {
 	framing
-	layout Layout
+	allow func([]byte) bool
 }
 
 var (
@@ -357,10 +398,11 @@ var (
 	_ transport.FatalFramer = layoutFraming{}
 )
 
-// Allow is the eight grammars AND the documented envelope.
+// Allow is the supplied gate AND the documented envelope.
 //
-// A zero layoutFraming admits nothing by either half: its layout is
-// unconfigured and its book is unset, so neither term can be true.
+// A zero layoutFraming admits nothing by either half: its gate is nil and its
+// book is unset, so neither term can be true. The nil test is not a
+// fallback — it refuses, where a degraded gate would admit.
 func (f layoutFraming) Allow(frame []byte) bool {
-	return f.layout.AllowedCommand(frame) && f.framing.Allow(frame)
+	return f.allow != nil && f.allow(frame) && f.framing.Allow(frame)
 }
