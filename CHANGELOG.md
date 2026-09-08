@@ -11,7 +11,22 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+- **A CHIRP file's ordinary rows now import on the Kenwood TS-590S and
+  TS-590SG.** A CHIRP file's blank `Duplex` column is its ordinary
+  simplex row, and these radios declare no shift vocabulary at all —
+  their 50-byte memory record carries no duplex selector — so until now
+  every ordinary row was refused with a blocking entry and the import
+  wrote nothing. A blank column asks for nothing these radios cannot do,
+  so it is no longer treated as a loss: the row imports as simplex and
+  nothing is reported. A `Duplex` column reading `off` is still refused,
+  because that asserts "no duplex configured" as distinct from simplex
+  and the record has nowhere to carry the distinction, and `CW`, `CWR`
+  and `RTTY` rows are still refused on the mode. The same change applies
+  to the six Icom models whose memory bank carries no duplex field
+  either — the IC-7300, IC-7300MK2, IC-7610, IC-7760, IC-7850 and
+  IC-7851 — none of which published a shift vocabulary for a blank
+  column to land in. No other radio's CHIRP outcome moves.
 
 ## [1.4.1] - 2026-09-07
 
