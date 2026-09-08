@@ -31,6 +31,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"go/format"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,8 +46,8 @@ const numColumns = 10
 // manual's parameter-description column (retained for the audit trail, not
 // emitted into the generated Go); Digits is the manual's Digits column:
 // within the profile's MinDigits..MaxDigits for a numeric field, or exactly
-// the profile's TextWidth for a text item (1..4 and 12 respectively for the
-// FT-710); Text marks those text items; Parameterless marks the rows whose
+// one of the profile's TextWidths for a text item (1..4 and 12 respectively
+// for the FT-710); Text marks those text items; Parameterless marks the rows whose
 // chart line names no field at all; and ManualLine is the source line in the
 // manual extract the row was transcribed from.
 type Row struct {
@@ -84,8 +85,8 @@ const parameterlessDigits = "-"
 // ManualLine, a duplicate (P1,P2,P3) triple, a non-zero P3 under
 // AddressPair, a non-zero P2 or P3 under AddressSingle, a text row under
 // TextRowsAbsent, a non-text row whose Digits falls outside the profile's
-// MinDigits..MaxDigits, a text row whose Digits is not the profile's
-// TextWidth, an address component outside the DOMAIN THIS PROFILE'S OWN FORM
+// MinDigits..MaxDigits, a text row whose Digits is named by none of the
+// profile's TextWidths, an address component outside the DOMAIN THIS PROFILE'S OWN FORM
 // gives it (0..99 per component under AddressTriple and AddressPair; 0..999
 // for P1 under AddressSingle, whose field is three digits wide), a hyphen
 // Digits cell on an
@@ -289,8 +290,13 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 		if p.TextRowPolicy == TextRowsAbsent {
 			return Row{}, fmt.Errorf("row (%s) is flagged text under %v — this model's chart prints no free-text row, so a text row is a transcription error", row.Name, p.TextRowPolicy)
 		}
-		if row.Digits != p.TextWidth {
-			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
+		// MEMBERSHIP, not equality: a chart may print text rows at more
+		// than one width, and the refusal names the whole declared set
+		// because a sentence quoting one number would be false of such a
+		// chart. TestParseCSV_TextRowMatchesAnyDeclaredWidth pins both
+		// halves.
+		if !slices.Contains(p.TextWidths, row.Digits) {
+			return Row{}, fmt.Errorf("text row (%s) must have digits %v, got %d", row.Name, p.TextWidths, row.Digits)
 		}
 	} else if !row.Parameterless && (row.Digits < p.MinDigits || row.Digits > p.MaxDigits) {
 		// The MinDigits..MaxDigits check is skipped for a parameterless row
@@ -394,7 +400,7 @@ type Observed struct {
 // cannot leak captured content through a build log.
 //
 // That bound is hardware-evidence policy and is deliberately independent of
-// the manual-schema widths in MinDigits/MaxDigits/TextWidth — the two
+// the manual-schema widths in MinDigits/MaxDigits/TextWidths — the two
 // categories can disagree, as table2-corrections.csv records.
 func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 	// Same self-validation as ParseCSV: nothing forces a caller through the

@@ -18,7 +18,7 @@ func pairProfile() Profile {
 	p.Addresses = AddressPair
 	p.LabelPolicy = LabelsAbsent
 	p.TextRowPolicy = TextRowsAbsent
-	p.TextWidth = 0
+	p.TextWidths = nil
 	return p
 }
 
@@ -76,12 +76,32 @@ func TestProfileValidate_ThreeNewPoliciesAreExplicit(t *testing.T) {
 		{"unknown Labels", func(p *Profile) { p.LabelPolicy = Labels(9) }, "Labels"},
 		{"zero TextRows", func(p *Profile) { p.TextRowPolicy = 0 }, "TextRows"},
 		{"unknown TextRows", func(p *Profile) { p.TextRowPolicy = TextRows(9) }, "TextRows"},
-		{"TextRowsAbsent with a non-zero TextWidth", func(p *Profile) { p.TextWidth = 12 }, "TextWidth"},
-		{"TextRowsAllowed with a zero TextWidth", func(p *Profile) {
-			p.TextRowPolicy, p.TextWidth = TextRowsAllowed, 0
-		}, "TextWidth"},
-		{"TextRowsAllowed with a positive TextWidth", func(p *Profile) {
-			p.TextRowPolicy, p.TextWidth = TextRowsAllowed, 8
+		{"TextRowsAbsent with a non-empty TextWidths", func(p *Profile) { p.TextWidths = []int{12} }, "TextWidths"},
+		// A zero ENTRY under TextRowsAbsent is the shape a blanket
+		// TextWidth: n → TextWidths: []int{n} rewrite would have produced
+		// for every absent profile, and it is not the same statement as
+		// "this chart has no text row": []int{0} declares one text row
+		// whose width is nothing. Refused, so the rewrite cannot land
+		// silently.
+		{"TextRowsAbsent with a zero entry", func(p *Profile) { p.TextWidths = []int{0} }, "TextWidths"},
+		{"TextRowsAllowed with an empty TextWidths", func(p *Profile) {
+			p.TextRowPolicy, p.TextWidths = TextRowsAllowed, nil
+		}, "TextWidths"},
+		{"TextRowsAllowed with a zero entry", func(p *Profile) {
+			p.TextRowPolicy, p.TextWidths = TextRowsAllowed, []int{0}
+		}, "TextWidths"},
+		{"TextRowsAllowed with a negative entry", func(p *Profile) {
+			p.TextRowPolicy, p.TextWidths = TextRowsAllowed, []int{-1}
+		}, "TextWidths"},
+		{"TextRowsAllowed with a positive TextWidths", func(p *Profile) {
+			p.TextRowPolicy, p.TextWidths = TextRowsAllowed, []int{8}
+		}, ""},
+		// Validation is POSITIVE-ONLY: the widths a chart prints are a set,
+		// and nothing here says how large it may be or that its entries must
+		// differ from one another. A second width is admitted for the reason
+		// the first is.
+		{"TextRowsAllowed with two widths", func(p *Profile) {
+			p.TextRowPolicy, p.TextWidths = TextRowsAllowed, []int{10, 15}
 		}, ""},
 	} {
 		p := pairProfile()
@@ -147,7 +167,7 @@ func TestParseCSV_PairAndAbsencePolicies(t *testing.T) {
 			"",
 		},
 		{
-			"TextRowsAllowed still accepts a text row at TextWidth",
+			"TextRowsAllowed still accepts a text row at a declared width",
 			fixtureAbsent,
 			"01,01,01,RADIO SETTING,MODE SSB,MY CALL,Up to 8,8,true,646\n",
 			"",
@@ -163,6 +183,46 @@ func TestParseCSV_PairAndAbsencePolicies(t *testing.T) {
 			t.Errorf("%s: ParseCSV() accepted the row, want a refusal naming %q", tc.name, tc.wantErr)
 		case tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr):
 			t.Errorf("%s: ParseCSV() = %v, want it to name %q", tc.name, err, tc.wantErr)
+		}
+	}
+}
+
+// TestParseCSV_TextRowMatchesAnyDeclaredWidth is the parse half of
+// TextWidths, and the case that no single int could express: a chart whose
+// text rows print at TWO widths — a screen-saver message of up to 10
+// characters and a power-on message of up to 15 — admits both and refuses
+// the width between them.
+//
+// The refusal names the SET rather than one number, because a sentence
+// quoting a single width would be false of a profile that declares more than
+// one, and a transcriber reading it beside a chart with two would have to
+// guess which of the two the parser was holding.
+func TestParseCSV_TextRowMatchesAnyDeclaredWidth(t *testing.T) {
+	p := fixtureAbsent
+	p.TextRowPolicy = TextRowsAllowed
+	p.TextWidths = []int{10, 15}
+	p.MaxDigits = 15
+
+	for _, tc := range []struct {
+		name    string
+		digits  string
+		wantErr bool
+	}{
+		{"the first declared width", "10", false},
+		{"the SECOND declared width, which no single TextWidth admitted beside the first", "15", false},
+		{"a width between the two", "12", true},
+	} {
+		row := "01,01,01,RADIO SETTING,MODE SSB,SCREEN SAVER MESSAGE,Up to 10 characters," + tc.digits + ",true,646\n"
+		rows, err := ParseCSV(withRows(p, 1), []byte(row))
+		switch {
+		case !tc.wantErr && err != nil:
+			t.Errorf("%s: ParseCSV() = %v, want the row to parse", tc.name, err)
+		case !tc.wantErr && len(rows) != 1:
+			t.Errorf("%s: ParseCSV() returned %d rows, want 1", tc.name, len(rows))
+		case tc.wantErr && err == nil:
+			t.Errorf("%s: ParseCSV() accepted the row, want a refusal", tc.name)
+		case tc.wantErr && !strings.Contains(err.Error(), "[10 15]"):
+			t.Errorf("%s: ParseCSV() = %v, want the refusal to name the declared set", tc.name, err)
 		}
 	}
 }
@@ -250,18 +310,18 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		textRows      TextRows
 		parameterless ParameterlessRows
 		addrs         [][3]int
-		textWidth     int
+		textWidths    []int
 		ceiling       int
 	}{
-		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, 12, MaxDigitsCeiling},
-		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, 12, MaxDigitsCeiling},
-		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, 12, MaxDigitsCeiling},
+		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
+		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
+		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
 		// The FT-891's chart prints a four-digit MENU Number, no group
 		// labels and no free-text row: core/cat/ft891/table2.csv's
 		// provenance header records all three as readings of that chart.
 		// Its DigitsCeiling is still core/cat's — the FT-891 renders into
 		// core/cat/ft891, not a package of its own.
-		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, 0, MaxDigitsCeiling},
+		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, nil, MaxDigitsCeiling},
 		// The FT-991A's chart prints ONE three-digit MENU Number that is
 		// the whole address, no group labels, no free-text row, and one
 		// row — 087 RADIO ID — with no parameter at all:
@@ -270,7 +330,7 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// ParameterlessExcluded entry and its first AddressSingle one. Its
 		// DigitsCeiling is still core/cat's — the FT-991A renders into
 		// core/cat/ft991a, not a package of its own.
-		"ft991a": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessExcluded, [][3]int{{87, 0, 0}}, 0, MaxDigitsCeiling},
+		"ft991a": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessExcluded, [][3]int{{87, 0, 0}}, nil, MaxDigitsCeiling},
 		// The TS-480's chart prints ONE three-digit Menu No. — the whole
 		// address — no group labels, and no free-text row:
 		// core/kw/ts480/menu480.csv's provenance header records all three
@@ -281,7 +341,7 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// why this row spells the number rather than a symbol — a stanza
 		// that copy-pasted 247 would pass every other test in this package,
 		// and core/kw/exdigits_ceiling_test.go is the twin pin.
-		"ts480": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, 0, 246},
+		"ts480": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, nil, 246},
 		// The TS-590S is one of the three Kenwood registrations, which
 		// are together the whole reason the ceiling column exists — none of
 		// them is "first": the registry is a map and ts480 heads the three
@@ -295,7 +355,7 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// header: one three-digit Menu number that is the whole address, no
 		// group labels, and one free-text row — menu 087 Power on message,
 		// eight ASCII characters.
-		"ts590s": {AddressSingle, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, 8, 246},
+		"ts590s": {AddressSingle, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, []int{8}, 246},
 		// The TS-590SG is the third of the Kenwood registrations that do
 		// NOT render into core/cat, and so carries the same non-default
 		// ceiling: 246 is core/kw's MaxEXDigits, spelt as a literal here because this
@@ -307,7 +367,7 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// menu number that is the whole address (AddressSingle), no group
 		// labels, and one free-text row of eight characters — menu 001 Power
 		// on message. See core/kw/ts590/menu590sg.csv's provenance header.
-		"ts590sg": {AddressSingle, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, 8, 246},
+		"ts590sg": {AddressSingle, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, []int{8}, 246},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {
@@ -340,8 +400,10 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		if !reflect.DeepEqual(np.Profile.ParameterlessAddresses, w.addrs) {
 			t.Errorf("%s: ParameterlessAddresses = %v, want %v", np.Name, np.Profile.ParameterlessAddresses, w.addrs)
 		}
-		if np.Profile.TextWidth != w.textWidth {
-			t.Errorf("%s: TextWidth = %d, want %d", np.Name, np.Profile.TextWidth, w.textWidth)
+		// The SET, not a first entry or a length: a profile declaring two
+		// widths where its chart prints one would satisfy either proxy.
+		if !reflect.DeepEqual(np.Profile.TextWidths, w.textWidths) {
+			t.Errorf("%s: TextWidths = %v, want %v", np.Name, np.Profile.TextWidths, w.textWidths)
 		}
 	}
 }

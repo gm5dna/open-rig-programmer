@@ -36,7 +36,7 @@ var fixtureRequired = Profile{
 	DigitsCeiling:    MaxDigitsCeiling,
 	MinDigits:        2,
 	MaxDigits:        6,
-	TextWidth:        8,
+	TextWidths:       []int{8},
 	MaxObservedWidth: 9,
 	ExpectedRows:     1,
 
@@ -116,13 +116,15 @@ func TestProfileValidate_Refusals(t *testing.T) {
 		{"negative DigitsCeiling", func(p *Profile) { p.DigitsCeiling = -1 }},
 		{"zero MinDigits", func(p *Profile) { p.MinDigits = 0 }},
 		{"zero MaxDigits", func(p *Profile) { p.MaxDigits = 0 }},
-		{"zero TextWidth", func(p *Profile) { p.TextWidth = 0 }},
+		{"empty TextWidths under TextRowsAllowed", func(p *Profile) { p.TextWidths = nil }},
+		{"a zero TextWidths entry", func(p *Profile) { p.TextWidths = []int{0} }},
+		{"a negative TextWidths entry", func(p *Profile) { p.TextWidths = []int{-1} }},
 		{"zero MaxObservedWidth", func(p *Profile) { p.MaxObservedWidth = 0 }},
 		{"zero ExpectedRows", func(p *Profile) { p.ExpectedRows = 0 }},
 		{"negative ExpectedRows", func(p *Profile) { p.ExpectedRows = -1 }},
 		{"MinDigits above MaxDigits", func(p *Profile) { p.MinDigits = 7; p.MaxDigits = 6 }},
 		{"MaxDigits above ceiling", func(p *Profile) { p.MaxDigits = MaxDigitsCeiling + 1 }},
-		{"TextWidth above ceiling", func(p *Profile) { p.TextWidth = MaxDigitsCeiling + 1 }},
+		{"TextWidths entry above ceiling", func(p *Profile) { p.TextWidths = []int{MaxDigitsCeiling + 1} }},
 		{"MaxObservedWidth above ceiling", func(p *Profile) { p.MaxObservedWidth = MaxDigitsCeiling + 1 }},
 		{"omitted ObservationPolicy", func(p *Profile) { p.Observations = 0 }},
 		{"unknown ObservationPolicy", func(p *Profile) { p.Observations = ObservationPolicy(99) }},
@@ -167,7 +169,10 @@ func TestProfileValidate_CeilingComesFromTheProfile(t *testing.T) {
 	}{
 		{"a width inside the profile's own ceiling", func(p *Profile) { p.MaxDigits = 32 }, false},
 		{"MaxDigits above the profile's own ceiling", func(p *Profile) { p.MaxDigits = 100 }, true},
-		{"TextWidth above the profile's own ceiling", func(p *Profile) { p.TextWidth = 100 }, true},
+		{"a TextWidths entry above the profile's own ceiling", func(p *Profile) { p.TextWidths = []int{100} }, true},
+		// The SECOND entry, which a sweep reading only the set's head would
+		// wave through.
+		{"a SECOND TextWidths entry above the profile's own ceiling", func(p *Profile) { p.TextWidths = []int{8, 100} }, true},
 		{"MaxObservedWidth above the profile's own ceiling", func(p *Profile) { p.MaxObservedWidth = 100 }, true},
 	} {
 		p := fixtureRequired
@@ -353,7 +358,7 @@ func TestFT710Profile_MatchesTodaysConstants(t *testing.T) {
 	if p.ObservedCSV != "table2-observed.csv" {
 		t.Errorf("ObservedCSV = %q, want \"table2-observed.csv\"", p.ObservedCSV)
 	}
-	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
+	if p.MinDigits != 1 || p.MaxDigits != 4 || !reflect.DeepEqual(p.TextWidths, []int{12}) || p.MaxObservedWidth != 12 {
 		t.Errorf("bounds drifted: %+v", p)
 	}
 	// Every registered profile renders into core/cat, so every one of them
@@ -415,7 +420,7 @@ func TestFTdx10Profile_Registered(t *testing.T) {
 	if p.ObservedCSV != "" {
 		t.Errorf("ObservedCSV = %q, want empty under ObservationsAbsent", p.ObservedCSV)
 	}
-	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
+	if p.MinDigits != 1 || p.MaxDigits != 4 || !reflect.DeepEqual(p.TextWidths, []int{12}) || p.MaxObservedWidth != 12 {
 		t.Errorf("bounds drifted: %+v", p)
 	}
 	if p.DigitsCeiling != MaxDigitsCeiling {
@@ -483,8 +488,8 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 	if p.MaxDigits != 4 {
 		t.Errorf("MaxDigits = %d, want 4", p.MaxDigits)
 	}
-	if p.TextWidth != 12 {
-		t.Errorf("TextWidth = %d, want 12", p.TextWidth)
+	if !reflect.DeepEqual(p.TextWidths, []int{12}) {
+		t.Errorf("TextWidths = %v, want [12]", p.TextWidths)
 	}
 	if p.MaxObservedWidth != 12 {
 		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
@@ -778,8 +783,8 @@ func TestSharedPackageNeedsAllKeysToDiffer(t *testing.T) {
 // core/cat/ft891/table2.csv's provenance header: Digits runs 1..5, the 5
 // coming from exactly two rows — 0803 OTHER DISP (ft891_layout.txt:595) and
 // 0804 OTHER SHIFT (:596), whose signed "-3000 ... +3000" parameter counts
-// its sign — and there is no text row anywhere in the chart, so TextWidth is
-// 0 rather than the 12 the other three profiles carry.
+// its sign — and there is no text row anywhere in the chart, so TextWidths is
+// EMPTY rather than the {12} the other three profiles carry.
 //
 // ExpectedRows is NOT a reading by this package: it is the committed
 // group-boundary ledger's sum, in the sense the ftdx10 and ftdx101 profiles
@@ -832,8 +837,8 @@ func TestFT891Profile_MatchesTodaysConstants(t *testing.T) {
 	if p.MaxDigits != 5 {
 		t.Errorf("MaxDigits = %d, want 5 (0803 and 0804, ft891_layout.txt:595-596)", p.MaxDigits)
 	}
-	if p.TextWidth != 0 {
-		t.Errorf("TextWidth = %d, want 0 under TextRowsAbsent", p.TextWidth)
+	if len(p.TextWidths) != 0 {
+		t.Errorf("TextWidths = %v, want empty under TextRowsAbsent", p.TextWidths)
 	}
 	if p.MaxObservedWidth != 12 {
 		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
@@ -875,7 +880,7 @@ func TestFT891Profile_MatchesTodaysConstants(t *testing.T) {
 // comment (profile.go:812-897): MinDigits is 1 like the other four charts,
 // and MaxDigits is 8 from ONE row — 151 PRESET FREQUENCY
 // (ft991a_layout.txt:692) — a reading of THIS chart, not a widening of the
-// other four profiles' 4 and 5. TextWidth is 0: this chart prints no
+// other four profiles' 4 and 5. TextWidths is EMPTY: this chart prints no
 // free-text row at all, so 0 is the only value Validate admits under
 // TextRowsAbsent, not a family resemblance to the FT-710's 12.
 //
@@ -936,8 +941,8 @@ func TestFT991AProfile_DeclaresItsValues(t *testing.T) {
 	if p.MaxDigits != 8 {
 		t.Errorf("MaxDigits = %d, want 8 (151 PRESET FREQUENCY, ft991a_layout.txt:692)", p.MaxDigits)
 	}
-	if p.TextWidth != 0 {
-		t.Errorf("TextWidth = %d, want 0 under TextRowsAbsent", p.TextWidth)
+	if len(p.TextWidths) != 0 {
+		t.Errorf("TextWidths = %v, want empty under TextRowsAbsent", p.TextWidths)
 	}
 	if p.MaxObservedWidth != 12 {
 		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)

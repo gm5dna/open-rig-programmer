@@ -163,7 +163,7 @@ func TestParseCSV_RefusesANonZeroP2OrP3(t *testing.T) {
 // TestParseCSV_RefusesATextRow pins TextRowsAbsent from the refusing side.
 // This chart prints no free-text field — the nearest candidates, the five
 // PF-key rows 048-052, carry a numeric "00 ~ 99 (2-digit)" legend — so the
-// profile declares TextRowsAbsent with TextWidth 0, and a row flagged text is
+// profile declares TextRowsAbsent with an empty TextWidths, and a row flagged text is
 // a transcription error rather than a row with an unstated width.
 //
 // The mutation flags menu 000 as text at ITS OWN width, so what is refused is
@@ -171,8 +171,8 @@ func TestParseCSV_RefusesANonZeroP2OrP3(t *testing.T) {
 // that would make the row legal.
 func TestParseCSV_RefusesATextRow(t *testing.T) {
 	p := ts480Profile(t)
-	if p.TextRowPolicy != extable.TextRowsAbsent || p.TextWidth != 0 {
-		t.Fatalf("profile declares TextRowPolicy %v / TextWidth %d, want TextRowsAbsent / 0", p.TextRowPolicy, p.TextWidth)
+	if p.TextRowPolicy != extable.TextRowsAbsent || len(p.TextWidths) != 0 {
+		t.Fatalf("profile declares TextRowPolicy %v / TextWidths %v, want TextRowsAbsent / empty", p.TextRowPolicy, p.TextWidths)
 	}
 	csv, err := os.ReadFile(p.ManualCSV)
 	if err != nil {
