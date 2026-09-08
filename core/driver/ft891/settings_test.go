@@ -896,7 +896,7 @@ func TestReadSetting_CannotInterleaveWithACrossCheck(t *testing.T) {
 // before any wire traffic if the descriptor fails driver.SettingsDescriptor.
 // Validate, and again if an all-MenuUnsupported codeplug.MenuSnapshot built
 // from its item IDs fails codeplug.MenuSnapshot.Validate — which requires
-// every ID to be EXACTLY 3, 4 or 6 ASCII digits. This radio is the first
+// every ID to be EXACTLY 3, 4, 5 or 6 ASCII digits. This radio is the first
 // registered Yaesu whose IDs take the four-digit form of that rule
 // (core/codeplug/menus.go's isSettingIDWidth), so a descriptor that minted
 // anything else would read the whole radio and only then fail. Neither

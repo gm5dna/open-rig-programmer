@@ -216,9 +216,9 @@ func newStreamError(token string, book Book) *StreamError {
 // makes the TS-480's disagreement about "O;" (E13) worth recording.
 const commErrorCause = "A communication error occurred, such as an overrun or framing error during a serial data transmission"
 
-// rejectionCauses is the whole of what either book says a "?;" means — TWO
-// causes, printed as alternatives, with nothing anywhere to tell them apart
-// (590:100-105, 480:130-135).
+// rejectionCauses is the whole of what all four books say a "?;" means —
+// TWO causes, printed as alternatives, with nothing anywhere to tell them
+// apart (590:100-105, 480:130-135, 890:106-112, 990:108-113).
 const rejectionCauses = "either \"Command syntax was incorrect\" or \"Command was not executed due to the current status of the transceiver (even though the command syntax was correct)\" — the two are printed as alternatives and nothing in the document distinguishes them"
 
 // transientSentence is the sentence that makes silence uninformative, and
