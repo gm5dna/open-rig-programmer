@@ -38,6 +38,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -152,7 +153,7 @@ func inTree(relDir, prefix string) bool {
 // only the "does f import core/transport" existence check (ok); the
 // returned localName is discarded there ("_ = transportName") because the
 // .Do detection is receiver-typed, not package-selector-shaped.
-// BuildMWSet/BuildMTSet no longer uses this helper at all: since M9b it
+// The Set-frame builder check no longer uses this helper at all: since M9b it
 // matches by method name alone and needs no import-name lookup (see
 // TestWritePathReachableOnlyThroughDriver's doc comment).
 func importsPath(f *ast.File, importPath string) (localName string, ok bool) {
@@ -226,8 +227,8 @@ func looksLikeOnce(expr ast.Expr) bool {
 // TestWritePathReachableOnlyThroughDriver pins the composition-root
 // discipline (see the package doc comment): the raw wire-write mechanisms
 // — transport.Engine.Do (the only place bytes cross the wire) and
-// the BuildMWSet/BuildMTSet/BuildMTSetCombined builders (the only
-// builders of Set frames that mutate a radio's memory; cat.Dialect
+// the BuildMWSet/BuildMTSet/BuildMTSetCombined/BuildMA0Set builders (the
+// only builders of Set frames that mutate a radio's memory; cat.Dialect
 // methods since M9b, matched by NAME rather than by package qualifier —
 // see the matcher's own comment below) — are referenced OUTSIDE their
 // own packages only by core/driver/**; and driver.Session.WriteChannel
@@ -267,8 +268,9 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     apart on what counts as a constructor.
 //
 //   - The Set-frame builders are detected as ANY selector named
-//     BuildMWSet, BuildMTSet or BuildMTSetCombined OUTSIDE core/cat's
-//     own tree, matched by method name alone, whatever the receiver —
+//     BuildMWSet, BuildMTSet, BuildMTSetCombined or BuildMA0Set OUTSIDE
+//     the carve-out named below (core/cat's own tree until Kenwood pair
+//     1 widened it), matched by method name alone, whatever the receiver —
 //     the SAME two-part shape (name-only match + owning-tree carve-out)
 //     this test already applies to WriteChannel below, not name-only
 //     alone. The core/cat carve-out is not a migration-window nicety:
@@ -279,11 +281,15 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     another via selectors (e.g. d.BuildMWSet(...)) forever, not just
 //     during Task 54's transitional package-level delegates.
 //     THE CARVE-OUT IS AN EXACT PACKAGE SET, NAMED BY EXACT PATH — never a
-//     prefix — and it now holds FOUR packages in TWO families: core/cat and
-//     core/cat/dialecttest (the Yaesu/Icom family), core/kw and
-//     core/kw/kwtest (the Kenwood family, added at Kenwood pair 1 Stage 1
-//     T7, 05/09/2026 — see the WIDENED paragraph below the condition this
-//     comment describes). Nothing else is exempt in either tree. It was
+//     prefix — and it now holds FIVE packages in TWO families: core/cat and
+//     core/cat/dialecttest (the Yaesu/Icom family), core/kw, core/kw/kwtest
+//     and core/kw/ma (the Kenwood family — the first two added at Kenwood
+//     pair 1 Stage 1 T7, 05/09/2026, core/kw/ma at Kenwood pair 2 Stage 0,
+//     08/09/2026, because it MINTS a Set builder of its own, BuildMA0Set,
+//     and re-validates it through its own outbound gate, which is core/kw's
+//     own reason restated for the MA grid — see the WIDENED paragraphs below
+//     the condition this comment describes). Nothing else is exempt in
+//     either tree. It was
 //     prefix-based (inTree) from M9b until M9c-4 task 1 NARROWED it, the
 //     first of that milestone's closures: a prefix exempts every future
 //     core/cat subpackage in advance, and M9c-4 introduces the first ones
@@ -291,10 +297,11 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     literal and a generated EX inventory — so a Set-builder call site
 //     appearing in one is precisely the regression this fence exists to
 //     refuse, and the old blanket would have waved it through.
-//     Both members are deliberate, for different reasons. core/cat is the
+//     The core/cat pair's two members are deliberate, for different
+//     reasons. core/cat is the
 //     builders' own package. core/cat/dialecttest is named because since
 //     M9c-3 task 7 it is a NON-test file — and so genuinely walked here —
-//     calling all three builders as part of the exported conformance suite
+//     calling all three of core/cat's builders as part of the exported suite
 //     M9c-4 runs over a real dialect. That remains the intended reading (a
 //     conformance suite for core/cat's own API is core/cat's own tree, not
 //     a new write-path call site), and it was VERIFIED rather than assumed
@@ -303,8 +310,12 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     that legitimately needs a builder must be ADDED HERE BY NAME with its
 //     reason, in BOTH the condition below and this comment — the same
 //     "nothing about this check is automatic" discipline the builder-name
-//     list carries below, and the discipline the Kenwood widening's own
-//     "WIDENED at Kenwood pair 1" paragraph below follows.
+//     list carries below, and the discipline the Kenwood widenings' own
+//     "WIDENED at Kenwood pair 1" and "WIDENED again at Kenwood pair 2"
+//     paragraphs below follow. core/kw/ma is the latest such addition, and
+//     it went in BEFORE the package existed: an exemption written for a
+//     directory that is not there yet is inert, and adding it afterwards is
+//     the edit everyone forgets.
 //     Amended at M9b: before the dialect seam these were package-level
 //     functions and an exact package-qualified check (sel.X an
 //     *ast.Ident naming the core/cat import) sufficed; the seam turns
@@ -319,6 +330,12 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     "BuildMTSet" comparison does not cover it. A new Set-frame builder
 //     must therefore be added here BY NAME; nothing about the shape of
 //     this check makes that automatic.
+//     Amended again at Kenwood pair 2 Stage 0 (08/09/2026): BuildMA0Set
+//     joined the list — core/kw/ma's memory-write Set builder for the MA
+//     grid, the Kenwood family's counterpart to BuildMWSet — and it too
+//     landed BEFORE the builder existed, for the reason above. The list
+//     lives in setFrameBuilderCalls at the foot of this file, which is the
+//     ONE site to widen and the site TestSetFrameBuilderCallsDetector pins.
 //
 //   - "Session.WriteChannel" is detected as ANY selector named
 //     WriteChannel outside the allowed trees, whatever the receiver's
@@ -369,10 +386,12 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 			})
 		}
 
-		// (a) BuildMWSet / BuildMTSet / BuildMTSetCombined, matched by
-		// NAME alone, whatever the receiver — OUTSIDE the carve-out, which
-		// since M9c-4 task 1 is the EXACT SET {core/cat,
-		// core/cat/dialecttest} rather than the core/cat prefix it was
+		// (a) BuildMWSet / BuildMTSet / BuildMTSetCombined / BuildMA0Set,
+		// matched by NAME alone, whatever the receiver (the exact list is
+		// setFrameBuilderCalls, at the foot of this file) — OUTSIDE the
+		// carve-out, which since M9c-4 task 1 is an EXACT SET: {core/cat,
+		// core/cat/dialecttest} then, the five packages the condition names
+		// now, rather than the core/cat prefix it was
 		// before (having a carve-out at all is what a same-day Codex
 		// review, C1, found missing from the first cut of this amendment:
 		// without one the check fired inside core/cat itself, which
@@ -414,23 +433,24 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		// NON-test exported conformance suite (dialecttest's reason). No
 		// other core/kw subpackage is exempt: core/kw/ts590 and core/kw/ts480
 		// are data-only layout packages and are swept like every other.
+		// WIDENED AGAIN at Kenwood pair 2 Stage 0 (08/09/2026), by name and for
+		// the FIRST of those two reasons: core/kw/ma is the MA family's own
+		// builder package — it mints BuildMA0Set, the memory-write Set builder
+		// for the 890S/990S grid, and its outbound gate re-validates an MA0 Set
+		// through it, exactly as core/kw's does for MW. It is named here BEFORE
+		// the package exists, and the guard is inert until it does; core/kw/ma's
+		// own conformance suite, if it grows one, is a SIXTH name and not
+		// covered by this one.
 		if !(pf.relDir == "core/cat" || pf.relDir == "core/cat/dialecttest" ||
-			pf.relDir == "core/kw" || pf.relDir == "core/kw/kwtest") {
-			ast.Inspect(pf.file, func(n ast.Node) bool {
-				sel, isSel := n.(*ast.SelectorExpr)
-				if !isSel {
-					return true
-				}
-				if sel.Sel.Name != "BuildMWSet" && sel.Sel.Name != "BuildMTSet" && sel.Sel.Name != "BuildMTSetCombined" {
-					return true
-				}
+			pf.relDir == "core/kw" || pf.relDir == "core/kw/kwtest" ||
+			pf.relDir == "core/kw/ma") {
+			for _, name := range setFrameBuilderCalls(pf.file) {
 				if inDriver {
 					sawDriverBuildMW = true
-					return true
+					continue
 				}
-				t.Errorf("%s: references .%s — the Set-frame builders may be used only from core/cat, core/cat/dialecttest, core/kw, core/kw/kwtest (the two families' builder packages and their conformance suites) and core/driver/**; other core/cat and core/kw subpackages are NOT exempt, the carve-out having been narrowed from the core/cat prefix to those named packages at M9c-4 and widened by name to the Kenwood pair at Kenwood pair 1 Stage 1 T7 (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
-				return true
-			})
+				t.Errorf("%s: references .%s — the Set-frame builders (BuildMWSet, BuildMTSet, BuildMTSetCombined, BuildMA0Set) may be used only from core/cat, core/cat/dialecttest, core/kw, core/kw/kwtest, core/kw/ma (the two families' builder packages and their conformance suites) and core/driver/**; other core/cat and core/kw subpackages are NOT exempt, the carve-out having been narrowed from the core/cat prefix to those named packages at M9c-4, widened by name to the Kenwood pair at Kenwood pair 1 Stage 1 T7 and to core/kw/ma, the MA family's own builder package, at Kenwood pair 2 Stage 0 (composition-root discipline; see this test's doc comment)", pf.relPath, name)
+			}
 		}
 
 		// (b) Session.WriteChannel — approximate; see the test doc comment.
@@ -461,17 +481,116 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 	// MT Sets only (the FT-710 is MTFormShort) and there was no
 	// BuildMTSetCombined call site for the walk to see at all; since M9c-6
 	// task 2 there is one — core/driver/ftdx10's write path, whose whole
-	// choreography is a single combined MT Set. The disjunction stays
+	// choreography is a single combined MT Set. BuildMA0Set is in that
+	// position now: it joined the family at Kenwood pair 2 Stage 0 with no
+	// call site anywhere, core/kw/ma being a stage away. The disjunction stays
 	// anyway, and not because the schedule caught up: demanding each name
 	// separately would assert WHICH radios this build carries, where the
 	// property actually wanted is that the walk and its filters can see
-	// core/driver/** at all. Any one of the three rules out a blind sweep,
+	// core/driver/** at all. Any one of the four rules out a blind sweep,
 	// and a future driver family using neither MW nor short MT must not fail
 	// a guard about the walker's own health.
+	//
+	// The fourth name reaches this flag with no edit of its own because the
+	// flag and the violation above are both driven by setFrameBuilderCalls's
+	// single list — the property TestSetFrameBuilderCallsDetector pins, so it
+	// is not left standing on this paragraph alone.
 	if !sawDriverBuildMW {
-		t.Error("never saw core/driver/** reference any of BuildMWSet/BuildMTSet/BuildMTSetCombined — the walker or its filters are broken, and every check above passed vacuously")
+		t.Error("never saw core/driver/** reference any of BuildMWSet/BuildMTSet/BuildMTSetCombined/BuildMA0Set — the walker or its filters are broken, and every check above passed vacuously")
 	}
 	if !sawCloneWriteChannel {
 		t.Error("never saw core/clone/** reference Session.WriteChannel — the walker or its filters are broken, and every check above passed vacuously")
+	}
+}
+
+// setFrameBuilderCalls returns, in source order, the Set-frame builder names
+// f references as a selector — whatever the receiver, matched by EXACT name.
+//
+// THE LIST IS THE ONE THE FENCE ABOVE READS TWICE: once to report a call site
+// outside the carve-out, once to set sawDriverBuildMW. That is why the
+// non-vacuity clause can be a disjunction over the family rather than a
+// counter per name, and why a name added here joins that disjunction without
+// anyone remembering to — the property TestSetFrameBuilderCallsDetector pins
+// rather than leaving asserted in prose.
+func setFrameBuilderCalls(f *ast.File) []string {
+	var names []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		sel, isSel := n.(*ast.SelectorExpr)
+		if !isSel {
+			return true
+		}
+		switch sel.Sel.Name {
+		case "BuildMWSet", "BuildMTSet", "BuildMTSetCombined", "BuildMA0Set":
+			names = append(names, sel.Sel.Name)
+		}
+		return true
+	})
+	return names
+}
+
+// TestSetFrameBuilderCallsDetector is the fence's own permanent red proof.
+//
+// It exists because the fence walks a tree that carries no call site for
+// every fenced name: BuildMA0Set was added at Kenwood pair 2 Stage 0 BEFORE
+// core/kw/ma exists, so on this build "no file outside the carve-out
+// references it" is indistinguishable from a matcher that never says yes.
+// The last row pins the EXACTNESS the doc comment claims: a neighbouring name
+// is not swept in by prefix or by resemblance.
+func TestSetFrameBuilderCallsDetector(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{
+			name: "the dialect seam's nested selector",
+			src: `package ftdx10
+func write(s *session) { _, _ = s.dialect.BuildMWSet(m) }`,
+			want: []string{"BuildMWSet"},
+		},
+		{
+			name: "the package-qualified call",
+			src: `package ftdx10
+func write(d cat.Dialect) { _, _ = cat.FT710.BuildMTSet(s, false, "AB") }`,
+			want: []string{"BuildMTSet"},
+		},
+		{
+			name: "the FTdx10 family's combined form",
+			src: `package ftdx10
+func write(d cat.Dialect) { _, _ = d.BuildMTSetCombined(s, m) }`,
+			want: []string{"BuildMTSetCombined"},
+		},
+		{
+			name: "the Kenwood MA family's memory-write Set builder",
+			src: `package ts890
+func write(l ma.Layout) { _, _ = ma.BuildMA0Set(l, r) }`,
+			want: []string{"BuildMA0Set"},
+		},
+		{
+			name: "several in one file, in source order",
+			src: `package ts990
+func write(d cat.Dialect, l ma.Layout) {
+	_, _ = d.BuildMWSet(m)
+	_, _ = ma.BuildMA0Set(l, r)
+}`,
+			want: []string{"BuildMWSet", "BuildMA0Set"},
+		},
+		{
+			name: "a neighbouring name the exact list does not hold",
+			src: `package ts890
+func write(l ma.Layout) { _, _ = ma.BuildMA1Set(l, r) }`,
+			want: nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := parser.ParseFile(token.NewFileSet(), "probe.go", tc.src, 0)
+			if err != nil {
+				t.Fatalf("parsing the probe source: %v", err)
+			}
+			got := setFrameBuilderCalls(f)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("setFrameBuilderCalls = %v, want %v for:\n%s", got, tc.want, tc.src)
+			}
+		})
 	}
 }
