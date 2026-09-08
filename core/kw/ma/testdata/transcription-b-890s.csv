@@ -1,0 +1,163 @@
+p1,p2,p3,name,digits,text
+0,00,00,Color Display Pattern,3,0
+0,00,01,Function Key Style,3,0
+0,00,02,Font Style (Frequency Display),3,0
+0,00,03,Screen Saver,3,0
+0,00,04,Screen Saver Wait Time,3,0
+0,00,05,Screen Saver Message,10,1
+0,00,06,Power-on Message,15,1
+0,00,07,FM Mode S-Meter Sensitivity,3,0
+0,00,08,Meter Response Speed (Analog),3,0
+0,00,09,Meter Display Pattern,3,0
+0,00,10,Meter Display Peak Hold,3,0
+0,00,11,S-Meter Scale,3,0
+0,00,12,TX Digital Meter,3,0
+0,00,13,Long Press Duration of Panel Keys,3,0
+0,00,14,Touchscreen Tuning,3,0
+0,00,15,PF A: Key Assignment,3,0
+0,00,16,PF B: Key Assignment,3,0
+0,00,17,PF C: Key Assignment,3,0
+0,00,18,External PF 1: Key Assignment,3,0
+0,00,19,External PF 2: Key Assignment,3,0
+0,00,20,External PF 3: Key Assignment,3,0
+0,00,21,External PF 4: Key Assignment,3,0
+0,00,22,External PF 5: Key Assignment,3,0
+0,00,23,External PF 6: Key Assignment,3,0
+0,00,24,External PF 7: Key Assignment,3,0
+0,00,25,External PF 8: Key Assignment,3,0
+0,00,26,Microphone PF 1: Key Assignment,3,0
+0,00,27,Microphone PF 2: Key Assignment,3,0
+0,00,28,Microphone PF 3: Key Assignment,3,0
+0,00,29,Microphone PF 4: Key Assignment,3,0
+0,00,30,Microphone DOWN: Key Assignment,3,0
+0,00,31,Microphone UP: Key Assignment,3,0
+0,00,32,Automatic Power Off,3,0
+0,01,00,Beep Volume,3,0
+0,01,01,Voice Message Volume (Play),3,0
+0,01,02,Sidetone Volume,3,0
+0,01,03,Voice Guidance Volume,3,0
+0,01,04,Voice Guidance Speed,3,0
+0,01,05,User Interface Language (Voice Guidance & Messages),3,0
+0,01,06,Automatic Voice Guidance,3,0
+0,02,00,FFT Scope Averaging (RTTY Decode),3,0
+0,02,01,RX UOS,3,0
+0,02,02,Newline Code,3,0
+0,02,03,Diddle,3,0
+0,02,04,TX UOS,3,0
+0,02,05,Automatic Newline Insertion,3,0
+0,02,06,FSK Spacing,3,0
+0,02,07,FSK Keying Polarity,3,0
+0,02,08,FSK Tone Frequency,3,0
+0,02,09,RTTY Tuning Scope,3,0
+0,02,10,FFT Scope Averaging (PSK Decode),3,0
+0,02,11,PSK AFC Tuning Range,3,0
+0,02,12,PSK Tone Frequency,3,0
+0,02,13,PSK Tuning Scope,3,0
+0,02,14,CW/RTTY/PSK Log File Format,3,0
+0,02,15,CW/RTTY/PSK Time Stamp,3,0
+0,02,16,Clock (CW/RTTY/PSK Time Stamp),3,0
+0,02,17,Waterfall when Tuning (RTTY/PSK Audio Scope),3,0
+0,03,00,Frequency Rounding Off (Multi/ Channel Control),3,0
+0,03,01,SSB Mode Frequency Step Size (Multi/Channel Control),3,0
+0,03,02,CW/FSK/PSK Mode Frequency Step Size (Multi/Channel Control),3,0
+0,03,03,FM Mode Frequency Step Size (Multi/ Channel Control),3,0
+0,03,04,AM Mode Frequency Step Size (Multi/ Channel Control),3,0
+0,03,05,9 kHz Step in AM Broadcast Band (Multi/Channel Control),3,0
+0,03,06,MHz Step,3,0
+0,03,07,Tuning Control :,3,0
+0,03,08,Tuning Speed Control,3,0
+0,03,09,Tuning Speed Control Sensitivity,3,0
+0,03,10,Lock Function,3,0
+0,03,11,Number of Band Memories,3,0
+0,03,12,Split Frequency Offset by RIT/XIT Control,3,0
+0,03,13,Band Direct Keys in Split Mode,3,0
+0,04,00,Number of Quick Memory Channels,3,0
+0,04,01,Temporary Change (Memory Channel Configurations),3,0
+0,04,02,Program Slow Scan,3,0
+0,04,03,Program Slow Scan Range,3,0
+0,04,04,Scan Hold,3,0
+0,04,05,Scan Resume,3,0
+0,05,00,Paddle Jack Configuration (Front),3,0
+0,05,01,Key Jack Configuration (Rear),3,0
+0,05,02,Electronic Keyer Squeeze Mode,3,0
+0,05,03,Dot and Dash Reversed Keying,3,0
+0,05,04,Paddle (Microphone Up/Down Keys),3,0
+0,05,05,CW BFO Sideband,3,0
+0,05,06,Automatic CW TX with Keying in SSB Mode,3,0
+0,05,07,Carrier Frequency Offset,3,0
+0,05,08,CW Keying Weight Ratio,3,0
+0,05,09,CW Keying Reversed Weight Ratio,3,0
+0,05,10,Interrupt Keying,3,0
+0,05,11,CW Message Entry,3,0
+0,05,12,Contest Number,4,1
+0,05,13,Contest Number Format,3,0
+0,05,14,Channel Number (Countup Message),3,0
+0,05,15,CW Rise Time,3,0
+0,05,16,CW/ Voice Message Retransmit Interval Time,3,0
+0,06,00,Playback Time (Fulltime Recording),3,0
+0,06,01,Recording with Squelch,3,0
+0,06,02,Time-out Timer,3,0
+0,06,03,TX Inhibit,3,0
+0,06,04,Transmit Power Step Size,3,0
+0,06,05,ID Beep,3,0
+0,06,06,TX Filter Low Cut (SSB/AM),3,0
+0,06,07,TX Filter High Cut (SSB/AM),3,0
+0,06,08,TX Filter Low Cut (SSB-DATA/AM- DATA),3,0
+0,06,09,TX Filter High Cut (SSB-DATA/AM- DATA),3,0
+0,06,10,RX Filter Numbers,3,0
+0,06,11,Filter Control in SSB Mode (High/Low and Shift/Width),3,0
+0,06,12,Filter Control in SSB-DATA Mode (High/Low and Shift/Width),3,0
+0,06,13,VOX Voice Delay (Microphone),3,0
+0,06,14,VOX Voice Delay (Except Microphone),3,0
+0,06,15,Delta Frequency Display,3,0
+0,07,00,Baud Rate (COM Port),3,0
+0,07,01,Baud Rate (Virtual Standard COM),3,0
+0,07,02,Baud Rate (Virtual Enhanced COM),3,0
+0,07,03,Decoded Character Output,3,0
+0,07,04,Quick Data Transfer,3,0
+0,07,05,Overwrite Location (Quick Data Transfer),3,0
+0,07,06,USB: Audio Input Level,3,0
+0,07,07,ACC 2: Audio Input Level,3,0
+0,07,08,USB: Audio Output Level,3,0
+0,07,09,ACC 2: Audio Output Level,3,0
+0,07,10,TX Monitor Level (Rear Connectors),3,0
+0,07,11,Audio Output Type (Rear Connectors),3,0
+0,08,00,Bandscope Display during TX,3,0
+0,08,01,TX Audio Waveform Display,3,0
+0,08,02,Bandscope Maximum Hold,3,0
+0,08,03,Waterfall when Tuning (Center Mode),3,0
+0,08,04,Waterfall Gradation Level,3,0
+0,08,05,Tuning Assist Line (SSB Mode),3,0
+0,08,06,Frequency Scale (Center Mode),3,0
+0,08,07,Automatic Correction Step (Touchscreen Tuning),3,0
+0,09,00,Send Message by Function Keys (USB Keyboard),3,0
+0,09,01,Keyboard Language (USB Keyboard),3,0
+0,09,02,Repeat Delay Time (USB Keyboard),3,0
+0,09,03,Repeat Speed (USB Keyboard),3,0
+1,00,00,Indication Signal Type (External Meter 1),3,0
+1,00,01,Indication Signal Type (External Meter 2),3,0
+1,00,02,Output Level (External Meter 1),3,0
+1,00,03,Output Level (External Meter 2),3,0
+1,00,04,Reference Signal Source,3,0
+1,00,05,Reference Oscillator Calibration,4,1
+1,00,06,TX Power Down with Transverter Enabled,3,0
+1,00,07,TX Hold After Antenna Tuning,3,0
+1,00,08,Antenna Tuner during RX,3,0
+1,00,09,Antenna Tuner Operation per Band,3,0
+1,00,10,Microphone Gain (FM Mode),3,0
+1,00,11,PKS Polarity Reverse,3,0
+1,00,12,TX Inhibit While Busy,3,0
+1,00,13,CTCSS Unmute for Internal Speaker,3,0
+1,00,14,PSQ Logic State,3,0
+1,00,15,PSQ Reverse Condition,3,0
+1,00,16,PSQ/PKS Pin Assignment (COM Connector),3,0
+1,00,17,Virtual Standard COM Port – RTS,3,0
+1,00,18,Virtual Standard COM Port – DTR,3,0
+1,00,19,Virtual Enhanced COM Port – RTS,3,0
+1,00,20,Virtual Enhanced COM Port - DTR,3,0
+1,00,21,External Display,3,0
+1,00,22,Resolution (External Display),3,0
+1,00,23,Touchscreen Calibration,3,0
+1,00,24,Software License Agreement,3,0
+1,00,25,Important Notices concerning Free Open Source,3,0
+1,00,26,About Various Software License Agreements,3,0

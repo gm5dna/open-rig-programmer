@@ -1,0 +1,81 @@
+# Kenwood TS-990S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: EX "Set or Read the Menu"
+# Printed page 21 = PDF page 22. Charts used: Set, Read, Answer.
+#   (The EX Command Parameter Lists begin on printed page 22 = PDF page 23.)
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# ---------------------------------------------------------------------------
+# COUNTED FRAME LENGTHS
+#   Read       : 8 positions. Ruler 1..10; cells 'E' 'X' P1 P2 P2 P3 P3 ';'.
+#                Terminator at printed position 8 - a NUMBER.
+#   Set/Answer : 24 positions, FIXED. The ruler prints, tier by tier:
+#                  tier 1 header  1  2  3  4  5  6  7  8  9 10
+#                         cells   E  X P1 P2 P2 P3 P3 P4 P5 P5
+#                  tier 2 header 11 12 13 14 15 16 17 18 19 20
+#                         cells  P5 P5 P5 P5 P5 P5 P5 P5 P5 P5
+#                  tier 3 header 21 22 23 24 25 26 27 28 29 30
+#                         cells  P5 P5 P5  ;
+#                The terminator's position header is the NUMBER 24, not a letter, and P5
+#                occupies exactly 15 positions (9-23). Columns 25-30 are printed and empty.
+#                See crop work/ex990-chart.png.
+#
+#   This contradicts the 890S, whose identical command uses "9 ~" and a terminator at the
+#   LETTER position "x". Both books give P5 the SAME variable-length note. FINDING.
+#
+# POSITION MAP (Set and Answer), with each legend VERBATIM
+#   1      'E'
+#   2      'X'
+#   3      P1                            [no parenthesised name is printed for P1]
+#            "0:  Menu"
+#            "1:  Advanced Menu"
+#   4- 5   P2
+#            "00 ~ 99:  Category Number"
+#            "Entering a non-existing number causes an error to occur."
+#            "Enter any value when using the Advanced Menu."
+#   6- 7   P3
+#            "00 ~ 99:  Entry Number"
+#            "Entering a non-existing number causes an error to occur."
+#            "Entering a number that cannot be set also causes an error to occur."
+#   8      P4 (Configuration Classification)
+#            "Space:  Normal Configuration."
+#            "9:  Initializing"
+#            "Response is always a space."
+#            [The value for Normal Configuration is a real ASCII space byte in the frame.]
+#   9-23   P5                            -- printed as a FIXED 15-wide field
+#            "String of alphanumeric characters for the Menu setting"
+#            "Entering a value larger than the size limit causes an error to occur."
+#            "Normally a 3-digit number (blank digits must be entered as 0)."
+#            "PF key settings use 4 digits (refer to the PF Key assignment ID lists)."
+#            "Frequency settings use 8 digits (blank digits must be entered as 0)."
+#            "A power-on message can vary in length from 0 to 15 characters."
+#            "Screen saver text can vary in length from 0 to 10 characters."
+#            "Refer to the Menu tables below for the EX Command Parameter lists."
+#            "Entering a value other than the listed values causes an error to occur.)"
+#  24      ';'   -- printed position header is the NUMBER 24
+#
+#   Read chart carries P1, P2, P3 only; P4 and P5 are absent and ';' sits at position 8 -
+#   identical to the 890S Read.
+#
+# ---------------------------------------------------------------------------
+# INHERITED-ASSUMED bytes
+#   * The 15-position P5 field versus the "Normally a 3-digit number" and "can vary in
+#     length from 0 to 15 characters" notes. The chart nails ';' to position 24, so a
+#     3-digit value leaves 12 positions unaccounted for. ASSUMED: the value is left-aligned
+#     in P5 and the remaining positions are ASCII spaces. The book states no pad character
+#     and no alternative geometry.
+#   * P1 = 0 (Menu), P2 = "00", P3 = "00" and P5 = "000" are read off this book's own EX
+#     Command Parameter Lists (printed p.22): 0 / 00 / 00 is "Color Display Pattern (Main
+#     screen)" and P5 000 is "Type 1". Those four fields are therefore manual-determined;
+#     only the padding of P5 is assumed.
+#   * ex_set_initialize below uses P4 = '9'. The book does NOT say whether P5 is still sent
+#     when P4 is '9' ("Initializing"). ASSUMED that the 24-position geometry is unchanged.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim; position 8 of the Set/Answer vectors is a real
+#           ASCII space, and positions 12-23 are real ASCII spaces)
+read	EX00000;
+set_normal	EX00000 000            ;
+answer_normal	EX00000 000            ;
+set_initialize	EX000009000            ;
