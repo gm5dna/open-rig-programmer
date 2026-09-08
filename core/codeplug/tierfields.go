@@ -9,22 +9,25 @@ import "github.com/gm5dna/open-rig-programmer/core/spec"
 // seven receiver fields of additions design D8).
 //
 // IT EXISTS BECAUSE SIXTEEN FUNCTIONS ENUMERATED THOSE SEVENTEEN FIELDS BY
-// HAND — six in this package (changedFields, tierAddedFieldFor,
-// tierFieldNormalisers, withUnavailableTierFields,
-// tierFieldsRepresentableByOmission, validateTierFields), eight in
-// core/csvio (tierCells, receiverCells, needsTierColumns,
-// needsReceiverColumns, parseTierCells, parseReceiverCells,
-// markTierFieldsUnavailable, markReceiverFieldsUnavailable), one in
-// core/csvio's CHIRP importer and one in core/clone — so an eighteenth
-// field means eighteen edits, and one missed edit is a field that silently
-// does not diff, does not validate, or does not export.
+// HAND — six in this package, eight in core/csvio, one in core/csvio's
+// CHIRP importer and one in core/clone — so an eighteenth field meant
+// sixteen edits, and one missed edit was a field that silently did not
+// diff, did not validate, or did not export. Every function since folded
+// onto this table is one fewer; the ones still enumerating by hand are the
+// ones asking a question no column here carries.
 //
 // THE COLUMNS ARE THE ONES AT LEAST TWO OF THOSE FUNCTIONS NEED, and no
 // more. What is deliberately NOT here: a per-field Valid closure (only
 // validateTierFields asks, and every field asks a different question of
-// spec.Capabilities), and a per-field cell renderer/parser (only
-// core/csvio asks, and it dispatches on the field's Go type, which this
-// row does not name). Both stay where their one caller is.
+// spec.Capabilities), and a per-field cell renderer/parser.
+//
+// THE RENDERER AND PARSER DO NOW EXIST — the eighteenth-field hazard is
+// exactly as real for a CSV column as for a diff — but as core/csvio's own
+// tierFieldCells, keyed by spec.Field so a row here finds its pair. They
+// stay there because both are made of that package's file format: its
+// reserved state spellings ("n/a", "absent") and its column-named parse
+// diagnostics. Hoisting them here would move the CSV format into the model
+// package, which is a worse trade than one map lookup.
 type TierField struct {
 	// Name is the ChannelData struct field's own Go name, e.g.
 	// "TxFreqHz". It names the thing the accessors below reach, which

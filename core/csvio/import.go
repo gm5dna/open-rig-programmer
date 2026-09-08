@@ -489,14 +489,14 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 		// equal to a read of the same radio instead of modified in ten
 		// fields the file never mentioned.
 		if hasReceiver {
-			if err := parseTierCells(&data, cell); err != nil {
+			if err := parseTierGroup(&data, cell, false); err != nil {
 				return nil, &ParseError{Line: line, Reason: err.Error()}
 			}
-			if err := parseReceiverCells(&data, cell); err != nil {
+			if err := parseTierGroup(&data, cell, true); err != nil {
 				return nil, &ParseError{Line: line, Reason: err.Error()}
 			}
 		} else if hasTier {
-			if err := parseTierCells(&data, cell); err != nil {
+			if err := parseTierGroup(&data, cell, false); err != nil {
 				return nil, &ParseError{Line: line, Reason: err.Error()}
 			}
 			markReceiverFieldsUnavailable(&data)
@@ -510,80 +510,25 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 	return channels, nil
 }
 
-// parseTierCells fills the ten tier-added fields of data from a
-// version-2 row, using cell to look each column up by name. A tier
-// column absent from a partially-adopted version-2 header reads as "",
-// i.e. Unknown — which is the right answer there, since the file DOES
-// declare itself version 2 and simply leaves that field unstated.
+// parseTierGroup fills ONE of the two appended column groups of data —
+// receiver false is version 2's ten D4 fields, true is version 3's seven
+// D8 ones — using cell to look each column up by name. A tier column
+// absent from a partially-adopted version-2 header reads as "", i.e.
+// Unknown, which is the right answer there: the file DOES declare itself
+// version 2 and simply leaves that field unstated.
 //
 // The first error stops the row: as everywhere in this importer, a cell
 // that cannot be understood is refused, never guessed at.
-func parseTierCells(data *codeplug.ChannelData, cell func(string) string) error {
-	txFreq, err := parseFreqFieldCell(cell("tx_frequency"), "tx_frequency")
-	if err != nil {
-		return err
+func parseTierGroup(data *codeplug.ChannelData, cell func(string) string, receiver bool) error {
+	for _, tf := range codeplug.TierFields {
+		if tf.Receiver != receiver {
+			continue
+		}
+		if err := tierFieldCells[tf.Field].Parse(data, cell(tf.Column)); err != nil {
+			return err
+		}
 	}
-	data.TxFreqHz = txFreq
-
-	data.Duplex = parseStringFieldCell(cell("duplex"))
-
-	offset, err := parseFreqFieldCell(cell("offset"), "offset")
-	if err != nil {
-		return err
-	}
-	data.OffsetHz = offset
-
-	data.ToneMode = parseStringFieldCell(cell("tone_mode"))
-
-	toneTx, err := parseToneFieldCell(cell("tone_tx"), "tone_tx", true)
-	if err != nil {
-		return err
-	}
-	data.ToneTx = toneTx
-
-	toneRx, err := parseToneFieldCell(cell("tone_rx"), "tone_rx", true)
-	if err != nil {
-		return err
-	}
-	data.ToneRx = toneRx
-
-	dtcsCode, err := parseIntFieldCell(cell("dtcs_code"), "dtcs_code")
-	if err != nil {
-		return err
-	}
-	data.DTCSCode = dtcsCode
-
-	data.DTCSPolarity = parseStringFieldCell(cell("dtcs_polarity"))
-	data.Filter = parseStringFieldCell(cell("filter"))
-
-	dataMode, err := parseBoolFieldCell(cell("data_mode"), "data_mode", true)
-	if err != nil {
-		return err
-	}
-	data.DataMode = dataMode
-
 	return nil
-}
-
-func parseReceiverCells(data *codeplug.ChannelData, cell func(string) string) error {
-	var err error
-	data.TuningStepEnabled, err = parseBoolFieldCell(cell("tuning_step_enabled"), "tuning_step_enabled", true)
-	if err != nil {
-		return err
-	}
-	data.TuningStep = parseStringFieldCell(cell("tuning_step"))
-	data.ProgramTuningStepHz, err = parseFreqFieldCell(cell("program_tuning_step"), "program_tuning_step")
-	if err != nil {
-		return err
-	}
-	data.AttenuatorDB, err = parseIntFieldCell(cell("attenuator"), "attenuator")
-	if err != nil {
-		return err
-	}
-	data.Preamp = parseStringFieldCell(cell("preamp"))
-	data.Antenna = parseStringFieldCell(cell("antenna"))
-	data.IPPlus, err = parseBoolFieldCell(cell("ip_plus"), "ip_plus", true)
-	return err
 }
 
 // markTierFieldsUnavailable sets all seventeen added fields Unavailable
