@@ -161,10 +161,12 @@ func wantCause(token string, book Book) string {
 	switch {
 	case token == "E;":
 		return "A communication error occurred, such as an overrun or framing error during a serial data transmission"
-	case book == Book590:
-		return "A receive buffer overrun error occurred"
-	default:
+	case book == Book480:
+		// E13 is a TS-480 DIVERGENCE, not a two-way split: the 590 pair,
+		// the TS-890S and the TS-990S all print the overrun sentence.
 		return "Receive data was sent but processing was not completed"
+	default:
+		return "A receive buffer overrun error occurred"
 	}
 }
 
@@ -205,12 +207,17 @@ func assertTypedFatal(t *testing.T, err error, token string, book Book) {
 
 // --- the four-state injection matrix (M3) -------------------------------
 
-// TestFatalTokens_FourStatesTwoTokensTwoBooks is the matrix the spec
+// TestFatalTokens_FourStatesTwoTokens is the matrix the spec
 // requires: E; and O; injected in EACH of four states — the read wait, the
 // write error-window, the drain, and with no command outstanding — through
 // the core/kw accumulator, each asserting the typed error with its OWN
 // book's cause sentence, never ErrRejected, never retried, never matched as
-// an answer. Sixteen cells: four states x two tokens x two books.
+// an answer. Four states x two tokens x every book this package reads.
+//
+// THE BOOK AXIS IS THE WHOLE SET DELIBERATELY. newStreamError's default arm
+// is a PANIC and IsFatal runs on the engine's reader goroutine, which has no
+// recover, so a book added to valid() without its two arms is a crash on the
+// first "E;" from a real radio. This matrix is what fails first instead.
 //
 // WHAT IT DOES NOT PROVE, said here rather than left for a reader to
 // assume: it is a test about the CAUSE, not about the instant. Three of the
@@ -218,7 +225,7 @@ func assertTypedFatal(t *testing.T, err error, token string, book Book) {
 // DEFERRED failure would also satisfy. The two adversarial pins below are
 // what tell suppression from deferral, and they are why this test is not
 // the whole of the design's evidence.
-func TestFatalTokens_FourStatesTwoTokensTwoBooks(t *testing.T) {
+func TestFatalTokens_FourStatesTwoTokens(t *testing.T) {
 	states := []struct {
 		name string
 		run  func(t *testing.T, f transport.Framing, token string) (*testPort, error)
@@ -230,7 +237,7 @@ func TestFatalTokens_FourStatesTwoTokensTwoBooks(t *testing.T) {
 	}
 	for _, st := range states {
 		for _, token := range []string{"E;", "O;"} {
-			for _, book := range []Book{Book590, Book480} {
+			for _, book := range []Book{Book590, Book480, Book890, Book990} {
 				t.Run(st.name+"/"+token+"/"+book.String(), func(t *testing.T) {
 					f := kwFraming(t, book)
 					port, err := st.run(t, f, token)
@@ -383,7 +390,7 @@ func runIdle(t *testing.T, f transport.Framing, token string) (*testPort, error)
 // cause" both hold when the failure is merely DEFERRED to the next call.
 // Assertion 1 is what tells suppression from deferral.
 func TestFatalTokens_SameChunk_SuppressesTheAnswerItArrivedWith(t *testing.T) {
-	for _, book := range []Book{Book590, Book480} {
+	for _, book := range []Book{Book590, Book480, Book890, Book990} {
 		t.Run(book.String(), func(t *testing.T) {
 			port := newTestPort()
 			t.Cleanup(func() { _ = port.Close() })
@@ -448,7 +455,7 @@ func TestFatalTokens_SameChunk_SuppressesTheAnswerItArrivedWith(t *testing.T) {
 // failure lands on the following command. That inversion is what makes this
 // pin the red/green proof of Q13 rather than a restatement of it.
 func TestFatalTokens_PostPurgeRace_NoFrameLeavesAfterAReceivedFatalFrame(t *testing.T) {
-	for _, book := range []Book{Book590, Book480} {
+	for _, book := range []Book{Book590, Book480, Book890, Book990} {
 		t.Run(book.String(), func(t *testing.T) {
 			port := newTestPort()
 			t.Cleanup(func() { _ = port.Close() })

@@ -14,6 +14,24 @@
 // 9-digit frequency field against 11, a hex mode nibble against a decimal
 // one, and seven dialect axes named for commands this family does not have.
 //
+// # Four books READ, two records DESCRIBED
+//
+// Book has four members — the 590 pair's document, the TS-480's, the
+// TS-890S's and the TS-990S's — because all four print the SAME frame
+// envelope and the same three-outcome error-message table, so one framing
+// adapter and one typed-error family can honestly speak for all of them.
+// NewFramingWithGate (allowlist.go) is the seam that lets another codec in
+// this family reuse them with its own outbound gate.
+//
+// EVERYTHING ELSE HERE IS THE 50-BYTE MR/MW RECORD, AND THAT IS TWO BOOKS.
+// Layout, the builders, the parsers, the eight grammars, EXAddress and the
+// goldens all describe the record the 590 pair's book and the TS-480's
+// print; NewLayout refuses Book890 and Book990 by name for exactly that
+// reason. So where the prose below says "both books" it means those two,
+// and the TS-890S/TS-990S memory channel — a different record, a different
+// EX width, a variable-length MA0 — is core/kw/ma's, with its own doc.go
+// carrying its own register and errata schedule.
+//
 // # What this package's own packages hold
 //
 // core/kw/ts590 carries the TS-590S and TS-590SG layout values and their
@@ -41,19 +59,25 @@
 // # The one variable-length frame — a negative fact, stated because it is
 // # load-bearing
 //
-// THE EX ANSWER IS THE ONLY VARIABLE-LENGTH FRAME THIS MILESTONE PARSES.
+// THE EX ANSWER IS THE ONLY VARIABLE-LENGTH FRAME THIS CODEC PARSES.
 // Its P5 is declared "String of alphanumeric characters for the Menu
 // setting (variable length)" (590:555-556) and "A string of characters
 // (Variable length). Normally 1-digit for the TS-480. Menu No. 32, 35 and
 // 48 ~ 52 use 2-digit parameters" (480:409-411), with no printed ceiling
-// anywhere (A19). Every other frame either radio sends is fixed: ID 6, FV
-// 7, TY 6, MC 6, MR 50. The TS-890S's floating MA0 terminator is not in
-// this pair.
+// anywhere (A19). Every other frame the three MR/MW rows send is fixed: ID
+// 6, FV 7, TY 6, MC 6, MR 50.
 //
-// So PrefixLenMatcher's exactLen <= 0 branch has exactly ONE user, and a
-// second one appearing is a sign that somebody has mis-read a chart rather
-// than found a new frame. It is recorded here because a reader meeting that
-// branch would otherwise take it for spare generality.
+// So PrefixLenMatcher's exactLen <= 0 branch has exactly ONE user IN THIS
+// CODEC, and a second one appearing HERE is a sign that somebody has
+// mis-read a chart rather than found a new frame. It is recorded because a
+// reader meeting that branch would otherwise take it for spare generality.
+//
+// THE SCOPE IS THIS CODEC, NOT THE FAMILY, and the distinction became real
+// when Book grew to four. The TS-890S's and TS-990S's MA0 answer is a
+// genuine second variable-length frame — a real one, not a mis-read chart —
+// and it is core/kw/ma's, matched by core/kw/ma's own matcher. Nothing about
+// it widens the sentence above, which is about the frames THIS package's
+// 50-byte record parses.
 //
 // # E; and O; — the design commitment, and the guarantee at its true
 // # strength
@@ -121,7 +145,9 @@
 // A token is NEVER matched as an answer, NEVER collapsed into ErrRejected,
 // and NEVER retried. core/kw/fatalframer_test.go carries the four-state
 // injection matrix — read wait, write error-window, drain, no command
-// outstanding, times two tokens, times two books — and re-runs
+// outstanding, times two tokens, times EVERY book this package reads (the
+// axis is the whole set because newStreamError's default arm is a panic on
+// a goroutine with no recover) — and re-runs
 // core/transport's two adversarial pins through this accumulator and this
 // typed cause.
 //
