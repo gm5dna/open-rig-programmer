@@ -371,6 +371,14 @@ func (l Layout) BuildEXRead(addr kw.EXAddress) (Command, error) {
 // does not cover, and on the 990S's padded form the pad IS the evidence that
 // the fixed reading was the right one.
 //
+// THE CONSUMER'S OBLIGATION, ON THE 990S'S FIXED FORM: the returned string is
+// fifteen bytes with the value and its pad undifferentiated, and neither book
+// says which byte the pad is. A caller reading a setting must take the first
+// item.Digits characters as the value and treat the remainder as pad; ANY
+// trim it performs beyond that is that caller's OWN assumed entry, not one
+// this codec makes or carries. See TestParseEXAnswer_990SFixedFormPadIsForTheCallerToStrip
+// for the pinned shape: a probe with a non-space pad, returned unchanged.
+//
 // THE WHOLE ADDRESS IS THE CORRELATION KEY. Every one of a radio's menu
 // addresses answers with a frame starting "EX", so an answer whose address
 // field is not the one item names is a DIFFERENT menu's reply — still in
@@ -385,6 +393,16 @@ func (l Layout) BuildEXRead(addr kw.EXAddress) (Command, error) {
 // parser would be the one UNBOUNDED path through the domain: the builder
 // refuses to SEND an address this chart does not print, and an answer
 // carrying one is not a setting this radio has.
+//
+// kw.MaxEXDigits IS NOT THIS FAMILY'S OWN DERIVATION. It is pair 1's figure —
+// DefaultMaxFrame minus THAT family's ten-byte EX answer overhead
+// (core/kw/exdigits.go) — reused here as a family-wide, not an MA-specific,
+// ceiling. This family's own overhead is nine bytes (exAnswerMinLen above),
+// so the arithmetic ceiling for THIS grid would be one higher (247, not
+// 246); 246 is kept anyway because both figures sit far above the fifteen
+// bytes either book ever prints, and the fleet ceiling test needs one number
+// it can hold across families, not a per-family one (spec §"The EX form",
+// A19).
 func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 	if !l.Configured() {
 		return "", newParseError(frame, "EX answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")

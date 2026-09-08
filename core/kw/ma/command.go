@@ -2,7 +2,10 @@
 
 package ma
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 // Command is an outbound MA-family command frame whose bytes were produced
 // and validated by a builder in THIS package. The zero value is invalid; use
@@ -68,14 +71,10 @@ func (c Command) IsZero() bool {
 
 // copyBytes returns an independent copy of b, and nil for nil.
 //
-// IT IS THIS PACKAGE'S OWN because kw's is unexported. Three lines, and the
-// alternative — exporting kw's — would put a copy helper on the family's
-// public surface for no caller's benefit.
+// IT IS THIS PACKAGE'S OWN because kw's is unexported. One line on stdlib's
+// bytes.Clone (which already returns nil for nil) — the alternative,
+// exporting kw's, would put a copy helper on the family's public surface for
+// no caller's benefit.
 func copyBytes(b []byte) []byte {
-	if b == nil {
-		return nil
-	}
-	out := make([]byte, len(b))
-	copy(out, b)
-	return out
+	return bytes.Clone(b)
 }
