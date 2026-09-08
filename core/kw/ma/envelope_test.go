@@ -420,3 +420,40 @@ func TestParseEXAnswer_The990SAnswerIsPrintedFIXEDAndTheS890SFloats(t *testing.T
 		t.Errorf("the TS-890S accepted the 990S's padded 24-byte form = %q — its terminator floats and it prints no window", got)
 	}
 }
+
+// TestParseEXAnswer_990SFixedFormPadIsForTheCallerToStrip pins the hand-over
+// ParseEXAnswer's doc comment names for the 990S's fixed-24 form: the
+// returned P5 is fifteen bytes with the value and its pad undifferentiated,
+// and neither book says what byte the pad is. This codec does not trim —
+// trimming would apply a pad rule no book prints — so a settings reader must
+// take the row's own item.Digits leading characters as the value and treat
+// the rest as pad; any narrower trim it performs is that reader's own
+// ASSUMED entry, not this package's.
+//
+// Probed with a NON-SPACE pad, so a reader cannot mistake "returned
+// verbatim" for "returned trimmed of whitespace": the fixture's item.Digits
+// is 3, and all fifteen bytes come back exactly as sent.
+func TestParseEXAnswer_990SFixedFormPadIsForTheCallerToStrip(t *testing.T) {
+	l := testLayout990WithEXItems(t, []kw.EXItem{fixtureItem})
+
+	if fixtureItem.Digits != 3 {
+		t.Fatalf("fixtureItem.Digits = %d, want 3 — this test's obligation-shape claim is pinned to that value", fixtureItem.Digits)
+	}
+
+	frame := "EX00301 " + "005XXXXXXXXXXXX" + ";"
+	if len(frame) != 24 {
+		t.Fatalf("the fixture is %d bytes, want the printed 24 — the test is wrong", len(frame))
+	}
+	got, err := l.ParseEXAnswer([]byte(frame), fixtureItem)
+	if err != nil {
+		t.Fatalf("ParseEXAnswer: %v", err)
+	}
+	if want := "005XXXXXXXXXXXX"; got != want {
+		t.Errorf("ParseEXAnswer(%q) = %q, want %q — P5 is verbatim, including a non-space pad", frame, got, want)
+	}
+	// The obligation itself: the value is the leading item.Digits bytes,
+	// the rest is pad, and this codec never draws that line for the caller.
+	if value := got[:fixtureItem.Digits]; value != "005" {
+		t.Errorf("the row's own leading %d characters = %q, want %q — that slice, not the whole string, is the value a settings reader must take", fixtureItem.Digits, value, "005")
+	}
+}

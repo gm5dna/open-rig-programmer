@@ -151,7 +151,13 @@ func layout890Config() layoutConfig {
 		MaxCTCSSIndex: 49,
 		// This book gives no command a Main/Sub band pointer: MN, MV, OM, TN
 		// and CN all carry their parameters without one (890:3647-3657,
-		// 890:3781-3792, 890:3955-3975, 890:5143-5155, 890:1348-1360).
+		// 890:3781-3792, 890:3955-3975, 890:5143-5155, 890:1348-1360). OM
+		// DOES have a P1 at those lines — but it selects a display area,
+		// "0: Left-hand frequency display" / "1: Right-hand frequency
+		// display" (890:3956, 890:3960-3972), not a Main/Sub band; the
+		// 990S's own Main/Sub pointer is a different axis entirely, on the
+		// SAME command (990:3699-3705, "0: Main Band / 1: Sub Band" —
+		// already cited below for that row's OM P1).
 		MainSub: false,
 		EXItems: EXItems890S(),
 	}
