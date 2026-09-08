@@ -206,7 +206,7 @@ func TestParseCSV_ParameterlessIsIndependentOfAddressForm(t *testing.T) {
 	p.Addresses = AddressPair
 	p.LabelPolicy = LabelsAbsent
 	p.TextRowPolicy = TextRowsAbsent
-	p.TextWidth = 0
+	p.TextWidths = nil
 	p.ParameterlessAddresses = [][3]int{{87, 1, 0}}
 
 	rows, err := ParseCSV(p, []byte("87,01,00,,,RADIO ID,"+parameterlessP4+",-,false,623\n"))

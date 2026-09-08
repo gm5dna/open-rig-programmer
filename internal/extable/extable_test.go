@@ -460,7 +460,7 @@ func TestParseCSV_AddressComponentRange(t *testing.T) {
 //
 // The invalidity is a BLANK MODEL, and the CSV is a row the fixture's own
 // 2..6 digit bounds accept. ParseCSV's own logic never consults Model — it
-// reads TextWidth, MinDigits and MaxDigits, and none of its error strings
+// reads TextWidths, MinDigits and MaxDigits, and none of its error strings
 // name the model — so this call succeeds the moment the p.Validate() call
 // is deleted. That is the point: an earlier version passed Profile{}, whose
 // zero bounds refuse every row downstream of the validation, so the test
@@ -475,7 +475,8 @@ func TestParseCSV_RefusesInvalidProfile(t *testing.T) {
 
 // TestParseObservedCSV_CeilingComesFromProfile is the test that kills
 // revision 1's derived ceiling. The fixture's MaxDigits is 6 and its
-// TextWidth is 8, so a ceiling still computed as max(MaxDigits, TextWidth)
+// sole TextWidths entry is 8, so a ceiling still computed as
+// max(MaxDigits, TextWidths...)
 // would be 8 and would wrongly REJECT a width of 9. The rejection case
 // alone passes under either implementation and proves nothing — the pair is
 // the point.
