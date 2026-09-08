@@ -3,10 +3,16 @@
 package ma
 
 import (
+	"context"
+	"errors"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/kw"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // THE OUTBOUND GATE'S OWN SUITE: the positive roster, the negative roster,
@@ -416,5 +422,248 @@ func TestAllowedCommand_TheTwoTierConformanceWalk(t *testing.T) {
 	}
 	if tier2 == 0 {
 		t.Fatal("tier 2 is empty, so the cross-refusals passed vacuously")
+	}
+}
+
+// --- the framing the engine really holds ---------------------------------
+
+// TestNewFramingFor_KeepsTheEnvelopeInFrontOfTheRoster is ma's twin of
+// core/kw's TestNewFramingWithGate_IsTheConjunctionNotThePredicateAlone, and
+// it has TWO halves because the gate has two.
+//
+// FIRST, THE ROSTER IS IN FRONT OF THE ENVELOPE. The 42-byte erase shape is
+// pair 1's example of a frame the book prints and the programme never builds;
+// this family's is MA5, "M A 5 P1 P1 P1 ;" (890:3305-3311, 990:3042-3047),
+// and it is perfectly envelope-legal. The book-only framing admits it and the
+// framing NewFramingFor returns must not — which is what a rewiring to
+// kw.NewFraming would break, silently, in the last defence before a physical
+// radio.
+//
+// SECOND, THE ENVELOPE IS STILL IN FRONT OF THE ROSTER, and this half needs a
+// SUBSTITUTED PREDICATE to have a witness at all: with the real roster there
+// is no frame AllowedCommand admits and the envelope refuses — the inclusion
+// is pinned by TestAllowedCommand_AdmitsOnlyFramesTheEnvelopeAlsoAdmits — so a
+// table of envelope-illegal frames driven at f alone would be satisfied by the
+// roster's own refusals and would prove nothing about the conjunction. The
+// probe is therefore built at the SAME SEAM NewFramingFor delegates to,
+// kw.NewFramingWithGate with THIS row's own book, and handed a predicate that
+// admits everything: every refusal it then makes is the envelope's alone, and
+// the moment that conjunction becomes a replacement this half goes red.
+func TestNewFramingFor_KeepsTheEnvelopeInFrontOfTheRoster(t *testing.T) {
+	for _, l := range bothLayouts() {
+		f, err := NewFramingFor(l)
+		if err != nil {
+			t.Fatalf("%s: NewFramingFor: %v", l.Model(), err)
+		}
+		envelope, err := kw.NewFraming(l.Book())
+		if err != nil {
+			t.Fatalf("%s: kw.NewFraming: %v", l.Model(), err)
+		}
+
+		// The roster's half. Its positive control is the whole corpus: a
+		// framing that refused its own row's traffic would satisfy every
+		// refusal below.
+		for what, frame := range positiveCorpus(t, l) {
+			if !f.Allow(frame) {
+				t.Errorf("%s: the framing the engine holds refused %q (%s), which its own builder produced", l.Model(), frame, what)
+			}
+		}
+		erase := []byte("MA5007;")
+		if !envelope.Allow(erase) {
+			t.Errorf("%s: the ENVELOPE refused %q, so this probe is not testing what it claims — the erase shape is envelope-legal and roster-illegal", l.Model(), erase)
+		}
+		if f.Allow(erase) {
+			t.Errorf("%s: the framing the engine holds ADMITTED the printed erase %q — its gate has fallen back to the envelope (890:3305-3311, 990:3042-3047)", l.Model(), erase)
+		}
+
+		// The envelope's half.
+		probe, err := kw.NewFramingWithGate(l.Book(), func([]byte) bool { return true })
+		if err != nil {
+			t.Fatalf("%s: kw.NewFramingWithGate: %v", l.Model(), err)
+		}
+		for _, tc := range []struct {
+			what  string
+			frame []byte
+		}{
+			{"no terminator", []byte("MA0007")},
+			{"terminator not last", []byte("MA0;07")},
+			{"embedded terminator", []byte("MA0007;;")},
+			{"lower-case opcode", []byte("ma0007;")},
+			{"control byte in the body", []byte("ID\x01;")},
+			{"past DefaultMaxFrame", []byte("MA0" + strings.Repeat("0", kw.DefaultMaxFrame) + ";")},
+		} {
+			if probe.Allow(tc.frame) {
+				t.Errorf("%s: %s — the seam admitted %q with a predicate that said yes, so the constructor has REPLACED the envelope instead of standing in front of it", l.Model(), tc.what, tc.frame)
+			}
+			if f.Allow(tc.frame) {
+				t.Errorf("%s: %s — the framing the engine holds admitted %q", l.Model(), tc.what, tc.frame)
+			}
+		}
+	}
+}
+
+// --- the matcher walk ----------------------------------------------------
+
+// maTestPort is a transport.Port whose Read blocks until the test delivers
+// bytes and whose Write can release a frame at a chosen moment. It is this
+// package's own because core/kw's is unexported and in another package's test
+// binary; it is fifty lines because transport.Port is io.ReadWriteCloser and
+// nothing more.
+type maTestPort struct {
+	mu      sync.Mutex
+	pending []byte
+	onWrite func()
+	wake    chan struct{}
+	closed  chan struct{}
+	once    sync.Once
+}
+
+func newMATestPort() *maTestPort {
+	return &maTestPort{wake: make(chan struct{}, 8), closed: make(chan struct{})}
+}
+
+func (p *maTestPort) Read(b []byte) (int, error) {
+	for {
+		p.mu.Lock()
+		if len(p.pending) > 0 {
+			n := copy(b, p.pending)
+			p.pending = p.pending[n:]
+			p.mu.Unlock()
+			return n, nil
+		}
+		p.mu.Unlock()
+		select {
+		case <-p.wake:
+		case <-p.closed:
+			return 0, errMATestPortClosed
+		}
+	}
+}
+
+func (p *maTestPort) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	hook := p.onWrite
+	p.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return len(b), nil
+}
+
+func (p *maTestPort) Close() error {
+	p.once.Do(func() { close(p.closed) })
+	return nil
+}
+
+// deliver queues bytes for the next Read and wakes it.
+func (p *maTestPort) deliver(s string) {
+	p.mu.Lock()
+	p.pending = append(p.pending, s...)
+	p.mu.Unlock()
+	select {
+	case p.wake <- struct{}{}:
+	default:
+	}
+}
+
+var errMATestPortClosed = errors.New("ma test: port closed")
+
+// ma0ReadSpec is a ClassRead spec for one MA0 read, with no retry: the
+// late-answer sequence needs the first read to time out ONCE and leave the
+// port suspect, which is the state the engine's entry quarantine is for.
+func ma0ReadSpec(match func(frame []byte) bool, timeout time.Duration) transport.CommandSpec {
+	return transport.CommandSpec{
+		Class:   transport.ClassRead,
+		Match:   match,
+		Timeout: timeout,
+		Settle:  time.Millisecond,
+	}
+}
+
+// TestMA0AnswerMatcher_ALateAnswerIsNeverTheNextReadsAnswer is pair 1's
+// late-answer shape re-run on BOTH rows, through a scripted Port and the REAL
+// engine rather than against the predicate alone — and through the framing
+// NewFramingFor returns, so the outbound gate is in the loop too.
+//
+// THE SEQUENCE IS ORDINARY, WHICH IS THE POINT: a read of channel 007 times
+// out and the engine quarantines the port; a read of 008 goes out; and the
+// radio's very late answer for 007 arrives while 008's read is waiting. Every
+// MA0 answer on a row is the same length and starts "MA0", so a matcher keyed
+// on the command name and the length alone accepts it — and ParseMA0Answer
+// then returns a record whose Slot says 007 while the caller asked for 008.
+// Here the whole correlation key spells as a prefix, because P1 is bytes 4-6
+// immediately after the opcode (890:3166-3168, 990:2893-2895), so the two
+// rows' matchers differ in ONE thing only: the 990S takes
+// kw.PrefixLenMatcher's exact-length branch (990:2938) and the 890S takes this
+// package's own RANGE matcher, its terminator floating under a ruler head
+// printed "x" (890:3181-3182).
+//
+// THE RANGE ITSELF IS NOT RE-PINNED HERE. shared_test.go's
+// TestMA0AnswerMatcher_990SIsExactAndThe890SIsARange already drives both
+// matchers over the printed and unprinted lengths — including the 200-byte
+// frame beginning with the right six bytes, which is the whole reason this
+// row has a matcher of its own rather than kw.PrefixLenMatcher's unbounded
+// branch. This test is the ENGINE half of the same finding and does not
+// repeat the predicate half.
+//
+// The delivery is made from inside the port's Write on the SECOND write, so
+// the late frame is released strictly after the entry quarantine has returned
+// and 008's read is on the wire — no sleep, and no chance of it being
+// swallowed by the drain instead.
+func TestMA0AnswerMatcher_ALateAnswerIsNeverTheNextReadsAnswer(t *testing.T) {
+	for _, l := range bothLayouts() {
+		slot7, slot8 := slotOf(t, l, 7), slotOf(t, l, 8)
+		read7, err := l.BuildMA0Read(slot7)
+		if err != nil {
+			t.Fatalf("%s: BuildMA0Read(007): %v", l.Model(), err)
+		}
+		read8, err := l.BuildMA0Read(slot8)
+		if err != nil {
+			t.Fatalf("%s: BuildMA0Read(008): %v", l.Model(), err)
+		}
+		late := rowSetFrame(l) // a well-formed answer for channel 007
+
+		port := newMATestPort()
+		t.Cleanup(func() { _ = port.Close() })
+		var writes atomic.Int32
+		port.onWrite = func() {
+			if writes.Add(1) == 2 {
+				port.deliver(late)
+			}
+		}
+
+		framing, err := NewFramingFor(l)
+		if err != nil {
+			t.Fatalf("%s: NewFramingFor: %v", l.Model(), err)
+		}
+		e, err := transport.NewEngineWith(port, framing)
+		if err != nil {
+			t.Fatalf("%s: NewEngineWith: %v", l.Model(), err)
+		}
+		t.Cleanup(func() { _ = e.Close() })
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Step one: 007's read times out with nothing on the line.
+		if _, err := e.Do(ctx, read7, ma0ReadSpec(l.MA0AnswerMatcher(slot7), 200*time.Millisecond)); !errors.Is(err, transport.ErrTimeout) {
+			t.Fatalf("%s: the read of 007 returned %v, want transport.ErrTimeout — this test's premise is that it times out and leaves the port suspect", l.Model(), err)
+		}
+
+		// Step two: 008's read goes out, and 007's answer arrives behind it.
+		got, err := e.Do(ctx, read8, ma0ReadSpec(l.MA0AnswerMatcher(slot8), 400*time.Millisecond))
+		if err == nil {
+			rec, perr := l.ParseMA0Answer(got)
+			t.Fatalf("%s: the read of channel 008 returned %q as its answer (ParseMA0Answer: slot %v, err %v) — that frame is channel 007's late reply, and correlating it here hands the caller one channel's record under another's number", l.Model(), got, rec.Slot, perr)
+		}
+		if got != nil {
+			t.Errorf("%s: the read of 008 returned frame %q alongside its error, want nil", l.Model(), got)
+		}
+		if !errors.Is(err, transport.ErrTimeout) {
+			t.Errorf("%s: the read of 008 returned %v, want transport.ErrTimeout — the late answer is not this read's answer, so nothing matched and the deadline is what ends the wait", l.Model(), err)
+		}
+		if n := e.UnexpectedFrames(); n == 0 {
+			t.Errorf("%s: the engine counted no unexpected frames — the late answer must be SEEN and rejected, not simply never delivered, or this test would pass on an empty line", l.Model())
+		}
 	}
 }
