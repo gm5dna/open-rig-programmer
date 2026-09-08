@@ -1,0 +1,25 @@
+# Kenwood TS-890S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: ID "Transceiver ID Number"
+# Printed page 35 = PDF page 36. Charts used: Read, Answer. (No Set chart is printed.)
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS
+#   Read   : 3 positions. Ruler 1..10; cells 'I' 'D' ';'. Terminator at printed position 3.
+#   Answer : 6 positions. Ruler 1..10; cells 'I' 'D' P1 P1 P1 ';'. Terminator at printed
+#            position 6. Every header is a NUMBER.
+#
+# POSITION MAP
+#   Read    1 'I'   2 'D'   3 ';'
+#   Answer  1 'I'   2 'D'   3-5 P1   6 ';'
+#
+# LEGEND, VERBATIM - the ID legend prints exactly ONE model/number pair:
+#   "P1"
+#   "  024:  TS-890S"
+#
+# INHERITED-ASSUMED bytes: none. Both frames are fully determined by the book.
+#
+# VECTORS
+read	ID;
+answer	ID024;
