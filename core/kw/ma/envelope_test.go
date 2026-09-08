@@ -10,10 +10,18 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 )
 
-// fixtureItem is the one inventory row the EX tests work against. Both real
-// inventories are bootstrap-empty until their transcriptions land, so every
-// positive EX leg here runs against a layout minted with this row — which is
-// what keeps the membership checks from passing vacuously.
+// fixtureItem is the one inventory row the EX tests work against: every
+// positive EX leg here runs against a layout minted with this single row, so
+// what these tests pin is the envelope and the membership machinery, not
+// either radio's chart. Keeping the fixture out of the real inventories is
+// what stops a chart edit from silently changing what an envelope test
+// asserts — and it is why these frames stay legible as literals.
+//
+// Its address, 0/03/01, IS printed by both books. That is deliberate and it
+// is not a claim: the fixture's Name and Digits are this file's, not the
+// chart's, and no test here reads a real inventory THROUGH fixtureItem. The
+// real inventories are asked their own questions, by address, in
+// TestBuildEXRead_IsEightBytesAndAsksTheInventory.
 var fixtureItem = kw.EXItem{Addr: kw.EXAddress{P1: 0, P2: 3, P3: 1}, Name: "fixture", Digits: 3}
 
 // testLayout990WithEXItems is testLayoutWithEXItems for the other row: the
@@ -288,9 +296,26 @@ func TestBuildEXRead_IsEightBytesAndAsksTheInventory(t *testing.T) {
 		}
 	}
 
-	// A real row, whose inventory is bootstrap-empty, builds nothing at all.
-	if cmd, err := Layout890().BuildEXRead(fixtureItem.Addr); err == nil {
-		t.Errorf("the bootstrap inventory admitted %q — an empty membership set has no members", cmd.Bytes())
+	// And the same question asked of the REAL 890S layout, both ways round,
+	// because a membership set that answered everything and one that
+	// answered nothing would both satisfy a one-sided pin.
+	//
+	// This arm used to read "a real row, whose inventory is bootstrap-empty,
+	// builds nothing at all", which is what it could say while T6's
+	// placeholder inventory was still in the tree. It cannot say it now:
+	// 0/03/01 is a row the TS-890S book actually prints (menu890s.csv), so
+	// the transcription landing turned that assertion from a membership pin
+	// into a falsehood about the chart.
+	if _, err := Layout890().BuildEXRead(kw.EXAddress{P1: 0, P2: 3, P3: 1}); err != nil {
+		t.Errorf("the TS-890S layout refused 0/03/01, a row its own chart prints: %v", err)
+	}
+	// 0/09/09 is in NEITHER book's chart — category 09 stops at item 03 on
+	// both — so no address here is admitted by a bound alone. That is the
+	// property the sparse charts need: an address inside every printed
+	// domain the book states can still be one the radio answers with an
+	// error.
+	if cmd, err := Layout890().BuildEXRead(kw.EXAddress{P1: 0, P2: 9, P3: 9}); err == nil {
+		t.Errorf("the TS-890S layout admitted %q — 0/09/09 is not a row of its chart", cmd.Bytes())
 	}
 }
 
