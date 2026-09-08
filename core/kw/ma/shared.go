@@ -515,6 +515,20 @@ func decodeDigits(field string, window []byte) (uint64, error) {
 	return v, nil
 }
 
+// parseToneIndex decodes a two-digit tone index and applies check, which is
+// whichever of the two ceilings the caller's field is bounded by. Used by
+// both codecs.
+func parseToneIndex(field string, window []byte, check func(string, int) error) (int, error) {
+	v, err := decodeDigits(field, window)
+	if err != nil {
+		return 0, err
+	}
+	if err := check(field, int(v)); err != nil {
+		return 0, err
+	}
+	return int(v), nil
+}
+
 // decodeFlag reads a byte both books print as exactly 0 and 1.
 func decodeFlag(field string, b byte) (bool, error) {
 	switch b {

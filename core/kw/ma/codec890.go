@@ -180,19 +180,6 @@ func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 	return rec, nil
 }
 
-// parseToneIndex decodes a two-digit tone index and applies check, which is
-// whichever of the two ceilings the caller's field is bounded by.
-func parseToneIndex(field string, window []byte, check func(string, int) error) (int, error) {
-	v, err := decodeDigits(field, window)
-	if err != nil {
-		return 0, err
-	}
-	if err := check(field, int(v)); err != nil {
-		return 0, err
-	}
-	return int(v), nil
-}
-
 // buildMA0Set890 builds the TS-890S memory write for rec (890:3166-3182).
 //
 // IT PADS NOTHING. The name is emitted as-is and the terminator follows it,
