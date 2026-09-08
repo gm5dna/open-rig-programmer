@@ -213,7 +213,7 @@ func (l Layout) ParseIDAnswer(frame []byte) (string, error) {
 	field := frame[2 : 2+kw.IDDigits]
 	for i, b := range field {
 		if b < '0' || b > '9' {
-			return "", newParseError(frame, "ID answer: P1 byte %d is %q; both books print P1 as three digits (890:2738, 990:2617), and a Kenwood answer is %d bytes with %d digits where a Yaesu one is 7 bytes with 4", i+1, b, kw.IDAnswerLen, kw.IDDigits)
+			return "", newParseError(frame, "ID answer: P1 byte %d is %q; both books print P1 as three digits (890:2738, 990:2617), and this family's answer is %d bytes with %d digits where a Yaesu one is 7 bytes with 4", i+1, b, kw.IDAnswerLen, kw.IDDigits)
 		}
 	}
 	return string(field), nil
