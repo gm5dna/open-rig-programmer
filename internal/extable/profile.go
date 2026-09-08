@@ -151,8 +151,10 @@ const (
 	// P1's DOMAIN IS 0..1, AND IT IS THE ONE BOUND IN THIS TYPE THAT IS NOT
 	// A FIELD'S CAPACITY. A one-digit field carries 0..9; the manuals
 	// enumerate the values instead — "P1 (Menu type number) 0: Menu 1:
-	// Advanced Menu" (docs/fixtures-private/manuals/ts890s_pc_rev1_layout.txt:1898-1900,
-	// ts990s_pc_rev2_layout.txt:1721-1723) — so the domain is the
+	// Advanced Menu" (docs/fixtures-private/manuals/
+	// ts890s_pc_rev1_layout.txt:1897-1900, ts990s_pc_rev2_layout.txt:1720-1723
+	// — the parenthetical is the 890S's wording; the 990S prints a bare
+	// "P1" over the same two-value list) — so the domain is the
 	// enumeration and a P1 of 2 names a group no chart prints.
 	// TestParseCSV_AddressGroupedP1DomainIs0To1 pins it, including the 9 a
 	// capacity argument would have admitted. P2 and P3 keep the two-digit
@@ -1205,11 +1207,11 @@ var ts590sgProfile = Profile{
 // be 0 on every row.
 //
 // TextRowPolicy is TextRowsAbsent and TextWidths empty, which under that
-// policy is the only shape Validate admits. The five PF-key rows are the near miss and
-// are deliberately not text: their shared cell prints "00 ~ 99 (2-digit)",
-// which is a numeric code range, and Text marks the chart's free-text row —
-// the one a transcriber must stop at — not any row whose values happen to be
-// looked up elsewhere.
+// policy is the only shape Validate admits. The five PF-key rows are the
+// near miss and are deliberately not text: their shared cell prints
+// "00 ~ 99 (2-digit)", which is a numeric code range, and Text marks the
+// chart's free-text row — the one a transcriber must stop at — not any
+// row whose values happen to be looked up elsewhere.
 //
 // Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
 // and ft891 profiles are not: its only consumers reach it through

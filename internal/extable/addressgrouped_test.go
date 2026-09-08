@@ -59,11 +59,13 @@ func TestProfileValidate_AddressGrouped(t *testing.T) {
 //
 // P1 is a one-digit field, so a capacity argument would give it 0..9. The
 // manuals enumerate the values instead — "P1 (Menu type number) 0: Menu 1:
-// Advanced Menu" (ts890s_pc_rev1_layout.txt:1898-1900,
-// ts990s_pc_rev2_layout.txt:1721-1723) — so the domain is the ENUMERATION and
-// the refusal names the form, as AddressSingle's does, because a sentence
-// quoting a number without saying which form is in force leaves the reader to
-// guess which of two rules they broke.
+// Advanced Menu" (ts890s_pc_rev1_layout.txt:1897-1900,
+// ts990s_pc_rev2_layout.txt:1720-1723 — the parenthetical is the 890S's
+// wording; the 990S prints a bare "P1" over the same two-value list) — so
+// the domain is the ENUMERATION and the refusal names the form, as
+// AddressSingle's does, because a sentence quoting a number without saying
+// which form is in force leaves the reader to guess which of two rules they
+// broke.
 func TestParseCSV_AddressGroupedP1DomainIs0To1(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

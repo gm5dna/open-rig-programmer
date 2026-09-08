@@ -881,8 +881,8 @@ func TestFT891Profile_MatchesTodaysConstants(t *testing.T) {
 // and MaxDigits is 8 from ONE row — 151 PRESET FREQUENCY
 // (ft991a_layout.txt:692) — a reading of THIS chart, not a widening of the
 // other four profiles' 4 and 5. TextWidths is EMPTY: this chart prints no
-// free-text row at all, so 0 is the only value Validate admits under
-// TextRowsAbsent, not a family resemblance to the FT-710's 12.
+// free-text row at all, so an EMPTY TextWidths is the only shape Validate
+// admits under TextRowsAbsent, not a family resemblance to the FT-710's 12.
 //
 // ExpectedRows is NOT a reading by this package: it COUNTS 087, the
 // parameterless row, the way the profile's own comment states — the chart
