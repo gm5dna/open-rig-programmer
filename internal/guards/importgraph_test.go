@@ -335,7 +335,11 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     grid, the Kenwood family's counterpart to BuildMWSet — and it too
 //     landed BEFORE the builder existed, for the reason above. The list
 //     lives in setFrameBuilderCalls at the foot of this file, which is the
-//     ONE site to widen and the site TestSetFrameBuilderCallsDetector pins.
+//     ONE site that changes the MATCHING, and the site
+//     TestSetFrameBuilderCallsDetector pins. The name set is ALSO stated in
+//     prose at :230, :271 and :389 above and in both failure messages below
+//     (the violation message and the non-vacuity message) — a new name
+//     moves all six, and every one of them must be edited by hand.
 //
 //   - "Session.WriteChannel" is detected as ANY selector named
 //     WriteChannel outside the allowed trees, whatever the receiver's

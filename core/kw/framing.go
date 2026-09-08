@@ -99,6 +99,12 @@ func (b Book) valid() bool {
 // every 1.5 s regardless of the condition — is the one that must be
 // survivable; the condition only ever makes the flood rarer, never larger.
 //
+// AFTER KENWOOD PAIR 2 STAGE 0 THIS CAP GATES ALL FOUR BOOKS, NOT ONLY THE
+// 590 PAIR AND THE TS-480. Neither the TS-890S's nor the TS-990S's document
+// states its own AI-flood arithmetic; the TS-480's 1.5 s figure is applied
+// to them as the conservative bound this discipline takes on an unprinted
+// fact, not because it is their own datum.
+//
 // The arithmetic: a drain succeeds when it observes one IdleGap of silence.
 // Pushes 1.5 s apart leave that gap open seven times over, so the only way
 // the drain is postponed is a push landing INSIDE its idle window, which
@@ -257,7 +263,7 @@ func (f framing) IsFatal(frame []byte) error {
 // Allow is the outbound write gate: the last defence before a physical
 // radio sees these bytes.
 //
-// THIS METHOD IS THE ENVELOPE ALONE — the rules both books print about
+// THIS METHOD IS THE ENVELOPE ALONE — the rules all four books print about
 // what a frame LOOKS like — and it does not know which commands exist,
 // because a framing built by NewFraming knows the book and not the layout.
 // T7 built the eight-grammar gate (ID read, AI read/set, FV read, TY read,
@@ -282,24 +288,29 @@ func (f framing) Allow(frame []byte) bool {
 	return envelopeAllows(frame)
 }
 
-// envelopeAllows reports whether frame satisfies the envelope both books
-// print, and nothing more.
+// envelopeAllows reports whether frame satisfies the envelope all four
+// books print, and nothing more.
 //
 // The rules, each with its citation:
 //
 //   - A terminator, exactly one, and it is the LAST byte (590:87-91,
-//     480:113-118). An embedded ';' is refused outright: the 590 book says
-//     of the memory name that "';' cannot be used" (590:1577), and a second
-//     terminator anywhere would split one frame into two on the radio's own
-//     parser.
-//   - At least two bytes of command name before it (590:12-13, 480:76),
-//     upper case — this programme builds no lower-case opcode, and the
-//     books' "either case" permission (590:62, 480:77-78) is about what the
+//     480:113-118, 890:93-96, 990:96-99). An embedded ';' is refused
+//     outright: the 590 book says of the memory name that "';' cannot be
+//     used" (590:1577), and a second terminator anywhere would split one
+//     frame into two on the radio's own parser.
+//   - At least two bytes of command name before it (590:12-13, 480:76,
+//     890:76-80, 990:77-83), upper case — this programme builds no
+//     lower-case opcode, and the four books' "either case" permission
+//     (590:62, 480:77-78, 890:77-78, 990:80-81) is about what the
 //     radio ACCEPTS, not a licence to emit a second spelling of every frame.
 //   - Every body byte printable ASCII, 0x20 to 0x7E. The 480 states the
 //     rule generally — "Do not use the control characters 00 to 1Fh since
-//     they are either ignored or cause a '?' answer" (480:127-129) — and
-//     0x20 is admitted DELIBERATELY, not by accident: a mandatory literal
+//     they are either ignored or cause a '?' answer" (480:127-129) —
+//     PRINTED BY THE TS-480 ALONE: neither the TS-890S's nor the TS-990S's
+//     book states it, so on Book890 and Book990 this floor is an ASSUMED
+//     extension of A2 (core/kw/doc.go's register), kept because refusing
+//     more input is always the safe direction. 0x20 is admitted
+//     DELIBERATELY, not by accident: a mandatory literal
 //     SPACE appears in outbound Set frames (IS P1 "Always a space",
 //     590:1184; MC P1 '0' or a space below 100, 590:1334-1337; KY P1 "A
 //     space must be used for the Set command", 480:768-769). 0x7F and

@@ -184,7 +184,7 @@ func TestDriverSeamPackageDoesNotImportCIV(t *testing.T) {
 // transceive-set builder, so there is nothing else to fence. A new
 // mutating builder must be ADDED HERE BY NAME — nothing about the shape of
 // this check makes that automatic, exactly as its CAT twin says of
-// BuildMWSet/BuildMTSet/BuildMTSetCombined.
+// BuildMWSet/BuildMTSet/BuildMTSetCombined/BuildMA0Set.
 var civWriteBuilders = []string{"BuildMemorySet"}
 
 // civWriteBuilderCarveOut is the EXACT set of packages, other than
