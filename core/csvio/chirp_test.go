@@ -1776,26 +1776,64 @@ func TestIsNonZeroCHIRPOffset(t *testing.T) {
 // charset-violation shapes beyond the ';' case already exercised via
 // TestImportCHIRP_Fixture (Location 18): a non-printable control byte
 // (0x07, BEL) and a non-ASCII byte (0xC3, the lead byte of a UTF-8
-// multi-byte rune). Both fall outside chirpTagByteOK's printable-ASCII
-// range and must be replaced with a space, producing exactly one
-// non-blocking ActionApproximated LossEntry on the Name column.
+// multi-byte rune). Both fall outside spec.Capabilities.TagByteOK's
+// DEFAULT printable-ASCII range and must be replaced with a space,
+// producing exactly one non-blocking ActionApproximated LossEntry on the
+// Name column.
+//
+// The last two cases are why the predicate is caps' rather than this
+// package's own: TagByteOK honours a PUBLISHED TagCharset, nine Icom
+// drivers supply one, and three of those (IC-7760, IC-7851, IC-R8600)
+// print a charset containing ';'. A literal here replaced a byte those
+// radios accept and then described a rule they do not use.
 func TestSanitizeCHIRPName(t *testing.T) {
+	// withTagCharset is the per-model half of this test: a fixture that
+	// differs from the default one in NOTHING but the charset it
+	// publishes, so a case below can only be answering the charset
+	// question.
+	withTagCharset := func(set string) spec.Capabilities {
+		caps := ft710LikeCapabilities()
+		caps.TagCharset = set
+		return caps
+	}
 	cases := []struct {
-		name string
-		in   string
-		want string
+		name    string
+		caps    spec.Capabilities
+		in      string
+		want    string
+		entries int
+		// detail, when non-empty, must appear in the single entry: the
+		// rule that rejected the byte, as the message states it.
+		detail string
 	}{
-		{"non-printable control byte (0x07 BEL)", "A\x07B", "A B"},
-		{"non-ASCII byte (0xC3)", "A\xC3B", "A B"},
+		// The default arm, unchanged: a radio publishing no charset is
+		// judged by printable ASCII 0x20-0x7E excluding ';', exactly as
+		// before.
+		{"non-printable control byte (0x07 BEL)", ft710LikeCapabilities(), "A\x07B", "A B", 1, "printable ASCII 0x20-0x7E, excluding ';'"},
+		{"non-ASCII byte (0xC3)", ft710LikeCapabilities(), "A\xC3B", "A B", 1, "printable ASCII 0x20-0x7E, excluding ';'"},
+		// A radio whose PUBLISHED charset contains ';' keeps it. The
+		// default excludes ';' because it terminates a NEWCAT frame, but
+		// the IC-7760, IC-7851 and IC-R8600 each print a name-charset
+		// table that contains one — replacing it there sanitised a byte
+		// the radio accepts and described a rule it does not use.
+		{"a published charset containing ';' keeps it", withTagCharset("AB;"), "A;B", "A;B", 0, ""},
+		// The converse, so the case above cannot pass by the charset
+		// being ignored altogether: a byte the DEFAULT admits but this
+		// charset omits is still replaced, and the Detail names the
+		// charset that rejected it rather than the default wording.
+		{"a published charset omitting a printable byte replaces it", withTagCharset("AB "), "AxB", "A B", 1, `this radio's tag charset "AB "`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, entries := sanitizeCHIRPName(1, tc.in, ft710LikeCapabilities())
+			got, entries := sanitizeCHIRPName(1, tc.in, tc.caps)
 			if got != tc.want {
 				t.Errorf("sanitizeCHIRPName(%q) tag = %q, want %q", tc.in, got, tc.want)
 			}
-			if len(entries) != 1 {
-				t.Fatalf("sanitizeCHIRPName(%q) = %d LossEntries, want 1: %+v", tc.in, len(entries), entries)
+			if len(entries) != tc.entries {
+				t.Fatalf("sanitizeCHIRPName(%q) = %d LossEntries, want %d: %+v", tc.in, len(entries), tc.entries, entries)
+			}
+			if tc.entries == 0 {
+				return
 			}
 			e := entries[0]
 			if e.Column != "Name" {
@@ -1806,6 +1844,9 @@ func TestSanitizeCHIRPName(t *testing.T) {
 			}
 			if e.Blocking {
 				t.Errorf("LossEntry.Blocking = true, want false (non-blocking)")
+			}
+			if !strings.Contains(e.Detail, tc.detail) {
+				t.Errorf("LossEntry.Detail = %q, want it to state the rule that rejected the byte, %q", e.Detail, tc.detail)
 			}
 		})
 	}
