@@ -368,22 +368,24 @@ func TestParseEXAnswer_RefusesWhatTheChartDoesNotPrint(t *testing.T) {
 	}
 }
 
-// TestParseEXAnswer_The990SAnswerIsPrintedFIXEDAndTheS890SFloats is the one
-// place the two books' EX charts genuinely differ, and it is a FINDING read
-// off the printed rulers rather than off the prose.
+// TestParseEXAnswer_The990SAnswerIsPrintedFIXEDAndTheS890SFloats is ERRATUM
+// E19, pinned both ways: the one place the two books' EX charts genuinely
+// differ, and a finding read off the printed rulers rather than off the prose.
 //
-// The 890S draws its EX Set and Answer with a floating terminator — the
-// ruler head is a literal "x" and the ';' sits under it (890:1902, 890:1912)
-// — so its answer is 9 bytes plus P5. The 990S draws BOTH to position 24:
-// positions 21-23 are P5 and the ';' is nailed to 24 (990:1732 for the Set
-// row, 990:1747 for the Answer row), which puts P5 in a 15-wide window at
-// positions 9-23. Yet the 990S prints the SAME variable-length P5 note as the
-// 890S (990:1746-1752).
+// The 890S draws its EX Set and Answer with a floating terminator — the ruler
+// reads "9~" and the terminator's own header cell is the letter "x", never a
+// number (890:1898-1904 Set, 890:1909-1913 Answer) — so its answer is 9 bytes
+// plus P5. The 990S draws BOTH to position 24: the ruler holds P5 to exactly
+// fifteen bytes at positions 9-23 and nails ';' to 24 (990:1719-1732 Set,
+// 990:1738-1747 Answer). Yet the SAME chart's own P5 note is the
+// variable-length one both books print (990:1742-1756), so the diagram and the
+// note beside it disagree.
 //
-// SO BOTH FORMS ARE ADMITTED ON THE 990S — the printed fixed 24 with P5
-// padded to its window, and a shorter unpadded frame carrying the row's own
-// printed width — and a length between the two, which neither reading
-// produces, is refused.
+// SO BOTH FORMS ARE ADMITTED ON THE 990S — the printed fixed 24 with P5 padded
+// to its window, and a shorter unpadded frame carrying the row's own printed
+// width — and a length between the two, which neither reading produces, is
+// refused. A parser built to the diagram alone would refuse or mis-scan every
+// item class narrower than the widest.
 func TestParseEXAnswer_The990SAnswerIsPrintedFIXEDAndTheS890SFloats(t *testing.T) {
 	l := testLayout990WithEXItems(t, []kw.EXItem{fixtureItem})
 
