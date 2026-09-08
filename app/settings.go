@@ -173,8 +173,8 @@ func classifySettingsOutcome(err error) (outcome, message string) {
 // working copy), and baseline/baselineStale are deliberately left
 // untouched — settings are not part of the channel baseline ReadRadio/
 // PrepareSend/Execute reason about. Emits transfer:progress per setting
-// (TargetKind "setting", TargetID the setting ID — exactly 3, 4 or 6 ASCII
-// digits, TargetDisplay from the descriptor) and exactly one transfer:done
+// (TargetKind "setting", TargetID the setting ID — exactly 3, 4, 5 or 6
+// ASCII digits, TargetDisplay from the descriptor) and exactly one transfer:done
 // (Kind "settings"):
 // Outcome "ok" on success, "refused" (with friendly wording) if the
 // connected session's driver exposes no settings surface at all
