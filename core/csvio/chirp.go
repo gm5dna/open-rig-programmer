@@ -292,17 +292,6 @@ func containsMode(caps spec.Capabilities, mode string) bool {
 	return slices.Contains(caps.Modes, mode)
 }
 
-// chirpTagByteOK reports whether b is a legal tag byte for this radio
-// family: printable ASCII 0x20-0x7E, excluding ';' (0x3B). Printable
-// ASCII excluding ';' is a family-wide CAT fact — ';' is the protocol
-// terminator, not a per-model choice — so this needs no capability. This
-// restates codeplug's validTagByte (which is unexported) rather than
-// reaching into that package for it — core/csvio depends only on
-// core/codeplug's exported surface, core/spec, and stdlib.
-func chirpTagByteOK(b byte) bool {
-	return b >= 0x20 && b <= 0x7E && b != ';'
-}
-
 // sanitizeCHIRPName turns a CHIRP Name into a radio tag: any byte outside
 // the radio's tag charset is replaced with a space (byte for byte, so
 // this never has to worry about splitting a multi-byte UTF-8 rune), and
@@ -314,7 +303,12 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 	b := []byte(name)
 	sanitized := false
 	for i := 0; i < len(b); i++ {
-		if !chirpTagByteOK(b[i]) {
+		// caps.TagByteOK, never a literal here: printable ASCII
+		// excluding ';' is only the DEFAULT rule, and a radio publishing
+		// its own charset (nine Icom rows do; the IC-7760's, IC-7851's
+		// and IC-R8600's each contain ';') must be judged by that.
+		// Pinned by TestSanitizeCHIRPName's two published-charset cases.
+		if !caps.TagByteOK(b[i]) {
 			b[i] = ' '
 			sanitized = true
 		}
@@ -322,7 +316,7 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 	if sanitized {
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Name", Value: name, Action: ActionApproximated, Blocking: false,
-			Detail: fmt.Sprintf("Name contained a byte outside the %s tag charset (printable ASCII 0x20-0x7E, excluding ';'); replaced with a space", caps.Model),
+			Detail: fmt.Sprintf("Name contained a byte the %s cannot hold in a tag (must be %s); replaced with a space", caps.Model, caps.TagCharsetDescription()),
 		})
 	}
 	if len(b) > caps.TagLen {
