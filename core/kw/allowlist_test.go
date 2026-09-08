@@ -3,6 +3,7 @@
 package kw
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -491,6 +492,91 @@ func TestNewFramingFor_RefusesAnUnconfiguredLayout(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "layout") {
 		t.Errorf("the refusal reads %v, and it should name the layout", err)
+	}
+}
+
+// TestNewFramingWithGate_IsTheConjunctionNotThePredicateAlone is the pin the
+// exported constructor exists to carry.
+//
+// NewFramingFor DELEGATES to it, so a constructor that returned the supplied
+// predicate by itself would strip the envelope half from the SHIPPING
+// TS-590/TS-480 outbound gate — the last defence before a physical radio —
+// while moving no byte of any generated artefact and so passing every
+// byte-identity leg untouched. The predicate here admits EVERYTHING, so
+// every refusal below is the envelope's alone and the test fails the moment
+// the conjunction becomes a replacement.
+func TestNewFramingWithGate_IsTheConjunctionNotThePredicateAlone(t *testing.T) {
+	admitEverything := func([]byte) bool { return true }
+	f, err := NewFramingWithGate(Book890, admitEverything)
+	if err != nil {
+		t.Fatalf("NewFramingWithGate: %v", err)
+	}
+
+	// Each of these satisfies the predicate and breaks one envelope rule
+	// the books print: the terminator, its position, the two upper-case
+	// name bytes, the printable interior, the bound.
+	for _, tc := range []struct {
+		name  string
+		frame []byte
+	}{
+		{"no terminator", []byte("ID")},
+		{"terminator not last", []byte("MC;07")},
+		{"embedded terminator", []byte("MC;07;")},
+		{"lower-case opcode", []byte("id;")},
+		{"control byte in the body", []byte("ID\x01;")},
+		{"past DefaultMaxFrame", append(append([]byte("MW"), bytes.Repeat([]byte("0"), DefaultMaxFrame)...), ';')},
+	} {
+		if f.Allow(tc.frame) {
+			t.Errorf("%s: the gate admitted %q — its predicate said yes and the ENVELOPE said no, so the constructor has replaced the envelope instead of standing in front of it", tc.name, tc.frame)
+		}
+	}
+
+	// The positive control, so the refusals above are not vacuous, and the
+	// other half of the conjunction: a frame the envelope admits is still
+	// refused when the predicate declines it.
+	legal := []byte("ID;")
+	if !f.Allow(legal) {
+		t.Errorf("the gate refused %q, which both halves admit", legal)
+	}
+	refuseEverything, err := NewFramingWithGate(Book890, func([]byte) bool { return false })
+	if err != nil {
+		t.Fatalf("NewFramingWithGate: %v", err)
+	}
+	if refuseEverything.Allow(legal) {
+		t.Errorf("the gate admitted %q against its own predicate", legal)
+	}
+
+	// And the rest of the adapter is the shipping one, by embedding.
+	if _, ok := f.(transport.FatalFramer); !ok {
+		t.Error("the gated framing is not a transport.FatalFramer, so E; and O; would stop closing the port")
+	}
+	if seq := f.InitSequence(); len(seq) != 1 || string(seq[0].Bytes()) != initFrame {
+		t.Errorf("the gated framing's InitSequence is %v, want the one AI0; frame", seq)
+	}
+}
+
+// TestNewFramingWithGate_RefusesANilPredicate. allowlist.go's standing
+// invariant is that the narrowed gate is a SECOND TYPE rather than an
+// optional field on the first, because an unset field gives a perfectly
+// usable value whose gate has silently fallen back to the envelope. A
+// function-valued parameter is that optional field with a different
+// spelling, so the constructor refuses nil rather than accepting it and
+// degrading — which is what a later defensive nil check would do.
+func TestNewFramingWithGate_RefusesANilPredicate(t *testing.T) {
+	for _, book := range []Book{Book890, Book990, Book590, BookUnset} {
+		t.Run(book.String(), func(t *testing.T) {
+			f, err := NewFramingWithGate(book, nil)
+			if err == nil {
+				t.Fatal("NewFramingWithGate accepted a nil gate")
+			}
+			if f != nil {
+				t.Errorf("NewFramingWithGate returned a non-nil framing alongside its error: %v", f)
+			}
+		})
+	}
+	// And an unset book is still refused even when the gate is real.
+	if _, err := NewFramingWithGate(BookUnset, func([]byte) bool { return true }); err == nil {
+		t.Error("NewFramingWithGate accepted BookUnset — a gate that speaks for no document is NewFraming's own refusal")
 	}
 }
 
