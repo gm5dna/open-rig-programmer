@@ -214,7 +214,7 @@ func (l Layout) buildMA0Set890(rec Record) (Command, error) {
 	if rec.DualRecv {
 		return Command{}, newParseError(nil, "%s: this record carries dual reception (P16 on the TS-990S, 990:2949-2951) and the TS-890S grid has no such parameter", what)
 	}
-	if rec.Class != 0 {
+	if rec.Class != 0 && rec.Class != '0' {
 		return Command{}, newParseError(nil, "%s: this record carries a channel type of %q (P2 on the TS-990S, 990:2897-2903) and the TS-890S grid has no channel type byte", what, rec.Class)
 	}
 

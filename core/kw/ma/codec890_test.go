@@ -215,6 +215,12 @@ func TestBuildMA0Set890_Refusals(t *testing.T) {
 	if _, err := l.BuildMA0Set(ok); err != nil {
 		t.Fatalf("the positive control was refused: %v", err)
 	}
+	// LOW-2: Class '0' is Single (990:2897-2903) — precisely what an 890S
+	// record already is — and the grid loses nothing this row didn't already
+	// omit, unlike '1' Dual and '2' Section defined.
+	if _, err := l.BuildMA0Set(spoil(ok, func(r *Record) { r.Class = '0' })); err != nil {
+		t.Errorf("Class = '0' was refused: %v", err)
+	}
 	for _, tt := range []struct {
 		what string
 		rec  Record
