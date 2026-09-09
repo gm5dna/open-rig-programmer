@@ -46,7 +46,7 @@
 // a NINE-byte Yaesu overhead; the two differ by exactly one byte, which is
 // what would make the copy-paste invisible.
 //
-// ITS VALUE IS 246, and it is written out here because the three Kenwood
+// ITS VALUE IS 246, and it is written out here because the five Kenwood
 // profile stanzas must carry it as a LITERAL in their DigitsCeiling field:
 // internal/extable is build-time tooling that renders this package's source
 // text and may not import the package it generates into, so the stanzas

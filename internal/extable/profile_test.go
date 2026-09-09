@@ -520,7 +520,7 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 // between the FT-710 and the FTdx10 — a digit sorts below a letter, so both
 // FT-8/9 names precede every "ftdx" one — which is not the order the models
 // were added in; pinning it by value is how that stops being a surprise. The
-// three Kenwood names sort after every Yaesu one only because "t" follows
+// five Kenwood names sort after every Yaesu one only because "t" follows
 // "f"; that is an accident of the lookup names, not a family
 // grouping the registry knows about, so it too is pinned by value here
 // rather than assumed.
@@ -532,7 +532,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ft891", "ft991a", "ftdx10", "ftdx101", "ts480", "ts590s", "ts590sg"}
+	want := []string{"ft710", "ft891", "ft991a", "ftdx10", "ftdx101", "ts480", "ts590s", "ts590sg", "ts890s", "ts990s"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -541,7 +541,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "TS-480", "TS-590S", "TS-590SG"}
+	wantModels := []string{"FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "TS-480", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
@@ -651,7 +651,7 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 // so that row's pair must be PERMITTED even though one of the four keys is
 // byte-equal across it.
 //
-// Every profile here is test-local. The three Kenwood registrations land in
+// Every profile here is test-local. The five Kenwood registrations land in
 // their own tasks with their own CSVs; nothing in this test registers
 // anything.
 func TestSharedPackageNeedsAllKeysToDiffer(t *testing.T) {

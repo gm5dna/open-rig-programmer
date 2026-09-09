@@ -1,0 +1,28 @@
+# Kenwood TS-990S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: ID "Transceiver ID Number"
+# Printed page 31 = PDF page 32. Charts used: Read, Answer. (No Set chart is printed.)
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS
+#   Read   : 3 positions. Ruler 1..10; cells 'I' 'D' ';'. Terminator at printed position 3.
+#   Answer : 6 positions. Ruler 1..10; cells 'I' 'D' P1 P1 P1 ';'. Terminator at printed
+#            position 6. Every header is a NUMBER.
+#
+# POSITION MAP
+#   Read    1 'I'   2 'D'   3 ';'
+#   Answer  1 'I'   2 'D'   3-5 P1   6 ';'
+#
+# LEGEND, VERBATIM - the whole of it, exactly as printed:
+#   "P1"
+#   "  022"
+#   There is NO model name printed against the number, unlike the 890S book which prints
+#   "024:  TS-890S". Exactly one value is printed in each book. FINDING, not resolved.
+#
+# INHERITED-ASSUMED bytes: none in the frames. What the number 022 DENOTES is not printed
+#   in this book; only the digits are witnessed here.
+#
+# VECTORS
+read	ID;
+answer	ID022;

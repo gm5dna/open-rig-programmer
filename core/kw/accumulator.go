@@ -27,9 +27,9 @@ import "bytes"
 // (590:555-556, 480:409-411) — recorded as A19, whose lift is an exhaustive
 // EX sweep. So no bound is DERIVABLE from these documents at all; 256 is
 // ADEQUATE rather than derived — comfortably above every printed Kenwood
-// frame, with 246 bytes of margin left for a P5 the parameter lists never
-// print anywhere near that wide, and still small enough to refuse to
-// buffer a wedged or noisy line without limit.
+// frame, with 206 bytes of margin (256 - 50) left for a P5 the parameter
+// lists never print anywhere near that wide, and still small enough to
+// refuse to buffer a wedged or noisy line without limit.
 //
 // THE WIDEST FRAME THE FAMILY PRINTS, AFTER KENWOOD PAIR 2, IS WIDER STILL:
 // the TS-990S's MA0 answer, at 57 bytes (the TS-890S's is 40-50). 256 still
