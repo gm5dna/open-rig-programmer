@@ -280,15 +280,22 @@ func TestWriteChannel_TheCapabilityGateIsTheFirstAnswerOnAnUnconsentedSession(t 
 	// suite asserting only that case cannot distinguish "the gate fires
 	// first" from "the gate was hoisted below rungs 6-9" — both answer the
 	// same way on a channel rung 8 would wave through. Here the channel ALSO
-	// carries rung 8's own fixture (a Known tone_rx of 1750 Hz); if the gate
-	// is first it never reaches rung 8 at all, and if it were moved below
-	// rungs 6-9 this would answer registerDecision8 instead.
+	// carries rung 6's own fixture (an Unknown tx_frequency) and rung 8's (a
+	// Known tone_rx of 1750 Hz); if the gate is first it never reaches either,
+	// and if it were moved below rung 6 or rung 8 this would answer
+	// registerDecision9 or registerDecision8 instead.
+	//
+	// RUNG 6 IS THE ONE THAT MATTERS MOST and was the one the earlier fixture
+	// did not reach (review s2-close-review-opus-2.md MED-2): it is the rung
+	// an ordinary CHIRP import trips, so it is the rung an unconsented session
+	// is likeliest to meet first if the order ever slips.
 	ch := writableChannel(id)
 	ch.Data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: 17500}
+	ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
 	sess2, p2 := openSessionAt(t, RealHardware, writeImage(id, populatedMA0(id)))
 	res2, err2 := sess2.WriteChannel(context.Background(), ch)
 	if err2 == nil {
-		t.Fatal("an unconsented RealHardware session accepted a write for a channel that also trips rung 8")
+		t.Fatal("an unconsented RealHardware session accepted a write for a channel that also trips rungs 6 and 8")
 	}
 	var refused2 *driver.WriteRefusedError
 	if !errors.As(err2, &refused2) {
@@ -296,7 +303,7 @@ func TestWriteChannel_TheCapabilityGateIsTheFirstAnswerOnAnUnconsentedSession(t 
 	}
 	var semantic2 *RefusalError
 	if errors.As(err2, &semantic2) {
-		t.Errorf("the capability gate answered with a semantic register (%q) for a channel that also trips rung 8; it must be the plain fleet refusal", semantic2.Register)
+		t.Errorf("the capability gate answered with a semantic register (%q) for a channel that also trips rungs 6 and 8; it must be the plain fleet refusal", semantic2.Register)
 	}
 	if len(res2.Steps) != 0 {
 		t.Errorf("Steps = %v, want none — no frame is built", res2.Steps)

@@ -227,14 +227,20 @@ func TestWriteChannel_TheCapabilityGateAnswersFirstOnUnconsentedRealHardware(t *
 // dislikes before it learned it may not write at all — exactly what plan
 // P7's pinning paragraph forbids.
 //
-// The channel also trips rung 8 (registerDecision8's own fixture, a Known
-// 1750 Hz tone_rx): if the gate answered after rung 8 rather than before it,
-// this case would see a *RefusalError naming "decision 8" instead of the
-// gate's plain *driver.WriteRefusedError.
+// The channel trips rungs 6 AND 8 — decision 9's own fixture (an Unknown
+// tx_frequency) and registerDecision8's (a Known 1750 Hz tone_rx) — so if the
+// gate answered after EITHER of them this case would see a *RefusalError
+// naming that rung instead of the gate's plain *driver.WriteRefusedError.
+// Rung 6 is the one that matters most and was the one the earlier fixture did
+// not reach (review s2-close-review-opus-2.md MED-2): it is the rung an
+// ordinary CHIRP import trips, as write.go's own comment says, so it is the
+// rung an unconsented session is likeliest to meet first if the order ever
+// slips.
 func TestWriteChannel_TheCapabilityGateAnswersFirstEvenWhenASemanticRungWouldAlsoRefuse(t *testing.T) {
 	sess, port := openTestSession(t, RealHardware, populatedImage(t, 7, occupiedSimplex()))
 	ch := simplexChannel("007")
 	ch.Data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: 17500}
+	ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
 	_, err := sess.WriteChannel(context.Background(), ch)
 	var refused *driver.WriteRefusedError
 	if !errors.As(err, &refused) {
@@ -242,9 +248,9 @@ func TestWriteChannel_TheCapabilityGateAnswersFirstEvenWhenASemanticRungWouldAls
 	}
 	var semantic *RefusalError
 	if errors.As(err, &semantic) {
-		t.Fatalf("the gate answered with a SEMANTIC refusal naming %q: the capability gate comes BEFORE rung 8, which this channel also trips", semantic.Register)
+		t.Fatalf("the gate answered with a SEMANTIC refusal naming %q: the capability gate comes BEFORE rungs 6 and 8, which this channel also trips", semantic.Register)
 	}
-	assertNoWireTraffic(t, port, "an unconsented real-hardware write that also trips rung 8")
+	assertNoWireTraffic(t, port, "an unconsented real-hardware write that also trips rungs 6 and 8")
 }
 
 // TestWriteChannel_ConsentIsTheRouteThroughTheCapabilityGate is the gate's
