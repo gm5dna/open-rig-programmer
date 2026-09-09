@@ -94,9 +94,9 @@ const (
 )
 
 // The three read frames, written once each because each is the whole of its
-// builder's output and, once task 8 lands, its gate's admission rule. Two
-// literals a file apart would be one edit from disagreeing, and the gate is
-// the last defence before a physical radio.
+// builder's output and of AllowedCommand's admission rule for it
+// (allowlist.go). Two literals a file apart would be one edit from
+// disagreeing, and the gate is the last defence before a physical radio.
 const (
 	idReadFrame = "ID;"
 	aiReadFrame = "AI;"
