@@ -3071,13 +3071,16 @@ func TestImportCHIRP_TS890And990BlockCWAndRTTYRows(t *testing.T) {
 					// then refused at the write. The ROOT FIX — grading a
 					// blank/off Duplex on a bank that reaches this field as
 					// Known 0, the radio's own simplex statement — was
-					// measured at this task and MOVES THE TS-590 PAIR's
-					// import artefact too, because those rows reach the field
-					// as well (core/driver/ts590/caps.go grades it on MEM,
-					// contrary to the T12 MED-1 ruling's premise). It is
-					// therefore DEFERRED to a v1.5.x follow-up under that
-					// ruling's own escape clause, and this line is what will
-					// have to change when it lands.
+					// measured at this task and MOVES THE TS-590 PAIR's AND
+					// THE IC-7300/IC-7300MK2's import artefacts too: every
+					// bank that grades FieldTxFrequency without grading
+					// FieldDuplex takes this branch
+					// (core/driver/ts590/caps.go:399,
+					// core/driver/ic7300/caps.go:349 against :363), which is
+					// six registered rows, contrary to the T12 MED-1 ruling's
+					// premise. It is therefore DEFERRED to a v1.5.x follow-up
+					// under that ruling's own escape clause, and this line is
+					// what will have to change when it lands.
 					if ch.Data.TxFreqHz.State != codeplug.Unknown {
 						t.Errorf("channels[%d].TxFreqHz.State = %v, want codeplug.Unknown", i, ch.Data.TxFreqHz.State)
 					}

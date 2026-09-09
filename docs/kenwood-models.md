@@ -326,9 +326,12 @@ additive (plan decision P11, spec decision 15).
   bank that grades the field, and rung 6 refuses a candidate with no
   Known transmit disposition (M-E8). The root fix — grading a blank or
   `off` `Duplex` on such a bank as Known 0, the radio's own simplex
-  statement — moves the TS-590 pair's import artefacts too, because those
-  rows grade the field as well, so it is deferred to a v1.5.x follow-up
-  rather than landed inside this registration.
+  statement — moves the TS-590 pair's AND the IC-7300/IC-7300MK2's import
+  artefacts too: every bank that grades `FieldTxFrequency` without grading
+  `FieldDuplex` takes this branch (`core/driver/ts590/caps.go:399`,
+  `core/driver/ic7300/caps.go:349` against `:363`), which is six
+  registered rows, so it is deferred to a v1.5.x follow-up rather than
+  landed inside this registration.
 
 ## Costs the TS-990S pays and the TS-890S does not
 
