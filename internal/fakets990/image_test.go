@@ -9,7 +9,7 @@ import (
 
 // printedFrequencies is the whole supply this book gives, re-derived here
 // rather than taken from image.go: "00007000000" from the front matter's FA
-// worked example (990:86, quoted again at 990:119 and 990:126), "00014175000"
+// worked example (990:86-89, quoted again at 990:119 and 990:126), "00014175000"
 // from the AS2 block ("for example, 14.175 MHz is displayed as 00014175000",
 // 990:344-345) and "00014195000" from FA's own parameter note ("For example,
 // enter 00014195000 for 14.195 MHz", 990:2352, and FB's at 990:2374). THE 990S
@@ -216,27 +216,29 @@ func TestDefaultImage_EveryLiveLegendValueAppears(t *testing.T) {
 // This is the T15 review's M2, ruled ACCEPT for both fakes and made harder
 // here because this radio has four windows where the 890S has two.
 func TestDefaultImage_TheFourToneIndexWindowsAreDistinctAndNonZero(t *testing.T) {
-	seen := map[string]string{}
+	seen := map[string][]string{}
 	for _, s := range DefaultImage() {
 		for _, f := range []struct{ name, value string }{
 			{"P7", s.ToneNo}, {"P8", s.CTCSSNo}, {"P13", s.ToneNo2}, {"P14", s.CTCSSNo2},
 		} {
 			if f.value != "00" && f.value != "  " {
-				seen[f.name] = f.value
+				seen[f.name] = append(seen[f.name], f.value)
 			}
 		}
 	}
 	for _, p := range []string{"P7", "P8", "P13", "P14"} {
-		if seen[p] == "" {
+		if len(seen[p]) == 0 {
 			t.Errorf("no channel in the default image carries a NON-ZERO %s: a P7/P8/P13/P14 offset error, or a dropped index, reads %q either way", p, "00")
 		}
 	}
 	values := map[string]string{}
-	for p, v := range seen {
-		if other, clash := values[v]; clash {
-			t.Errorf("%s and %s both carry index %q — two windows with one value cannot separate a transposition", p, other, v)
+	for p, vs := range seen {
+		for _, v := range vs {
+			if other, clash := values[v]; clash {
+				t.Errorf("%s and %s both carry index %q — two windows with one value cannot separate a transposition", p, other, v)
+			}
+			values[v] = p
 		}
-		values[v] = p
 	}
 }
 

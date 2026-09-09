@@ -38,14 +38,14 @@ var _ Image = DefaultImage
 // sources mechanically.
 
 // The THREE frequencies this document prints, and there are no others. The
-// front matter's FA worked example gives 7 MHz (990:86, quoted again at
+// front matter's FA worked example gives 7 MHz (990:86-89, quoted again at
 // 990:119 and 990:126), the AS2 block gives 14.175 MHz ("for example, 14.175
 // MHz is displayed as 00014175000", 990:344-345) and FA's own parameter note
 // gives 14.195 MHz ("For example, enter 00014195000 for 14.195 MHz",
 // 990:2352, and FB's at 990:2374). THE 890S PRINTS ONLY TWO; any other
 // frequency in an image would be an invented byte on either row.
 const (
-	printedFA   = "00007000000" // 990:86
+	printedFA   = "00007000000" // 990:86-89
 	printedAS2  = "00014175000" // 990:344-345
 	printedFA14 = "00014195000" // 990:2352
 )
