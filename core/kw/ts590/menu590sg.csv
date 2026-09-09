@@ -116,7 +116,7 @@
 # THE VERSION ROW IS NOT A TEXT ROW. 000 Firmware Version prints "Version
 #   information (4 ASCII characters) read only" and is transcribed
 #   digits=4, text=false. That is the design decision, not a reading: the
-#   profile carries ONE exact TextWidth, this chart prints strings of two
+#   profile's TextWidths named ONE width, this chart prints strings of two
 #   different widths (4 here, 8 at 001), and the repository's existing
 #   treatment of a version string is the FT-891's 18/01/00 MAIN VERSION,
 #   digits=4 text=false (core/cat/ft891/table2.csv). text marks the chart's
@@ -125,8 +125,8 @@
 #   asserts nothing about the string's grammar.
 #
 # TEXT ROWS. Exactly one: 001 Power on message, "Power on Message (up to 8
-#   ASCII characters)", digits 8, which is the profile's TextWidth. No other
-#   row in this chart describes free text.
+#   ASCII characters)", digits 8, the profile's sole TextWidths entry. No
+#   other row in this chart describes free text.
 #
 # NO GROUP LABELS. The chart's columns are "Menu (P1) | Function | Command
 #   Parameter (P5)" and nothing else. The FT-710's and the FTdx10's charts
