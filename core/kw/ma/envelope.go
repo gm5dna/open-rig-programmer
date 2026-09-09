@@ -410,8 +410,17 @@ func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 	if item.Digits < 1 || item.Digits > kw.MaxEXDigits {
 		return "", newParseError(frame, "EX answer: the inventory row for %v declares a printed width of %d, and this codec admits 1 to %d — a zero width is a row that was never transcribed, and a wider one describes an answer longer than this family's own %d-byte frame bound (A19)", item.Addr, item.Digits, kw.MaxEXDigits, kw.DefaultMaxFrame)
 	}
-	if _, ok := l.EXItem(item.Addr); !ok {
+	row, ok := l.EXItem(item.Addr)
+	if !ok {
 		return "", newParseError(frame, "EX answer: menu %v is not in %s's transcribed menu inventory — the builder and the gate refuse to send that address, and an answer carrying it is not a setting this row has", item.Addr, l.model)
+	}
+	// C-MED-2 / S1-MED-1: the width bound is the INVENTORY ROW's Digits, not
+	// the caller's copy — kw.Layout.EXItems deliberately hands out mutable
+	// copies (core/kw/exitem.go), so a caller that reconstructs an item
+	// wrongly must be told, not silently corrected by substituting the
+	// canonical row underneath it.
+	if item.Digits != row.Digits {
+		return "", newParseError(frame, "EX answer: the caller's item for menu %d %02d %02d declares a printed width of %d, and this row's own inventory declares %d — the width comes from the inventory row, and the two must agree (A19)", item.Addr.P1, item.Addr.P2, item.Addr.P3, item.Digits, row.Digits)
 	}
 	if len(frame) < exAnswerMinLen {
 		return "", newParseError(frame, "EX answer: the frame is %d bytes; the eight positions through P4 are followed by the terminator, and a frame of exactly %d bytes is the READ, which carries no P4 at all (890:1907, 990:1736)", len(frame), EXReadLen)
@@ -440,7 +449,7 @@ func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 	}
 
 	p5 := frame[exP5Off : len(frame)-1]
-	if err := l.checkEXP5Width(frame, p5, item); err != nil {
+	if err := l.checkEXP5Width(frame, p5, row); err != nil {
 		return "", err
 	}
 	for i, b := range p5 {
