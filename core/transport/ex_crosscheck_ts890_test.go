@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -287,7 +288,7 @@ func TestEXInventoryCrossCheck_TS890PFKeyWidthsAgreeUnderRulingRB(t *testing.T) 
 	// The correction touches those seventeen and nothing else: every other
 	// address the fake answers is its leg's own width.
 	for addr, p5 := range fake {
-		if slicesContains(pf, addr) {
+		if slices.Contains(pf, addr) {
 			continue
 		}
 		if want := legWidths[addr]; len(p5) != want {
@@ -320,17 +321,6 @@ func transcriptionBWidths890(t *testing.T) map[string]int {
 		t.Fatalf("%s yielded no widths — this test would pass vacuously", codecBCopy890)
 	}
 	return out
-}
-
-// slicesContains is spelt out rather than imported so this file adds no import
-// for one predicate.
-func slicesContains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
 
 // TestEXInventoryCrossCheck_TS890RedProofs runs the same comparison over

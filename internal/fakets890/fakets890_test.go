@@ -264,6 +264,8 @@ func TestUnknownCommandsAreRejected(t *testing.T) {
 		"MA1" + strings.Repeat("0", 14) + ";", // MA1 Direct Write, off the roster
 		"MA5000;",                             // MA5 Channel Deletion, off the roster
 		"MA;",                                 // no such command: the family is MA0..MA7
+		"MN007;",                              // Memory Name Set, off the roster (doc.go)
+		"MN;",                                 // Memory Name Read, off the roster (doc.go)
 		"M;",                                  // shorter than any name
 		";",                                   // a bare terminator
 		"XY;",
