@@ -29,55 +29,36 @@ describes under *Switching on writes for an unverified radio*.
 
 ## What changed in this version
 
-- **Kenwood TS-890S and TS-990S: read, opt-in write, menu-settings read.**
-  The 100 memory channels and the menu inventory — 158 settings on the
-  TS-890S, 194 on the TS-990S — over Kenwood's own PC control commands.
-  Tone and scan skip are read and written, as on the TS-590 pair, and
-  one frame carries a whole channel, which removes that pair's largest
-  cost: a channel read off one of these radios comes back with its
-  transmit frequency already known, so reading the memories, editing a
-  name and sending them straight back works. Every published mode can be
-  written — 16 on the TS-890S, 26 on the TS-990S, the data modes spelt
-  into the mode names themselves.
-- **What these two radios refuse is published rather than discovered.**
-  A write to a channel the radio does not already hold is refused: the
-  program reads the target first and will not create a channel the
-  manual never says the command can create. Registering these radios
-  does not mean the program can fill a blank one — they can be
-  re-programmed, not programmed from empty. A channel whose secondary
-  side on the radio is not what the program's own frame would write is
-  refused, naming the parameter and both values. A 1750 Hz receive tone
-  is refused. On the TS-990S, a channel with dual reception switched on
-  is refused outright, and so is a section-defined channel. Channels are
-  never deleted, although both manuals print a deletion command. Slots
-  100–119 are offered on neither radio, no band edges are published, and
-  the 9600 port speed is assumed.
-- **A CHIRP file's ordinary rows import on both new radios** on the same
-  terms as the TS-590 pair's, with one further cost: a single frame
-  carries the transmit frequency, the tone mode, the transmit tone and
-  the receive tone together, and the write path requires all four to be
-  known. A CHIRP row states none of them, and nothing supplies a value
-  the file did not carry, so an imported CHIRP channel is refused at the
-  write until you fill all four in. A `TSQL` row is refused on the tone
-  column besides. The program's own CSV import and export are unaffected.
-- **Also in this version:** a CHIRP file's ordinary rows now import on
-  the Kenwood TS-590S and TS-590SG and on the six Icom models whose
-  memory bank carries no duplex field (a blank `Duplex` column is
-  simplex; `off` is still refused); and a CHIRP `Name` is sanitised
-  against each radio's own published tag charset, so a `;` in a name is
-  kept on the eleven Icom rows that allow it.
-- **No Kenwood radio has ever answered a frame from this program.**
-  Writing stays switched off on both new rows until you switch it on for
-  that radio. Every claim above rests on the two service manuals and on
-  simulated radios transcribed from them.
-- **Byte identity.** This milestone's own command-line capture — 479
-  artefacts on each side, a narrower instrument than v1.4.1's 608 — is
-  identical by hash for every previously supported radio, with one
-  exception: the three surfaces that print the supported-model list
-  gain exactly two rows, TS-890S and TS-990S. Reverting the single
-  registration commit alone returns every artefact to the v1.4.1 base.
-  Every golden vector, transcription CSV and evidence checksum is
-  untouched.
+A patch release: no radio is added and nothing becomes writable that was
+not writable before.
+
+- **A CHIRP file's blank `Duplex` column now states a transmit
+  disposition** on the six radios whose memory record grades a transmit
+  frequency but has no duplex selector: the TS-590S, TS-590SG, TS-890S,
+  TS-990S, IC-7300 and IC-7300MK2. A blank column is CHIRP's ordinary
+  simplex row, and the import used to leave the transmit frequency
+  *unknown*, which said the file had been silent when it had not; that
+  unknown then travelled into the CSV export, into `rigprog diff` and
+  into the loss report. Each radio's own record now supplies the value:
+  zero on the TS-890S and TS-990S, whose books print that a simplex
+  channel's split parameters all read zero, and the channel's own receive
+  frequency on the other four, whose records have no split flag at all.
+  A `Duplex` column reading `off` is unchanged and still refused.
+- **The published recovery for an imported CHIRP channel was overstated
+  on five radios and is now measured.** The TS-890S and TS-990S ask for
+  two values, the transmit tone and the receive tone, not four. The
+  TS-590S asks for the data mode and both tone numbers, the TS-590SG for
+  those plus the filter, and the IC-7300 and IC-7300MK2 for the filter,
+  the data mode and a slot the radio already holds. CHIRP has no column
+  for a data mode or a filter, so on those four rows a CHIRP file alone
+  can never complete a write; the program's own CSV carries them.
+- `rigprog diff` and the write plan now name only the fields that
+  actually changed on a modified channel, instead of restating unchanged
+  ones as `X→X`.
+- **Fixed:** the desktop app no longer shows a pair of document
+  scrollbars after the window is resized, and the *Unverified writes*
+  panel no longer squashes its radio list to a single clipped row (both
+  seen on macOS in v1.4.1).
 
 ## Downloads
 
