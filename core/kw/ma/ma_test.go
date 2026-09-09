@@ -129,6 +129,31 @@ func TestAllowedCommand_AdmitsExactlyTheSevenGrammars(t *testing.T) {
 	}
 }
 
+// TestAllowedCommand_AdmitsEveryNameBuildMA0SetProduces widens
+// TestAllowedCommand_AdmitsExactlyTheSevenGrammars' one-name "MA0 set" entry
+// into a property: the one-name positive corpus above cannot see a whole
+// class of names (MED-1). A name that fails to build is skipped — the loop
+// still asserts at least one other name built per row, so it is non-vacuous.
+func TestAllowedCommand_AdmitsEveryNameBuildMA0SetProduces(t *testing.T) {
+	for _, l := range bothLayouts() {
+		built := 0
+		for _, name := range []string{"", "A", "GB3IV", "0123456789", "  x  ", "a b"} {
+			cmd, err := l.BuildMA0Set(Record{Slot: slotOf(t, l, 7), FreqHz: 14_250_000,
+				Mode: '2', ToneType: '0', Name: name})
+			if err != nil {
+				continue
+			}
+			built++
+			if !l.AllowedCommand(cmd.Bytes()) {
+				t.Errorf("%s: gate refused its own builder's output %q (name %q)", l.Model(), cmd.Bytes(), name)
+			}
+		}
+		if built == 0 {
+			t.Fatalf("%s: no name in the list built at all — the loop is vacuous", l.Model())
+		}
+	}
+}
+
 // TestAllowedCommand_AdmitsOnlyFramesTheEnvelopeAlsoAdmits pins the INCLUSION
 // the conjunction rests on: the seven grammars are strictly narrower than the
 // envelope both books print.

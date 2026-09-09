@@ -56,7 +56,9 @@
 //	    the parser right-trims the window and a trailing space is
 //	    indistinguishable from the absence of one, so a name ending in a
 //	    space is written back one character shorter. That is a stated
-//	    capability limit, not a defect.
+//	    capability limit, not a defect. checkName's reading of that limit
+//	    (MED-1) REFUSES a trailing-space name at build on this row, rather
+//	    than carrying or silently trimming it.
 //	    Lift: L-HW-1, observing the MA0 family — write a 3-character name to
 //	    a scratch channel, read it back, record the ten bytes exactly.
 //	    TS-990S.

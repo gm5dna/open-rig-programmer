@@ -207,17 +207,17 @@ func TestBuildMA0Set890_EmitsTheGridAndPadsNothing(t *testing.T) {
 		t.Errorf("a one-character name built %d bytes, want %d — this grid pads nothing", got, want)
 	}
 
-	// LOW-4 / A1: a trailing space cannot survive the round trip — the
-	// terminator floats straight after the name, so "AB " builds the wire
-	// form "AB ;" and parses back as "AB".
+	// MED-1 (was LOW-4 / A1): the terminator floats straight after the name
+	// with no pad byte, so a trailing space would build the wire form
+	// "AB ;" and parse back as "AB" — Parse ∘ Build is not the identity for
+	// that name, and AllowedCommand's own re-render then refuses a frame
+	// this codec built (see TestAllowedCommand_AdmitsEveryNameBuildMA0SetProduces).
+	// checkName now refuses the name at build rather than carrying it; the
+	// refusal itself is pinned in TestBuildMA0Set890_Refusals.
 	trailing := rec
 	trailing.Name = "AB "
-	if got, want := string(mustBuild(t, l, trailing)), frame890("AB "); got != want {
-		t.Errorf("BuildMA0Set with a trailing-space name = %q, want %q", got, want)
-	}
-	back, err := l.ParseMA0Answer(mustBuild(t, l, trailing))
-	if err != nil || back.Name != "AB" {
-		t.Errorf("round trip of a trailing-space name = %+v, %v, want Name %q", back, err, "AB")
+	if _, err := l.BuildMA0Set(trailing); err == nil {
+		t.Error("BuildMA0Set with a trailing-space name built; want a refusal (MED-1)")
 	}
 }
 
@@ -248,6 +248,9 @@ func TestBuildMA0Set890_Refusals(t *testing.T) {
 		{"a name over ten characters", spoil(ok, func(r *Record) { r.Name = "ELEVENCHARS" }), "10 characters"},
 		{"a name outside A2's charset", spoil(ok, func(r *Record) { r.Name = "A\x01" }), "A2"},
 		{"a name containing ';'", spoil(ok, func(r *Record) { r.Name = "A;B" }), "';'"},
+		// MED-1: the 890S grid pads nothing, so a trailing space cannot
+		// survive a build round trip and is refused rather than carried.
+		{"a name ending in a space", spoil(ok, func(r *Record) { r.Name = "AB " }), "ends in a space"},
 		{"a tone type outside 0-3", spoil(ok, func(r *Record) { r.ToneType = '4' }), "P5"},
 		{"a frequency wider than eleven digits", spoil(ok, func(r *Record) { r.FreqHz = 100_000_000_000 }), "11 digits"},
 		{"an empty record", spoil(ok, func(r *Record) { r.Empty = true }), "no erase"},
