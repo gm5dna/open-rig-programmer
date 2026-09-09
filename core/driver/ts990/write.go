@@ -49,7 +49,7 @@ const (
 	registerDecision15 = "decision 15"
 	// registerA2 is the tag charset: that the family default IS this
 	// radio's set. The ';' half of it is forced rather than assumed — see
-	// checkName. LIFT: L-HW-9, per registry row.
+	// checkName. LIFT: L-HW-2, per registry row.
 	registerA2 = "A2"
 	// registerA3 is create-on-write: whether an MA0 Set alone can register
 	// an unassigned channel is nowhere printed, and every other member of
@@ -168,10 +168,11 @@ func invertToneModes() map[string]byte {
 //
 // TWENTY-SIX ENTRIES — every spec.Field but spec.FieldErase, in the same
 // order this package's own literal list carries them (caps_test.go's
-// allSpecFields; plan P5 forbids a Kenwood file naming spec.AllFields).
-// FieldErase is not a field a write requests: it is the whole shape of a
-// DIFFERENT frame — MA5, which this programme never builds (990:3042-3047) —
-// and WriteChannel refuses an empty channel a rung above this table.
+// allSpecFields; plan P5 permits these rows to name spec.AllFields,
+// reversing pair 1's rule). FieldErase is not a field a write requests: it
+// is the whole shape of a DIFFERENT frame — MA5, which this programme never
+// builds (990:3042-3047) — and WriteChannel refuses an empty channel a rung
+// above this table.
 //
 // EIGHT ARE UNCONDITIONAL, AND THAT IS THE FRAME'S OWN SHAPE. The 57-byte
 // record carries a frequency, a mode, an FM width, a tone function, two tone
@@ -308,7 +309,8 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // reaches the wire until every rung has passed, which is what P7's "no frame
 // is built until every rung passes" is there to guarantee. THE STRONGER
 // REASON IS THE STANDING ONE: BuildMA0Set's own refusals (an over-wide
-// frequency, A17/M-E6) are LOCALLY DECIDABLE from the candidate alone, so
+// frequency against the printed eleven-digit field, 990:2905-2906, M-E6)
+// are LOCALLY DECIDABLE from the candidate alone, so
 // building last would send the pre-write MA0 read to the radio for a channel
 // whose Set could never be built in the first place.
 //
@@ -319,9 +321,10 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // SENT, NEVER CONFIRMED, and the distinction is this family's most
 // load-bearing assumption. That a "?;" is a REJECTION at all is this book's
 // own error table (990:108-121); that an ACCEPTED Set draws nothing at all is
-// A6, and no TS-990S has ever been written to by this project. Silence is
-// therefore inconclusive, and a driver reporting Confirmed on silence would
-// be asserting A6 as a fact. A "?;" inside the bounded window is different:
+// A20/L-HW-3, and no TS-990S has ever been written to by this project.
+// Silence is therefore inconclusive, and a driver reporting Confirmed on
+// silence would be asserting A20 as a fact. A "?;" inside the bounded window
+// is different:
 // the frame provably went out and the radio provably refused it, so that
 // outcome reports Sent true with the typed kw.RejectionError.
 //
@@ -339,24 +342,26 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// "unknown" rather than the truth, "no frame was ever built".
 	res := driver.WriteResult{Steps: []driver.WriteStep{}}
 
+	// RUNG 1 — the identifier's syntax, and nothing about membership.
 	number, err := parseSlotID(ch.Slot)
 	if err != nil {
 		return res, &UnknownSlotError{Slot: ch.Slot, Reason: err.Error()}
 	}
+	// RUNG 2 — membership in THIS session's published banks. The same
+	// branch, and the same message, that refuses a READ of an unpublished
+	// slot: 100-119 are refused here exactly as "999" is, with no special
+	// case and no invented radio behaviour (decision 12; see
+	// UnknownSlotError, read.go).
 	bank, ok := s.caps.BankOf(ch.Slot)
 	if !ok {
-		// The same branch, and the same message, that refuses a READ of an
-		// unpublished slot: 100-119 are refused here exactly as "999" is,
-		// with no special case and no invented radio behaviour (decision
-		// 12; see UnknownSlotError, read.go).
 		return res, &UnknownSlotError{
 			Slot:   ch.Slot,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
 		}
 	}
 
+	// RUNG 3 — AN EMPTY CHANNEL IS AN ERASE REQUEST, AND IT IS REFUSED
 	if ch.Empty() {
-		// AN EMPTY CHANNEL IS AN ERASE REQUEST, AND IT IS REFUSED
 		// (decision 15). This radio prints a DEDICATED deletion command
 		// where pair 1 had only an ambiguous MW side effect — MA5,
 		// "Channel Deletion" (990:3042-3047) — so there is no ambiguity to
@@ -375,7 +380,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 	data := *ch.Data
 
-	// P7 rung 4, and it is THE FLEET'S walk rather than a table of this
+	// RUNG 4 — P7, and it is THE FLEET'S walk rather than a table of this
 	// package's own (driver.CheckFieldStates): every field of ChannelData
 	// that carries a FieldState, judged against this session's own
 	// vocabularies. What it prevents is silent rather than loud — a value
@@ -386,7 +391,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, plainRefusal(ch.Slot, field, "%s: %v", field, err)
 	}
 
-	// THE CAPABILITY GATE. Every requested field must pass
+	// RUNG 5 — THE CAPABILITY GATE. Every requested field must pass
 	// spec.FieldSupport.CanWrite for THIS slot's bank in THIS session's
 	// capabilities — spec.Supported, or spec.ConsentedUnverified, which is
 	// the label every writable field of a consented real-hardware session
@@ -467,8 +472,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		// driver.ErrWriteRefused) must hold for it as for every other
 		// pre-wire rung — AND the codec's own typed cause survives, because
 		// the design names it: a frequency beyond the eleven-digit field is
-		// the codec's refusal and its message names the FIELD WIDTH rather
-		// than any radio's tuning range (A17, M-E6).
+		// the codec's refusal and its message names the FIELD WIDTH PRINTED
+		// AT 990:2905-2906 rather than any radio's tuning range (M-E6).
 		return res, fmt.Errorf("ts990: WriteChannel %s: %w: %w", ch.Slot, driver.ErrWriteRefused, err)
 	}
 
@@ -846,8 +851,8 @@ func (s *Session) setRecord(slotID string, slot ma.Slot, data codeplug.ChannelDa
 	rec := ma.Record{
 		Slot: slot,
 		// P3, eleven digits at bytes 8-18 (990:2905-2906). The codec
-		// refuses anything wider, and its message names the FIELD WIDTH
-		// rather than a tuning range (A17) — the only frequency bound this
+		// refuses anything wider, and its message names the PRINTED FIELD
+		// WIDTH rather than a tuning range — the only frequency bound this
 		// milestone ships, MinFreqHz/MaxFreqHz being 0/0 (M-E6).
 		FreqHz: data.FreqHz,
 		// P4 with P5: modeWire resolved both from the one published name.

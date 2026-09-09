@@ -99,7 +99,7 @@ type radioImage struct {
 	// information at all.
 	ma0Silent map[string]bool
 	// ma0SetReject makes every MA0 SET answer "?;" instead of the silence
-	// an accepted Set draws (A6). It is the write path's REJECTION row,
+	// an accepted Set draws (A20/L-HW-3). It is the write path's REJECTION row,
 	// which is the only wire outcome of a Set that is attributable at all.
 	ma0SetReject bool
 	// exAnswers maps the FIVE-DIGIT menu address of an EX read —
@@ -248,8 +248,8 @@ func (img radioImage) reply(frame string) string {
 	case strings.HasPrefix(frame, "AI"):
 		return ""
 	case strings.HasPrefix(frame, "MA0") && len(frame) == ma0AnswerLen:
-		// AN ACCEPTED SET DRAWS NOTHING, which is A6 applied and not a
-		// TS-990S observed: no radio of this family has ever been written
+		// AN ACCEPTED SET DRAWS NOTHING, which is A20/L-HW-3 applied and not
+		// a TS-990S observed: no radio of this family has ever been written
 		// to by this project. The Set and the Answer share one grid
 		// (990:2893-2938), so the two MA0 forms are told apart by LENGTH
 		// alone here exactly as the codec's own gate tells them apart.

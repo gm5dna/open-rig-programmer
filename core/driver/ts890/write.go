@@ -112,7 +112,8 @@ var writeChannelGapHook func()
 
 // ma0SetSpec is the transport spec for the ONE MA0 Set this driver sends:
 // fire-and-forget — write the frame, listen for a bounded window in case a
-// "?;" arrives, and treat silence as the end of the exchange.
+// "?;" arrives, and treat silence as the end of the exchange (A20/L-HW-3,
+// "an MA0 Set produces no answer while AI is off").
 //
 // IT IS WRITTEN OUT RATHER THAN TAKEN FROM transport.CATWriteSpec(), whose
 // value is identical: that helper's name says CAT, this family is not CAT, and
@@ -347,12 +348,12 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // transcript for one write is exactly TWO frames.
 //
 // SENT, NEVER CONFIRMED. That a "?;" is a REJECTION is the book's own error
-// table (890:106-112); that an ACCEPTED Set draws nothing at all is an
-// assumption no TS-890S has ever tested. Silence is therefore inconclusive,
-// and a driver reporting Confirmed on silence would be asserting that reading
-// as a fact. A "?;" inside the bounded window is different: the frame provably
-// went out and the radio provably refused it, so that outcome reports Sent
-// true with the typed kw.RejectionError.
+// table (890:106-112); that an ACCEPTED Set draws nothing at all is A20/
+// L-HW-3, an assumption no TS-890S has ever tested. Silence is therefore
+// inconclusive, and a driver reporting Confirmed on silence would be
+// asserting A20 as a fact. A "?;" inside the bounded window is different:
+// the frame provably went out and the radio provably refused it, so that
+// outcome reports Sent true with the typed kw.RejectionError.
 //
 // THE OPERATION MUTEX IS HELD FOR THE WHOLE CALL, and here that is
 // load-bearing rather than tidy: the write is TWO exchanges, transport.Engine
@@ -742,10 +743,13 @@ func (s *Session) checkTag(slotID, tag string) error {
 //
 // P8 AND P11 ARE DELIBERATELY NOT COMPARED. The transmit FREQUENCY and the
 // split flag ARE expressible — tx_frequency is a published field and P11 is
-// derived from it (see candidate) — so changing a channel's split frequency,
-// or making it simplex by clearing tx_frequency, is an edit this model can
-// carry. What it cannot carry is a transmit MODE or WIDTH of its own, and
-// those two are exactly what this rung tests.
+// derived from it (see candidate) — so changing a channel's split frequency
+// is an edit this model can carry. CLEARING tx_frequency ON A CHANNEL THAT
+// IS CURRENTLY SPLIT IS NOT: the candidate's P9 would be the zeroed simplex
+// side against the radio's live one, and THIS RUNG refuses that mismatch
+// structurally, every time — it is this rung's ordinary case rather than an
+// exception to it. What it cannot carry is a transmit MODE or WIDTH of its
+// own, and those two are exactly what this rung tests.
 //
 // IT IS ALSO WHERE THE PRINTED P4/P10 RULE BITES (890:3219-3221): the Set
 // copies P4 into P10 on emit, so the two can never disagree from the candidate

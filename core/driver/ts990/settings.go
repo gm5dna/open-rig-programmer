@@ -203,11 +203,11 @@ type UnknownSettingError = driver.UnknownSettingError
 //
 // THE MATCHER ALSO ADMITS A FRAME OF EXACTLY THE READ'S OWN EIGHT BYTES, and
 // that is a real property of a full-address EX matcher rather than a bug in
-// this one: core/kw records it as A25's assumption that Kenwood radios do not
-// echo the host's own frames back on the line. If that ever turns out false,
-// ma.ParseEXAnswer's own check catches the echo one layer down — it names an
-// eight-byte frame as the READ, "which carries no P4 at all" — so this driver
-// refuses loudly rather than returning a wrong value.
+// this one: core/kw/ma records it as A12/L-HW-9's assumption that neither
+// radio echoes the host's own frames back on the line. If that ever turns
+// out false, ma.ParseEXAnswer's own check catches the echo one layer down —
+// it names an eight-byte frame as the READ, "which carries no P4 at all" —
+// so this driver refuses loudly rather than returning a wrong value.
 //
 // NO RETRY, where the channel read carries one, and the two paths differ in
 // what a retry would buy. A whole-radio read is a hundred MA0 exchanges that
@@ -238,7 +238,7 @@ func (s *Session) exSpec(id string) transport.CommandSpec {
 // an individual exchange — it is protecting the OTHERS: a settings read
 // landing inside Open's three-frame probe, a ReadChannel, or a WriteChannel's
 // pre-write read and Set, would interleave a frame of its own with theirs on
-// a radio whose only acknowledgement of a Set is silence (A6).
+// a radio whose only acknowledgement of a Set is silence (A20/L-HW-3).
 // TestReadSetting_IsAtomicUnderOpMu pins it.
 //
 // THE TWO WIRE OUTCOMES ARE READ DIFFERENTLY, AND THE DIFFERENCE IS THE
