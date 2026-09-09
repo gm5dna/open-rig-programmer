@@ -117,8 +117,10 @@ func TestReadChannel_MapsThePopulatedRecordOntoTheNeutralModel(t *testing.T) {
 		t.Errorf("TxFreqHz = %+v, want Known 14255000 (P8, 890:3191-3192)", d.TxFreqHz)
 	}
 
-	// The nineteen the record does not express, every one ANSWERED
-	// Unavailable and never left Absent.
+	// The fifteen with a FieldState the record does not express, every one
+	// ANSWERED Unavailable and never left Absent. The other four have no
+	// state to carry: clarifier, ctcss_state and shift are scalars checked
+	// below, and erase has no ChannelData member at all.
 	for name, state := range map[string]codeplug.FieldState{
 		"ctcss_tone":          d.CTCSSTone.State,
 		"tag_display":         d.TagDisplay.State,
@@ -359,11 +361,18 @@ func TestReadChannel_ATimeoutIsNotAnInferenceOfAbsence(t *testing.T) {
 	}
 }
 
-// TestReadChannel_AnAnswerNamingAnotherSlotIsRefused pins the comparison the
-// transport cannot make: the matcher correlates on a prefix, so a stale
-// answer for another channel that survived the quarantine would otherwise be
-// stored under this channel's identifier. That silent mis-attribution is the
-// corruption this project refuses.
+// TestReadChannel_AnAnswerNamingAnotherSlotIsRefused documents the SECOND
+// line of defence, not the first: Layout.MA0AnswerMatcher's prefix is
+// ma0Prefix plus the three channel digits (core/kw/ma/shared.go), and
+// rec.Slot is decoded from those same bytes, so on this row the matcher's
+// prefix already carries the whole correlation key and a stale answer for
+// another slot is refused before AnswerMismatchError's comparison in
+// read.go ever runs — unlike the 590, whose P1 sits too deep in the frame
+// to spell as a prefix. The guard stays (T12's read-then-Set wants the same
+// comparison), but on this row it can only be exercised by a fault the
+// matcher cannot see, which this fixture does not construct. What IS
+// observable, and what this test asserts, is the timeout: the peer's
+// slot-008 frame never matches a read of 007, so nothing answers.
 func TestReadChannel_AnAnswerNamingAnotherSlotIsRefused(t *testing.T) {
 	// The peer is keyed on the READ's channel digits, so serving 008's frame
 	// for a read of 007 is exactly the fault under test.
@@ -371,17 +380,12 @@ func TestReadChannel_AnAnswerNamingAnotherSlotIsRefused(t *testing.T) {
 		"007": answerFor(t, 8, populated()),
 	}})
 	_, err := sess.ReadChannel(context.Background(), "007")
-	var mismatch *AnswerMismatchError
-	if !errors.As(err, &mismatch) {
-		// A prefix matcher rejects the frame outright here, which is the
-		// stronger outcome; either way it must NOT be accepted.
-		if err == nil {
-			t.Fatal("an answer naming slot 008 was accepted for a read of 007")
-		}
-		return
+	var to *kw.TimeoutError
+	if !errors.As(err, &to) {
+		t.Fatalf("err = %v, want a *kw.TimeoutError: the matcher's prefix refuses slot 008's answer before AnswerMismatchError's comparison can run", err)
 	}
-	if mismatch.Requested != "007" || mismatch.Answered != "008" {
-		t.Errorf("AnswerMismatchError = %+v, want 007/008", mismatch)
+	if errors.Is(err, ErrAnswerMismatch) {
+		t.Error("errors.Is(err, ErrAnswerMismatch) = true, want false: the mismatch guard is unreachable on this row")
 	}
 }
 

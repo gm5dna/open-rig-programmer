@@ -301,6 +301,10 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 // codeplug.Channel carries no detail field, driver.SessionDiagnostics is a
 // counter, and an error would cost the whole radio's read. Reporting it is
 // what P14 means by carrying the residue rather than discarding it.
+//
+// The note is reachable only when a caller supplies a logger; nothing
+// outside core/driver does so today, so T17's registration must wire one
+// for this row or the residue is unobservable in the shipping programme.
 func (s *Session) noteNameResidue(id string, rec ma.Record) {
 	if s.logger == nil || rec.NameResidue == "" {
 		return

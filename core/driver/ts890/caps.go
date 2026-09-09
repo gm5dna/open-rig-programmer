@@ -115,7 +115,7 @@ const narrowSuffix = "-N"
 // MANUFACTURER, and every index above 25 differs from pair 1's for the same
 // frequency.
 //
-// THE 51ST ENTRY IS AN OVER-CLAIM ON THE RECEIVE SIDE, and that is matrix
+// THE 51ST ENTRY IS AN OVER-CLAIM ON THE RECEIVE SIDE, and that is pair 1's
 // M-E1 recurring rather than an oversight. spec.Capabilities carries ONE tone
 // domain and ONE predicate, AdmitsTone, which codeplug.ToneField.Valid
 // applies to ToneTx and ToneRx alike, so a 51-entry list admits 1750 Hz as a
