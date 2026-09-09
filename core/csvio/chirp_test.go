@@ -2387,6 +2387,11 @@ func ts590LikeCapabilities(model, catID string) spec.Capabilities {
 	caps.TagLen = 8
 	caps.Modes = []string{"LSB", "USB", "CW", "FM", "FM-N", "AM", "FSK", "CW-R", "FSK-R"}
 	caps.ShiftOptions = nil
+	// Mirrored item 5: core/driver/ts590/caps.go's SimplexTxEqualsRx. MW/MR
+	// has no transmit-frequency field at all and selects simplex with P1
+	// (590:1521-1523), so a blank CHIRP Duplex row's transmit disposition is
+	// the row's own receive frequency.
+	caps.SimplexTx = spec.SimplexTxEqualsRx
 	rw := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
 	banks := make([]spec.Bank, len(caps.Banks))
 	copy(banks, caps.Banks)
@@ -2520,6 +2525,10 @@ func maLikeCapabilities(model, catID string, modes []string) spec.Capabilities {
 	// fixture that kept the inherited three would report an error on every
 	// channel these two radios can import.
 	caps.CTCSSStates = nil
+	// Mirrored from both drivers' caps.go: SimplexTxZero. Each book prints
+	// that a simplex channel's split parameters all read 0
+	// (890:3217-3218, 990:2964-2965).
+	caps.SimplexTx = spec.SimplexTxZero
 	// The pair's own chart: the project's shared fifty plus 1750.0 Hz, which
 	// is the one entry that separates them and the reason this is mirrored
 	// rather than inherited.
@@ -2843,14 +2852,15 @@ func TestImportCHIRP_TS590PairBlocksCWAndRTTYRows(t *testing.T) {
 					if ch.Data.Shift != "" {
 						t.Errorf("channels[%d].Shift = %q, want \"\" — this radio publishes no shift value to store, and \"\" is what its own read produces", i, ch.Data.Shift)
 					}
-					// TS-590S/SG reach spec.FieldTxFrequency, so a row this
-					// branch says nothing about must leave TxFreqHz UNKNOWN
-					// (mirroring importCHIRPDuplexIcom's own rule), never
-					// ABSENT — Absent is what codeplug.Validate reports as
-					// an error, and a row that never mentioned split is not
-					// an invalid channel.
-					if ch.Data.TxFreqHz.State != codeplug.Unknown {
-						t.Errorf("channels[%d].TxFreqHz.State = %v, want codeplug.Unknown", i, ch.Data.TxFreqHz.State)
+					// TS-590S/SG reach spec.FieldTxFrequency, and a BLANK
+					// Duplex cell is decision 4's ordinary simplex row, so
+					// the file DID state the transmit disposition: since
+					// the 09/09/2026 design these rows carry Known at the
+					// row's own frequency, this pair's printed encoding of
+					// simplex (590:1521-1523). Never ABSENT — Absent is
+					// what codeplug.Validate reports as an error.
+					if ch.Data.TxFreqHz != (codeplug.FreqField{State: codeplug.Known, Value: ch.Data.FreqHz}) {
+						t.Errorf("channels[%d].TxFreqHz = %+v, want Known at this row's own %d Hz", i, ch.Data.TxFreqHz, ch.Data.FreqHz)
 					}
 				}
 				if issues := validateImported(t, channels, caps); codeplug.HasErrors(issues) {
@@ -3097,42 +3107,31 @@ func TestImportCHIRP_TS890And990BlockCWAndRTTYRows(t *testing.T) {
 					if ch.Data.Shift != "" {
 						t.Errorf("channels[%d].Shift = %q, want \"\" — this radio publishes no shift value to store, and \"\" is what its own read produces", i, ch.Data.Shift)
 					}
-					// TxFreqHz IS REACHED ON THESE ROWS and this branch says
-					// nothing about it, so it is left UNKNOWN, never invented
-					// and never ABSENT (Absent is what codeplug.Validate
-					// reports as an error, and a row that never mentioned
-					// split is not an invalid channel).
+					// TxFreqHz IS REACHED ON THESE ROWS, and a BLANK Duplex
+					// cell is decision 4's ordinary simplex row, so since the
+					// 09/09/2026 design the importer states what each book
+					// prints a simplex channel's split parameters hold:
+					// Known 0 (890:3217-3218, 990:2964-2965). Never ABSENT —
+					// Absent is what codeplug.Validate reports as an error.
+					// That closes the v1.5.x follow-up this line used to
+					// defer.
 					//
-					// AND UNKNOWN IS ONE OF THREE THINGS THAT MAKE SUCH A ROW
-					// UNWRITABLE ON THESE TWO RADIOS TODAY, which this pin
-					// records rather than hides: both drivers' rung 6 refuses
-					// a candidate with no Known transmit disposition (M-E8),
-					// and their MA0 Set additionally requires a Known tone
-					// mode, transmit tone and receive tone, of which this
-					// blank-Tone row supplies only the mode
-					// (TestImportCHIRP_TS890And990TakeTheToneModeBranch pins
-					// all three). So a CHIRP file imports cleanly here and
-					// every one of its channels is then refused at the write
-					// until the user supplies the transmit frequency AND both
-					// tone indices — the FULL recovery, understated as the
-					// transmit frequency alone until the milestone-close
-					// review measured it (C-MED-1). The ROOT FIX of the
-					// transmit-frequency third — grading a
-					// BLANK Duplex on a bank that reaches this field as
-					// Known 0, the radio's own simplex statement, an "off"
-					// one still blocking (decision 4, pinned below) — was
-					// measured at this task and MOVES THE TS-590 PAIR's AND
-					// THE IC-7300/IC-7300MK2's import artefacts too: every
-					// bank that grades FieldTxFrequency without grading
-					// FieldDuplex takes this branch
-					// (core/driver/ts590/caps.go:399,
-					// core/driver/ic7300/caps.go:349 against :363), which is
-					// six registered rows, contrary to the T12 MED-1 ruling's
-					// premise. It is therefore DEFERRED to a v1.5.x follow-up
-					// under that ruling's own escape clause, and this line is
-					// what will have to change when it lands.
-					if ch.Data.TxFreqHz.State != codeplug.Unknown {
-						t.Errorf("channels[%d].TxFreqHz.State = %v, want codeplug.Unknown", i, ch.Data.TxFreqHz.State)
+					// IT DOES NOT MAKE THE ROW WRITABLE, which this pin
+					// records rather than hides. MA0 Set additionally
+					// requires a Known transmit tone and receive tone, and a
+					// blank-Tone row supplies NEITHER — the tone MODE it does
+					// supply, so the recovery on these two radios is TWO
+					// values, the two indices, not the four the shipped prose
+					// claimed (measured 09/09/2026 §1.4;
+					// TestImportCHIRP_TS890And990TakeTheToneModeBranch pins
+					// the three tone states). Decision B is RULED B2: the
+					// file's rToneFreq/cToneFreq columns are CHIRP's per-row
+					// "this is not really data" defaults, the same species as
+					// DtcsCode 023 (chirp.go's chirpExtraColumnDefaults), so
+					// the indices stay Unknown and the write stays refused,
+					// naming both.
+					if ch.Data.TxFreqHz != (codeplug.FreqField{State: codeplug.Known, Value: 0}) {
+						t.Errorf("channels[%d].TxFreqHz = %+v, want Known 0 (890:3217-3218, 990:2964-2965)", i, ch.Data.TxFreqHz)
 					}
 				}
 				if issues := validateImported(t, channels, caps); codeplug.HasErrors(issues) {
@@ -3374,4 +3373,98 @@ func TestImportCHIRP_TS890And990TakeTheToneModeBranch(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestImportCHIRP_BlankDuplexTakesTheRowsOwnSimplexStatement is decision A3
+// of the 09/09/2026 CHIRP transmit-disposition design: a blank CHIRP Duplex
+// cell is decision 4's ordinary simplex row, so on a bank that reaches
+// spec.FieldTxFrequency the importer states the transmit disposition the
+// radio's OWN record gives a simplex channel, instead of leaving an Unknown
+// that says the file was silent when it was not.
+//
+// There is no fleet-wide value, which is the whole reason the datum exists:
+// the TS-890S/TS-990S records print that every split parameter reads 0
+// (SimplexTxZero), whilst the TS-590 pair and the IC-7300 pair have no split
+// flag to read and express simplex as tx == rx (SimplexTxEqualsRx). A row
+// declaring NOTHING keeps the old behaviour exactly.
+//
+// This does NOT re-introduce the substitution struck in
+// core/driver/ic7300/write.go: that rule let a DRIVER invent a transmit
+// frequency for a channel whose TxFreqHz was simply not Known, with no file
+// behind it. Here the importer states what its file already said.
+func TestImportCHIRP_BlankDuplexTakesTheRowsOwnSimplexStatement(t *testing.T) {
+	const blank = "Location,Name,Frequency,Duplex,Mode\n1,SIMPLEX,29.600000,,FM\n"
+
+	t.Run("SimplexTxZero imports Known 0", func(t *testing.T) {
+		caps := maLikeCapabilities("TS-890S", "024", ts890Modes)
+		if caps.SimplexTx != spec.SimplexTxZero {
+			t.Fatalf("fixture SimplexTx = %v, want SimplexTxZero — the fixture must mirror core/driver/ts890/caps.go", caps.SimplexTx)
+		}
+		got := importOneChannel(t, blank, caps)
+		if got.TxFreqHz != (codeplug.FreqField{State: codeplug.Known, Value: 0}) {
+			t.Errorf("TxFreqHz = %+v, want Known 0 (890:3217-3218)", got.TxFreqHz)
+		}
+	})
+
+	t.Run("SimplexTxEqualsRx imports Known at the row's own frequency", func(t *testing.T) {
+		caps := ts590LikeCapabilities("TS-590SG", "023")
+		if caps.SimplexTx != spec.SimplexTxEqualsRx {
+			t.Fatalf("fixture SimplexTx = %v, want SimplexTxEqualsRx — the fixture must mirror core/driver/ts590/caps.go", caps.SimplexTx)
+		}
+		got := importOneChannel(t, blank, caps)
+		if got.TxFreqHz != (codeplug.FreqField{State: codeplug.Known, Value: 29_600_000}) {
+			t.Errorf("TxFreqHz = %+v, want Known 29600000, this row's own frequency (590:1521-1523)", got.TxFreqHz)
+		}
+	})
+
+	// THE ZERO VALUE'S GUARD. An unregistered row that says nothing must
+	// not be defaulted into an encoding nobody read, so it keeps the
+	// Unknown it had before this datum existed — and the write keeps
+	// refusing it.
+	t.Run("SimplexTxUnstated is unchanged", func(t *testing.T) {
+		caps := ts590LikeCapabilities("TEST-UNSTATED", "000")
+		caps.SimplexTx = spec.SimplexTxUnstated
+		got := importOneChannel(t, blank, caps)
+		if got.TxFreqHz.State != codeplug.Unknown {
+			t.Errorf("TxFreqHz = %+v, want Unknown — a row declaring nothing must behave exactly as it did before SimplexTx existed", got.TxFreqHz)
+		}
+	})
+
+	// "off" IS UNTOUCHED. Decision 4 stands: CHIRP's "off" asserts "no
+	// duplex configured" as distinct from simplex, which these records
+	// cannot say, so it still blocks — and a blocked row states no
+	// transmit disposition either.
+	t.Run("an off Duplex row still blocks and states nothing", func(t *testing.T) {
+		const csv = "Location,Name,Frequency,Duplex,Mode\n1,OFFDUP,29.600000,off,FM\n"
+		caps := ts590LikeCapabilities("TS-590SG", "023")
+		channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+		}
+		if !report.HasBlocking() {
+			t.Fatalf("HasBlocking() = false, want true: %+v", report.Entries)
+		}
+		for i, ch := range channels {
+			if ch.Data != nil && ch.Data.TxFreqHz.State != codeplug.Unknown {
+				t.Errorf("channels[%d].TxFreqHz = %+v, want Unknown — \"off\" is not a simplex statement", i, ch.Data.TxFreqHz)
+			}
+		}
+	})
+}
+
+// importOneChannel imports a one-row CHIRP fixture and returns that row's
+// channel data, failing the test if the row did not import cleanly.
+func importOneChannel(t *testing.T, csv string, caps spec.Capabilities) *codeplug.ChannelData {
+	t.Helper()
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("HasBlocking() = true, want false: %+v", report.Entries)
+	}
+	if len(channels) != 1 || channels[0].Data == nil {
+		t.Fatalf("imported %d channels, want exactly 1 with data", len(channels))
+	}
+	return channels[0].Data
 }
