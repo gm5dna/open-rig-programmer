@@ -492,6 +492,27 @@ func TestWriteChannel_A3RefusesABlankTarget(t *testing.T) {
 	assertReadButNoSet(t, port, "007", "a blank target")
 }
 
+// TestWriteChannel_A3RefusesABlankTargetAndLogsTheResidue is LOW-2 from the
+// T12 review: the pre-write read can meet the same A21 residue ReadChannel
+// reports (erratum E4 — this book's blank note stops at P12), and the A3
+// refusal must not let it go unlogged. A caller told the channel is blank
+// should also learn its name window is not empty — the one fact that would
+// say the slot is not as fresh as the refusal implies.
+func TestWriteChannel_A3RefusesABlankTargetAndLogsTheResidue(t *testing.T) {
+	var log recordingLogger
+	sess, port := openTestSession(t, Simulated, radioImage{ma0Answers: map[string]string{
+		"007": blankAnswer890(7, "OLDNAME"),
+	}}, WithTransportLogger(&log))
+
+	_, err := sess.WriteChannel(context.Background(), simplexChannel("007"))
+	assertRegister(t, err, registerA3, "a blank target with residue")
+	assertReadButNoSet(t, port, "007", "a blank target with residue")
+
+	if got := log.lines(); len(got) != 1 || !strings.Contains(got[0], "OLDNAME") {
+		t.Errorf("the residue was not logged: logger saw %v", got)
+	}
+}
+
 // TestWriteChannel_Decision9RefusesASecondarySideTheSetWouldNotReproduce is
 // rung 11, the second read-dependent rung, and it is where this pair's one
 // real LOSS is enforced.
