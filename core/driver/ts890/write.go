@@ -457,11 +457,17 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 			"this channel's state for tx_frequency is %q, not %q. The MA0 record states a channel's transmit disposition on EVERY write — P8's eleven digits and P11's split flag are positions in the one frame (890:3191-3203) — so there is no frame in which the field can be left unsaid, and a value this programme does not hold could only be manufactured. A channel READ from this radio always carries one; this refusal is what a file or a CHIRP import meets",
 			data.TxFreqHz.State, codeplug.Known)
 	}
-	// A CHIRP IMPORT ALWAYS ARRIVES HERE: core/csvio/chirp.go's
-	// importCHIRPDuplexShift leaves tx_frequency Unknown on every row of a
-	// file imported for a bank that grades the field (chirp.go:663-666), so
-	// no CHIRP file is writable to this row until the importer carries a
-	// split disposition of its own.
+	// A CHIRP IMPORT NO LONGER ARRIVES HERE, and the stale cite that said it
+	// did read chirp.go:663-666 for an assignment that was already at :664.
+	// Since the 09/09/2026 transmit-disposition design,
+	// core/csvio/chirp.go's importCHIRPDuplexShift reads this row's own
+	// spec.SimplexTx on a BLANK Duplex cell (chirp.go:688-694) and states
+	// what 890:3217-3218 prints — Known 0 — so an imported channel passes
+	// this rung. It stops at the TONE rungs below instead, which name
+	// tone_tx and then tone_rx: a blank-Tone CHIRP row carries a Known tone
+	// MODE and neither index, and decision B is ruled B2, so the file's
+	// rToneFreq/cToneFreq columns are not read for them. An "off" Duplex row
+	// still blocks in the importer and never reaches any rung here.
 
 	// RUNGS 7-9 and the live-byte refusals, then the record the Set would
 	// emit. Still locally decidable: nothing has reached the wire.
