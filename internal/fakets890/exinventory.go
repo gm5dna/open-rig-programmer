@@ -99,6 +99,47 @@ var parameterlessAddresses = []string{
 	"10026", // About Various Software License Agreements (890:2278-2280)
 }
 
+// THE SECOND 890S-ONLY CORRECTION THIS PROJECTION APPLIES, and it is one the
+// evidence leg got wrong rather than one the codec's side invented.
+//
+// The EX block's own P5 note prints FOUR width classes, and one of them is
+// scoped to the PF keys: "PF key settings use 4 digits (refer to the PF Key
+// assignment ID lists)." (890:1918-1919). Transcription B recorded the
+// ordinary three-digit legend on all seventeen of this chart's PF rows, and
+// transcription A recorded four. THE LEG IS WRONG, NOT A: the sentence is
+// printed, it names the class by name, and the PF assignment ID list runs past
+// three digits. That arbitration is already made and recorded — ruling R-B in
+// core/kw/ma/crosscheck_test.go, which checks it in both directions — and the
+// leg is FROZEN EVIDENCE, so the error is corrected HERE, in the projection,
+// and never in the CSV.
+//
+// APPLYING IT IS NOT "EDITING A TABLE TO MAKE THE CROSS-CHECK PASS", and the
+// distinction matters. The authority is the book's own sentence, read at this
+// side independently; nothing here consults transcription A, the generated
+// inventory or internal/extable. It is the same move internal/fakets590 makes
+// when it declines to project B's text flag under the repository's own ruling
+// — a fake that answered a width the book contradicts would be modelling the
+// radio wrongly on a point the book settles, which is not what an independent
+// evidence leg is for.
+//
+// The correction is applied BY ADDRESS, and it is refused unless every one of
+// the seventeen is present AND carries the width the ruling's shape predicate
+// requires (projectWidths). "The PF rows differ" must not quietly become "the
+// PF rows differ by something else".
+var pfKeyAddresses = []string{
+	"00015", "00016", "00017", // PF A, PF B, PF C (890:2286-2288 in the chart, 890:1918-1919 for the width)
+	"00018", "00019", "00020", "00021", "00022", "00023", "00024", "00025", // External PF 1-8
+	"00026", "00027", "00028", "00029", // Microphone PF 1-4
+	"00030", "00031", // Microphone DOWN, Microphone UP
+}
+
+// The two widths ruling R-B is about: what the book prints for a PF key row,
+// and what transcription B recorded there.
+const (
+	pfKeyWidth    = 4
+	pfKeyLegWidth = 3
+)
+
 // EXDefaults returns a fresh copy of this radio's default menu state:
 // five-character wire address -> default raw P5 (width n -> n x '0').
 //
@@ -356,6 +397,16 @@ func projectWidths(rows []bRow) (map[string]int, error) {
 			return nil, fmt.Errorf("address %s is not in this transcription: the four \"Does not correspond to a command\" rows (890:2273-2280) are PRINTED and transcription B carries them, so their absence means this is not transcription B", addr)
 		}
 		delete(out, addr)
+	}
+	for _, addr := range pfKeyAddresses {
+		w, ok := out[addr]
+		if !ok {
+			return nil, fmt.Errorf("PF key address %s is not in this transcription: ruling R-B is about a row that exists, so its absence means this is not transcription B", addr)
+		}
+		if w != pfKeyLegWidth {
+			return nil, fmt.Errorf("PF key address %s carries width %d, and ruling R-B's shape says this leg reads %d there (890:1918-1919 prints %d): the divergence has changed rather than gone, which is an arbitration and not a correction to apply here", addr, w, pfKeyLegWidth, pfKeyWidth)
+		}
+		out[addr] = pfKeyWidth
 	}
 	return out, nil
 }
