@@ -792,6 +792,41 @@ func TestRedProof_The890SProfileRefusesAWidth8Row(t *testing.T) {
 	}
 }
 
+// TestRedProof_The990SProfileRefusesAParameterlessRow mirrors the width-8
+// proof above for the other direction: it takes a real hyphen-digits row out
+// of the TS-890S transcription and offers it, alone, under the TS-990S
+// profile. The TS-890S excludes this row from its own inventory
+// (ParameterlessExcluded); the TS-990S's book prints no parameterless row at
+// all and refuses one on sight (ParameterlessRefused). Confirmed as a red
+// proof by hand (not committed): the same record offered under ts890s alone
+// is accepted, so the refusal below is the TS-990S policy firing, not a
+// malformed row.
+func TestRedProof_The990SProfileRefusesAParameterlessRow(t *testing.T) {
+	p890, p990 := lookupProfile(t, "ts890s"), lookupProfile(t, "ts990s")
+
+	var record string
+	for _, line := range csvBody(t, p890.ManualCSV) {
+		// 1/00/23, Touchscreen Calibration (890:2273) — the first of the
+		// four "Does not correspond to a command" rows.
+		if strings.HasPrefix(line, "1,00,23,") {
+			record = line
+			break
+		}
+	}
+	if record == "" {
+		t.Fatalf("no 1/00/23 row in %s; this proof needs a real hyphen-digits row from that chart", p890.ManualCSV)
+	}
+	if !strings.Contains(record, ",-,") {
+		t.Fatalf("the 1/00/23 row of %s is %q, which does not carry the hyphen digits cell this proof is about", p890.ManualCSV, record)
+	}
+
+	if _, err := extable.ParseCSV(p990, []byte(record+"\n")); err == nil {
+		t.Errorf("ParseCSV(ts990s) accepted %q: the TS-990S profile declares ParameterlessRefused and its book prints no parameterless row, so a hyphen digits cell must be refused", record)
+	} else {
+		t.Logf("refused as required: %v", err)
+	}
+}
+
 // TestCrossCheck_The890SExclusionsArePinnedByAddress pins the four omissions
 // BY ADDRESS rather than by count — a count-only gate is satisfied by any four
 // omissions — and pins the addressless firmware row's absence with its reason.
