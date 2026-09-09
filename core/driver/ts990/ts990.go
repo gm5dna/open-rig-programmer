@@ -169,14 +169,17 @@ func (d *ts990Driver) Capabilities() spec.Capabilities {
 // StopBits implements driver.SerialFramingReporter, and it is a SESSION
 // PRECONDITION rather than a nicety (matrix §3.1, plan P10):
 // transport.DefaultStopBits is 2 — the Yaesu family's framing — and this book
-// specifies ONE: "Start Bit 1", "Data Bit 8", "Stop Bit 1", "Parity Bit None"
-// (990:15-19). A driver that omitted this interface would open every session
-// at the wrong framing and fail like a dead port.
+// specifies ONE, in a table this driver's value is read from: "Start Bit 1"
+// (990:16), "Data Bit 8" (990:17), "Stop Bit 1" (990:18), "Parity Bit None"
+// (990:20). A driver that omitted this interface would open every session at
+// the wrong framing and fail like a dead port.
 //
-// The 4800 bps rate costs nothing here because it is not published (matrix
-// §1.11): this book's exclusion is the USB-B connector rather than a framing
-// condition, but the rate is omitted either way, so no session this driver
-// opens is at a rate whose framing differs.
+// THE ONE PRINTED EXCEPTION COSTS NOTHING, and stating why is the point: the
+// stop-bit row's own parenthesis is "2 is available only when using 4800 bps"
+// (990:18), so the answer would be conditional if 4800 were on offer — and it
+// is not (§1.11, for its own reason, the USB-B exclusion at 990:23). No
+// session this driver opens can be at that rate, so this answer is
+// unconditional rather than a simplification.
 func (d *ts990Driver) StopBits() int { return 1 }
 
 // idSpec is the transport spec for the "ID;" probe: the prefix, this family's
