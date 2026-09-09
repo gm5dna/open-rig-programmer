@@ -169,7 +169,10 @@ func DefaultImage() map[int]MemState {
 	second := simplexRecord(printedAS0, modeFM)
 	second.FMNarrow = '1' // "1: Narrow" (890:3178)
 	second.ToneType = '1' // "1: Tone" (890:3182)
-	second.Lockout = '1'  // "1: Lockout ON" (890:3207)
+	second.ToneNo = "12"  // TN chart index 12 = 100.0 Hz (890:5149-5163), a
+	// NON-ZERO index: index 00 is also printed and would leave P6 answering
+	// the same bytes as a dropped index or a P6/P7 offset error would give.
+	second.Lockout = '1' // "1: Lockout ON" (890:3207)
 	second.Name = "MEMORY 001"
 	img[1] = second
 
@@ -180,6 +183,10 @@ func DefaultImage() map[int]MemState {
 	// business modelling the state the driver refuses.
 	split := simplexRecord(printedAS0, modeUSB)
 	split.ToneType = '2' // "2: CTCSS" (890:3183)
+	split.CTCSSNo = "08" // CN chart index 08 = 88.5 Hz (890:1354-1369), a
+	// NON-ZERO index for the same reason second.ToneNo above is: TN and CN
+	// print identical frequencies at 00-49, so a P6/P7 offset error or a
+	// dropped index would still pass a "00" fixture.
 	split.SplitFreq = printedFA
 	split.SplitMode = modeUSB
 	split.Split = '1'
