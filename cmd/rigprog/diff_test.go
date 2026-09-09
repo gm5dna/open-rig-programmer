@@ -82,6 +82,48 @@ func TestWriteDiffReport_AddedModifiedErased(t *testing.T) {
 	}
 }
 
+// TestWriteDiffReport_ModifiedNamesOnlyChangedFields pins the fix for the
+// v1.5.x follow-up (j): the Modified line used to print all three fields
+// unconditionally, so a one-field edit rendered "mode FM→FM, tag ""→""" —
+// noise a reviewer has to read past to find the actual change, and the one
+// thing this line exists to show.
+//
+// The FALLBACK case is the second half, and it is reachable: Diff's equality
+// is over the WHOLE ChannelData (its Equality doc), so a slot whose tone,
+// shift or field state moved is DiffModified with all three printed fields
+// equal. Naming no field there would render a bare slot claiming nothing.
+func TestWriteDiffReport_ModifiedNamesOnlyChangedFields(t *testing.T) {
+	base := codeplug.ChannelData{FreqHz: 7_000_000, Mode: "LSB", Tag: "OLD"}
+	tagOnly := base
+	tagOnly.Tag = "NEW"
+	freqOnly := base
+	freqOnly.FreqHz = 7_010_000
+	toneOnly := base
+	toneOnly.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 1000}
+
+	for _, tc := range []struct {
+		name     string
+		after    codeplug.ChannelData
+		wantLine string
+	}{
+		{"tag alone", tagOnly, `  M-01: tag "OLD"→"NEW"` + "\n"},
+		{"frequency alone", freqOnly, "  M-01: freq 7000000→7010000 Hz\n"},
+		{"nothing this line prints", toneOnly, "  M-01: changed in a field this summary does not print\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			after := tc.after
+			var buf bytes.Buffer
+			writeModifiedEntry(&buf, codeplug.DiffEntry{
+				Slot: "001", Bank: spec.BankMemory, Kind: codeplug.DiffModified,
+				Before: &base, After: &after,
+			})
+			if got := buf.String(); got != tc.wantLine {
+				t.Errorf("writeModifiedEntry = %q, want %q", got, tc.wantLine)
+			}
+		})
+	}
+}
+
 // TestCmdDiff_NeitherPortNorFake / BothPortAndFake pin the "--port XOR
 // --fake" requirement, matching probe/read.
 func TestCmdDiff_NeitherPortNorFake(t *testing.T) {
