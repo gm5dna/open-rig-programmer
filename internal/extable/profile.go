@@ -973,7 +973,7 @@ var ft991aProfile = Profile{
 }
 
 // ts590sProfile carries the TS-590S's menu-chart transcription facts. It is
-// one of the three Kenwood registrations, all of which render OUTSIDE
+// one of the five Kenwood registrations, all of which render OUTSIDE
 // core/cat: the inventory is emitted into core/kw/ts590, so EXItem and
 // EXAddress are qualified by the explicit "kw" alias, and — the part that
 // matters — the ceiling it declares is core/kw's, not this package's
@@ -1086,7 +1086,7 @@ var ts590sProfile = Profile{
 }
 
 // ts590sgProfile carries the TS-590SG's menu-chart transcription facts. It is
-// one of the three Kenwood registrations, which are the reason DigitsCeiling
+// one of the five Kenwood registrations, which are the reason DigitsCeiling
 // is a per-profile field at all: they render outside core/cat, so their
 // ceiling is core/kw's MaxEXDigits and not this package's MaxDigitsCeiling.
 // None of the three is "first" — the registry is a map, and under
@@ -1287,6 +1287,264 @@ var ts480Profile = Profile{
 	},
 }
 
+// ts890sProfile carries the TS-890S's menu-chart transcription facts. Like
+// the three older Kenwood registrations it renders OUTSIDE core/cat — the
+// inventory is emitted into core/kw/ma, so EXItem and EXAddress are
+// qualified by the explicit "kw" alias and the ceiling it declares is
+// core/kw's, not this package's constant.
+//
+// IT IS THE FIRST AddressGrouped REGISTRATION. This book prints THREE
+// address cells whose widths are one, two and two — "P1 (Menu type number)
+// 0: Menu 1: Advanced Menu", "P2 (Category number) 00 ~ 99", "P3 (Item
+// number) 00 ~ 99" (ts890s_pc_rev1_layout.txt:1897-1910) — five wire
+// characters in all, which is neither the six of AddressTriple nor the four
+// of AddressPair. All three components are on the wire, so unlike the Pair
+// and Single forms this one refuses no component; see AddressForm's own doc
+// comment, which already cites this book for the P1 enumeration that makes
+// that component's domain 0..1 rather than a one-digit field's 0..9.
+//
+// THE CHART IS TWO LISTS UNDER ONE HEADING, NOT TWO CHARTS. "EX Command
+// Parameter Lists" (1934) prints a "Menu" table (1935-2204) and an
+// "Advanced Menu" table (2212-2281) whose rows differ only in P1, so both
+// belong to one inventory and one CSV — which is why ExpectedRows counts
+// across both and why the Advanced rows are not a second registration.
+//
+// EVIDENCE FOR EACH POLICY, all from that layout text and confirmed on the
+// renders named above:
+//
+//   - LabelsAbsent. The table's heading rows are P1 | P2 | P3 | Function |
+//     P5, and P5's own sub-heading row is the code list "000 001 002 003
+//     004 005 006 ~" (1935-1938, 2006-2009, 2098-2101, 2181-2184,
+//     2212-2215). There is no group-label column of any kind. This was read
+//     off the layout text AND confirmed against renders of PDF pages 26, 27,
+//     28, 29 and 30 (printed 25-29), which show the ruled table headings
+//     directly.
+//
+//   - TextRowsAllowed with TextWidths {10, 15}. The chart prints exactly two
+//     free-text fields, and their widths differ, which is the case
+//     TextWidths is a SET for: 0/00/05 Screen Saver Message, "Up to 10
+//     alphanumeric characters" (1946), and 0/00/06 Power-on Message, "Up to
+//     15 alphanumeric characters" (1947). The EX command's own P5 legend
+//     states the same two lengths from the other side — "A power-on message
+//     can vary in length from 0 to 15 characters. Screen saver text can vary
+//     in length from 0 to 10 characters." (1920-1921).
+//
+//   - MinDigits 3 / MaxDigits 4: the P5 column headings give every
+//     enumerating row 3, and RULING R-B settles the seventeen PF-key rows
+//     at 4, on the EX command page's own citation (1918-1919); see
+//     core/kw/ma/menu890s.csv's own provenance header for the rest of this
+//     transcription's judgements.
+//
+//   - ParameterlessExcluded over the four addresses ParameterlessAddresses
+//     names below, each of which prints "Does not correspond to a command"
+//     where a parameter table would be. They are transcribed and COUNTED —
+//     ExpectedRows includes them — and omitted from the inventory by
+//     address, because a menu line that names no field is not an address
+//     an EX frame may read or write.
+//
+// THE CEILING IS TRANSCRIBED, AS THE OTHER KENWOOD STANZAS' ARE. 246 is
+// core/kw.MaxEXDigits (core/kw/exdigits.go), and it cannot be written here
+// as the symbol — this package is build-time tooling that RENDERS core/kw
+// source text, and importing core/kw would cycle the dependency that
+// one-way rule exists to keep. core/kw/exdigits_ceiling_test.go pins every
+// profile with this ImportPath to it.
+//
+// THIS BOOK'S OWN ARITHMETIC WOULD GIVE 247, AND IT IS NOT USED. An EX
+// answer here is "EX"(2) + P1(1) + P2(2) + P3(2) + P4(1) + ";"(1) = NINE
+// fixed bytes before P5 (the frame table at 1898-1913), one fewer than the
+// ten core/kw derives from pair 1's three-digit menu number, so 256 − 9 =
+// 247 — which is numerically core/cat's MaxDigitsCeiling, the Yaesu number
+// this family's ceiling test exists to keep distinct from its own. The
+// family ceiling is what a Kenwood profile declares, so this stanza
+// declares 246 and stays inside the arithmetic rather than one byte outside
+// it. Neither figure is a claim about the widest value the radio prints:
+// that argument rests on the ASSUMED-register entry the design labels A19,
+// and an assumption is not lifted by a chart.
+//
+// ExpectedRows is 162: the printed ADDRESSED rows of both lists, 135 with
+// P1=0 and 27 with P1=1. The chart's last printed line, "Firmware Version"
+// (2281), is not among them — its P2 cell prints an em dash rather than an
+// address, under the table's own note "P2 is any value." (2283) — and the
+// four parameterless rows above ARE among them. If a transcription disagrees
+// with this number, the answer is arbitration against the PDF, never an edit
+// here.
+//
+// Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101,
+// ft891 and ts590 profiles are not.
+var ts890sProfile = Profile{
+	Model:       "TS-890S",
+	Package:     "ma",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/kw",
+	ImportAlias: "kw",
+	VarName:     "exItems890S",
+	OutFile:     "exinventory890s_gen.go",
+	ManualCSV:   "menu890s.csv",
+
+	Addresses:     AddressGrouped,
+	LabelPolicy:   LabelsAbsent,
+	TextRowPolicy: TextRowsAllowed,
+	// Named BY ADDRESS, never by a count: a count-only gate would accept an
+	// inventory that omitted the wrong four rows and still satisfied the
+	// arithmetic. staleness890s_test.go fires exactly that falsification.
+	ParameterlessPolicy: ParameterlessExcluded,
+	ParameterlessAddresses: [][3]int{
+		{1, 0, 23}, // Touchscreen Calibration
+		{1, 0, 24}, // Software License Agreement
+		{1, 0, 25}, // Important Notices concerning Free Open Source
+		{1, 0, 26}, // About Various Software License Agreements
+	},
+
+	// core/kw's ceiling, transcribed from kw.MaxEXDigits; see above for why
+	// this book's own 247 is not what a Kenwood profile declares.
+	DigitsCeiling: 246,
+	MinDigits:     3,
+	MaxDigits:     4,
+	TextWidths:    []int{10, 15},
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
+	// the ObservationsAbsent profiles above: no TS-890S has ever been asked
+	// anything by this project, so no observation CSV is ever parsed and this
+	// bound is never consulted. It carries NO hardware claim and must not be
+	// read as one; the moment observations do exist it is re-derived from
+	// them rather than kept. It is spelt 12 for the reason ts480Profile
+	// gives: that is what the other absent profiles spell, and a sentinel
+	// that coincided with this chart's own widest width would look derived
+	// from the chart, which is the one property a sentinel must not have.
+	MaxObservedWidth: 12,
+	ExpectedRows:     162,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems890S is the TS-890S's EX menu inventory, sorted by menu address,",
+		"built from ONE source: the manual transcription in menu890s.csv (the",
+		`TS-890S PC Control Command Reference Guide's "EX Command Parameter`,
+		`Lists"). The address is a GROUPED triple — a one-digit menu type, a`,
+		"two-digit category and a two-digit item, five wire characters — and the",
+		"book prints its two menu types as two tables under one heading, so both",
+		"are here: P1 0 is the Menu list and P1 1 the Advanced Menu list. The",
+		"chart prints no group labels, so every P1Label and P2Label is \"\". There",
+		"are no hardware READ observations to join — no TS-890S has ever been",
+		"asked anything — so every item carries the absence sentinels",
+		`ObservedReadWidth 0 and ObservedReadShape "".`,
+		"Regenerate with `go generate ./core/kw/ma`; do not edit by hand.",
+	},
+}
+
+// ts990sProfile carries the TS-990S's menu-chart transcription facts. Its
+// inventory is emitted into core/kw/ma, outside core/cat, so EXItem and
+// EXAddress are qualified by the explicit "kw" alias — and the ceiling it
+// declares is core/kw's, not this package's constant.
+//
+// THE CEILING IS 246, WHICH IS core/kw.MaxEXDigits (core/kw/exdigits.go),
+// AND THE ARITHMETIC FOR THIS RADIO WOULD HAVE GIVEN 247. Its EX answer is
+// "EX"(2) + P1(1) + P2(2) + P3(2) + P4(1) + ";"(1) = NINE fixed bytes
+// (docs/fixtures-private/manuals/ts990s_pc_rev2_layout.txt:1719-1747), so
+// 256 − 9 = 247 is what a per-radio derivation would produce. 247 is
+// numerically extable.MaxDigitsCeiling — core/cat's number, from a Yaesu
+// answer's own nine bytes — and core/kw/exdigits_ceiling_test.go is what
+// keeps the two distinct by requiring every profile with this ImportPath to
+// carry core/kw's 246. This stanza carries 246 for that reason and not
+// because the chart's widest printed value asks for it: the "widest printed
+// value" argument rests on the ASSUMED bound the design labels A19.
+//
+// Evidence, all from the book whose cover prints "TS-990S / PC CONTROL
+// COMMAND / Reference Guide" over "January/30/2019" (see
+// core/kw/ma/menu990s.csv's own provenance header, which carries every
+// transcription judgement and its layout line):
+//
+//   - The chart prints a (P1,P2,P3) triple of ONE, TWO and TWO digits —
+//     AddressGrouped, all three components on the wire (layout :1767-1768
+//     for the column headers, :1723 for the P1 enumeration "0: Menu /
+//     1: Advanced Menu").
+//   - LabelsAbsent. The chart has no group-label columns at all: its
+//     columns are P1, P2, P3, Function and P5 (:1767-1768). This was read
+//     off the layout text AND CONFIRMED against 300-dpi renders of printed
+//     pages 22, 23, 24, 25, 26 and 27 (PDF pages 23-28). The two table
+//     titles "Menu" (:1765) and "Advanced Menu" (:2194) are the P1
+//     enumeration, not per-row labels.
+//   - MinDigits 3 / MaxDigits 8. The P5 column headers ARE the codes and
+//     they are three characters wide (:1768), which is the width of every
+//     enumerated row and the narrowest the chart prints; 8 is the widest,
+//     from the 28 Fixed Mode band-limit rows' "8-digit frequency (in Hz)
+//     with unused digits entered as 0" (:2070-2159). Nineteen rows lie
+//     between: 0/05/11 Contest Number at 4 (:1972), and the eighteen
+//     PF-key rows 0/00/15 to 0/00/32, whose own cell states no width and
+//     whose width the EX command page prints instead — "PF key settings
+//     use 4 digits (refer to the PF Key assignment ID lists)" (:1747-1748),
+//     the "PF Key Assignment Lists" (:2287) running to four-character IDs
+//     (:2341). The transcription leg read those rows as 3 and recorded the
+//     disagreement; ORCHESTRATOR RULING R-B settled it at 4, on both this
+//     radio and the 890S. MaxDigits did not move.
+//   - TextRowsAllowed with TextWidths {10, 15}: menu 0/00/06 Screen Saver
+//     Message, "Up to 10 alphanumeric characters" (:1778), and menu 0/00/07
+//     Power-on Message, "Up to 15 alphanumeric characters" (:1779). The EX
+//     command page states both counts again (:1751-1752). They are the
+//     chart's only two free-text fields; the numeric-legend rows above
+//     state a WIDTH, not a character count, and are NOT text.
+//   - ParameterlessRefused. Every ADDRESSED row of this chart names a
+//     settable field, so a hyphen in a Digits cell is a transcription
+//     error. The four rows drawn with a dash where the address should be
+//     (:2272-2279) are not rows of the inventory at all: an unaddressed row
+//     names no EX address, so there is nothing for the exclusion policy to
+//     exclude.
+//
+// ExpectedRows is 194 — 167 rows with P1=0 and 27 with P1=1 — and it comes
+// from the transcription leg's own count of the chart's ADDRESSED rows, not
+// from two transcriptions agreeing with each other. If a later leg counts
+// something else, the answer is arbitration against the PDF, never an edit
+// here.
+//
+// Deliberately NOT given a named accessor, for the reason the other
+// TypesImported profiles are not.
+var ts990sProfile = Profile{
+	Model:       "TS-990S",
+	Package:     "ma",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/kw",
+	ImportAlias: "kw",
+	VarName:     "exItems990S",
+	OutFile:     "exinventory990s_gen.go",
+	ManualCSV:   "menu990s.csv",
+
+	Addresses:           AddressGrouped,
+	LabelPolicy:         LabelsAbsent,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
+
+	// core/kw's ceiling, transcribed from kw.MaxEXDigits; see above for why
+	// this radio's own 247 is the one number it must not be.
+	DigitsCeiling: 246,
+	MinDigits:     3,
+	MaxDigits:     8,
+	TextWidths:    []int{10, 15},
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here. Validate
+	// demands a positive value from every profile, but this profile declares
+	// ObservationsAbsent — no TS-990S has ever been asked anything by this
+	// project — so no observation CSV is ever parsed and this bound is never
+	// consulted. It carries NO hardware claim and must not be read as one;
+	// the moment observations do exist it is re-derived from them rather
+	// than kept. It is spelt 12 because that is what the other
+	// ObservationsAbsent profiles spell, and a sentinel that coincided with
+	// one of this chart's own widths would look derived from the chart,
+	// which is the one property a sentinel must not have.
+	MaxObservedWidth: 12,
+	ExpectedRows:     194,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems990S is the TS-990S's EX menu inventory, sorted by (P1,P2,P3),",
+		"built from ONE source: the manual transcription in menu990s.csv (the",
+		`TS-990S PC Control Command Reference Guide's "EX Command Parameter`,
+		`Lists" — both printed lists, "Menu" and "Advanced Menu"). The address`,
+		"is a THREE-component group of one, two and two digits, all of them on",
+		"the wire, and the chart prints no group labels, so every P1Label and",
+		`P2Label is "". There are no hardware READ observations to join — no`,
+		"TS-990S has ever been asked anything — so every item carries the",
+		`absence sentinels ObservedReadWidth 0 and ObservedReadShape "".`,
+		"Regenerate with `go generate ./core/kw/ma`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
@@ -1299,6 +1557,8 @@ var registry = mustRegistry(map[string]Profile{
 	"ts480":   ts480Profile,
 	"ts590s":  ts590sProfile,
 	"ts590sg": ts590sgProfile,
+	"ts890s":  ts890sProfile,
+	"ts990s":  ts990sProfile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {

@@ -1,0 +1,32 @@
+# Kenwood TS-890S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: FV "Firmware Version"
+# Printed page 34 = PDF page 35. Charts used: Read, Answer. (No Set chart is printed.)
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS
+#   Read   : 3 positions. Ruler 1..10; cells 'F' 'V' ';'. Terminator at printed position 3.
+#   Answer : 7 positions. Ruler 1..10; cells 'F' 'V' P1 P1 P1 P1 ';'. Terminator at printed
+#            position 7. Every header is a NUMBER.
+#
+# POSITION MAP
+#   Read    1 'F'   2 'V'   3 ';'
+#   Answer  1 'F'   2 'V'   3-6 P1 (four positions)   7 ';'
+#
+# LEGEND, VERBATIM
+#   "P1"
+#   "  Character string of the firmware version."
+#   worked example, VERBATIM:
+#   "For example: "FV1.00;" (firmware version 1.00)"
+#
+#   The worked example is 7 characters and lands exactly on the counted chart: F V 1 . 0 0 ;
+#   so P1 = "1.00" occupies positions 3,4,5,6 and the '.' is a real frame byte.
+#
+# INHERITED-ASSUMED bytes: none. The Answer vector below is the book's own printed example.
+#   The book does not say what happens if a version string is not four characters long; the
+#   chart gives P1 exactly four positions.
+#
+# VECTORS
+read	FV;
+answer_printed_example	FV1.00;

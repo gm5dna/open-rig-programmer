@@ -297,14 +297,14 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 // ceiling test asserts its constant against the REGISTERED profile's
 // DigitsCeiling rather than against a literal.
 func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
-	// The parameterless columns are here rather than assumed. Four of the
-	// five registered charts are ParameterlessRefused with an EMPTY address
-	// set, and that pairing is what keeps their committed inventories
+	// The parameterless columns are here rather than assumed. Most of the
+	// registered charts are ParameterlessRefused with an EMPTY address set,
+	// and that pairing is what keeps their committed inventories
 	// byte-identical across the seam that admitted parameterless rows, since
 	// RenderGo emits its exclusion header only for a non-empty address set.
-	// The FT-991A is the one exception, so the SET is stated per
-	// registration too: a policy asserted without its addresses would let a
-	// profile exclude the wrong row and still satisfy this table.
+	// The FT-991A and the TS-890S are the exceptions, so the SET is stated
+	// per registration too: a policy asserted without its addresses would
+	// let a profile exclude the wrong row and still satisfy this table.
 	want := map[string]struct {
 		addr          AddressForm
 		labels        Labels
@@ -343,9 +343,9 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// that copy-pasted 247 would pass every other test in this package,
 		// and core/kw/exdigits_ceiling_test.go is the twin pin.
 		"ts480": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, nil, 246},
-		// The TS-590S is one of the three Kenwood registrations, which
+		// The TS-590S is one of the five Kenwood registrations, which
 		// are together the whole reason the ceiling column exists — none of
-		// them is "first": the registry is a map and ts480 heads the three
+		// them is "first": the registry is a map and ts480 heads all five
 		// under RegisteredProfiles' sort. Its inventory renders into core/kw,
 		// whose EX answer carries ten fixed bytes against a Yaesu one's
 		// nine, so its ceiling is core/kw.MaxEXDigits — 246, one less than
@@ -369,6 +369,28 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// labels, and one free-text row of eight characters — menu 001 Power
 		// on message. See core/kw/ts590/menu590sg.csv's provenance header.
 		"ts590sg": {AddressSingle, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, []int{8}, 246},
+		// The TS-890S is the registry's FIRST AddressGrouped entry: its
+		// chart prints three address cells of one, two and two digits, all
+		// of them on the wire (core/kw/ma/menu890s.csv's provenance header
+		// records the reading). It is also the first registration with TWO
+		// free-text widths — a screen-saver message of 10 characters and a
+		// power-on message of 15 — which is the case TextWidths is a SET
+		// for rather than a scalar. Its four ParameterlessExcluded
+		// addresses are the Advanced Menu rows the book prints "Does not
+		// correspond to a command" against, and they are named here BY
+		// ADDRESS: a count would be satisfied by excluding the wrong four.
+		// Its ceiling is core/kw's 246, spelt as a literal for the reason
+		// the ts480 and ts590 rows above give.
+		"ts890s": {AddressGrouped, LabelsAbsent, TextRowsAllowed, ParameterlessExcluded, [][3]int{{1, 0, 23}, {1, 0, 24}, {1, 0, 25}, {1, 0, 26}}, []int{10, 15}, 246},
+		// The TS-990S is the second AddressGrouped entry and the pair's
+		// other half — the same address form, the same two text widths and
+		// the same core/kw ceiling as the TS-890S, but
+		// ParameterlessRefused, because its book prints the same four
+		// notice rows with a dash in EVERY address column: an unaddressed
+		// row names no address for an exclusion set to hold. The two rows
+		// standing side by side here is the point — a pair that looks
+		// identical and is not, in exactly one column.
+		"ts990s": {AddressGrouped, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, []int{10, 15}, 246},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {
