@@ -47,10 +47,16 @@ tag. The full release notes for each version are on the
 - **A CHIRP file's ordinary rows import on both new radios** on the same
   terms as the TS-590 pair's — a blank `Duplex` column is simplex, `off`
   is refused, and `CW`, `CWR` and `RTTY` are refused on the mode — with
-  one further cost: a CHIRP row states no transmit frequency and these
-  radios' write path requires one, so an imported CHIRP channel is
-  refused at the write until you supply it. The program's own CSV import
-  and export are unaffected.
+  one further cost, which is four values rather than one. A single frame
+  carries the transmit frequency, the tone mode, the transmit tone and
+  the receive tone together, and these radios' write path requires all
+  four to be known. A CHIRP row states no transmit frequency, and its
+  blank `Tone` column states only that tone is off, leaving both tone
+  values unsaid; a `TSQL` row is refused on the tone column besides,
+  because neither radio's memory chart prints a transmit-and-receive tone
+  mode. Nothing supplies a value the file did not carry, so an imported
+  CHIRP channel is refused at the write until you fill all four in. The
+  program's own CSV import and export are unaffected.
 - No Kenwood radio has ever answered a frame from this program. Writing
   stays switched off on both rows until you switch it on for that radio.
 
