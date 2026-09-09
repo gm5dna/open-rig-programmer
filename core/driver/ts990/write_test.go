@@ -274,6 +274,36 @@ func TestWriteChannel_TheCapabilityGateIsTheFirstAnswerOnAnUnconsentedSession(t 
 	if got := p.Transcript(); !reflect.DeepEqual(got, probeFrames) {
 		t.Errorf("transcript = %v, want the probe alone — not even the pre-write read", got)
 	}
+
+	// THE HARDER CASE, AND THE ONE THAT PINS THE GATE'S POSITION RATHER THAN
+	// MERELY ITS ERROR TYPE. An ordinary channel trips no semantic rung, so a
+	// suite asserting only that case cannot distinguish "the gate fires
+	// first" from "the gate was hoisted below rungs 6-9" — both answer the
+	// same way on a channel rung 8 would wave through. Here the channel ALSO
+	// carries rung 8's own fixture (a Known tone_rx of 1750 Hz); if the gate
+	// is first it never reaches rung 8 at all, and if it were moved below
+	// rungs 6-9 this would answer registerDecision8 instead.
+	ch := writableChannel(id)
+	ch.Data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: 17500}
+	sess2, p2 := openSessionAt(t, RealHardware, writeImage(id, populatedMA0(id)))
+	res2, err2 := sess2.WriteChannel(context.Background(), ch)
+	if err2 == nil {
+		t.Fatal("an unconsented RealHardware session accepted a write for a channel that also trips rung 8")
+	}
+	var refused2 *driver.WriteRefusedError
+	if !errors.As(err2, &refused2) {
+		t.Fatalf("errors.As(*driver.WriteRefusedError) = false for %v", err2)
+	}
+	var semantic2 *RefusalError
+	if errors.As(err2, &semantic2) {
+		t.Errorf("the capability gate answered with a semantic register (%q) for a channel that also trips rung 8; it must be the plain fleet refusal", semantic2.Register)
+	}
+	if len(res2.Steps) != 0 {
+		t.Errorf("Steps = %v, want none — no frame is built", res2.Steps)
+	}
+	if got := p2.Transcript(); !reflect.DeepEqual(got, probeFrames) {
+		t.Errorf("transcript = %v, want the probe alone — not even the pre-write read", got)
+	}
 }
 
 // TestWriteChannel_ConsentOpensTheGateAndEveryRungBelowItStillFires is the
