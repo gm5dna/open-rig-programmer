@@ -51,6 +51,8 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -554,6 +556,65 @@ const (
 	TS590SGModel = "TS-590SG"
 )
 
+// TS890SModel and TS990SModel name the TS-890S's and TS-990S's
+// realDrivers/fakeDrivers keys, each of which must equal ts890.New(...).Model()
+// and ts990.New(...).Model() respectively — pinned, like every constant above,
+// by TestDriverTableKeysMatchDriverModel walking both tables on BOTH consent
+// arms.
+//
+// TIER 6's SECOND KENWOOD PAIR, AND NOT A SIBLING PAIR. The TS-590 pair above
+// is two rows over ONE driver package because one 50-byte MW record serves
+// both radios; these two radios' memory records are DIFFERENT SHAPES — a
+// 40-to-50-byte MA0 answer with thirteen parameters on the 890S and a 57-byte
+// one with eighteen on the 990S — so plan decision P1 gives each its own
+// driver package (core/driver/ts890, core/driver/ts990) over one shared codec
+// package (core/kw/ma, which holds both layouts). A crossed constructor here
+// is therefore a compile error rather than a working driver for the wrong
+// radio, which is the one hazard this pair does NOT carry.
+//
+// THE SPELLINGS COME FROM TWO DIFFERENT PLACES AND THE DIFFERENCE MATTERS.
+// "TS-890S" is the ID legend's own, printed with the token beside it ("024:
+// TS-890S", 890:2733; capability matrix §1.1). "TS-990S" is NOT printed
+// anywhere this project has read: 990:2612 prints the token 022 BARE, with no
+// model name against it, so this string is a key this PROJECT mints over a
+// documentary silence — a recorded choice (matrix §1.1, plan decision P2), not
+// a transcription. core/driver/ts990's own modelName mints the same string,
+// and core/driver/ts890's siblingModelName binds 022 to it in a refusal
+// message; core/driver/ts590's does the same as of this milestone, which is
+// what makes the choice one statement rather than three.
+//
+// TWO SLUGS EXIST HERE TOO, on the FT-891's and the 590 pair's terms. The
+// PACKAGE slugs are "ts890" and "ts990" (core/driver/ts890, internal/fakets890,
+// internal/extable's "ts890s"/"ts990s" profile keys — and NOT a package of
+// their own under core/kw, where both layouts live in core/kw/ma). ModelSlug,
+// which names each radio's snapshot and journal directory, gives "ts-890s" and
+// "ts-990s"; TestModelSlug pins both values and TestModelSlugsUnique pins that
+// neither collides.
+//
+// ONE STATIC BANK EACH AND NOTHING DISCOVERED, where the 590 pair has two.
+// MEM ("000".."099") is declared statically and DENSE on both rows and no
+// discovery frame of any kind is ever built (plan P11, matrix §1.4, §3.4).
+// There is no SCAN bank on either row and that is evidential rather than a
+// vocabulary limit: neither book prints which parameter selects a section
+// channel's start frequency and which its end, so a two-slot-per-index bank
+// would be a reading. Slots 100-119 exist in both radios and are published in
+// no bank for the same reason.
+//
+// BOTH ROWS IMPLEMENT driver.SerialFramingReporter AND RETURN 1, like the 590
+// pair and unlike every Yaesu row: these manuals print the framing outright
+// (matrix §3.1), so it is documentary rather than assumed.
+// TestStopBitsFor_EveryKenwoodDriverReportsOne carries all four Kenwood rows.
+//
+// NEITHER ROW CAN PROGRAMME A BLANK RADIO, and that is the published cost of
+// registering them (internal/radiotext's two entries state it to users): one
+// MA0 Set carries every field of a channel, so this programme reads the
+// channel it is about to write and refuses when the read comes back blank —
+// there is no printed frame that creates a channel from nothing.
+const (
+	TS890SModel = "TS-890S"
+	TS990SModel = "TS-990S"
+)
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -780,6 +841,29 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts590.New(ts590.RowSG, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}
 		return ts590.New(ts590.RowSG, ts590.RealHardware)
+	},
+	// The TS-890S and TS-990S (Tier 6's second pair): ONE package each, so
+	// the profile is the only argument and these rows read like the FT-991A's
+	// rather than like the 590 pair's above. The consent arms name
+	// ts890.RealHardware and ts990.RealHardware explicitly for the reason
+	// every profile-argument row here does: the option changes the SESSION's
+	// effective capabilities and never the profile it was built from, and
+	// each driver's zero Profile IS RealHardware, so a consent arm that had
+	// quietly passed the Simulated value would build a driver that hands a
+	// real radio the simulator's write-Supported set with nothing failing
+	// safe. TestRealDriverFor_DefaultPathByteIdentical compares each arm
+	// against the constructor call it is supposed to make.
+	TS890SModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts890.New(ts890.RealHardware, ts890.WithConsentedUnverifiedWrites())
+		}
+		return ts890.New(ts890.RealHardware)
+	},
+	TS990SModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites())
+		}
+		return ts990.New(ts990.RealHardware)
 	},
 }
 
