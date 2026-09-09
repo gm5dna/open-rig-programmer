@@ -209,6 +209,32 @@ projection omits exactly those four and nothing else, as a set difference
 against B's own addresses rather than as a count — a count-only assertion is
 satisfied by an inventory that dropped the wrong four rows.
 
+### Ruling R-B, the PF key width — the one place this projection corrects the leg
+
+Transcription B reads **three** digits on all seventeen PF key rows
+(`0/00/15` … `0/00/31`) and transcription A reads **four**. The `EX` block's own
+P5 note settles it: *"PF key settings use 4 digits (refer to the PF Key
+assignment ID lists)."* (`890:1918-1919`). The arbitration is already made and
+recorded — **ruling R-B** in `core/kw/ma/crosscheck_test.go`, which states **THE
+LEG IS WRONG, NOT A** and checks the divergence in both directions.
+
+The leg is **frozen evidence**, so the error is corrected in `exinventory.go`'s
+projection and **never in the CSV**. Two things keep that from being "editing a
+table to make the cross-check pass":
+
+- the authority is the book's own printed sentence, read at this side. The
+  projection consults neither transcription A, nor the generated inventory, nor
+  `internal/extable`, so the two sides still meet in `core/transport` as two
+  derivations;
+- the correction **refuses to apply** unless every one of the seventeen is
+  present AND still carries the three the ruling records. A leg that has moved
+  is an arbitration, not a correction to apply blind — ruling R-B's
+  both-directions check, brought to this side.
+
+`TestEXInventoryCrossCheck_TS890PFKeyWidthsAgreeUnderRulingRB` asserts all three
+facts together: both inventories carry four, the leg carries three, and the
+correction touches those seventeen addresses and no others.
+
 ### What the menu VALUES are, and what they are not
 
 Each menu's default raw P5 is its **printed width in `0` bytes** — an INVENTED

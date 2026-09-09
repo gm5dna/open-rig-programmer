@@ -107,6 +107,32 @@
 // make it pass. Which side is wrong (or whether the chart itself is) is an
 // arbitration against the PDF.
 //
+// TWO CORRECTIONS ARE APPLIED IN THE PROJECTION, and neither is an edit to the
+// evidence. Transcription B is frozen and is not touched; what exinventory.go
+// does is fold it under two facts printed in this book:
+//
+//   - THE FOUR EXCLUDED ADDRESSES. The chart prints four Advanced Menu rows
+//     with real addresses and the body "Does not correspond to a command"
+//     (890:2273-2280, erratum E16). B carries them and the production
+//     inventory does not, so this side applies its OWN exclusion of the same
+//     four, spelt out by address.
+//   - RULING R-B, THE PF KEY WIDTH. B reads three digits on all seventeen PF
+//     key rows and A reads four; the EX block's own P5 note settles it — "PF
+//     key settings use 4 digits (refer to the PF Key assignment ID lists)."
+//     (890:1918-1919). The arbitration is already made and recorded, in
+//     core/kw/ma/crosscheck_test.go's ruling R-B, which states THE LEG IS
+//     WRONG, NOT A and checks the divergence in both directions. So the
+//     projection corrects those seventeen widths from the printed sentence,
+//     read here at this side; it consults neither transcription A nor
+//     internal/extable, and it REFUSES to apply the correction unless every
+//     one of the seventeen is present and still carries the three the ruling
+//     records — a leg that has moved is an arbitration, not a correction to
+//     apply blind. A fake answering a width the book contradicts would be
+//     modelling the radio wrongly on a point the book settles, which is not
+//     what an independent evidence leg is for; it is the same move
+//     internal/fakets590 makes when it declines to project B's text flag under
+//     the repository's own ruling.
+//
 // # What this fake deliberately does NOT model
 //
 // THE EX (MENU) SET. The EX READ is modelled — ex.go, from this package's own

@@ -63,6 +63,10 @@ func TestEXDefaults_EveryValueIsItsWidthInZeroBytes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseB: %v", err)
 	}
+	pf := map[string]bool{}
+	for _, addr := range pfKeyAddresses {
+		pf[addr] = true
+	}
 	got := EXDefaults()
 	checked := 0
 	for _, r := range rows {
@@ -70,7 +74,15 @@ func TestEXDefaults_EveryValueIsItsWidthInZeroBytes(t *testing.T) {
 		if !ok {
 			continue // one of the four excluded addresses
 		}
-		if want := strings.Repeat("0", r.width); p5 != want {
+		width := r.width
+		if pf[r.wire()] {
+			// Ruling R-B: the leg reads three here and the book prints four
+			// (890:1918-1919). TestEXDefaults_ThePFKeyRowsAnswerFourBytes is
+			// where that correction is pinned; here it is only accounted
+			// for, so this test stays about the placeholder convention.
+			width = pfKeyWidth
+		}
+		if want := strings.Repeat("0", width); p5 != want {
 			t.Errorf("menu %s (line %d): default P5 = %q, want %q", r.wire(), r.line, p5, want)
 		}
 		checked++
@@ -100,6 +112,27 @@ func TestEXDefaults_ReturnsAFreshCopy(t *testing.T) {
 // committed CSV, which is well formed by construction.
 func bWith(rows ...string) []byte {
 	return []byte("p1,p2,p3,name,digits,text\n" + strings.Join(rows, "\n") + "\n")
+}
+
+// ruledRows are the rows projectWidths REQUIRES of any chart it folds: the
+// four the exclusion removes and the seventeen ruling R-B corrects. A
+// synthetic chart missing them is refused, which is the point — so the
+// projection proofs that are not ABOUT those refusals supply them.
+func ruledRows() []string {
+	var out []string
+	for _, addr := range excludedHere {
+		out = append(out, addr[:1]+","+addr[1:3]+","+addr[3:]+",Does not correspond to a command,3,0")
+	}
+	for _, addr := range pfKeyAddresses {
+		out = append(out, addr[:1]+","+addr[1:3]+","+addr[3:]+",A PF Key Assignment,3,0")
+	}
+	return out
+}
+
+// bWithRuled renders a synthetic chart carrying rows plus every row the
+// rulings need.
+func bWithRuled(rows ...string) []byte {
+	return bWith(append(append([]string{}, rows...), ruledRows()...)...)
 }
 
 // TestParseB_Refusals pins every malformed input as a REFUSAL rather than a
@@ -187,7 +220,7 @@ func TestParseB_Refusals(t *testing.T) {
 // one row short and the missing address would be reported as absent rather
 // than as duplicated.
 func TestProjectWidths_RefusesADuplicateAddress(t *testing.T) {
-	rows, err := parseB(bWith(
+	rows, err := parseB(bWithRuled(
 		"0,00,00,Color Display Pattern,3,0",
 		"0,00,00,Color Display Pattern,3,0",
 	))
@@ -219,13 +252,7 @@ func TestProjectWidths_RefusesAMissingExcludedAddress(t *testing.T) {
 // proof on a synthetic chart, so that the arm is known to fire rather than
 // merely to be present.
 func TestProjectWidths_ExcludesTheFourItWasGiven(t *testing.T) {
-	rows, err := parseB(bWith(
-		"0,00,00,Color Display Pattern,3,0",
-		"1,00,23,Touchscreen Calibration,3,0",
-		"1,00,24,Software License Agreement,3,0",
-		"1,00,25,Important Notices concerning Free Open Source,3,0",
-		"1,00,26,About Various Software License Agreements,3,0",
-	))
+	rows, err := parseB(bWithRuled("0,00,00,Color Display Pattern,3,0"))
 	if err != nil {
 		t.Fatalf("parseB: %v", err)
 	}
@@ -233,11 +260,112 @@ func TestProjectWidths_ExcludesTheFourItWasGiven(t *testing.T) {
 	if err != nil {
 		t.Fatalf("projectWidths: %v", err)
 	}
-	if len(widths) != 1 {
-		t.Fatalf("projected %d addresses (%v), want 1 — the four excluded rows must not survive", len(widths), widths)
+	if want := 1 + len(pfKeyAddresses); len(widths) != want {
+		t.Fatalf("projected %d addresses (%v), want %d — the four excluded rows must not survive", len(widths), widths, want)
 	}
 	if _, ok := widths["00000"]; !ok {
-		t.Errorf("projected %v, want the one non-excluded address 00000", widths)
+		t.Errorf("projected %v, want the one non-excluded ordinary address 00000", widths)
+	}
+	for _, addr := range excludedHere {
+		if _, ok := widths[addr]; ok {
+			t.Errorf("projected %s, which the exclusion must remove", addr)
+		}
+	}
+}
+
+// TestProjectWidths_AppliesRulingRBToThePFKeyRows is the second correction's
+// positive proof: the seventeen PF rows arrive from the leg carrying three and
+// leave the projection carrying the four the book prints — "PF key settings
+// use 4 digits (refer to the PF Key assignment ID lists)." (890:1918-1919) —
+// while every other row is untouched.
+func TestProjectWidths_AppliesRulingRBToThePFKeyRows(t *testing.T) {
+	rows, err := parseB(bWithRuled("0,00,00,Color Display Pattern,3,0"))
+	if err != nil {
+		t.Fatalf("parseB: %v", err)
+	}
+	widths, err := projectWidths(rows)
+	if err != nil {
+		t.Fatalf("projectWidths: %v", err)
+	}
+	for _, addr := range pfKeyAddresses {
+		if got := widths[addr]; got != pfKeyWidth {
+			t.Errorf("PF key %s projected width %d, want %d (890:1918-1919, ruling R-B)", addr, got, pfKeyWidth)
+		}
+	}
+	if got := widths["00000"]; got != 3 {
+		t.Errorf("the ordinary row 00000 projected width %d, want 3 — the correction must touch the PF rows and nothing else", got)
+	}
+}
+
+// TestProjectWidths_RefusesAChangedOrMissingPFRow. The correction is
+// meaningful only against the divergence the ruling records: a leg that no
+// longer reads three there has MOVED, which is an arbitration rather than a
+// correction to apply blind. This is ruling R-B's both-directions check,
+// brought to this side.
+func TestProjectWidths_RefusesAChangedOrMissingPFRow(t *testing.T) {
+	tests := []struct {
+		name string
+		rows []string
+		want string
+	}{
+		{
+			"a PF row missing altogether",
+			append([]string{"0,00,00,Color Display Pattern,3,0"}, ruledRows()[:len(excludedHere)+1]...),
+			"is not in this transcription",
+		},
+		{
+			"a PF row the leg no longer reads as three",
+			func() []string {
+				rows := append([]string{"0,00,00,Color Display Pattern,3,0"}, ruledRows()...)
+				rows[1+len(excludedHere)] = "0,00,15,PF A: Key Assignment,4,0"
+				return rows
+			}(),
+			"the divergence has changed rather than gone",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows, err := parseB(bWith(tt.rows...))
+			if err != nil {
+				t.Fatalf("parseB: %v", err)
+			}
+			_, err = projectWidths(rows)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("projectWidths returned %v, want a refusal naming %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestEXDefaults_ThePFKeyRowsAnswerFourBytes is the same fact seen from the
+// answer side, and it is what core/transport's cross-check compares against
+// the codec's own inventory.
+func TestEXDefaults_ThePFKeyRowsAnswerFourBytes(t *testing.T) {
+	defaults := EXDefaults()
+	for _, addr := range pfKeyAddresses {
+		if got, want := defaults[addr], strings.Repeat("0", pfKeyWidth); got != want {
+			t.Errorf("menu %s answers %q, want %q (890:1918-1919)", addr, got, want)
+		}
+	}
+	// And the leg really does read three there, so the correction is doing
+	// work rather than agreeing with what was already in the CSV.
+	rows, err := parseB(transcriptionB890S)
+	if err != nil {
+		t.Fatalf("parseB: %v", err)
+	}
+	corrected := 0
+	for _, r := range rows {
+		for _, addr := range pfKeyAddresses {
+			if r.wire() == addr {
+				if r.width != pfKeyLegWidth {
+					t.Errorf("transcription B carries width %d at %s; ruling R-B records %d there", r.width, addr, pfKeyLegWidth)
+				}
+				corrected++
+			}
+		}
+	}
+	if corrected != len(pfKeyAddresses) {
+		t.Errorf("found %d of the %d PF rows in transcription B", corrected, len(pfKeyAddresses))
 	}
 }
 
