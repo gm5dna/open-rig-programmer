@@ -330,7 +330,8 @@ func (d *ts990Driver) open(ctx context.Context, eng *transport.Engine, layout ma
 	}
 	id.CATID = got
 
-	if err := d.probeFV(ctx, eng, layout); err != nil {
+	fv, err := d.probeFV(ctx, eng, layout)
+	if err != nil {
 		return nil, err
 	}
 
@@ -340,6 +341,7 @@ func (d *ts990Driver) open(ctx context.Context, eng *transport.Engine, layout ma
 		id:          id,
 		caps:        d.SessionCaps(d.Capabilities()),
 		newReadSpec: d.readSpec,
+		fvAnswer:    fv,
 	}, nil
 }
 
@@ -360,7 +362,7 @@ func (d *ts990Driver) probeID(ctx context.Context, eng *transport.Engine, layout
 	return got, nil
 }
 
-// probeFV sends "FV;" and DISCARDS the four characters it answers with.
+// probeFV sends "FV;" and returns the four characters it answers with.
 //
 // THE FRAME IS SENT FOR WHAT ITS ABSENCE WOULD MEAN, NOT FOR ITS CONTENT, and
 // that is this row's difference from pair 1 (matrix §3.5). The TS-590S gates
@@ -371,8 +373,14 @@ func (d *ts990Driver) probeID(ctx context.Context, eng *transport.Engine, layout
 // sends (BS4's two P1 domains at 990:527/540 are the sharpest) and to five
 // EX menu rows (990:1814, 1866, 1924, 2054, 2163) whose markers
 // core/kw/ma's generated inventory already carries — a settings-surface
-// note, not a read-path one. Keeping a value nothing consults would be a
-// surface a later reader would have to check for callers.
+// note, not a read-path one.
+//
+// THE ANSWER IS STILL CARRIED, because it is a REPORTED FACT rather than a
+// consulted one: cmd/rigprog/probe.go prints it, quoted, through the optional
+// driver.FirmwareAnswerReporter capability, and a session that kept nothing
+// would drop that line for this row alone while the sibling printed it
+// (review s2-close-review-opus-1.md LOW-1). Nothing in this package branches
+// on the value.
 //
 // What the frame still does is refuse a session. The EXISTENCE of FV is
 // printed for this row, with a Read chart, an Answer chart and a worked
@@ -390,19 +398,20 @@ func (d *ts990Driver) probeID(ctx context.Context, eng *transport.Engine, layout
 // shipped — is therefore load-bearing on the ENVELOPE here and on nothing
 // else: a five-character version would fail Open, where on pair 1 it merely
 // took the conservative branch of a write gate.
-func (d *ts990Driver) probeFV(ctx context.Context, eng *transport.Engine, layout ma.Layout) error {
+func (d *ts990Driver) probeFV(ctx context.Context, eng *transport.Engine, layout ma.Layout) (string, error) {
 	cmd, err := layout.BuildFVRead()
 	if err != nil {
-		return fmt.Errorf("ts990: Open: FV probe: %w", err)
+		return "", fmt.Errorf("ts990: Open: FV probe: %w", err)
 	}
 	frame, err := eng.Do(ctx, cmd, d.fvSpec())
 	if err != nil {
-		return fmt.Errorf("ts990: Open: FV probe: %w", wireFailure("FV", err))
+		return "", fmt.Errorf("ts990: Open: FV probe: %w", wireFailure("FV", err))
 	}
-	if _, err := layout.ParseFVAnswer(frame); err != nil {
-		return fmt.Errorf("ts990: Open: FV probe: %w", err)
+	got, err := layout.ParseFVAnswer(frame)
+	if err != nil {
+		return "", fmt.Errorf("ts990: Open: FV probe: %w", err)
 	}
-	return nil
+	return got, nil
 }
 
 // Session is one open, identity-probed TS-990S connection. Safe for
@@ -438,6 +447,9 @@ type Session struct {
 	// NAMED FOR THE PACKAGE IT MUST NOT BE MISTAKEN FOR: these files also
 	// use spec.Bank and spec.Capabilities two lines away.
 	newReadSpec func(match func(frame []byte) bool, retries int) transport.CommandSpec
+	// fvAnswer is the FV probe's P1 verbatim — reported, never consulted.
+	// See FirmwareAnswer and probeFV.
+	fvAnswer string
 }
 
 // Identity implements driver.Session: the probed CATID plus the
@@ -449,6 +461,19 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // in the sibling drivers — a caller mutating what it was handed must never
 // alter what WriteChannel enforces.
 func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
+
+// FirmwareAnswer returns the FV probe's P1 EXACTLY AS THE RADIO ANSWERED IT —
+// the four characters verbatim — and "" only on a session that never got one,
+// which Open makes unreachable: an FV that does not answer refuses the
+// session.
+//
+// IT EXISTS BECAUSE THE ANSWER IS A REPORTED FACT, NOT A PRIVATE ONE, and on
+// this row it is ONLY that: nothing here branches on the version (matrix
+// §3.5), so the accessor's whole purpose is that an owner can see what their
+// radio said. Without it the datum is unreachable outside this package and
+// rigprog probe, which type-asserts driver.FirmwareAnswerReporter, prints the
+// line for the sibling row and silently omits it for this one.
+func (s *Session) FirmwareAnswer() string { return s.fvAnswer }
 
 // Diagnostics reports this session's transport-level health counters as a
 // point-in-time snapshot — the driver-layer surface for the engine's own
