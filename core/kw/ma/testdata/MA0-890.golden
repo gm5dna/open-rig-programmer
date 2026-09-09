@@ -1,0 +1,128 @@
+# Kenwood TS-890S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision number is printed. Cover prints "January/30/2019"
+#   under "PC CONTROL COMMAND REFERENCE GUIDE / TS-890S". (File name says rev1; the book
+#   itself prints no revision.)
+# Command: MA0 "Memory Channel Configuration"
+# Printed page 41 = PDF page 42. Charts used: Set, Read, Answer (all three on that page).
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted. Every position
+# below was COUNTED off the printed numbered ruler above each chart row.
+#
+# ---------------------------------------------------------------------------
+# COUNTED FRAME LENGTHS
+#   Read    : 7 positions. Ruler prints 1..10; cells occupy 1..7, ';' at printed position 7.
+#   Set     : 39 fixed positions, then P13, then ';'.
+#   Answer  : identical chart to Set, position for position.
+#
+#   The Set and Answer rulers print, tier by tier:
+#     tier 1 header  1  2  3  4  5  6  7  8  9 10   cells  M  A  0 P1 P1 P1 P2 P2 P2 P2
+#     tier 2 header 11 12 13 14 15 16 17 18 19 20   cells P2 P2 P2 P2 P2 P2 P2 P3 P4 P5
+#     tier 3 header 21 22 23 24 25 26 27 28 29 30   cells P6 P6 P7 P7 P8 P8 P8 P8 P8 P8
+#     tier 4 header 31 32 33 34 35 36 37 38 39 40~  cells P8 P8 P8 P8 P8 P9 P10 P11 P12 P13
+#     tier 5 header (EMPTY)  x                      cells P13  ;
+#   i.e. the ninth column of tier 4 is headed "40 ~", the first column of tier 5 is headed
+#   by NOTHING at all and still carries "P13", and the terminator's position header is the
+#   LETTER "x", not a number. See FINDINGS in provenance.md and the crop
+#   work/ma0-890-set.png (Set) and work/ma0-890-ans.png (Answer).
+#
+# DERIVED RULE (890S MA0 Set and Answer), as a function of name length N:
+#   frame length = 39 + N + 1 = 40 + N bytes, 0 <= N <= 10  (40 .. 50 bytes)
+#   the terminator's position x = 40 + N
+#   The name is NOT padded: the ruler stops numbering at "40 ~" and gives the terminator a
+#   letter, which is the same device the book uses for every other variable-length field
+#   (MA2 p.42, CK7 p.14, CM4/CM5 p.15-16, EX p.24).
+#
+# ---------------------------------------------------------------------------
+# POSITION MAP (Set and Answer are identical), with each legend VERBATIM
+#   1      'M'
+#   2      'A'
+#   3      '0'
+#   4- 6   P1 (Channel number )
+#            "000 ~ 119"
+#            "Channels P0 ~ P9 are represented as 100 ~ 109 and channels E0 ~ E9 are
+#             represented as 110 ~ 119."
+#   7-17   P2 (Frequency information (11 digits in Hz.))
+#            "Blank digits must be entered as "0"."
+#  18      P3 (Mode Information)
+#            "Refer to the P2 value of the OM command."
+#            [OM is on printed p.51; its P2 is indeed the mode: 0 Unused, 1 LSB, 2 USB,
+#             3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 8 Unused, 9 FSK-R, A PSK, B PSK-R,
+#             C LSB-D, D USB-D, E FM-D, F AM-D. The citation is correct in this book.]
+#  19      P4 (FM Normal/ Narrow information)
+#            "0:  Normal"   "1:  Narrow"
+#  20      P5 (FM tone type)
+#            "0:  OFF"  "1:  Tone"  "2:  CTCSS"  "3:  Cross Tone"
+#  21-22   P6 (Tone frequency)
+#            "Refer to the P1 value of the TN command."
+#            [TN is on printed p.66; its index column IS headed P1: 00 67.0 ... 49 254.1,
+#             50 1750.0, 99 "To default".]
+#  23-24   P7 (CTCSS frequency)
+#            "Refer to the P1 value of the CN command."
+#            [CN is on printed p.16. Its parameter heading reads "P1 (CTCSS frequency)"
+#             and the frame carries only P1 - but the index column of its printed table is
+#             headed "P2" in all four column pairs: 00 67.0 ... 49 254.1, 99 "to default".
+#             Recorded as a FINDING, not resolved.]
+#  25-35   P8 (Split transmission frequency information (11 digits))
+#            "Blank digits must be entered as "0"."
+#  36      P9 (Split Transmission mode information )
+#            "Refer to the P2 value of the OM command."
+#  37      P10 (Split Transmission FM Normal/ Narrow information)
+#            "0:  Normal"  "1:  Narrow"
+#  38      P11 (Split information)
+#            "0:  Simplex"  "1:  Split"
+#  39      P12 (Scan lockout)
+#            "0:  Lockout OFF"  "1:  Lockout ON"
+#            [MA3 on printed p.42 encodes the same thing as P2: "0: Scan Lockout OFF /
+#             1: Scan Lockout ON" - same values, different words.]
+#  40~     P13 (Channel name)
+#            "Up to 10 characters"
+#            [No note about padding, about permitted characters, or about a minimum length.]
+#   x      ';'
+#
+# NOTES PRINTED UNDER THE MA0 BOX, VERBATIM
+#   "When setting the channel currently being accessed, the new settings are reflected the
+#    next time that channel is accessed."
+#   "When the Programmable VFO is in the process of being read, it cannot be set."
+#   "When reading a blank channel, parameters P2 to P12 becomes blank."
+#   "When reading a single memory channel, all parameters for Split Transmission become 0."
+#   "When setting the split memory channel, set the same setting on the transmission side
+#    and the reception side for FM normal / narrow information (P4, P10)."
+#
+#   The MA0 box says NOTHING about a channel that is not yet registered, and NOTHING about
+#   a response being given only when AI is ON. Those two sentences appear on the sibling
+#   commands instead (MA2 and MA3, printed p.42): "Setting an unassigned channel causes an
+#   error." and "When the AI function is ON, a response is provided by the MA0 command."
+#
+# ---------------------------------------------------------------------------
+# INHERITED-ASSUMED bytes (values the manual does not determine)
+#   * Every field value below is a choice, not a manual-stated value; only the FIELD WIDTHS
+#     and the permitted value SETS come from the book. Specifically:
+#   * P6 and P7 when P5 (FM tone type) is 0 (OFF): the book never says what the tone and
+#     CTCSS indices hold for a channel whose tone is OFF. ASSUMED "00" (index 00 = 67.0 Hz
+#     in both tables), because 00 is the lowest legal index printed.
+#   * The channel name characters: the book gives no character set for P13.
+#     ASSUMED uppercase ASCII letters and digits.
+#   * The blank-channel case is NOT represented here: the note stops at P12 and never says
+#     what P13 or the frame length becomes for a blank channel (see provenance FINDING 8).
+#   * Vector "answer_name_empty" assumes that "no name" means ZERO name bytes (x = 40).
+#     The book does not state this; it follows only from the ruler's "40 ~" / "x" device.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim, terminator included)
+# Read chart (2 vectors)
+read_ch000	MA0000;
+read_ch119	MA0119;
+# Answer chart (4 vectors) - lengths 50, 40, 43, 46
+# ordinary simplex channel, name of the FULL printed width (10 characters), length 50
+answer_name_full10	MA0000000142500002000000000000000000000HOMEBASE10;
+# same shape with an EMPTY name, length 40, terminator at x = 40
+answer_name_empty	MA0001000070740006000000000000000000000;
+# name SHORTER than the field (3 characters), lockout ON, length 43, terminator at x = 43
+answer_name_short3	MA0119000503130004100000000000000000001SIX;
+# tone state other than OFF (P5 = 1 Tone, P6 = 08 -> 88.5 Hz, P7 = 12 -> 100.0 Hz) and a
+# split indication (P11 = 1) with a split transmission frequency in P8, length 46
+answer_tone_split	MA0100000296000004010812000295000004010REPEAT;
+# Set chart (2 vectors) - the Set ruler is identical to the Answer ruler position for
+# position, so these are byte-identical to the Answer vectors they mirror
+set_name_full10	MA0000000142500002000000000000000000000HOMEBASE10;
+set_tone_split	MA0100000296000004010812000295000004010REPEAT;

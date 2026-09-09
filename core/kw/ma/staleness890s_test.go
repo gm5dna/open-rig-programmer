@@ -129,10 +129,14 @@ func TestEXItems890S_HasExpectedRowsLessTheExclusions(t *testing.T) {
 	}
 }
 
-// TestEXItems890S_ExcludesTheDeclaredAddressesAndNothingElse is the by-address
-// half of the same gate on the SHIPPED inventory: the count above is satisfied
-// by any four omissions, so it is this test that says WHICH four are gone.
-func TestEXItems890S_ExcludesTheDeclaredAddressesAndNothingElse(t *testing.T) {
+// TestEXItems890S_ExcludesTheDeclaredAddresses is the by-address half of the
+// same gate on the SHIPPED inventory: it asserts only that the four declared
+// addresses are absent, so a FIFTH silently missing address would still pass
+// it. crosscheck_test.go's TestCrossCheck_The890SExclusionsArePinnedByAddress
+// is the test that closes the "and nothing else" half, by collecting every
+// address absent from the inventory and requiring the set to equal the four
+// declared ones exactly.
+func TestEXItems890S_ExcludesTheDeclaredAddresses(t *testing.T) {
 	p := profile890S(t)
 	present := map[[3]int]bool{}
 	for _, it := range ma.EXItems890S() {
@@ -145,26 +149,6 @@ func TestEXItems890S_ExcludesTheDeclaredAddressesAndNothingElse(t *testing.T) {
 	}
 }
 
-// csvBody890S returns menu890s.csv's data rows with its provenance comments
-// and blank lines removed, so a test can perturb ONE row without reproducing
-// the transcription's facts in this file.
-func csvBody890S(t *testing.T) []string {
-	t.Helper()
-	p := profile890S(t)
-	data, err := os.ReadFile(p.ManualCSV)
-	if err != nil {
-		t.Fatalf("reading %s: %v", p.ManualCSV, err)
-	}
-	var out []string
-	for _, l := range strings.Split(string(data), "\n") {
-		if l == "" || strings.HasPrefix(l, "#") {
-			continue
-		}
-		out = append(out, l)
-	}
-	return out
-}
-
 // TestRedProof890S_DeletingARowIsRefused is the completeness gate fired.
 // RenderGo compares the supplied sets against each other only, so no regime
 // can see a jointly truncated source; ExpectedRows is the check that catches
@@ -172,7 +156,7 @@ func csvBody890S(t *testing.T) []string {
 // happily into a smaller, plausible menu table.
 func TestRedProof890S_DeletingARowIsRefused(t *testing.T) {
 	p := profile890S(t)
-	body := csvBody890S(t)
+	body := csvBody(t, p.ManualCSV)
 	if len(body) != p.ExpectedRows {
 		t.Fatalf("menu890s.csv holds %d data rows, want %d", len(body), p.ExpectedRows)
 	}
@@ -201,7 +185,7 @@ func TestRedProof890S_DeletingARowIsRefused(t *testing.T) {
 // test cannot pass by disagreeing with the transcription about anything else.
 func TestRedProof890S_P1OutsideTheMenuTypeEnumerationIsRefused(t *testing.T) {
 	p := profile890S(t)
-	first := strings.Split(csvBody890S(t)[0], ",")
+	first := strings.Split(csvBody(t, p.ManualCSV)[0], ",")
 	if len(first) < 3 {
 		t.Fatalf("the first CSV row has %d columns, want at least 3", len(first))
 	}
@@ -272,7 +256,7 @@ func TestRedProof890S_ATextRowOfAnUndeclaredWidthIsRefused(t *testing.T) {
 // row it does.
 func TestRedProof890S_ExcludingTheWrongAddressesIsRefused(t *testing.T) {
 	p := profile890S(t)
-	body := csvBody890S(t)
+	body := csvBody(t, p.ManualCSV)
 
 	// The declared exclusion this test moves, and an ordinary row to move it
 	// on to. Both are read out of the transcription rather than restated: the

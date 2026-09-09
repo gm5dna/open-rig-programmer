@@ -1,0 +1,39 @@
+# Kenwood TS-990S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: MN "Memory Channel Number"   (990S only - the 890S book has no MN command)
+# Printed page 40 = PDF page 41. Charts used: Set, Read, Answer.
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS
+#   Set    : 7 positions. Ruler 1..10; cells 'M' 'N' P1 P2 P2 P2 ';'. Terminator at 7.
+#   Read   : 4 positions. Ruler 1..10; cells 'M' 'N' P1 ';'.          Terminator at 4.
+#   Answer : 7 positions. Ruler 1..10; cells 'M' 'N' P1 P2 P2 P2 ';'. Terminator at 7.
+#   Every header is a NUMBER.
+#
+# POSITION MAP
+#   Set/Answer  1 'M'  2 'N'  3 P1  4-6 P2  7 ';'
+#   Read        1 'M'  2 'N'  3 P1  4 ';'
+#
+# P1 LEGEND, VERBATIM (Main/Sub)
+#   "P1"
+#   "  0:  Main Band"
+#   "  1:  Sub Band"
+#
+# P2 LEGEND, VERBATIM
+#   "P2"
+#   "  000 ~ 119:"
+#   "  Channel number (Channel numbers P00 ~ P09 are represented by 100 ~ 109. Channel
+#    numbers E00 ~ E09 are represented by 110 ~ 119."
+#   [This legend spells the channels "P00 ~ P09" and "E00 ~ E09", whereas MA0 on printed
+#    p.35 spells the same channels "P0 ~ P9" and "E0 ~ E9", and MA2 on printed p.36 spells
+#    them "P00 ~ P09" but omits the E range entirely. FINDING.]
+#
+# INHERITED-ASSUMED bytes
+#   * P1 = 0 (Main Band) and P2 = 000 are arbitrary in-range choices; the ranges are the
+#     book's.
+#
+# VECTORS  (witness only - one per form, as the brief specifies)
+set	MN0000;
+read	MN0;
+answer	MN0000;

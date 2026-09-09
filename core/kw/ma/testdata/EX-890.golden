@@ -1,0 +1,70 @@
+# Kenwood TS-890S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: EX "Set or Read the Menu"
+# Printed page 24 = PDF page 25. Charts used: Set, Read, Answer.
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# ---------------------------------------------------------------------------
+# COUNTED FRAME LENGTHS
+#   Read       : 8 positions. Ruler 1..10; cells 'E' 'X' P1 P2 P2 P3 P3 ';'.
+#                Terminator at printed position 8 - a NUMBER.
+#   Set/Answer : 8 fixed positions, then P5, then ';'.
+#                The ruler prints, tier by tier:
+#                  tier 1 header  1  2  3  4  5  6  7  8  9 ~
+#                         cells   E  X P1 P2 P2 P3 P3 P4  P5
+#                  tier 2 header  x
+#                         cells   ;
+#                The ninth column of tier 1 is headed "9 ~" and the terminator's position
+#                header is the LETTER "x", not a number. See crop work/ex890-chart.png.
+#                Frame length = 8 + len(P5) + 1; terminator position x = 9 + len(P5).
+#
+# POSITION MAP (Set and Answer), with each legend VERBATIM
+#   1      'E'
+#   2      'X'
+#   3      P1 (Menu type number)
+#            "0:  Menu"
+#            "1:  Advanced Menu"
+#   4- 5   P2 (Category number)
+#            "00 ~ 99"
+#            "Entering a non-existing number causes an error to occur."
+#            "Enter any value when using the Advanced Menu."
+#   6- 7   P3 (Item number)
+#            "00 ~ 99"
+#            "Entering a non-existing number causes an error to occur."
+#            "Entering a number that cannot be set also causes an error to occur."
+#   8      P4 (Configuration classification)
+#            "Space:  Normal Configuration"
+#            "9:  Initial value setting (setting command only)"
+#            "Response is always a space."
+#            [The value for Normal Configuration is a real ASCII space byte in the frame.]
+#   9~     P5 (String of alphanumeric characters for the Menu setting)   -- VARIABLE LENGTH
+#            "Normally a 3-digit number (blank digits must be entered as "0".)"
+#            "PF key settings use 4 digits (refer to the PF Key assignment ID lists)."
+#            "A power-on message can vary in length from 0 to 15 characters."
+#            "Screen saver text can vary in length from 0 to 10 characters."
+#            "Refer to the Menu tables below for the EX Command Parameter lists."
+#            "Entering a value other than the listed values causes an error to occur.)"
+#   x      ';'   -- printed position header is the LETTER x
+#
+#   Read chart carries P1, P2, P3 only; P4 and P5 are absent and ';' sits at position 8.
+#
+# ---------------------------------------------------------------------------
+# INHERITED-ASSUMED bytes
+#   * P2 and P3 (category 00 / item 00) and the P5 value "000": arbitrary in-range choices.
+#     The book's own EX Command Parameter Lists (which start after this page) were not read
+#     for this witness, so no specific menu item is claimed. Legal ranges 00~99 / 00~99 are
+#     the book's.
+#   * P4 in the Set vector is the ASCII space byte for "Normal Configuration"; the space is
+#     manual-determined, its position (8) is counted.
+#   * ex_set_initialize below uses P4 = '9'. The book does NOT say whether P5 is still sent
+#     when P4 is '9' ("Initial value setting (setting command only)"). ASSUMED that P5 is
+#     still present and carries the same width as an ordinary setting.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim; the byte at position 8 of the Set/Answer
+#           vectors is a real ASCII space)
+read	EX00000;
+set_normal	EX00000 000;
+answer_normal	EX00000 000;
+set_initialize	EX000009000;
