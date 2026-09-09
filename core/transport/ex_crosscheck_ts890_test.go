@@ -108,6 +108,10 @@ var parameterlessAddresses890 = []string{"10023", "10024", "10025", "10026"}
 // RED PROOFS below can run it over a deliberately perturbed one. A comparison
 // that is only ever run on data expected to agree has never been shown to be
 // able to disagree.
+//
+// ex_crosscheck_ts990_test.go, this package's other MA-family EX
+// cross-check, calls this same function rather than a second copy of it —
+// one shared helper, both rows.
 func compareMAEXInventories(layout ma.Layout, items []kw.EXItem, fake map[string]string) []exMismatch {
 	var out []exMismatch
 	seen := map[string]bool{}

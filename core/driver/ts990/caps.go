@@ -249,8 +249,8 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 
 		// P17 at byte 46, AND THE ENCODING IS THIS RADIO'S OWN: "1: Scan
 		// Lockout OFF / 2: Scan Lockout ON" (990:2952-2954), where the
-		// TS-890S prints 0/1 and where THIS BOOK'S OWN MA3 P2 prints
-		// "0: Scan Lockout OFF / 1: Scan Lockout ON" (990:3019-3021).
+		// TS-890S prints 0/1 (890:3205-3207) and where THIS BOOK'S OWN MA3
+		// P2 prints "0: Scan Lockout OFF / 1: Scan Lockout ON" (990:3019-3021).
 		// That is erratum E8 and the sharpest trap in either book; the
 		// published value comes from MA0 P17, because MA0 is the record
 		// this programme reads and MA3 is not on the outbound roster
@@ -402,11 +402,12 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 			// candidate with a single blank channel, which on a
 			// hundred-slot space is every real codeplug.
 			NoBlank: false,
+			Fields:  bankFields(rw),
 			// Sparse false, and the five sparse-space fields with it: this
 			// is a small dense space fully printed in the book
 			// (990:2893-2896), and spec.Validate requires those fields to
 			// be zero when Sparse is false.
-			Fields: bankFields(rw),
+			Sparse: false,
 		}},
 		Modes: modeNames(l),
 		// MANUAL-EVIDENCED WIDTH, ASSUMED PAD BYTE (§1.6, A1). P18 is

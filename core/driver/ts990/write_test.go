@@ -139,10 +139,10 @@ func assertRegister(t *testing.T, err error, register string) *RefusalError {
 // the write's transport spec that are load-bearing rather than incidental.
 //
 // NO Match, and therefore no answer length: on this family's assumed
-// convention an accepted Set produces no answer at all (A6), so a spec that
-// waited for one would spend a whole read timeout and then report a timeout
-// for a write the radio had accepted. transport.Engine refuses a ClassWrite
-// spec carrying a Match outright.
+// convention an accepted Set produces no answer at all (A20/L-HW-3), so a
+// spec that waited for one would spend a whole read timeout and then report
+// a timeout for a write the radio had accepted. transport.Engine refuses a
+// ClassWrite spec carrying a Match outright.
 //
 // RetryReads 0, NECESSARILY: transport safety obligation 2 forbids resending
 // a write, and Do refuses a write-class spec with a non-zero RetryReads
