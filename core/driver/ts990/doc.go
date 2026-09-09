@@ -36,8 +36,7 @@
 // The codec, the frame grammars and the outbound gate are core/kw/ma's; this
 // row's layout values are ma.Layout990()'s. This package holds the neutral
 // capability table, the identity probe, the read choreography, the write
-// refusal ladder (Stage 2 task 14) and the settings descriptor with the menu
-// read behind it.
+// refusal ladder and the settings descriptor with the menu read behind it.
 //
 // # The Kenwood MA DRIVER register — K-D1 and K-D2, for THIS ROW
 //
@@ -122,7 +121,7 @@
 //	      leg does not share, so one leg does not lift the other. THE ROW IS
 //	      LIFTED WHEN BOTH OF ITS PATHS ARE.
 //
-// # Forward note for the write ladder (task 14)
+// # The write ladder (task 14)
 //
 // Recorded here because this file is where A14 and A1 are cited for this row,
 // and because both facts are settled by the CODEC rather than by the driver —
@@ -137,10 +136,13 @@
 // the space absorbed by the pad/trim pair, and NO SPECIAL CASE IS NEEDED IN
 // THE WRITE LADDER. The sibling row reaches the same place by the opposite
 // mechanism: its terminator floats, so "AB ;" and "AB;" are distinct frames
-// and its codec carries P13 verbatim in both directions. If a later
-// write-back audit compares names field-for-field, it should record a
-// trailing-space name in its per-channel detail, so the comparison stays
-// legible rather than silent.
+// and its codec carries P13 verbatim in both directions. The write-back audit
+// this would need is ALREADY HERE — core/clone/execute.go compares
+// want.Tag != got.Tag — and it needs no code of its own for this case: a
+// trailing-space tag reads back plain, so the comparison reports a legible
+// FieldTag mismatch rather than staying silent. driver.WriteResult carries no
+// per-channel detail to say WHY the tags differ, but the audit does not go
+// quiet — it names the field.
 //
 // THE CODEC NORMALISES THE CLASS BYTE AND THE DUAL/SECTION-DEFINED REFUSAL IS
 // THEREFORE THE DRIVER'S (A14). MA0 P2 is the channel type — "0: Single / 1:

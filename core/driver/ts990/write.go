@@ -306,7 +306,11 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // WHAT THE SET WOULD EMIT, so the record and the comparison must be one datum
 // rather than two derivations of it. Building is not sending — no byte
 // reaches the wire until every rung has passed, which is what P7's "no frame
-// is built until every rung passes" is there to guarantee.
+// is built until every rung passes" is there to guarantee. THE STRONGER
+// REASON IS THE STANDING ONE: BuildMA0Set's own refusals (an over-wide
+// frequency, A17/M-E6) are LOCALLY DECIDABLE from the candidate alone, so
+// building last would send the pre-write MA0 read to the radio for a channel
+// whose Set could never be built in the first place.
 //
 // NO READ-BACK VERIFICATION (P13). The verify-read after a write is
 // core/clone's, exactly as on every other family; WriteChannel NEVER calls
@@ -576,7 +580,7 @@ func readDependentRefusal(slotID string, current, set ma.Record) error {
 	// zeroed form, and either is a change the radio's own answer can prove.
 	if diffs := secondaryDiffs(current, set); len(diffs) > 0 {
 		return refuse(slotID, registerDecision9, nil,
-			"channel %s carries frequency-2 values this programme cannot represent, and one MA0 Set rewrites the whole record: %s (990:2929-2945). codeplug.ChannelData has ONE mode, ONE FM width and ONE tone tuple, so these bytes have no source in the channel and the write would replace them with the primary side's own. Such a channel is READABLE but not rewritable until the neutral model grows a second tuple",
+			"channel %s's frequency-2 side is not what this write would emit, and one MA0 Set rewrites the whole record: %s (990:2929-2945). codeplug.ChannelData has ONE mode, ONE FM width and ONE tone tuple, so these bytes have no source in the channel and the write would replace them with the primary side's own. Such a channel is READABLE but not rewritable until the neutral model grows a second tuple",
 			slotID, strings.Join(diffs, "; "))
 	}
 	return nil
@@ -646,6 +650,14 @@ func selfContradictoryAnswer(slotID string, current ma.Record) error {
 // flag DO have a home in the neutral model — TxFreqHz — so a difference there
 // is an edit the user asked for, not a value with nowhere to go. P10 to P14
 // are the five with no home at all.
+//
+// THE CONSEQUENCE IS WIDER THAN A SIMPLEX/SPLIT CONVERSION: a split channel's
+// secondary side has no source in codeplug.ChannelData at all, so an ORDINARY
+// edit to the PRIMARY side of a split channel whose secondary MIRRORS it —
+// Mode, say — is refused here too, because the Set the write would build
+// carries the edited primary's mode on P10 while the radio's own answer still
+// carries the pre-edit one. The channel is readable and its secondary side is
+// unchanged; it is the write that has no way to say so.
 func secondaryDiffs(current, set ma.Record) []string {
 	var diffs []string
 	for _, c := range []struct {
