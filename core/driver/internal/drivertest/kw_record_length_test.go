@@ -14,11 +14,12 @@ import (
 // helper can be tested: a helper that never fails passes every caller's test
 // vacuously, and a helper that always fails is caught by its first call site.
 //
-// The fixtures are the two MA-family length refusals this helper is written
-// for, quoted from core/kw/ma verbatim so a reworded codec message shows up
-// here rather than in two driver packages: the TS-890S's RANGE (codec890.go's
-// "runs 40 to 50") and the TS-990S's EQUALITY (codec990.go's "is exactly
-// 57"). Only their shared opening is asserted — see the helper.
+// The fixtures are hand copies of the two MA-family length refusals'
+// shapes, not quotations of core/kw/ma — the TS-890S's RANGE ("runs 40 to
+// 50") and the TS-990S's EQUALITY ("is exactly 57"). Only their shared
+// opening is asserted here — see the helper. A reworded codec message is
+// caught live at core/driver/ts890/read_test.go:410, which parses a short
+// frame through the real layout().ParseMA0Answer.
 func TestAssertKenwoodMAFrameLengthMismatch_AcceptsAndRefuses(t *testing.T) {
 	ma890 := &kw.ParseError{
 		Frame:  []byte("MA0000;"),
