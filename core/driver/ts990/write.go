@@ -277,6 +277,7 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //	                  refusals and core/kw/ma's own
 //	THE ONE READ — MA0 Read of the target slot, held with the Set under opMu
 //	PART 2 — read-dependent, and every clause quotes the answer:
+//	   the answer   a flag and the window it describes disagree
 //	10 A3            the answer satisfies the empty predicate
 //	11 A14           P2 says Dual or Section defined
 //	   decision 9    P16 = 1, unconditionally
@@ -539,6 +540,9 @@ func (s *Session) readCurrent(ctx context.Context, slotID string, slot ma.Slot) 
 // the narrowest message for the widest problem would be told the least useful
 // true thing.
 func readDependentRefusal(slotID string, current, set ma.Record) error {
+	if err := selfContradictoryAnswer(slotID, current); err != nil {
+		return err
+	}
 	if current.Empty {
 		// Rung 10 — A3. The channel is unassigned NOW, established by this
 		// driver's own read rather than by a cached pass.
@@ -574,6 +578,62 @@ func readDependentRefusal(slotID string, current, set ma.Record) error {
 		return refuse(slotID, registerDecision9, nil,
 			"channel %s carries frequency-2 values this programme cannot represent, and one MA0 Set rewrites the whole record: %s (990:2929-2945). codeplug.ChannelData has ONE mode, ONE FM width and ONE tone tuple, so these bytes have no source in the channel and the write would replace them with the primary side's own. Such a channel is READABLE but not rewritable until the neutral model grows a second tuple",
 			slotID, strings.Join(diffs, "; "))
+	}
+	return nil
+}
+
+// selfContradictoryAnswer refuses an answer whose FLAG and the window it
+// describes disagree, before any other read-dependent rung reads either.
+//
+// THE NEUTRAL MODEL CARRIES NO P15 OF ITS OWN, and that is the whole reason
+// this rung exists (T12's review of the sibling row found the same gap
+// there). A read publishes the second frequency as tx_frequency and drops the
+// flag; a write RE-DERIVES the flag from tx_frequency. So on a frame where
+// the two disagree, the Set this driver builds would carry a P15 THE RADIO
+// DID NOT SEND — the one thing a one-frame rewrite must never do — and no
+// rung below would notice, because rung 11 compares P10-P14 and the flag is
+// not among them.
+//
+// IT RESTS ON PRINTED AUTHORITY AND SO TAKES THE PLAIN FLEET ERROR. P15 is
+// "0: Simplex / 1: Split" (990:2946-2951) and a single memory channel's whole
+// frequency-2 side is zero (990:2964-2965, A16): a split channel therefore
+// HAS a frequency 2 and a simplex one does not, and a frame claiming both at
+// once is outside what this book describes. Nothing is assumed, so no
+// register entry is named.
+//
+// THE P15 ARM IS SCOPED TO A NON-DUAL RECORD, and the exception is
+// DOCUMENTED rather than defensive: a DUAL-RECEPTION channel legitimately
+// carries a live frequency 2 with P15 = 0, because that second side is a
+// sub-band RECEIVE frequency and not a transmit one (990:2949-2951, and
+// read.go's channelData says the same in the other direction). Calling that
+// state a contradiction would tell a user their radio answered nonsense when
+// it answered exactly what this book prints — and the write is refused one
+// clause below either way, by decision 9's unconditional P16 rung, whose
+// message describes it correctly.
+//
+// THE P16 ARM IS THE OTHER DIRECTION AND HAS NO SUCH EXCEPTION: a
+// dual-reception flag over a frequency-2 side that is entirely zero describes
+// a second receiver with no frequency, and it is a record core/kw/ma's own
+// builder refuses to produce (the zeroed side and a set flag contradict each
+// other, 990:2964-2965). Such an answer cannot be written back at all.
+//
+// core/kw/ma DECODES THE FLAGS INDEPENDENTLY OF THE WINDOW and refuses the
+// contradiction only on BUILD, which is correct for a codec — a parser that
+// refused it would make a channel unreadable, and clone.ReadAll abandons a
+// whole radio's read on the first channel error. Catching it HERE, on the
+// write path alone, is what keeps the read loud-free and the write honest.
+func selfContradictoryAnswer(slotID string, current ma.Record) error {
+	if current.DualRecv && current.TXFreqHz == 0 {
+		return &driver.WriteRefusedError{
+			Slot:   slotID,
+			Reason: fmt.Sprintf("channel %s answers with P16 = 1, dual reception ON (990:2949-2951), and a frequency-2 side that is entirely zero — a second receiver with no frequency for the record to hold. A single memory channel's whole frequency-2 side is zero (990:2964-2965), and a set flag over that side is a pairing this family's own encoder refuses to build, so this answer cannot be written back in any form. It is refused rather than rebuilt with a flag or a side the radio did not send", slotID),
+		}
+	}
+	if !current.DualRecv && current.Split != (current.TXFreqHz != 0) {
+		return &driver.WriteRefusedError{
+			Slot:   slotID,
+			Reason: fmt.Sprintf("channel %s answers with P15 = %s and a frequency 2 of %d Hz, and the two contradict each other: the book prints P15 as \"0: Simplex / 1: Split\" (990:2946-2951) and says a single memory channel's whole frequency-2 side is zero (990:2964-2965), so a split channel has a frequency 2 and a simplex one does not. The neutral model carries no split flag of its own — a read publishes the second frequency as tx_frequency and a write re-derives P15 from it — so writing this channel back would put a P15 on the wire that the radio did not send. It is refused rather than flipped", slotID, flagText(current.Split), current.TXFreqHz),
+		}
 	}
 	return nil
 }

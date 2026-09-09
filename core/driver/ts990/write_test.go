@@ -314,6 +314,19 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 
 	dual := populatedFields(id)
 	dual.dual = '1'
+	dual.txFreq, dual.txMode = "00014200000", '4'
+
+	// The three SELF-CONTRADICTORY answers: a flag and the window it
+	// describes disagreeing, in both directions for P15 and in the one
+	// direction P16 can take.
+	splitFlagOnly := populatedFields(id)
+	splitFlagOnly.split = '1'
+
+	splitContentOnly := populatedFields(id)
+	splitContentOnly.txFreq, splitContentOnly.txMode = "00014200000", '4'
+
+	dualFlagOnly := populatedFields(id)
+	dualFlagOnly.dual = '1'
 
 	dualAndSplit := populatedFields(id)
 	dualAndSplit.dual, dualAndSplit.split = '1', '1'
@@ -449,7 +462,31 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 		wants:    []string{"P2", "'2'", "990:2897-2903"},
 		readSent: true,
 	}, {
-		name:     "rung 11 — dual reception is refused unconditionally",
+		name:     "the answer contradicts itself — P15 says split and frequency 2 is zero",
+		rung:     "10a",
+		answer:   splitFlagOnly.frame(),
+		slot:     id,
+		kind:     kindPlain,
+		wants:    []string{"P15", "990:2946-2951", "990:2964-2965"},
+		readSent: true,
+	}, {
+		name:     "the answer contradicts itself — P15 says simplex and frequency 2 has content",
+		rung:     "10a",
+		answer:   splitContentOnly.frame(),
+		slot:     id,
+		kind:     kindPlain,
+		wants:    []string{"P15", "990:2946-2951", "990:2964-2965"},
+		readSent: true,
+	}, {
+		name:     "the answer contradicts itself — P16 says dual reception and frequency 2 is zero",
+		rung:     "10a",
+		answer:   dualFlagOnly.frame(),
+		slot:     id,
+		kind:     kindPlain,
+		wants:    []string{"P16", "990:2949-2951", "990:2964-2965"},
+		readSent: true,
+	}, {
+		name:     "rung 11 — dual reception is refused unconditionally, whatever P15 says",
 		rung:     "11",
 		answer:   dual.frame(),
 		slot:     id,
