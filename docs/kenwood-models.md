@@ -6,19 +6,31 @@ The evidence behind the Kenwood entries in `docs/radio-notes.md`. Every
 claim below cites the code that makes it true; the citations are for
 reviewers and contributors.
 
-## Three rows built, two of them selectable
+## Five rows built, four of them selectable
 
-The **TS-590S** and the **TS-590SG** are in the model list. The
-**TS-480** is not, although its driver is written, tested and shipped in
-the binary — see *The TS-480 is built and not registered* below, which
-is the longest entry on this page because an absence needs more
-explaining than a presence.
+The **TS-590S**, the **TS-590SG**, the **TS-890S** and the **TS-990S**
+are in the model list. The **TS-480** is not, although its driver is
+written, tested and shipped in the binary — see *The TS-480 is built and
+not registered* below, which is the longest entry on this page because
+an absence needs more explaining than a presence.
 
 These radios talk a third wire protocol: neither Yaesu's CAT nor Icom's
 CI-V, but Kenwood's own semicolon-terminated PC control commands. The
-codec is `core/kw`, the two 590 layouts are `core/kw/ts590`, the TS-480's
-is `core/kw/ts480`, and the drivers are `core/driver/ts590` (both rows,
-one package, a REQUIRED row argument) and `core/driver/ts480`.
+envelope codec is `core/kw`; the two 590 layouts are `core/kw/ts590`, the
+TS-480's is `core/kw/ts480`, and the 890S's and 990S's are both in
+`core/kw/ma` — one package holding two layouts, two hand-written record
+codecs and its own outbound gate. The drivers are `core/driver/ts590`
+(both 590 rows, one package, a REQUIRED row argument),
+`core/driver/ts480`, and `core/driver/ts890` and `core/driver/ts990`, one
+package each.
+
+**Why the second pair gets two driver packages where the first pair
+shares one.** The 590 pair's two radios share a 50-byte memory record, so
+one driver serves both with a row argument. The 890S's and 990S's records
+are different shapes — 40 to 50 bytes with thirteen parameters against a
+fixed 57 with eighteen — so there is no shared body for a row argument to
+select between, and a crossed registration of that pair is a compile
+error rather than a working driver for the wrong radio.
 
 **Two registry rows over one driver, and no radio has ever answered
 either.** `core/driver/ts590/caps.go` keeps a SEPARATE write-trial guard
@@ -214,6 +226,136 @@ publishing ten slots on the strength of a phrase would mean this program
 offering to write channels nobody has read. They are a known, unreached
 part of the radio rather than a bank, and publishing them later is
 additive (plan decision P11, spec decision 15).
+
+## Costs both 890S and 990S rows pay
+
+- **A blank channel cannot be filled: "registered" does not mean "can
+  programme a fresh radio".** One `MA0` Set carries the WHOLE channel, so
+  the write path reads the target first and refuses when that read
+  satisfies the blank predicate, naming register entry **A3**. Whether an
+  `MA0` Set can CREATE an unassigned channel is printed nowhere for that
+  command, while five sibling commands print an unassigned-channel
+  prohibition in the 890S book (`890:3265`, `890:3282`, `890:3300-3301`,
+  `890:3324`, `890:3356`) and four in the 990S's (`990:3008`, `990:3023`,
+  `990:3037-3038`, `990:3058`) — so a create path exists in the family and
+  only `MA0`'s own participation is unknown. A3 is scoped PER ROW and its
+  lift is **L-HW-3**: set a channel confirmed blank from the front panel
+  and read it back. Until then these radios can be re-programmed, not
+  programmed from empty. `core/driver/ts890/write.go`,
+  `core/driver/ts990/write.go` (rung 10).
+- **The secondary side is readable and is not rewritable from nothing,
+  and that is a different statement from the absence list below.** One
+  Set rewrites the whole record, primary and secondary sides together,
+  and this program has a source for the primary side and none for the
+  secondary. Rung 11 therefore compares the radio's OWN secondary
+  parameters against what the Set would emit and refuses, naming the
+  parameter and both values, rather than overwriting a side the file
+  never described. **M-E5's distinction applies here in the opposite
+  direction**: the fields listed as absent below (`attenuator`, `preamp`,
+  `antenna`, `filter`, the tuning steps) have no position in the record at
+  all and their absence says nothing about the radio, whereas the
+  secondary side HAS a position, IS read, and is refused on the write —
+  a refusal about a field the program can see.
+- **A 1750 Hz receive tone is refused**, on both rows. Each row's
+  tone-number chart runs to 1750 Hz as its last entry and each row's
+  tone-squelch chart has no entry for it at all, so the program publishes
+  51 tones, writes 1750 Hz as a transmit tone and refuses it as a receive
+  one. It cannot come OFF a radio either: the receive chart stops short
+  of it, so no answer can carry it.
+- **Slots 100-119 are unreached, and the reason is evidential rather
+  than a vocabulary limit.** Both books print the whole slot space,
+  "000 ~ 119", with "Channels P0 ~ P9 are represented as 100 ~ 109 and
+  channels E0 ~ E9 are represented as 110 ~ 119" (`890:3167-3169`,
+  `990:2893-2896`). What neither book prints is which parameter of an
+  `MA0` read selects a section channel's START frequency and which its
+  END — the 590 book does print that for its own command, which is why
+  that row HAS a scan bank — so a two-slot-per-index bank here would be a
+  reading. The CODEC admits those channel numbers (`core/kw/ma`'s slot
+  ranges carry `SlotScan` 100-109 and `SlotExtension` 110-119, so an
+  answer for one parses rather than being refused); the DRIVER publishes
+  no bank containing them, and no channel is ever produced for a class
+  published in no bank. Publishing them later is additive (plan decision
+  P11).
+- **`MinFreqHz` and `MaxFreqHz` are 0 on both rows.** Neither PC control
+  command reference prints a frequency range for its radio, and a band
+  plan from a specification sheet would be a claim from a document this
+  project does not hold. An out-of-range frequency is refused by the
+  radio, not by the program.
+- **The speed is assumed: 9600, with no override and no probing.**
+  No Kenwood book held here prints a factory rate. A wrong speed is not a
+  safe failure but an unreachable radio, and its symptom is a timeout
+  indistinguishable from a dead port or a bad cable — which is why the
+  assumption is stated to the user rather than buried.
+- **A write to the channel the radio is displaying may read back old.**
+  Both books print it in the same words: "When setting the channel
+  currently being accessed, the new settings are reflected the next time
+  that channel is accessed" (`890:3211-3212`, `990:2958-2959`). The
+  program's read-back verification can therefore show the previous
+  contents for that one channel.
+- **No channel is ever deleted, over a PRINTED command.** Both books
+  print a dedicated deletion command — `MA5`, "Memory Channel (Channel
+  Deletion)" (`890:3305`) and "Channel Deletion" (`990:3042-3047`) — which
+  is STRONGER evidence than the 590 pair's ambiguous short-frame side
+  effect, and the standing no-erase rule declines it anyway.
+  `core/kw/ma`'s outbound gate refuses any `MA5` frame besides, so the
+  refusal is positive rather than a matter of nobody having written the
+  builder.
+- **The data modes are IN the mode names (M-E3).** The 890S publishes
+  `LSB-D`, `USB-D`, `FM-D`, `FM-D-N` and `AM-D` among its sixteen names;
+  the 990S publishes three numbered sets (`D1`, `D2`, `D3`) among its
+  twenty-six. Neither record has a separate data-mode byte, so
+  `data_mode` is the zero `FieldSupport` on both rows and a channel's
+  data disposition travels in the mode column of a CSV or a CHIRP file.
+  A round trip preserves it; a file carrying a `data_mode` column for one
+  of these radios would be describing a field the record has not got.
+- **Auto Information is switched off PER CONNECTOR.** "The AI function
+  can be set separately for USB connector, COM connector, or LAN
+  connector" (`990:187-188`; the 890S has three connectors likewise), so a
+  session's `AI0;` affects the one it is using and leaves the others
+  alone.
+- **CHIRP.** A blank `Duplex` column imports as simplex on both rows —
+  these are the first two rows DESIGNED under that arm rather than having
+  it applied retrospectively — and `off` still blocks, because it asserts
+  "no duplex configured" as distinct from simplex and the record has
+  nowhere to carry the distinction. `CW`, `CWR` and `RTTY` block on the
+  mode: `chirpModeMap` resolves them to `CW-U`, `CW-L` and `RTTY-U`, and
+  Kenwood spells RTTY `FSK` and prints CW without a sideband suffix. **A
+  CHIRP import is refused at the write on these two rows today**, and
+  that is a fleet question rather than a Kenwood one: a CHIRP row states
+  no transmit frequency, `core/csvio` leaves `TxFreqHz` Unknown for any
+  bank that grades the field, and rung 6 refuses a candidate with no
+  Known transmit disposition (M-E8). The root fix — grading a blank or
+  `off` `Duplex` on such a bank as Known 0, the radio's own simplex
+  statement — moves the TS-590 pair's import artefacts too, because those
+  rows grade the field as well, so it is deferred to a v1.5.x follow-up
+  rather than landed inside this registration.
+
+## Costs the TS-990S pays and the TS-890S does not
+
+- **A channel with dual reception ON is refused unconditionally.** P16,
+  "1: Dual reception ON" (`990:2949-2951`), describes a second RECEIVER
+  over the channel's frequency-2 side. No field of this program's channel
+  model names such a thing, and one Set rewrites the whole record, so a
+  write would silently switch the second receiver off. The refusal does
+  not consult the split flag beside it: what P15 says about frequency 2
+  is a separate statement, and neither reading makes the second
+  receiver's frequency something this program holds. The 890S's record
+  carries no such flag at all, so it has no such refusal.
+- **A channel whose own answer types it as SECTION DEFINED is refused at
+  the write**, naming register entry **A8**: the book decides the channel
+  type "while setting the P9 and P10 values" (`990:2901-2903`), and what a
+  Set would put in a section-defined channel's frequency-2 window is not
+  something this program can state. Reading is unaffected.
+- **The lockout flag is printed `1`/`2` here and `0`/`1` on the 890S**
+  (erratum E8): `990:2952-2954` prints "1: Scan Lockout OFF / 2: Scan
+  Lockout ON" for the memory record, while the same book's `MA3` prints
+  `0`/`1` a few pages later (`990:3020-3021`). Each row's codec accepts
+  only the two values its own memory-record chart prints, so neither
+  convention can leak into the other.
+- **Twenty-six modes against sixteen**, from each book's own OM P2
+  legend. The difference is entirely in the data sets: one on the 890S,
+  three on the 990S.
+- **194 menu settings against 158**, each row's own generated inventory.
 
 ## The TS-480 is built and not registered
 

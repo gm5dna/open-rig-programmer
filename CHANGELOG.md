@@ -11,6 +11,49 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Added
+- **Kenwood TS-890S and TS-990S**: read, opt-in write, menu-settings
+  read. The 100 memory channels and the menu inventory — 158 settings on
+  the TS-890S, 194 on the TS-990S — over Kenwood's own PC control
+  commands. Tone and scan skip are read AND written, as on the TS-590
+  pair, and **one frame carries a whole channel**, which is what removes
+  that pair's largest cost: a channel read off one of these radios comes
+  back with its transmit frequency already known, so reading the
+  memories, editing a name and sending them straight back works. Every
+  published mode can be written too — 16 on the TS-890S, 26 on the
+  TS-990S, the data modes spelt into the mode names themselves, so a
+  channel's data disposition survives a CSV or CHIRP round trip in its
+  mode column.
+- **What these two radios refuse, and it is published rather than
+  discovered.** A write to a channel the radio does not already hold is
+  refused: one frame carries the whole channel, so the program reads the
+  target first and will not create a channel the manual never says the
+  command can create. **Registering these radios does not mean the
+  program can fill a blank one** — they can be re-programmed, not
+  programmed from empty. A channel whose secondary side on the radio is
+  not what the program's own frame would write is refused, naming the
+  parameter and both values, rather than overwritten. A 1750 Hz receive
+  tone is refused on both rows. On the TS-990S alone, a channel with
+  dual reception switched on is refused outright — that flag describes a
+  second receiver the program's channel model cannot hold — and so is a
+  channel the radio types as section defined. Channels are never
+  deleted, although both manuals print a deletion command. Slots 100-119
+  exist on both radios and are offered on neither: neither manual prints
+  what selects a scan range's start frequency and what its end, so a
+  bank of them would be a reading rather than a transcription. No band
+  edges are published, because neither manual prints a frequency range.
+  The port speed of 9600 is assumed, as it is for the TS-590 pair, and
+  there is still no way to open at another.
+- **A CHIRP file's ordinary rows import on both new radios** on the same
+  terms as the TS-590 pair's — a blank `Duplex` column is simplex, `off`
+  is refused, and `CW`, `CWR` and `RTTY` are refused on the mode — with
+  one further cost: a CHIRP row states no transmit frequency and these
+  radios' write path requires one, so an imported CHIRP channel is
+  refused at the write until you supply it. The program's own CSV import
+  and export are unaffected.
+- No Kenwood radio has ever answered a frame from this program. Writing
+  stays switched off on both rows until you switch it on for that radio.
+
 ### Changed
 - **A CHIRP file's ordinary rows now import on the Kenwood TS-590S and
   TS-590SG.** A CHIRP file's blank `Duplex` column is its ordinary
