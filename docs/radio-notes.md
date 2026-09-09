@@ -338,6 +338,130 @@ for these radios, so the program declares none rather than inventing
 one, and a frequency out of range is refused by the radio rather than by
 the program.
 
+### TS-890S and TS-990S (opt-in)
+
+Read the 100 memory channels and the menu settings: 158 of them on the
+TS-890S, 194 on the TS-990S. Tone and scan skip ARE read and written on
+these radios, as on the TS-590 pair above: one memory record carries a
+tone mode, separate transmit and receive tone numbers and a
+channel-lockout flag, and **one frame carries the whole channel**. That
+one difference from the TS-590 pair is what removes their largest
+refusal — a memory channel read off one of these radios comes back with
+its transmit frequency already known, so reading the memories, editing a
+name and sending them straight back works. Every mode these radios
+publish can be written too: 16 on the TS-890S and 26 on the TS-990S.
+
+**Registering a radio does not mean the program can fill a blank one.**
+Refused: **a write to a channel the radio does not already hold**.
+Because one frame carries a whole channel, the program reads the channel
+it is about to write and refuses when that read comes back blank:
+whether the memory-set command can CREATE an unassigned channel is
+printed nowhere for that command, while five sibling commands in the
+TS-890S manual and four in the TS-990S manual each print an
+unassigned-channel prohibition of their own. So the program refuses,
+naming register entry A3, rather than creating a channel on an
+assumption. Channels the radio already holds are written normally. In
+practice: these radios can be re-programmed, not programmed from empty.
+The refusal lifts only when somebody sets a channel confirmed blank at
+the radio's own front panel and reports what came back.
+
+Also refused: a channel whose **secondary side** on the radio is not
+what the program's own frame would write. The record is read and the
+secondary side comes back readable — but the program has a source for
+the primary side and none for the secondary, and one frame rewrites the
+whole record, so before the write it compares the radio's own secondary
+parameters against what it would emit and refuses, naming the parameter
+and both values, rather than overwriting a side your file never
+described. This is a **refusal about a side the program can read**,
+which is a different thing from the fields listed as absent below: those
+have no position in the record at all.
+
+Also refused: a **1750 Hz receive tone**, on both rows and for the same
+reason as on the TS-590 pair — it is the last entry of the tone-number
+chart these radios print and has no entry at all in the tone-squelch
+chart, so the program writes it as a transmit tone and refuses it as a
+receive one.
+
+On the **TS-990S only**, two further refusals, neither of which the
+TS-890S's record can even express. A channel with **dual reception**
+switched on is refused outright: that flag describes a second RECEIVER
+over the channel's second frequency side, nothing in this program's
+channel model names such a thing, and one frame rewrites the whole
+record — so the write would silently switch the second receiver off. And
+a channel whose own answer says it is **section defined** is refused at
+the write, naming register entry A8 — reading it is unaffected.
+
+**Slots 100–119 are not offered on either radio**, and both radios have
+them. Neither manual prints what selects a section channel's start
+frequency and which its end, so a bank of those slots would be a reading
+rather than a transcription; the program publishes the 100 ordinary
+memory channels and stops there. The codec parses an answer for those
+channels if one arrives — it is the *bank* that is not published, not
+the frame that is refused.
+
+Not shown: the **band edges**. Neither manual prints a frequency range
+for these radios, so the program declares none rather than inventing
+one, and a frequency out of range is refused by the radio rather than by
+the program.
+
+**Data modes travel in the mode column.** Both radios spell their data
+modes into the mode names themselves — `LSB-D`, `USB-D`, `FM-D`, `AM-D`
+on the TS-890S, and three numbered sets (`LSB-D1`, `LSB-D2`, `LSB-D3`
+and so on) on the TS-990S — so there is no separate data-mode column for
+a CSV or a CHIRP file to carry, and a channel's data disposition
+survives a round trip inside its mode name. A file that carried a
+data-mode column for one of these radios would be describing a field the
+record does not have.
+
+**A CHIRP file's ordinary rows import on both radios**, on exactly the
+terms the TS-590 pair's do: a blank `Duplex` column means simplex and
+these radios declare no shift vocabulary at all, so such a row imports
+and nothing is reported. A `Duplex` column reading `off` is refused, and
+`CW`, `CWR` and `RTTY` rows are refused on the mode — they resolve to
+names these radios' own mode lists do not print, which are `CW`, `CW-R`,
+`FSK` and `FSK-R`. **One further cost applies to a CHIRP import on these
+two rows and not to a CSV one**: a CHIRP row says nothing about a
+transmit frequency, and these radios' write path requires one to be
+known, so an imported CHIRP channel is refused at the write until you
+supply it. The program's own CSV import and export are unaffected — a
+CSV read off the radio carries the transmit frequency already.
+
+**A write may read back as the old value if the radio is displaying
+that channel.** Both manuals print it in the same words: "When setting
+the channel currently being accessed, the new settings are reflected the
+next time that channel is accessed." A verification read of the channel
+on the radio's own front panel can therefore show the previous contents;
+move off it and read again.
+
+Channels cannot be deleted. Both radios print a dedicated
+channel-deletion command and the program does not build it: this program
+does not delete a user's channels, and the outbound gate refuses any
+frame of that shape besides, so it cannot be sent by accident.
+
+Guesses: its **speed**. No Kenwood manual held here prints a factory
+rate, so the program opens at 9600; if your radio is set differently,
+change it at the radio's own menu, because the program has no speed
+setting and never probes for one. A wrong speed looks exactly like a
+dead port.
+
+**Auto Information is switched off on one connector only.** These radios
+set it separately per connector, so a session switches it off on the one
+it is using and leaves the others as they were — a logger on another
+port will not see its own stream stop.
+
+**One recorded observation is not visible in the program at all.** The
+TS-890S's simulated radio models a blank channel that still carries a
+leftover name, because the manual's blank-channel note stops short of
+the name window and says nothing about it; the driver ignores such a
+residue rather than treating it as channel content, and notes it on the
+driver's own transport log. Nothing in the app or the command line
+prints that note today, and nothing will until somebody reads a channel
+confirmed blank off a real TS-890S and reports whether the name window
+came back blank (the lift recorded as L-HW-4). It is written down here
+so the absence is a decision rather than an oversight.
+
+Evidence: `docs/kenwood-models.md`.
+
 ### TS-480 (built, not selectable)
 
 The TS-480's driver exists in this program and the radio is **not in the

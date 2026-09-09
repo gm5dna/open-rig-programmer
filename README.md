@@ -34,6 +34,7 @@ and Linux.
 | **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760**, **IC-7100** | ✅ | ⚠️ opt-in |
 | **IC-R8600** (a receiver) | ✅ | ⚠️ opt-in |
 | **TS-590S**, **TS-590SG** | ✅ | ⚠️ opt-in |
+| **TS-890S**, **TS-990S** | ✅ | ⚠️ opt-in, existing channels only |
 
 Only the FT-710 has ever been connected to this program. The others
 were built from the makers' protocol manuals and tested against
