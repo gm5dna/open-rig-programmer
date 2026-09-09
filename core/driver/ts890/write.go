@@ -352,7 +352,7 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // load-bearing rather than tidy: the write is TWO exchanges, transport.Engine
 // serialises each exchange and not the pair, and a concurrent operation landing
 // between them "would decide against one radio state and write against
-// another" (core/driver/ic705/write.go:58-61). It is NOT held across
+// another" (core/driver/ic705/write.go:58-60). It is NOT held across
 // write-then-verify: that pair is core/clone's, as the driver seam assigns it,
 // and TestWriteChannel_IsAtomicUnderOpMu distinguishes the two.
 func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
