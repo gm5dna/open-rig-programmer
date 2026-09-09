@@ -48,6 +48,23 @@ func TestParseMA0Answer890_ReadsThePrintedGrid(t *testing.T) {
 	}
 }
 
+// MED-1 fix round 2: a GENUINE TS-890S answer whose name ends in a space
+// PARSES — A1's stated limit is that it reads back one character shorter,
+// not that the read is refused. checkName is domain-only (length, ';',
+// printable) and carries no row discriminator; the trailing-space refusal
+// belongs to buildMA0Set890, which is the one direction the round trip
+// cannot carry it.
+func TestParseMA0Answer890_ATrailingSpaceNameParsesOneCharacterShorter(t *testing.T) {
+	l := Layout890()
+	rec, err := l.ParseMA0Answer([]byte(frame890("AB ")))
+	if err != nil {
+		t.Fatalf("a trailing-space name must parse (A1's stated limit, not a refusal): %v", err)
+	}
+	if rec.Name != "AB" {
+		t.Errorf("Name = %q, want %q — A1: the parser right-trims, so the name reads back one character shorter", rec.Name, "AB")
+	}
+}
+
 // THE 890S FRAME LENGTH IS A RANGE AND THE ASSERTION IS CODEC-LOCAL.
 // core/kw/ma CANNOT import core/driver/internal/drivertest: Go's internal
 // rule confines that package to importers beneath core/driver, and this

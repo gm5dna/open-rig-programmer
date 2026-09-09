@@ -224,6 +224,15 @@ func (l Layout) buildMA0Set890(rec Record) (Command, error) {
 	if err := checkName("P13, the channel name", rec.Name); err != nil {
 		return Command{}, newParseError(nil, "%s: %v", what, err)
 	}
+	// MED-1, fix round 2: THIS ROW'S GRID PADS NOTHING (this function's own
+	// doc), so a trailing space is real content with no pad byte to
+	// distinguish it from — and cannot survive a build round trip. A1's pad
+	// rule is TS-990S ONLY (doc.go): P18's fixed ten-byte window absorbs any
+	// trailing content identically whichever way it is spelled, so this
+	// refusal belongs here, on build, and not in checkName's shared domain.
+	if strings.HasSuffix(rec.Name, " ") {
+		return Command{}, newParseError(nil, "%s: P13, the channel name ends in a space, and the TS-890S grid carries no pad (A1 is TS-990S ONLY) — such a name cannot survive a build round trip and is refused on build rather than carried", what)
+	}
 
 	second, err := l.buildSecond890(what, rec)
 	if err != nil {
