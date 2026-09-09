@@ -411,7 +411,8 @@ func (d *ts990Driver) probeFV(ctx context.Context, eng *transport.Engine, layout
 // IT CARRIES AN OPERATION MUTEX (plan P12/P13). transport.Engine serialises
 // each individual EXCHANGE, not a whole driver operation, and this driver's
 // operations are not all single exchanges: Open's probe is three frames, and
-// T14's write is a read and a Set that must decide against ONE radio state.
+// WriteChannel's write is a read and a Set that must decide against ONE
+// radio state.
 // opMu guards ONE DRIVER OPERATION, so a concurrent caller cannot land in the
 // middle of one — and holding it for every operation, rather than only for the
 // several-frame ones, is what makes the rule "one driver operation at a time"

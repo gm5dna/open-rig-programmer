@@ -241,9 +241,16 @@ func TestExSpec_CarriesTheFullAddressAndAdmitsAVariableWidth(t *testing.T) {
 // driver returns what the radio said and trims nothing. Trimming would apply
 // a pad rule the register does not carry to a field A1 is explicitly scoped
 // away from (A1 is the MA0 NAME window's), and this tree carries no value
-// semantics at all: no legend, no units, no options, no default. What the
-// value/pad split IS, for a consumer that needs one, is stated by the codec
-// (core/kw/ma's ParseEXAnswer) and belongs to whatever renders a setting.
+// semantics at all: no legend, no units, no options, no default. THE
+// OBLIGATION TO MAKE THAT SPLIT IS DISCHARGED NOWHERE TODAY: the codec
+// (core/kw/ma's ParseEXAnswer) states it in terms — take item.Digits
+// characters as the value, the rest is pad — but driver.SettingItem carries
+// only ID, Label and Display, so no layer above this one holds item.Digits
+// either. This driver declines to truncate on its own account because this
+// row's TextWidths are {10, 15} (internal/extable/profile.go) and a text
+// row's trailing space could be content, not pad; the settings seam
+// carrying no per-item width is a milestone-close follow-up (a
+// driver.SettingItem change), not this task's.
 func TestReadSetting_ReadsBothAnswerFormsAndReturnsP5Verbatim(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
