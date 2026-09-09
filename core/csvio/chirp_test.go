@@ -2359,13 +2359,26 @@ func TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord(t *testing.T) {
 //     branch says nothing about must leave TxFreqHz: this radio has the
 //     field, so Unknown, never the zero value the map would otherwise leave
 //     it at (see importCHIRPDuplexShift's own comment).
+//  5. spec.Capabilities.SimplexTx — SimplexTxEqualsRx, as
+//     core/driver/ts590/caps.go's is: MW/MR carries no transmit-frequency
+//     field at all and P1 selects simplex (590:1521-1523), so a blank CHIRP
+//     Duplex row's transmit disposition is the row's own receive frequency.
+//     Read by importCHIRPDuplexShift's blank arm.
+//  6. THE TONE VOCABULARY — the three fields FieldToneMode/FieldToneTx/
+//     FieldToneRx, ToneModes, and the 43-entry Kenwood chart. Added
+//     09/09/2026 for v1.5.x follow-up (l): grading none of the three sent
+//     every pair-1 test down importCHIRPToneCTCSS whilst the registered rows
+//     take importCHIRPToneIcom, so the fixture's evidence was about a branch
+//     these radios never reach. CTCSSStates goes nil with it, as the real
+//     driver's is — a row publishing the Icom half of the vocabulary pair
+//     publishes no Yaesu half, and codeplug.Validate measures a channel's
+//     ctcss_state against that list.
 //
-// Everything else — the tone chart, the CTCSS-state vocabulary, the tag
-// charset — is ft710LikeCapabilities' and is NOT a claim about a Kenwood
-// radio. No test here asks this fixture a question about any of them, and a
-// test that needed one would have to widen the fixture first rather than
-// trust it. TagLen IS corrected to 8 (590:1576) because the name-length path
-// reads it.
+// Everything else — the tag charset — is ft710LikeCapabilities' and is NOT a
+// claim about a Kenwood radio. No test here asks this fixture a question
+// about it, and a test that needed one would have to widen the fixture first
+// rather than trust it. TagLen IS corrected to 8 (590:1576) because the
+// name-length path reads it.
 //
 // PMS/SCAN IS ABSENT FROM THIS FIXTURE and that is deliberate, not an
 // omission: ImportCHIRP writes into the MEMORY bank alone (memBank), so a
@@ -2392,6 +2405,27 @@ func ts590LikeCapabilities(model, catID string) spec.Capabilities {
 	// (590:1521-1523), so a blank CHIRP Duplex row's transmit disposition is
 	// the row's own receive frequency.
 	caps.SimplexTx = spec.SimplexTxEqualsRx
+	caps.Transmit = spec.HasTransmitter
+	// Mirrored item 6. nil, as core/driver/ts590/caps.go's own is: this row
+	// publishes the Icom half of the vocabulary pair and no Yaesu half.
+	caps.CTCSSStates = nil
+	caps.ToneModes = []spec.ToneMode{
+		{Value: "OFF", Semantics: spec.ToneModeOff},
+		{Value: "TONE", Semantics: spec.ToneModeCTCSS},
+		{Value: "CTCSS", Semantics: spec.ToneModeCTCSSRxSquelch},
+		{Value: "CROSS", Semantics: spec.ToneModeCross},
+	}
+	// THE 43-ENTRY CHART, not pair 2's 51: core/driver/ts590/caps.go's
+	// kenwoodCTCSSTones literal, the project's shared forty-two plus
+	// 1750.0 Hz. Transcribed here rather than shared because core/csvio sits
+	// BELOW core/driver in the import graph.
+	caps.CTCSSTones = []spec.Tone{
+		670, 693, 719, 744, 770, 797, 825, 854, 885, 915, 948, 974,
+		1000, 1035, 1072, 1109, 1148, 1188, 1230, 1273, 1318, 1365,
+		1413, 1462, 1514, 1567, 1622, 1679, 1738, 1799, 1862, 1928,
+		2035, 2065, 2107, 2181, 2257, 2291, 2336, 2418, 2503, 2541,
+		17500,
+	}
 	rw := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
 	banks := make([]spec.Bank, len(caps.Banks))
 	copy(banks, caps.Banks)
@@ -2408,6 +2442,12 @@ func ts590LikeCapabilities(model, catID string) spec.Capabilities {
 			// Graded on the MEM bank only, as the real driver's bankFields
 			// does — see the doc comment's mirrored item 4.
 			spec.FieldTxFrequency: rw,
+			// Mirrored item 6: the Icom half of the vocabulary pair, all
+			// three graded, which is what sends a CHIRP row down
+			// importCHIRPToneIcom as the registered rows do.
+			spec.FieldToneMode: rw,
+			spec.FieldToneTx:   rw,
+			spec.FieldToneRx:   rw,
 			// No per-channel clarifier field, no shift selector and no
 			// ctcss_state/ctcss_tone pair anywhere in the 47 accounted
 			// parameter bytes: this record expresses tone as a mode selector
@@ -3474,4 +3514,89 @@ func importOneChannel(t *testing.T, csv string, caps spec.Capabilities) *codeplu
 		t.Fatalf("imported %d channels, want exactly 1 with data", len(channels))
 	}
 	return channels[0].Data
+}
+
+// TestImportCHIRP_TS590PairTakesTheToneModeBranch is v1.5.x follow-up (l):
+// until 09/09/2026 ts590LikeCapabilities graded NONE of
+// FieldToneMode/FieldToneTx/FieldToneRx, so every pair-1 test took
+// importCHIRPToneCTCSS whilst the registered rows take importCHIRPToneIcom
+// (core/driver/ts590/caps.go's bankFields grades all three). The fixture's
+// evidence was therefore about a branch these two radios never reach.
+//
+// The three shapes are §1.2 of the 09/09/2026 design, and the pair's answers
+// are the TS-890S/TS-990S ones for the same reason: the 590 record spells
+// tone as a mode selector with two independent indices, and its CTCSS legend
+// value maps to spec.ToneModeCTCSSRxSquelch (ASSUMED, the same class of
+// reading as register entry K-D1 on pair 2), which is receive squelch only —
+// so CHIRP's TSQL, which asks for encode+decode, has no wire value here and
+// is refused rather than substituted. That refusal is follow-up (k)'s
+// question answered: the 590 pair does what pair 2 does, in the same words.
+//
+// BOTH INDICES STAY UNKNOWN ON A BLANK-Tone ROW, which is ruling B2: the
+// file's rToneFreq/cToneFreq columns are CHIRP's per-row "this is not really
+// data" defaults (chirpExtraColumnDefaults, above), so nothing is carried
+// from them and the write stays refused naming both.
+func TestImportCHIRP_TS590PairTakesTheToneModeBranch(t *testing.T) {
+	for _, caps := range []spec.Capabilities{
+		ts590LikeCapabilities("TS-590S", "021"),
+		ts590LikeCapabilities("TS-590SG", "023"),
+	} {
+		t.Run(caps.Model, func(t *testing.T) {
+			for _, f := range []spec.Field{spec.FieldToneMode, spec.FieldToneTx, spec.FieldToneRx} {
+				if !reaches(caps, spec.BankMemory, f) {
+					t.Fatalf("fixture precondition: MEM does not reach %s — the real driver grades all three, so this fixture takes importCHIRPToneCTCSS where the registered row takes importCHIRPToneIcom", f)
+				}
+			}
+
+			t.Run("a blank Tone row leaves both indices Unknown and the mode Known OFF", func(t *testing.T) {
+				d := importOneChannel(t, "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n1,SIMPLEX,145.500000,FM,,88.5,88.5\n", caps)
+				if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "OFF" {
+					t.Errorf("ToneMode = %+v, want Known %q", d.ToneMode, "OFF")
+				}
+				if d.ToneTx.State != codeplug.Unknown || d.ToneRx.State != codeplug.Unknown {
+					t.Errorf("ToneTx = %+v, ToneRx = %+v, want both Unknown — the two populated columns beside a blank Tone cell are CHIRP's per-row defaults, not this row's answer (ruling B2)", d.ToneTx, d.ToneRx)
+				}
+			})
+
+			t.Run("a Tone row sets the transmit index and leaves the receive index Unknown", func(t *testing.T) {
+				d := importOneChannel(t, "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n1,REPEATER,145.500000,FM,Tone,100.0,88.5\n", caps)
+				if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "TONE" {
+					t.Errorf("ToneMode = %+v, want Known %q", d.ToneMode, "TONE")
+				}
+				if d.ToneTx.State != codeplug.Known || d.ToneTx.Value != spec.Tone(1000) {
+					t.Errorf("ToneTx = %+v, want Known 1000 from rToneFreq", d.ToneTx)
+				}
+				if d.ToneRx.State != codeplug.Unknown {
+					t.Errorf("ToneRx = %+v, want Unknown — CHIRP's encode-only row says nothing about the receive index", d.ToneRx)
+				}
+			})
+
+			t.Run("a TSQL row is refused and moves no field", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n1,SQUELCH,145.500000,FM,TSQL,88.5,88.5\n"
+				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if !report.HasBlocking() {
+					t.Fatalf("HasBlocking() = false, want true — this row publishes no encode+decode tone mode: %+v", report.Entries)
+				}
+				var tone []LossEntry
+				for _, e := range entriesForLine(report, 2) {
+					if e.Column == "Tone" {
+						tone = append(tone, e)
+					}
+				}
+				if len(tone) != 1 {
+					t.Fatalf("%d Tone entries, want exactly 1: %+v", len(tone), tone)
+				}
+				if e := tone[0]; e.Action != ActionUnsupported || !e.Blocking || e.Value != "TSQL" {
+					t.Errorf("Tone entry = %+v, want a Blocking ActionUnsupported one carrying the TSQL cell", e)
+				}
+				d := channels[0].Data
+				if d.ToneMode.State != codeplug.Unknown || d.ToneTx.State != codeplug.Unknown || d.ToneRx.State != codeplug.Unknown {
+					t.Errorf("ToneMode = %+v, ToneTx = %+v, ToneRx = %+v, want all Unknown", d.ToneMode, d.ToneTx, d.ToneRx)
+				}
+			})
+		})
+	}
 }
