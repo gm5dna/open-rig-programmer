@@ -18,9 +18,12 @@ import "fmt"
 //
 // THE READ FRAME IS ALWAYS AT THE FULL THREE-DIGIT ADDRESS. Both books print
 // ten positions with P1 occupying three of them (590:552, 480:410), and
-// internal/extable registers all three Kenwood profiles as AddressSingle, so
+// internal/extable registers this package's three Kenwood stanzas —
+// ts590sProfile, ts590sgProfile and ts480Profile — as AddressSingle, so
 // there is one width on every row and no second form for a builder to get
-// wrong.
+// wrong. The other two Kenwood stanzas, ts890sProfile and ts990sProfile,
+// register AddressGrouped with a five-character address instead; that pair
+// renders through core/kw/ma's own EX read, not this one.
 
 // The EX frame lengths.
 const (
