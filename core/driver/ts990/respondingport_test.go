@@ -26,6 +26,9 @@ const (
 	// parameters, a ten-byte name window at 47-56 and ';' nailed to 57
 	// (990:2919-2938).
 	ma0AnswerLen = 57
+	// exReadLen is "E X P1 P2 P2 P3 P3 ;" — eight bytes, carrying NO P4
+	// (990:1734-1736).
+	exReadLen = 8
 )
 
 // respondingPort is this package's scripted radio: a net.Pipe whose remote
@@ -47,9 +50,10 @@ const (
 //
 // WHAT IT KNOWS: "AI0;" (silence), "ID;", "FV;", the seven-byte MA0 read and
 // — since task 14 — the 57-byte MA0 Set, which draws SILENCE unless
-// ma0SetReject scripts a "?;". ANY OTHER frame is answered "?;", so a task
-// that adds a command class and forgets to teach this helper about it sees
-// its frame rejected loudly rather than silently succeed.
+// ma0SetReject scripts a "?;", and the eight-byte EX read. ANY OTHER frame is
+// answered "?;", so a task that adds a command class and forgets to teach
+// this helper about it sees its frame rejected loudly rather than silently
+// succeed.
 //
 // THE ACKNOWLEDGEMENT SEMANTICS OF THOSE ANSWERS ARE AN ASSUMED CONVENTION
 // APPLIED, NOT AN OBSERVED RADIO TRANSCRIBED — no TS-990S has ever been
@@ -98,6 +102,16 @@ type radioImage struct {
 	// an accepted Set draws (A6). It is the write path's REJECTION row,
 	// which is the only wire outcome of a Set that is attributable at all.
 	ma0SetReject bool
+	// exAnswers maps the FIVE-DIGIT menu address of an EX read —
+	// frame[2:7] — to the RAW answer frame served for it. Raw, so a test can
+	// serve a foreign address, a P5 wider than the row's printed width or
+	// either of the two answer shapes E19 admits.
+	exAnswers map[string]string
+	// exReject names addresses answered "?;" — the settings seam's own
+	// outcome, which is SettingUnavailable rather than a failure — and
+	// exSilent those answered not at all.
+	exReject map[string]bool
+	exSilent map[string]bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -249,6 +263,18 @@ func (img radioImage) reply(frame string) string {
 			return ""
 		}
 		if ans, ok := img.ma0Answers[slot]; ok {
+			return ans
+		}
+		return "?;"
+	case strings.HasPrefix(frame, "EX") && len(frame) == exReadLen:
+		addr := frame[2:7]
+		if img.exSilent[addr] {
+			return ""
+		}
+		if img.exReject[addr] {
+			return "?;"
+		}
+		if ans, ok := img.exAnswers[addr]; ok {
 			return ans
 		}
 		return "?;"
