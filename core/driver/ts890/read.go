@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw/ma"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -88,23 +87,6 @@ func (e *UnknownSlotError) Error() string {
 
 // Unwrap lets errors.Is(err, ErrUnknownSlot) match.
 func (e *UnknownSlotError) Unwrap() error { return ErrUnknownSlot }
-
-// AnswerMismatchError reports the requested and the answered slot; the shared
-// form carries the model name, so this package needs no typed error of its
-// own.
-//
-// ON THIS ROW THE SLOT IS THE WHOLE OF THE ADDRESSING, which is why there is
-// no second mismatch type where pair 1 has one. The 590's MR answer carries a
-// P1 that its slot string cannot express, so that driver needs an
-// AnswerP1MismatchError; here P1 IS the channel number, three digits at
-// positions 4-6 immediately after the opcode (890:3184-3186), and the record
-// has no other addressing byte.
-type AnswerMismatchError = driver.AnswerMismatchError[string]
-
-// ErrAnswerMismatch is the sentinel a caller compares against (via errors.Is)
-// when a slot-addressed answer names a DIFFERENT channel than the one just
-// requested.
-var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
 // parseSlotID reads a canonical slot identifier as a channel number.
 //
@@ -260,9 +242,6 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 	rec, err := s.layout.ParseMA0Answer(frame)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ts890: ReadChannel %s: %w", id, err)
-	}
-	if got := rec.Slot.String(); got != id {
-		return codeplug.Channel{}, &AnswerMismatchError{Model: "ts890", Requested: id, Answered: got}
 	}
 	if rec.Empty {
 		// THE EMPTY PREDICATE IS A PREDICATE AND NOT A VALIDITY RULE (plan
