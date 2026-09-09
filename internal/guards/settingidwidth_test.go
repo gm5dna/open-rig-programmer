@@ -93,7 +93,7 @@ import (
 // field, the form"), core/driver/<model>, internal/fake*. Each such
 // statement is true as written and becomes FALSE if generalised, which is
 // the opposite of the drift this guard catches. RE-MEASURED at the
-// TS-890S/TS-990S registration (task 18, 09/09/2026): 96 of them in
+// TS-890S/TS-990S registration (task 18, 09/09/2026): 96 matches in
 // non-test files outside the scoped directories, and 267 across every .go
 // file outside them including tests — 68 of that last number are this
 // file's own samples and prose, which the guard never scans.
