@@ -434,14 +434,21 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		CTCSSToneRange: nil,
 		// FIVE rates, and 4800 is deliberately OMITTED (§1.11). The book
 		// prints six: "Selectable from 4800*/ 9600/ 19200/ 38400/ 57600/
-		// 115200 bps" (990:13-14), with the asterisk resolving on the same
-		// page to "4800 bps cannot be used with the USB-B connector"
-		// (990:23) — and USB-B is the connector this book's own "Using a
-		// USB Cable" section steers a PC user to (990:33-40). A Bauds list
-		// is one flat list per row with no per-path axis, so publishing
-		// 4800 would promise a rate this programme cannot deliver on the
-		// ordinary connection, and the failure mode would be a timeout that
-		// looks like a dead port. Publishing five claims nothing false.
+		// 115200 bps" (990:13-14). IT IS CONDITIONAL IN TWO INDEPENDENT
+		// WAYS ON THIS RADIO, and spec.Capabilities can express neither.
+		// The asterisk resolves on the same page to "4800 bps cannot be
+		// used with the USB-B connector" (990:23) — and USB-B is the
+		// connector this book's own "Using a USB Cable" section steers a PC
+		// user to (990:33-40) — while a Bauds list is ONE FLAT LIST PER ROW
+		// with no per-path axis and cannot say "except over one of this
+		// radio's paths". And the framing table's stop-bit row makes the
+		// rate the one place two stop bits are available, "1 (2 is
+		// available only when using 4800 bps)" (990:18), where stop bits
+		// live in transport.SerialConfig and are chosen once per session
+		// independently of the rate — so offering 4800 would offer a rate
+		// this programme then opens with framing the book scopes to it.
+		// Publishing five claims nothing false; the failure mode publishing
+		// six invites is a timeout that looks like a dead port.
 		Bauds: []int{9600, 19200, 38400, 57600, 115200},
 		// ASSUMED — A11, and an OPERATIONAL ASSUMPTION rather than a
 		// conservative choice (§1.12). This book prints no factory value:

@@ -209,9 +209,13 @@ func (s *Session) ma0Spec(slot ma.Slot) transport.CommandSpec {
 //   - A TIMEOUT is the typed kw.TimeoutError, which says in as many words that
 //     it is not an inference of absence. It fails the session read whole too.
 //   - AN UNASSIGNED CHANNEL IS NOT A FAILURE AND IS NOT A REJECTION: an answer
-//     whose P2-P18 are blank is the documented blank channel of 990:2962-2963
-//     and is reported as codeplug.Channel{Slot: id} with a nil Data, which is
-//     the driver seam's own spelling of "this slot is empty". The predicate is
+//     whose BYTES 7-56 are blank — P2 to P18, which on this row is the WHOLE
+//     record and includes the name window — is the documented blank channel of
+//     990:2962-2963, and is reported as codeplug.Channel{Slot: id} with a nil
+//     Data, which is the driver seam's own spelling of "this slot is empty".
+//     The sibling row's note stops at P12 and leaves its name window
+//     unspecified, which is why it has a residue arm and this one has none.
+//     The predicate is
 //     the codec's and runs before any per-field domain parse, which is what
 //     stops a blank P17 — a byte MA0 prints only as '1' or '2' — raising on
 //     every unused slot of a fresh radio.
