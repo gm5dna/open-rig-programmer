@@ -315,7 +315,7 @@
 //
 //  10. THE DEFAULT IMAGE'S RECORD COMPOSITION. Every BYTE of every shipped
 //     record is a printed constant, one of the three printed example
-//     frequencies (990:86, 990:344-345, 990:2352), a printed legend value, a
+//     frequencies (990:86-89, 990:344-345, 990:2352), a printed legend value, a
 //     character from the printed KY set (990:2770-2778), or A6's blank
 //     spelling — but no MA0 frame is printed as a literal anywhere in the
 //     book, so the CROSS-FIELD COMBINATION has never been printed or observed.
@@ -387,9 +387,9 @@
 //     on for the MA0 grid — and it is the only candidate that cannot be read
 //     as a digit of the value: a '0' pad would make a three-digit menu's
 //     answer indistinguishable from a fifteen-digit one. core/kw/ma returns P5
-//     verbatim and leaves the pad to its caller, so nothing downstream depends
-//     on which byte this is; a test that did would be pinning this entry
-//     rather than the radio.
+//     verbatim and leaves the pad to its caller, so no production code
+//     depends on which byte this is; this package's own ex_test.go pin,
+//     TestEXAnswer_ThePadIsSpacesAndTheValueLeadsIt, holds it.
 //
 // # What is NOT in this register, and why
 //

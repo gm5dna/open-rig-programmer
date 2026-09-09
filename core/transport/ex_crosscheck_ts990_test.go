@@ -460,9 +460,6 @@ func TestEXTS990RoundTrip_AllAddressesRawPort(t *testing.T) {
 		if got := gotP5[:item.Digits]; got != want {
 			t.Errorf("%v: the answer's first %d P5 bytes are %q, want the fake's own default %q", item.Addr, item.Digits, got, want)
 		}
-		if pad := gotP5[item.Digits:]; strings.Trim(pad, " ") != "" {
-			t.Errorf("%v: the pad past the row's own %d bytes is %q, want spaces — ma.ParseEXAnswer returns P5 verbatim and leaves the pad to this caller", item.Addr, item.Digits, pad)
-		}
 		answered++
 	}
 	if answered != len(items) {
