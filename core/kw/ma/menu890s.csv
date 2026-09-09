@@ -1,0 +1,250 @@
+# menu890s.csv - transcription A of the TS-890S "EX Command Parameter Lists".
+#
+# BOOK: "TS-890S PC CONTROL COMMAND Reference Guide", January/30/2019,
+# (c) 2019 B5A-2944-00/01 - the title, date and code as printed on the cover
+# and the last page (layout lines 1-8 and 5936).
+#
+# SOURCE: docs/fixtures-private/manuals/ts890s_pc_rev1_layout.txt, the chart
+# at layout lines 1934-2283 - the "Menu" list (P1=0, lines 1939-2204) and the
+# "Advanced Menu" list (P1=1, lines 2218-2281), whose column headings are at
+# 1935-1938, 2006-2009, 2098-2101, 2181-2184 and 2212-2215. The EX command's
+# own frame and parameter definitions, which this file's widths are read
+# against, are at 1896-1926.
+#
+# RENDER PAGES CHECKED: every line above was read against 300 dpi renders of
+# PDF pages 25, 26, 27, 28, 29 and 30 (printed pages 24 to 29) of
+# ts890s_pc_rev1.pdf, produced with pdftoppm -r 300. Layout-led, PDF-checked.
+#
+# DATE: 08/09/2026. No other document was consulted: not another radio's
+# chart, not another transcription, not a third-party table.
+#
+# ROWS: 162 addressed rows - 135 with P1=0 and 27 with P1=1. The chart's last
+# printed line, "1 - 27 Firmware Version", is NOT here: its P2 cell prints an
+# em dash rather than an address (layout 2281, render page 30), so it is not
+# an addressed row. The four rows whose P5 cell reads "Does not correspond to
+# a command" ARE here, addressed and counted, with a hyphen digits cell: the
+# profile names them in ParameterlessAddresses and the generator omits them
+# from the inventory by address.
+#
+# COLUMNS: p1,p2,p3,p1_label,p2_label,name,p4,digits,text,manual_line.
+#   p1,p2,p3    the chart's three address cells, verbatim with their leading
+#               zeros (P1 one digit, P2 and P3 two).
+#   p1_label,p2_label
+#               always blank: this chart prints no group-label columns at all
+#               (confirmed on renders of PDF pages 26-30), so the profile
+#               registers LabelsAbsent.
+#   name        the Function column VERBATIM, wrapped lines joined with one
+#               space - except that a break INSIDE a word is closed up
+#               rather than joined with a space, because the space would be
+#               one the book does not print: the seven cells that break
+#               after "(Multi/" are "(Multi/Channel Control)", which the
+#               chart itself prints unbroken at 0/03/05 (layout 2046-2047),
+#               and the two cells that break after "AM-" are
+#               "(SSB-DATA/AM-DATA)", the hyphen being the compound's own.
+#               Where the book prints a space mid-line it is kept: 0/05/16
+#               "CW/ Voice Message Retransmit Interval Time" (layout 2114).
+#   p4          the book's own description of this row's P5 field. It is the
+#               row's printed P5 cell where that cell is prose spanning the
+#               whole width (the two message rows, the seventeen PF-key rows,
+#               Contest Number, Reference Oscillator Calibration and the four
+#               "Does not correspond to a command" rows); on every other row
+#               the chart prints a VALUE TABLE and no description, so p4
+#               carries the P5 legend the book gives those rows at layout
+#               1917. The P5 value tables themselves are NOT transcribed
+#               here: nothing reads them, RenderGo does not emit p4, and a
+#               seven-column matrix with vertically wrapped cells is not
+#               transcribable without a check no test in this repository
+#               would give it.
+#   digits      the width of the largest P5 code printed for the row. The
+#               column headings are three characters ("000" ... "006 ~"), so
+#               a row that enumerates values is 3. Twenty-one rows are not:
+#               the two message rows carry their prose character counts (10
+#               and 15, layout 1946 and 1947) and are flagged text; Contest
+#               Number prints "0001 ~ 9999 (Must be a 4-digit number)"
+#               (layout 2108) and Reference Oscillator Calibration
+#               "Parameter value of 0000 ~ 1000" (layout 2236), which are
+#               numeric legends of width 4 and are NOT text; and the
+#               seventeen PF-key rows are 4 under the ruling below. The four
+#               excluded rows carry "-".
+#   text        true only for the two message rows.
+#   manual_line the line in the layout text this row was transcribed from.
+#
+# RULED, BY THE ORCHESTRATOR (ruling R-B, 08/09/2026): the seventeen PF-key
+# rows 0/00/15 to 0/00/31 carry digits 4, NOT the 3 this file first
+# transcribed. Their own P5 cell is the prose "Refer to the list of function
+# allotment numbers for the PF key" and states no width, so the width has to
+# come from the chart's own surroundings; the EX command page prints it -
+# "PF key settings use 4 digits (refer to the PF Key assignment ID lists)"
+# (layout 1918-1919, render page 25) - and the list it points at runs to
+# four-character IDs, "Off 9999" being the last (layout 2292-2342, the ID
+# at 2342). The transcription leg recorded the disagreement rather than
+# settling it, which is what a transcription leg should do; this line
+# records who settled it and on what. The profile's MaxDigits stays 4: the
+# two numeric-legend rows above already carried that width.
+#
+# 0/03/07's Function cell is "Tuning Control :" - the book itself prints
+# this cell truncated (layout 2049, render-confirmed on printed page 26,
+# between "MHz Step" and "Tuning Speed Control"), and it is transcribed as
+# printed.
+0,00,00,,,Color Display Pattern,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1939
+0,00,01,,,Function Key Style,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1940
+0,00,02,,,Font Style (Frequency Display),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1941
+0,00,03,,,Screen Saver,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1942
+0,00,04,,,Screen Saver Wait Time,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1944
+0,00,05,,,Screen Saver Message,Up to 10 alphanumeric characters,10,true,1946
+0,00,06,,,Power-on Message,Up to 15 alphanumeric characters,15,true,1947
+0,00,07,,,FM Mode S-Meter Sensitivity,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1948
+0,00,08,,,Meter Response Speed (Analog),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1949
+0,00,09,,,Meter Display Pattern,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1951
+0,00,10,,,Meter Display Peak Hold,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1953
+0,00,11,,,S-Meter Scale,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1954
+0,00,12,,,TX Digital Meter,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1955
+0,00,13,,,Long Press Duration of Panel Keys,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1957
+0,00,14,,,Touchscreen Tuning,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1959
+0,00,15,,,PF A: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1960
+0,00,16,,,PF B: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1961
+0,00,17,,,PF C: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1962
+0,00,18,,,External PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1963
+0,00,19,,,External PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1964
+0,00,20,,,External PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1965
+0,00,21,,,External PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1966
+0,00,22,,,External PF 5: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1967
+0,00,23,,,External PF 6: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1968
+0,00,24,,,External PF 7: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1969
+0,00,25,,,External PF 8: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1970
+0,00,26,,,Microphone PF 1: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1971
+0,00,27,,,Microphone PF 2: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1972
+0,00,28,,,Microphone PF 3: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1973
+0,00,29,,,Microphone PF 4: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1974
+0,00,30,,,Microphone DOWN: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1975
+0,00,31,,,Microphone UP: Key Assignment,Refer to the list of function allotment numbers for the PF key,4,false,1976
+0,00,32,,,Automatic Power Off,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1977
+0,01,00,,,Beep Volume,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1978
+0,01,01,,,Voice Message Volume (Play),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1979
+0,01,02,,,Sidetone Volume,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1981
+0,01,03,,,Voice Guidance Volume,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1983
+0,01,04,,,Voice Guidance Speed,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1984
+0,01,05,,,User Interface Language (Voice Guidance & Messages),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1986
+0,01,06,,,Automatic Voice Guidance,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1988
+0,02,00,,,FFT Scope Averaging (RTTY Decode),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1989
+0,02,01,,,RX UOS,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1990
+0,02,02,,,Newline Code,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1991
+0,02,03,,,Diddle,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1993
+0,02,04,,,TX UOS,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1995
+0,02,05,,,Automatic Newline Insertion,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1996
+0,02,06,,,FSK Spacing,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1997
+0,02,07,,,FSK Keying Polarity,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1998
+0,02,08,,,FSK Tone Frequency,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,1999
+0,02,09,,,RTTY Tuning Scope,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2010
+0,02,10,,,FFT Scope Averaging (PSK Decode),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2011
+0,02,11,,,PSK AFC Tuning Range,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2012
+0,02,12,,,PSK Tone Frequency,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2013
+0,02,13,,,PSK Tuning Scope,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2015
+0,02,14,,,CW/RTTY/PSK Log File Format,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2017
+0,02,15,,,CW/RTTY/PSK Time Stamp,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2019
+0,02,16,,,Clock (CW/RTTY/PSK Time Stamp),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2022
+0,02,17,,,Waterfall when Tuning (RTTY/PSK Audio Scope),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2024
+0,03,00,,,Frequency Rounding Off (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2027
+0,03,01,,,SSB Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2030
+0,03,02,,,CW/FSK/PSK Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2033
+0,03,03,,,FM Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2037
+0,03,04,,,AM Mode Frequency Step Size (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2042
+0,03,05,,,9 kHz Step in AM Broadcast Band (Multi/Channel Control),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2046
+0,03,06,,,MHz Step,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2048
+0,03,07,,,Tuning Control :,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2049
+0,03,08,,,Tuning Speed Control,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2050
+0,03,09,,,Tuning Speed Control Sensitivity,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2051
+0,03,10,,,Lock Function,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2054
+0,03,11,,,Number of Band Memories,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2057
+0,03,12,,,Split Frequency Offset by RIT/XIT Control,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2060
+0,03,13,,,Band Direct Keys in Split Mode,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2065
+0,04,00,,,Number of Quick Memory Channels,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2068
+0,04,01,,,Temporary Change (Memory Channel Configurations),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2070
+0,04,02,,,Program Slow Scan,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2072
+0,04,03,,,Program Slow Scan Range,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2073
+0,04,04,,,Scan Hold,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2074
+0,04,05,,,Scan Resume,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2076
+0,05,00,,,Paddle Jack Configuration (Front),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2078
+0,05,01,,,Key Jack Configuration (Rear),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2081
+0,05,02,,,Electronic Keyer Squeeze Mode,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2083
+0,05,03,,,Dot and Dash Reversed Keying,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2084
+0,05,04,,,Paddle (Microphone Up/Down Keys),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2085
+0,05,05,,,CW BFO Sideband,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2086
+0,05,06,,,Automatic CW TX with Keying in SSB Mode,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2088
+0,05,07,,,Carrier Frequency Offset,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2090
+0,05,08,,,CW Keying Weight Ratio,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2103
+0,05,09,,,CW Keying Reversed Weight Ratio,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2105
+0,05,10,,,Interrupt Keying,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2106
+0,05,11,,,CW Message Entry,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2107
+0,05,12,,,Contest Number,0001 ~ 9999 (Must be a 4-digit number),4,false,2108
+0,05,13,,,Contest Number Format,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2109
+0,05,14,,,Channel Number (Countup Message),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2111
+0,05,15,,,CW Rise Time,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2113
+0,05,16,,,CW/ Voice Message Retransmit Interval Time,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2115
+0,06,00,,,Playback Time (Fulltime Recording),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2117
+0,06,01,,,Recording with Squelch,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2118
+0,06,02,,,Time-out Timer,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2119
+0,06,03,,,TX Inhibit,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2120
+0,06,04,,,Transmit Power Step Size,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2121
+0,06,05,,,ID Beep,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2122
+0,06,06,,,TX Filter Low Cut (SSB/AM),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2123
+0,06,07,,,TX Filter High Cut (SSB/AM),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2125
+0,06,08,,,TX Filter Low Cut (SSB-DATA/AM-DATA),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2128
+0,06,09,,,TX Filter High Cut (SSB-DATA/AM-DATA),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2131
+0,06,10,,,RX Filter Numbers,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2133
+0,06,11,,,Filter Control in SSB Mode (High/Low and Shift/Width),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2135
+0,06,12,,,Filter Control in SSB-DATA Mode (High/Low and Shift/Width),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2137
+0,06,13,,,VOX Voice Delay (Microphone),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2138
+0,06,14,,,VOX Voice Delay (Except Microphone),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2139
+0,06,15,,,Delta Frequency Display,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2140
+0,07,00,,,Baud Rate (COM Port),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2142
+0,07,01,,,Baud Rate (Virtual Standard COM),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2145
+0,07,02,,,Baud Rate (Virtual Enhanced COM),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2148
+0,07,03,,,Decoded Character Output,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2150
+0,07,04,,,Quick Data Transfer,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2151
+0,07,05,,,Overwrite Location (Quick Data Transfer),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2153
+0,07,06,,,USB: Audio Input Level,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2155
+0,07,07,,,ACC 2: Audio Input Level,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2156
+0,07,08,,,USB: Audio Output Level,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2157
+0,07,09,,,ACC 2: Audio Output Level,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2158
+0,07,10,,,TX Monitor Level (Rear Connectors),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2159
+0,07,11,,,Audio Output Type (Rear Connectors),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2161
+0,08,00,,,Bandscope Display during TX,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2163
+0,08,01,,,TX Audio Waveform Display,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2164
+0,08,02,,,Bandscope Maximum Hold,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2165
+0,08,03,,,Waterfall when Tuning (Center Mode),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2166
+0,08,04,,,Waterfall Gradation Level,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2167
+0,08,05,,,Tuning Assist Line (SSB Mode),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2170
+0,08,06,,,Frequency Scale (Center Mode),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2174
+0,08,07,,,Automatic Correction Step (Touchscreen Tuning),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2186
+0,09,00,,,Send Message by Function Keys (USB Keyboard),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2189
+0,09,01,,,Keyboard Language (USB Keyboard),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2195
+0,09,02,,,Repeat Delay Time (USB Keyboard),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2203
+0,09,03,,,Repeat Speed (USB Keyboard),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2204
+1,00,00,,,Indication Signal Type (External Meter 1),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2218
+1,00,01,,,Indication Signal Type (External Meter 2),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2224
+1,00,02,,,Output Level (External Meter 1),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2229
+1,00,03,,,Output Level (External Meter 2),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2232
+1,00,04,,,Reference Signal Source,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2234
+1,00,05,,,Reference Oscillator Calibration,"Parameter value of 0000 ~ 1000, corresponding to setting values of -500 ~ +500",4,false,2236
+1,00,06,,,TX Power Down with Transverter Enabled,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2237
+1,00,07,,,TX Hold After Antenna Tuning,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2238
+1,00,08,,,Antenna Tuner during RX,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2239
+1,00,09,,,Antenna Tuner Operation per Band,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2240
+1,00,10,,,Microphone Gain (FM Mode),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2241
+1,00,11,,,PKS Polarity Reverse,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2242
+1,00,12,,,TX Inhibit While Busy,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2243
+1,00,13,,,CTCSS Unmute for Internal Speaker,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2244
+1,00,14,,,PSQ Logic State,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2245
+1,00,15,,,PSQ Reverse Condition,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2246
+1,00,16,,,PSQ/PKS Pin Assignment (COM Connector),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2248
+1,00,17,,,Virtual Standard COM Port – RTS,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2251
+1,00,18,,,Virtual Standard COM Port – DTR,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2257
+1,00,19,,,Virtual Enhanced COM Port – RTS,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2262
+1,00,20,,,Virtual Enhanced COM Port - DTR,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2267
+1,00,21,,,External Display,Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2271
+1,00,22,,,Resolution (External Display),Normally a 3-digit number (blank digits must be entered as “0”.),3,false,2272
+1,00,23,,,Touchscreen Calibration,Does not correspond to a command,-,false,2273
+1,00,24,,,Software License Agreement,Does not correspond to a command,-,false,2274
+1,00,25,,,Important Notices concerning Free Open Source,Does not correspond to a command,-,false,2276
+1,00,26,,,About Various Software License Agreements,Does not correspond to a command,-,false,2279

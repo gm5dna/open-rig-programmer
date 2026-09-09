@@ -71,7 +71,7 @@
 //     NAMES one of two enumerated choices, it does not make the parameter
 //     textual. This chart has no free-text row at all — there is no "(up to
 //     N characters) (ASCII)" anywhere in it — which is why the ft891
-//     extable profile declares TextRowsAbsent with TextWidth 0, and why a
+//     extable profile declares TextRowsAbsent with an empty TextWidths, and why a
 //     text row in this CSV is refused by the parser rather than transcribed.
 //     Recorded as a defect-shaped TRAP rather than a defect: a reader
 //     skimming for the FTdx10's MY CALL. row will find these five and must

@@ -1,0 +1,145 @@
+# Kenwood TS-990S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision number is printed. Cover prints "January/30/2019"
+#   under "PC CONTROL COMMAND REFERENCE GUIDE / TS-990S". (File name says rev2; the book
+#   itself prints no revision.)
+# Command: MA0 "Memory Channel Configuration"
+# Printed page 35 = PDF page 36. Charts used: Set, Read, Answer (all three on that page).
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted. Every position
+# below was COUNTED off the printed numbered ruler above each chart row.
+#
+# ---------------------------------------------------------------------------
+# COUNTED FRAME LENGTHS
+#   Read    : 7 positions. Ruler prints 1..10; cells occupy 1..7, ';' at printed position 7.
+#   Set     : 57 positions, FIXED. Terminator at the NUMBERED position 57.
+#   Answer  : identical chart to Set, position for position; ';' at 57.
+#
+#   The Set and Answer rulers print, tier by tier (every header is a NUMBER; this book
+#   never uses the letter "x" here):
+#     tier 1 header  1  2  3  4  5  6  7  8  9 10   cells  M  A  0 P1 P1 P1 P2 P3 P3 P3
+#     tier 2 header 11 12 13 14 15 16 17 18 19 20   cells P3 P3 P3 P3 P3 P3 P3 P3 P4 P5
+#     tier 3 header 21 22 23 24 25 26 27 28 29 30   cells P6 P7 P7 P8 P8 P9 P9 P9 P9 P9
+#     tier 4 header 31 32 33 34 35 36 37 38 39 40   cells P9 P9 P9 P9 P9 P9 P10 P11 P12 P13
+#     tier 5 header 41 42 43 44 45 46 47 48 49 50   cells P13 P14 P14 P15 P16 P17 P18 P18 P18 P18
+#     tier 6 header 51 52 53 54 55 56 57 58 59 60   cells P18 P18 P18 P18 P18 P18  ;
+#   Columns 58, 59 and 60 of tier 6 are printed and EMPTY.
+#   See crops work/ma0-990-set.png (Set) and work/ma0-990-ans.png (Answer).
+#
+# LENGTH RULE (990S MA0 Set and Answer): 57 bytes, independent of name length. P18 is a
+#   fixed 10-wide field at positions 47-56 even though its legend says "Up to 10 digits."
+#
+# ---------------------------------------------------------------------------
+# POSITION MAP (Set and Answer are identical), with each legend VERBATIM
+#   1      'M'
+#   2      'A'
+#   3      '0'
+#   4- 6   P1
+#            "000 ~ 119:  Channel Number"
+#            "Channels P0 ~ P9 are represented as 100 ~ 109 and channels E0 ~ E9 are
+#             represented as 110 ~ 119."
+#   7      P2
+#            "0:  Single Memory channel"
+#            "1:  Dual Memory channel"
+#            "2:  Section defined Memory channel"
+#            "The memory channel type is decided while setting the P9 and P10 values, so
+#             this parameter is ignored. Enter a dummy value."
+#   8-18   P3
+#            "Frequency 1 (11 digits in Hz.)"
+#  19      P4
+#            "Mode information for frequency 1 (refer to the P2 value of the OM command)"
+#  20      P5
+#            "0:  FM Wide for frequency 1"   "1:  FM Narrow for frequency 1"
+#  21      P6
+#            "0:  FM Tone function OFF for frequency 1"
+#            "1:  Tone for frequency 1"
+#            "2:  CTCSS for frequency 1"
+#            "3:  Cross Tone for frequency 1"
+#  22-23   P7
+#            "Tone frequency for frequency 1 (refer to the P2 value of the TN command)"
+#            [TN is on printed p.60; its index column IS headed P2: 00 67.0 ... 49 254.1,
+#             50 1750, 99 "Default". Citation correct.]
+#  24-25   P8
+#            "CTCSS frequency for frequency 1 (refer to the P2 value of the CN command)"
+#            [CN is on printed p.15; P1 is Main/Sub Band, P2 is the frequency and the table
+#             is headed P2: 00 67.0 ... 49 254.1, 99 "to default". Citation correct.]
+#  26-36   P9
+#            "Frequency 2 (11 digits in Hz. Blank digits must be entered as 0.)"
+#  37      P10
+#            "Mode information for frequency 2 (refer to the P1 value of the OM command)"
+#            [OM is on printed p.44. Its P1 is "0: Main Band / 1: Sub Band", NOT the mode;
+#             the mode is OM's P2. This citation contradicts P4 above. FINDING, not resolved.]
+#  38      P11
+#            "0:  FM Wide for frequency 2"   "1:  FM Narrow for frequency 2"
+#  39      P12
+#            "0:  FM Tone function OFF for frequency 2"
+#            "1:  Tone for frequency 2"
+#            "2:  CTCSS for frequency 2"
+#            "3:  Cross Tone for frequency 2"
+#  40-41   P13
+#            "Tone frequency for frequency 2 (refer to the P2 value of the TN command)"
+#  42-43   P14
+#            "CTCSS frequency for frequency 2 (refer to the P2 value of the CN command)"
+#  44      P15
+#            "0:  Simplex"   "1:  Split"
+#  45      P16
+#            "0:  Dual reception OFF"   "1:  Dual reception ON"
+#  46      P17
+#            "1:  Scan Lockout OFF"   "2:  Scan Lockout ON"
+#            [MA3 on printed p.36 encodes the same thing as "0: Scan Lockout OFF /
+#             1: Scan Lockout ON". Two encodings of one field in one book. FINDING.]
+#  47-56   P18
+#            "Channel Name (Up to 10 digits.)"
+#            [The word is "digits", for a name field. No note about padding or characters.]
+#  57      ';'
+#
+# NOTES PRINTED UNDER THE MA0 BOX, VERBATIM
+#   "When setting the channel currently being accessed, the new settings are reflected the
+#    next time that channel is accessed."
+#   "When the section defined memory channel is in the process of being read, it cannot be
+#    set."
+#   "When reading a blank channel, parameters P2 to P18 becomes blank."
+#   "When reading a single memory channel, all parameters for frequency 2 become 0."
+#
+#   The MA0 box says NOTHING about a channel that is not yet registered, and NOTHING about
+#   a response being given only when AI is ON. Those sentences appear on the sibling
+#   commands instead (MA1, MA2, MA3, MA6, printed p.36): "Setting an unassigned channel
+#   causes an error." / "When the AI function is ON, a response is provided by the MA0
+#   command." / "When the AI function is ON, a response can consist of the MA0 command."
+#
+# ---------------------------------------------------------------------------
+# INHERITED-ASSUMED bytes (values the manual does not determine)
+#   * The PAD CHARACTER for P18 when the name is shorter than 10. The chart is a fixed
+#     10-wide field and the terminator is nailed to position 57, but the legend says "Up to
+#     10 digits." and no padding note is printed anywhere.
+#     ASSUMED: ASCII space (0x20), name left-aligned, trailing spaces.
+#     This is the single largest unknown in this frame; two vectors below depend on it.
+#   * P7/P8 and P13/P14 when the corresponding tone function (P6 / P12) is 0 (OFF): the
+#     book never says what the indices hold. ASSUMED "00" (index 00 = 67.0 Hz), the lowest
+#     legal index printed.
+#   * P2 is stated to be ignored on Set ("Enter a dummy value"); the value carried below is
+#     therefore ASSUMED and matches what a corresponding Answer would plausibly report.
+#   * The channel-name character set: not printed. ASSUMED uppercase ASCII and digits.
+#   * The blank-channel case is NOT represented here: "P2 to P18 becomes blank" does not
+#     say whether the 57-position geometry survives.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim, terminator included; a space inside a frame
+#           is a real ASCII space)
+# Read chart (2 vectors)
+read_ch000	MA0000;
+read_ch119	MA0119;
+# Answer chart (4 vectors) - all 57 bytes
+# ordinary simplex channel, single memory channel, name of the FULL printed width
+answer_name_full10	MA00000000142500002000000000000000000000000001HOMEBASE10;
+# same shape with an EMPTY name - 10 pad characters, INHERITED-ASSUMED to be spaces
+answer_name_empty	MA00010000070740006000000000000000000000000001          ;
+# name SHORTER than the field (3 characters + 7 assumed pad spaces), lockout ON (P17 = 2)
+answer_name_short3	MA01190000503130004100000000000000000000000002ABC       ;
+# tone state other than OFF (P6 = 1 Tone, P7 = 08 -> 88.5 Hz, P8 = 12 -> 100.0 Hz), a dual
+# memory channel (P2 = 1) carrying a second frequency in P9, split (P15 = 1), dual
+# reception ON (P16 = 1), CTCSS on frequency 2 (P12 = 2, P14 = 21 -> 136.5 Hz), lockout ON
+answer_tone_dual_split	MA01001000296000004010812000295000004020021112REPEAT    ;
+# Set chart (2 vectors) - the Set ruler is identical to the Answer ruler position for
+# position, so these are byte-identical to the Answer vectors they mirror
+set_name_full10	MA00000000142500002000000000000000000000000001HOMEBASE10;
+set_tone_dual_split	MA01001000296000004010812000295000004020021112REPEAT    ;

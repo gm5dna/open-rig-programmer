@@ -11,8 +11,10 @@ import (
 )
 
 // TestStreamError_CarriesEachBooksOwnCauseSentence is erratum E13 made
-// falsifiable: the two documents give the SAME token DIFFERENT causes, and
-// a diagnostic that quotes the wrong one quotes the wrong document.
+// falsifiable: the books do not all give the SAME token the same cause —
+// the TS-480 diverges from the other three, which is E13 at its true
+// width, and a diagnostic that quotes the wrong sentence quotes the wrong
+// document.
 func TestStreamError_CarriesEachBooksOwnCauseSentence(t *testing.T) {
 	tests := []struct {
 		token    string
@@ -24,6 +26,13 @@ func TestStreamError_CarriesEachBooksOwnCauseSentence(t *testing.T) {
 		{"E;", Book480, "A communication error occurred, such as an overrun or framing error during a serial data transmission", "480:140-142"},
 		{"O;", Book590, "A receive buffer overrun error occurred", "590:113"},
 		{"O;", Book480, "Receive data was sent but processing was not completed", "480:143-144"},
+		{"E;", Book890, "A communication error occurred, such as an overrun or framing error during a serial data transmission", "890:118-120"},
+		{"E;", Book990, "A communication error occurred, such as an overrun or framing error during a serial data transmission", "990:118-120"},
+		// AND THE TWO NEW BOOKS SIDE WITH THE 590, NOT WITH THE 480: both
+		// print "A receive buffer overrun error occurred" for "O;", so E13
+		// is a TS-480 divergence rather than a two-way split.
+		{"O;", Book890, "A receive buffer overrun error occurred", "890:121-123"},
+		{"O;", Book990, "A receive buffer overrun error occurred", "990:121"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.token+" "+tt.book.String(), func(t *testing.T) {
@@ -60,7 +69,7 @@ func TestStreamError_CarriesEachBooksOwnCauseSentence(t *testing.T) {
 // not find one here.
 func TestStreamError_IsNeverARejection(t *testing.T) {
 	for _, token := range []string{"E;", "O;"} {
-		for _, b := range []Book{Book590, Book480} {
+		for _, b := range []Book{Book590, Book480, Book890, Book990} {
 			e := newStreamError(token, b)
 			if errors.Is(e, transport.ErrRejected) {
 				t.Errorf("%s on %v matches transport.ErrRejected — a link failure is not a refusal", token, b)
@@ -111,6 +120,8 @@ func TestRejectionError_NamesBothCausesAndTheTransientSentence(t *testing.T) {
 	}{
 		{Book590, "590:100-105", "590:106-108"},
 		{Book480, "480:130-135", "480:136-138"},
+		{Book890, "890:106-112", "890:114-116"},
+		{Book990, "990:108-113", "990:114-116"},
 	} {
 		t.Run(tt.book.String(), func(t *testing.T) {
 			e, err := NewRejectionError(tt.book, "MC007;")
@@ -149,7 +160,7 @@ func TestRejectionError_NamesBothCausesAndTheTransientSentence(t *testing.T) {
 // `cite := "590:..."; if e.Book == Book480 { ... }`, a value that names no
 // document quoted the TS-590's line numbers — the exact fail-open
 // ErrUnconfiguredBook exists to prevent, in the one package whose headline
-// erratum (E13) is that the two books disagree. An error that cannot name
+// erratum (E13) is that the books disagree about `O;`. An error that cannot name
 // its document must cite no lines at all and SAY that it cannot.
 func TestTypedErrors_QuoteNoDocumentTheyWereNotGiven(t *testing.T) {
 	for _, tt := range []struct {
@@ -160,7 +171,7 @@ func TestTypedErrors_QuoteNoDocumentTheyWereNotGiven(t *testing.T) {
 		{"timeout", (&TimeoutError{Book: BookUnset, Command: "MR0007;"}).Error()},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			for _, forbidden := range []string{"590:", "480:"} {
+			for _, forbidden := range []string{"590:", "480:", "890:", "990:"} {
 				if strings.Contains(tt.msg, forbidden) {
 					t.Errorf("Error() = %q — it quotes %s though it was given no document to speak for", tt.msg, forbidden)
 				}
@@ -173,15 +184,18 @@ func TestTypedErrors_QuoteNoDocumentTheyWereNotGiven(t *testing.T) {
 }
 
 // TestTimeoutError_IsNeverAnInferenceOfAbsence is the sharpest of the three
-// and the reason the family exists at all. Both books say the NAK itself is
-// unreliable — "Occasionally, this message may not appear due to
-// microprocessor transients in the transceiver" (590:106-108, 480:136-138)
-// — so a read that times out carries NO information: it is neither "absent"
-// nor "rejected". The message must say so, in the place a user reads it.
+// and the reason the family exists at all. Every book says the NAK itself
+// is unreliable — "Occasionally, this message may not appear due to
+// microprocessor transients in the transceiver" (590:106-108, 480:136-138,
+// 890:114-116, 990:114-116) — so a read that times out carries NO
+// information: it is neither "absent" nor "rejected". The message must say
+// so, in the place a user reads it.
 //
-// BOTH BOOKS ARE EXERCISED, as RejectionError's twin already was: the 480
+// EVERY BOOK IS EXERCISED, as RejectionError's twin already was: the 480
 // leg of the citation branch had no test at all, so nothing said which
-// document a TS-480 session's timeout would quote.
+// document a TS-480 session's timeout would quote. The cross-quote negative
+// is stated over the WHOLE set rather than as one sibling, so a fifth book
+// added without its own arm cannot pass by quoting a neighbour's lines.
 func TestTimeoutError_IsNeverAnInferenceOfAbsence(t *testing.T) {
 	for _, tt := range []struct {
 		book     Book
@@ -189,6 +203,8 @@ func TestTimeoutError_IsNeverAnInferenceOfAbsence(t *testing.T) {
 	}{
 		{Book590, "590:106-108"},
 		{Book480, "480:136-138"},
+		{Book890, "890:114-116"},
+		{Book990, "990:114-116"},
 	} {
 		t.Run(tt.book.String(), func(t *testing.T) {
 			e, err := NewTimeoutError(tt.book, "MR0007;")
@@ -207,13 +223,13 @@ func TestTimeoutError_IsNeverAnInferenceOfAbsence(t *testing.T) {
 					t.Errorf("Error() = %q, want it to contain %q", msg, want)
 				}
 			}
-			if other := "480:136-138"; tt.book == Book480 {
-				other = "590:106-108"
-				if strings.Contains(msg, other) {
-					t.Errorf("Error() = %q — a TS-480 session's timeout quotes the 590 book", msg)
+			for _, other := range []string{"590:106-108", "480:136-138", "890:114-116", "990:114-116"} {
+				if other == tt.citation {
+					continue
 				}
-			} else if strings.Contains(msg, other) {
-				t.Errorf("Error() = %q — a 590 session's timeout quotes the 480 book", msg)
+				if strings.Contains(msg, other) {
+					t.Errorf("Error() = %q — a %v session's timeout quotes %s, another book's lines", msg, tt.book, other)
+				}
 			}
 			var to *TimeoutError
 			if !errors.As(error(e), &to) {

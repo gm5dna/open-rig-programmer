@@ -1,0 +1,47 @@
+# Kenwood TS-890S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: AI "Auto Information"
+# Printed page 3 = PDF page 4. Charts used: Set, Read, Answer.
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS
+#   Set    : 4 positions. Ruler 1..10; cells 'A' 'I' P1 ';'. Terminator at printed position 4.
+#   Read   : 3 positions. Ruler 1..10; cells 'A' 'I' ';'.    Terminator at printed position 3.
+#   Answer : 4 positions. Ruler 1..10; cells 'A' 'I' P1 ';'. Terminator at printed position 4.
+#   Every header is a NUMBER.
+#
+# POSITION MAP
+#   Set/Answer  1 'A'  2 'I'  3 P1  4 ';'
+#   Read        1 'A'  2 'I'  3 ';'
+#
+# LEGEND, VERBATIM - every value and its meaning
+#   "P1"
+#   "  0:  AI OFF"
+#   "  1:  Not used"
+#   "  2:  AI ON (Not back up the ON state)"
+#   "  3:  Not used"
+#   "  4:  AI ON (Back up the ON state)"
+#
+# BULLETS PRINTED WITH THE COMMAND, VERBATIM (four of them)
+#   "When AI is ON, the respective response command is sent when the parameter is changed by
+#    the command with the response command."
+#   "When AI is ON by setting P1 parameter to 2 and the transceiver is turned to OFF, AI is
+#    also turned to OFF."
+#   "The backup state is initialized (AI OFF) by full reset, standard reset, or VFO reset."
+#   "The AI function can be set separately for USB connector, COM connector, or LAN
+#    connector."
+#   (The 990S book prints a fifth bullet that this book does not: "Parameter 4 is supported
+#    from firmware version 1.20.")
+#
+# INHERITED-ASSUMED bytes: none. Values 1 and 3 are printed as "Not used"; no vector is
+#   emitted for them, since the book gives them no meaning.
+#
+# VECTORS
+set_off	AI0;
+set_on_not_backed_up	AI2;
+set_on_backed_up	AI4;
+read	AI;
+answer_off	AI0;
+answer_on_not_backed_up	AI2;
+answer_on_backed_up	AI4;

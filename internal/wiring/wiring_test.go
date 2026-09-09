@@ -35,6 +35,8 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts480"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/extable"
@@ -44,6 +46,8 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft991a"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets590"
+	"github.com/gm5dna/open-rig-programmer/internal/fakets890"
+	"github.com/gm5dna/open-rig-programmer/internal/fakets990"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
@@ -238,6 +242,13 @@ var fakePackageForModel = map[string]string{
 	// registration answers "021" to the SG's driver and fails.
 	TS590SModel:  "internal/fakets590",
 	TS590SGModel: "internal/fakets590",
+	// Tier 6's SECOND pair, and the plainest rows in this table: one
+	// simulator package per model (plan decision P1), one constructor each
+	// taking no row argument, so there is no "which sibling" question for
+	// the CATID check below to settle — only "which package", which is what
+	// this table answers.
+	TS890SModel: "internal/fakets890",
+	TS990SModel: "internal/fakets990",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -404,6 +415,16 @@ var nonVacuousDefaultImage = map[string]bool{
 	// would be a test failure rather than a quiet reduction in coverage.
 	TS590SModel:  true,
 	TS590SGModel: true,
+	// The TS-890S and TS-990S (Tier 6's second pair). Each simulator ships
+	// FOUR populated memory channels of its own — 000 to 003 — every byte a
+	// printed constant, a printed example or a printed character (each
+	// package's PROVENANCE.md, plan decision P19). The 890S's image
+	// additionally holds a BLANK record with a residual name at 004, which
+	// is not a populated read and is not counted here; it is that package's
+	// A21 fixture, and the fleet read walking past it without erroring is
+	// itself the thing it proves.
+	TS890SModel: true,
+	TS990SModel: true,
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testing.T) {
@@ -1488,7 +1509,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1603,6 +1624,30 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	}
 	if TS590SModel == TS590SGModel {
 		t.Errorf("TS590SModel and TS590SGModel are both %q — the two rows must key the registry separately, or one sibling's session would be served as the other's", TS590SModel)
+	}
+	// Tier 6's SECOND Kenwood pair, and the first pair in this test whose
+	// two rows come from TWO DIFFERENT DRIVER PACKAGES (core/driver/ts890
+	// and core/driver/ts990, plan decision P1). That makes the
+	// crossed-pairing slip the 590 comment above warns of a COMPILE error
+	// on the real side and a live hazard only on the fake side, where both
+	// rows' closures return the same fakeRadio interface — so both names
+	// are pinned here for the reason every sibling pair's are, and
+	// TestOpenFakeSessionFor_EveryRegisteredModel's identity leg ("024"
+	// against "022") is what catches a fake row built twice from one
+	// package.
+	//
+	// The spellings are each book's own ID legend: "024: TS-890S"
+	// (890:2733) and, for 022, the registry key this project MINTS over a
+	// documentary silence (990:2612 prints the token bare; capability
+	// matrix §1.1, plan decision P2).
+	if TS890SModel != "TS-890S" {
+		t.Errorf("TS890SModel = %q, want \"TS-890S\"", TS890SModel)
+	}
+	if TS990SModel != "TS-990S" {
+		t.Errorf("TS990SModel = %q, want \"TS-990S\"", TS990SModel)
+	}
+	if TS890SModel == TS990SModel {
+		t.Errorf("TS890SModel and TS990SModel are both %q — the two rows must key the registry separately, or one radio's session would be served as the other's", TS890SModel)
 	}
 }
 
@@ -2004,8 +2049,8 @@ func TestModelSlug(t *testing.T) {
 		// be unique and still be wrong, and wiring.go's FT991AModel doc
 		// comment says this test is what pins it.
 		{"FT-991A", "ft-991a"},
-		// Tier 6's three Kenwood slugs (plan decision P2). The two 590 rows
-		// are REGISTERED and the TS-480 is not, and all three are pinned
+		// Tier 6's Kenwood slugs (plan decision P2). The two 590 rows
+		// are REGISTERED and the TS-480 is not, and all are pinned
 		// here anyway: ModelSlug is a pure string function, the 480's slug
 		// is the name its snapshot directory will take on the day its row
 		// registers, and pinning it now means that day's commit cannot
@@ -2023,6 +2068,18 @@ func TestModelSlug(t *testing.T) {
 		// tidying the table against SupportedModels(). It is not: it is P2/L7
 		// deliberately, for the reason the paragraph above gives. Leave it.
 		{"TS-480", "ts-480"},
+		// Tier 6's SECOND pair (plan decision P2). Both rows are
+		// REGISTERED, and both slugs are pinned by VALUE here for the
+		// reason the FT-991A's row states: TestModelSlugsUnique walks
+		// SupportedModels() and pins distinctness and non-emptiness only,
+		// so a slug that collapsed to "ts890s" would still be unique and
+		// still be wrong. The PACKAGE slugs are "ts890" and "ts990"
+		// (core/driver/ts890, internal/fakets890, internal/extable's
+		// "ts890s" profile key); these — the MODEL slugs, which name each
+		// radio's snapshot and journal directory — keep the hyphen as a
+		// separator and the trailing S.
+		{"TS-890S", "ts-890s"},
+		{"TS-990S", "ts-990s"},
 		{"FTX-1", "ftx-1"},
 	} {
 		if got := ModelSlug(tc.model); got != tc.want {
@@ -2179,7 +2236,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2407,6 +2464,22 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: TS590SGModel, want: func() driver.Driver { return ts590.New(ts590.RowSG, ts590.RealHardware) }, wantConsent: func() driver.Driver {
 			return ts590.New(ts590.RowSG, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}},
+		// Tier 6's SECOND pair, and it asks LESS of the table than the 590
+		// rows above rather than more: core/driver/ts890 and
+		// core/driver/ts990 are two packages with one New each, taking the
+		// profile as the only required argument (the ft991a shape), so
+		// there is no row argument to cross and a crossed CONSTRUCTOR is a
+		// type error. What remains is the hazard every profile-argument row
+		// here carries: a consent arm that quietly passed ts890.Simulated
+		// would hand a real radio the simulator's write-Supported set, and
+		// each driver's zero Profile IS RealHardware, so nothing fails
+		// safe. That is what these two rows pin.
+		{model: TS890SModel, want: func() driver.Driver { return ts890.New(ts890.RealHardware) }, wantConsent: func() driver.Driver {
+			return ts890.New(ts890.RealHardware, ts890.WithConsentedUnverifiedWrites())
+		}},
+		{model: TS990SModel, want: func() driver.Driver { return ts990.New(ts990.RealHardware) }, wantConsent: func() driver.Driver {
+			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -2618,6 +2691,15 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// No Kenwood radio has ever answered a frame from this project.
 		TS590SModel:  true,
 		TS590SGModel: true,
+		// The TS-890S and TS-990S (Tier 6's second pair). Both
+		// writeTrialsComplete constants are FALSE — one per PACKAGE here
+		// rather than one per row, because each radio has a driver package
+		// of its own (plan decision P18) — so each row's RealHardware
+		// profile is the all-Unverified one and carries a write-side
+		// Unverified field this predicate must find, on its one MEM bank.
+		// No Kenwood radio has ever answered a frame from this project.
+		TS890SModel: true,
+		TS990SModel: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -2859,11 +2941,12 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 // 8-N-2 against radios whose manuals print one stop bit (matrix §3.1), and
 // fail exactly like a dead port. Nothing in this repository would go red.
 //
-// ALL THREE KENWOOD DRIVERS, and the TS-480 is the one that could not be
-// reached any other way: its row is BUILT and NOT REGISTERED (plan decision
-// P3), so realDriverFor cannot produce it and it is constructed DIRECTLY
-// here. That leg is the one that will matter on the day the row registers,
-// which is precisely when nobody will think to write it.
+// EVERY KENWOOD DRIVER, registered or not, and the TS-480 is the one that
+// could not be reached any other way: its row is BUILT and NOT REGISTERED
+// (plan decision P3), so realDriverFor cannot produce it and it is
+// constructed DIRECTLY here. That leg is the one that will matter on the
+// day the row registers, which is precisely when nobody will think to
+// write it.
 //
 // THE CONTRAST KEEPS IT HONEST, twice over: a registered Yaesu model, which
 // implements nothing and must still come back with transport.DefaultStopBits;
@@ -2885,6 +2968,14 @@ func TestStopBitsFor_EveryKenwoodDriverReportsOne(t *testing.T) {
 		// row ever wires a Kenwood key to a driver that does not report.
 		{"TS-590S (registered)", mustRealDriver(t, TS590SModel)},
 		{"TS-590SG (registered)", mustRealDriver(t, TS590SGModel)},
+		// Tier 6's SECOND pair, from the registry too, and they are why
+		// this leg is plan decision P10's SECOND leg rather than a
+		// duplicate of the driver-local StopBits() assertions T11 and T13
+		// already make: those two stayed green throughout this seam being
+		// open, because a driver can report one stop bit perfectly and
+		// still never be asked.
+		{"TS-890S (registered)", mustRealDriver(t, TS890SModel)},
+		{"TS-990S (registered)", mustRealDriver(t, TS990SModel)},
 		// The UNREGISTERED TS-480, constructed directly: there is no
 		// registry key to look it up by, by design.
 		{"TS-480 (built, unregistered — plan P3)", ts480.New(ts480.RealHardware)},
@@ -3009,7 +3100,13 @@ var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, 
 // TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo; their framing
 // coverage is stopBitsFor's own seam pin below
 // (TestStopBitsFor_EveryKenwoodDriverReportsOne).
-var kenwoodModels = []string{TS590SModel, TS590SGModel}
+//
+// FOUR ROWS SINCE TIER 6's SECOND PAIR: the TS-890S and the TS-990S, one
+// driver package each (plan decision P1), both reporting one stop bit like
+// the two above them and both covered by the same seam pin. The list grew
+// by two names and by nothing else — see wantIdentityWidth below, which
+// this pair leaves UNCHANGED.
+var kenwoodModels = []string{TS590SModel, TS590SGModel, TS890SModel, TS990SModel}
 
 // TestMakerModelListsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1
@@ -3109,6 +3206,19 @@ func TestMakerModelListsPartitionSupportedModels(t *testing.T) {
 	// StaticCapabilities rather than restated, so the check is against what
 	// the driver says and not against a second table.
 	wantIdentityWidth := map[string]int{"yaesuModels": 4, "icomModels": 2, "kenwoodModels": 3}
+
+	// THE KENWOOD ENTRY IS UNCHANGED BY TIER 6's SECOND PAIR, asserted
+	// rather than left to a reader's eye (plan decision P20). "024" and
+	// "022" are three printed digits exactly as "020", "021" and "023"
+	// are, so a registration that widened this entry to admit them would
+	// be describing a divergence that does not exist — and would then
+	// stop catching a Kenwood row wired into icomModels, which is the
+	// only thing the number is for. The literal 3 is repeated here on
+	// purpose: a check that read wantIdentityWidth["kenwoodModels"] into
+	// itself would agree with any value.
+	if got := wantIdentityWidth["kenwoodModels"]; got != 3 {
+		t.Errorf("wantIdentityWidth[\"kenwoodModels\"] = %d, want 3 — the TS-890S's \"024\" and the TS-990S's \"022\" are three printed digits like the TS-590 pair's \"021\"/\"023\", so this pair's registration widens nothing here", got)
+	}
 
 	for m, listName := range union {
 		if !registered[m] {
@@ -4787,6 +4897,337 @@ func TestOpenFakeSessionFor_TS590SGEndToEnd(t *testing.T) {
 	for _, e := range snap.Entries {
 		if e.State != codeplug.MenuKnown {
 			t.Errorf("ReadSettings: item %q state = %v, want MenuKnown", e.ID, e.State)
+		}
+	}
+}
+
+// THE COMPILE-TIME PROOFS that Tier 6's second pair's concrete session types
+// satisfy the optional capability cmd/rigprog's probe report renders the
+// firmware answer from. They live HERE for the reason the TS-590 pair's does:
+// a lost interface still COMPILES everywhere it is consumed — every consumer
+// is a type assertion with an ok arm — so the only thing that can fail loudly
+// is an assertion naming both sides, and this package already imports both.
+//
+// TWO ASSERTIONS RATHER THAN THE 590 PAIR'S ONE, because these are two driver
+// packages (plan decision P1) and each Session type answers for itself.
+var (
+	_ driver.FirmwareAnswerReporter = (*ts890.Session)(nil)
+	_ driver.FirmwareAnswerReporter = (*ts990.Session)(nil)
+)
+
+// Tier 6's second pair's option-source probe, and the slot it turns off.
+//
+// Each simulator's DefaultImage populates memory channels 000 to 003 (each
+// package's PROVENANCE.md, plan decision P19), so emptying ONE of them is a
+// change a plain read can see and 000 stays as the non-vacuity control. The
+// same numbers serve both rows because both images populate both channels,
+// which is a fact about the two images and not a shared constant between the
+// two packages.
+const (
+	tsPairOptionProbeChannel = 2
+	tsPairOptionProbeSlot    = "002"
+	tsPairOptionControlSlot  = "000"
+)
+
+// TestOpenFakeSessionFor_TS890SOptionSourceIsItsOwn is the FTdx101 pair's
+// test two families over, and the hazard it covers is NARROWER here than on
+// any earlier pair — which is exactly why it is worth writing down what is
+// left rather than assuming the shape carries over.
+//
+// internal/fakets890 and internal/fakets990 are TWO packages with TWO Option
+// types (plan decision P1), so a closure reading the other row's variable
+// does NOT compile, unlike the FTdx101, IC-7851 and TS-590 pairs' shared-type
+// case. What still compiles is a row whose fake AND option variable are both
+// the sibling's — the copy-paste that builds one radio twice — and that is a
+// live hazard: both closures return the same fakeRadio interface, so nothing
+// in the type system objects. This test and its mirror set one variable and
+// assert the OTHER row's session does not see it, which fails on exactly that
+// mistake.
+//
+// The fixture is fakets890.WithEmptyChannel rather than an added bank,
+// because this family discovers nothing at all (plan decision P11): there is
+// no discovery walk for a seeding option to show up in, and emptying a slot
+// the default image populates is the readable change this family does have.
+func TestOpenFakeSessionFor_TS890SOptionSourceIsItsOwn(t *testing.T) {
+	prev := TS890SFakeSessionOpts
+	TS890SFakeSessionOpts = []fakets890.Option{fakets890.WithEmptyChannel(tsPairOptionProbeChannel)}
+	t.Cleanup(func() { TS890SFakeSessionOpts = prev })
+
+	// Reached the 890S, which is the var that was set.
+	assertTSPairProbeSlotEmptied(t, TS890SModel, true)
+	// Did NOT reach the 990S, whose own var is untouched.
+	assertTSPairProbeSlotEmptied(t, TS990SModel, false)
+}
+
+// TestOpenFakeSessionFor_TS990SOptionSourceIsItsOwn is the mirror image, and
+// both directions are tested for the reason the FTdx101 pair's are: a pair of
+// rows that both built the 890S would pass the 890S's test outright.
+func TestOpenFakeSessionFor_TS990SOptionSourceIsItsOwn(t *testing.T) {
+	prev := TS990SFakeSessionOpts
+	TS990SFakeSessionOpts = []fakets990.Option{fakets990.WithEmptyChannel(tsPairOptionProbeChannel)}
+	t.Cleanup(func() { TS990SFakeSessionOpts = prev })
+
+	assertTSPairProbeSlotEmptied(t, TS990SModel, true)
+	assertTSPairProbeSlotEmptied(t, TS890SModel, false)
+}
+
+// assertTSPairProbeSlotEmptied opens model's registered fake session and
+// asserts whether the probe slot reads back empty — Data nil being both
+// drivers' spelling of "this channel is unassigned", from the printed
+// blank-channel answer each book carries (890:3215-3216, 990:2960-2962).
+//
+// THE CONTROL SLOT IS ASSERTED POPULATED IN BOTH DIRECTIONS, for the reason
+// the TS-590 helper asserts its own in both: a session that had lost its
+// whole image would otherwise satisfy the want==true case for entirely the
+// wrong reason, and a session reading some other rig's records would satisfy
+// want==false.
+func assertTSPairProbeSlotEmptied(t *testing.T, model string, want bool) {
+	t.Helper()
+	ctx := testCtx(t)
+	sess, closeAll, err := OpenFakeSessionFor(ctx, model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll for %q: unexpected error: %v", model, err)
+		}
+	})
+
+	ctrl, err := sess.ReadChannel(ctx, tsPairOptionControlSlot)
+	if err != nil {
+		t.Fatalf("%s: ReadChannel(%q): unexpected error: %v", model, tsPairOptionControlSlot, err)
+	}
+	if ctrl.Data == nil {
+		t.Fatalf("%s: the control slot %q reads empty — this rig's default image populates it, so neither direction of this test asserts anything", model, tsPairOptionControlSlot)
+	}
+
+	ch, err := sess.ReadChannel(ctx, tsPairOptionProbeSlot)
+	if err != nil {
+		t.Fatalf("%s: ReadChannel(%q): unexpected error: %v", model, tsPairOptionProbeSlot, err)
+	}
+	if got := ch.Data == nil; got != want {
+		if want {
+			t.Errorf("%s: slot %q reads populated, want empty — this row's option source did not reach its own rig", model, tsPairOptionProbeSlot)
+		} else {
+			t.Errorf("%s: slot %q reads empty, want populated — this row's rig was seeded from the SIBLING's option source, which is the crossed-source hazard fake.go's comment describes", model, tsPairOptionProbeSlot)
+		}
+	}
+}
+
+// tsPairEndToEnd is one row's expectation for the fake end-to-end leg below.
+type tsPairEndToEnd struct {
+	model      string
+	catID      string
+	descriptor string
+	// populated is every slot this row's DefaultImage fills with a record
+	// a read reports as populated, in slot order. The 890S's channel 004 is
+	// deliberately ABSENT: it holds a BLANK record carrying a residual name
+	// (that package's A21 fixture), and a read reporting it populated would
+	// be the empty predicate treating a residue as content.
+	populated []string
+	// refused maps a populated slot to the RefusalError register that must
+	// answer when the channel just read is written straight back. A slot
+	// absent from this map must write back and read back UNCHANGED.
+	refused map[string]string
+	// blankSlot is an unassigned slot in this row's image, used for the
+	// blank-target refusal: a populated channel aimed at it must be refused
+	// by name, never created.
+	blankSlot string
+}
+
+// TestOpenFakeSessionFor_TS890SEndToEnd drives the TS-890S from
+// OpenFakeSessionFor all the way out again — probe, whole-image read,
+// write-back of every populated channel, the blank-target refusal, and the
+// whole settings inventory — through the REGISTERED pairing rather than
+// through a driver a test constructed.
+//
+// WHY IT LIVES HERE AND NOT IN core/driver/ts890. That package's tests build
+// their own driver against their own fake, so they prove the driver and the
+// fake agree; they cannot prove that internal/wiring's realDrivers/fakeDrivers
+// rows name the same radio, that OpenFakeSessionFor's option variable reaches
+// the right rig, or that the profile this row wires is the write-capable one.
+// A registration that wired ts890.RealHardware into fakeDrivers would leave
+// every driver-local test green and every write here refused at the capability
+// gate.
+//
+// THE WRITE-BACK IS THE POINT, and it is a read-modify-nothing round trip: the
+// channel that goes out is the channel that came in, so anything the codec,
+// the ladder or the fake's own validation drops shows up as a difference on
+// the read-back rather than as a silent narrowing. All four of this row's
+// populated channels write back unchanged.
+func TestOpenFakeSessionFor_TS890SEndToEnd(t *testing.T) {
+	assertTSPairEndToEnd(t, tsPairEndToEnd{
+		model:      TS890SModel,
+		catID:      "024",
+		descriptor: "ts890s-ex@1",
+		populated:  []string{"000", "001", "002", "003"},
+		refused:    nil,
+		// 010 is past the image's five occupied channel numbers and inside
+		// the published bank, so a Set aimed at it is a CREATE — which this
+		// programme does not do (A3).
+		blankSlot: "010",
+	})
+}
+
+// TestOpenFakeSessionFor_TS990SEndToEnd is the same leg on the other row, and
+// its expectations DIFFER in the one way that matters: channel 002 of
+// internal/fakets990's DefaultImage carries P16 = 1, dual reception, and the
+// write ladder's rung 11 refuses it UNCONDITIONALLY (decision 9) because a
+// second receiver's frequency has no home in the neutral model and one MA0 Set
+// rewrites the whole record.
+//
+// THAT REFUSAL IS THE EXPECTED OUTCOME AND NOT A DEFECT TO DESIGN AWAY. The
+// image is what it is because the book prints the flag and the second side;
+// an image that avoided the combination would leave this radio's most
+// consequential refusal unexercised end to end.
+func TestOpenFakeSessionFor_TS990SEndToEnd(t *testing.T) {
+	assertTSPairEndToEnd(t, tsPairEndToEnd{
+		model:      TS990SModel,
+		catID:      "022",
+		descriptor: "ts990s-ex@1",
+		populated:  []string{"000", "001", "002", "003"},
+		refused:    map[string]string{"002": "decision 9"},
+		blankSlot:  "010",
+	})
+}
+
+// assertTSPairEndToEnd runs one row's whole fake round trip. Written as a
+// helper over a table rather than as two copies, because the two rows differ
+// in four literals and in nothing structural — and where they DO differ
+// (the 990S's refused channel) the difference is data, visible at the two call
+// sites above rather than buried in a branch here.
+func assertTSPairEndToEnd(t *testing.T, tc tsPairEndToEnd) {
+	t.Helper()
+	ctx := testCtx(t)
+	sess, closeAll, err := OpenFakeSessionFor(ctx, tc.model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", tc.model, err)
+	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll for %q: unexpected error: %v", tc.model, err)
+		}
+	})
+
+	// THE PROBE. Open has already sent AI0; and the two-frame identity probe
+	// (plan decision P9); what it learned is here, and the CAT ID is what
+	// says this row's driver was wired to this row's rig.
+	if got := sess.Identity().CATID; got != tc.catID {
+		t.Fatalf("%s: session Identity().CATID = %q, want %q — the fakeDrivers row wired this model to the wrong rig", tc.model, got, tc.catID)
+	}
+
+	// THE WHOLE-IMAGE READ, through core/clone's ReadAll — the caller every
+	// real read goes through, CLI and GUI alike — rather than a bank walk of
+	// this test's own, so what is proved is the composition.
+	svc := clone.NewService(sess, clone.SnapshotStore{Dir: t.TempDir()})
+	cp, err := svc.ReadAll(ctx)
+	if err != nil {
+		t.Fatalf("%s: ReadAll: unexpected error: %v", tc.model, err)
+	}
+	if len(cp.Channels) != 100 {
+		t.Errorf("%s: ReadAll returned %d channels, want 100 — this row publishes ONE dense MEM bank of \"000\"..\"099\" and no other (plan decision P11)", tc.model, len(cp.Channels))
+	}
+	var populated []string
+	byslot := make(map[string]codeplug.Channel, len(cp.Channels))
+	for _, ch := range cp.Channels {
+		byslot[ch.Slot] = ch
+		if ch.Data != nil {
+			populated = append(populated, ch.Slot)
+		}
+	}
+	if !slices.Equal(populated, tc.populated) {
+		t.Fatalf("%s: ReadAll reports %v populated, want %v — every assertion below reads from this set", tc.model, populated, tc.populated)
+	}
+	if _, ok := byslot[tc.blankSlot]; !ok {
+		t.Fatalf("%s: the read has no slot %q at all, so the blank-target leg below would assert nothing", tc.model, tc.blankSlot)
+	}
+	if byslot[tc.blankSlot].Data != nil {
+		t.Fatalf("%s: slot %q reads populated, so it is not a blank target", tc.model, tc.blankSlot)
+	}
+
+	// THE WRITE-BACK, channel by channel: what came in goes straight back
+	// out, and then is read again and compared. Nothing is modified, so any
+	// difference is something the round trip lost.
+	for _, slot := range tc.populated {
+		ch := byslot[slot]
+		_, err := sess.WriteChannel(ctx, ch)
+		if wantRegister, isRefused := tc.refused[slot]; isRefused {
+			var refusal *driver.WriteRefusedError
+			if !errors.As(err, &refusal) {
+				t.Errorf("%s: WriteChannel(%q) err = %v, want a *driver.WriteRefusedError naming %q", tc.model, slot, err, wantRegister)
+				continue
+			}
+			if !strings.HasPrefix(refusal.Reason, wantRegister+": ") {
+				t.Errorf("%s: WriteChannel(%q) refusal Reason = %q, want it to open with %q — each rung names the register or decision it comes from", tc.model, slot, refusal.Reason, wantRegister)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: WriteChannel(%q): unexpected error: %v (the Simulated profile must be write-capable against the fake)", tc.model, slot, err)
+			continue
+		}
+		back, err := sess.ReadChannel(ctx, slot)
+		if err != nil {
+			t.Errorf("%s: ReadChannel(%q) after the write-back: unexpected error: %v", tc.model, slot, err)
+			continue
+		}
+		if !reflect.DeepEqual(back, ch) {
+			t.Errorf("%s: slot %q did not survive a write-back unchanged:\n before = %#v\n after  = %#v", tc.model, slot, ch, back)
+		}
+	}
+
+	// THE BLANK-TARGET REFUSAL, BY NAME, and it is the published cost of
+	// registering these rows: neither radio can be programmed from a blank
+	// channel, because no printed frame creates one and whether an MA0 Set
+	// would is nowhere stated (A3). A populated channel aimed at an
+	// unassigned slot is refused after the pre-write read, never sent.
+	blank := byslot[tc.populated[0]]
+	blank.Slot = tc.blankSlot
+	if _, err := sess.WriteChannel(ctx, blank); err == nil {
+		t.Errorf("%s: WriteChannel to the unassigned slot %q returned no error — this programme does not create channels (A3)", tc.model, tc.blankSlot)
+	} else {
+		var refusal *driver.WriteRefusedError
+		if !errors.As(err, &refusal) {
+			t.Errorf("%s: WriteChannel to %q err = %v, want a *driver.WriteRefusedError", tc.model, tc.blankSlot, err)
+		} else if !strings.HasPrefix(refusal.Reason, "A3: ") {
+			t.Errorf("%s: WriteChannel to %q refusal Reason = %q, want it to open with \"A3: \"", tc.model, tc.blankSlot, refusal.Reason)
+		}
+	}
+
+	// THE SETTINGS WALK, over this row's WHOLE inventory. The bound is
+	// derived from the descriptor the session itself publishes rather than
+	// written down here: a descriptor that silently lost half its items
+	// would otherwise walk a shorter list quietly.
+	reader, ok := sess.(driver.SettingsReader)
+	if !ok {
+		t.Fatalf("%s: the session does not implement driver.SettingsReader — this row's whole settings surface is unreachable", tc.model)
+	}
+	wantItems := 0
+	for _, menu := range reader.SettingsDescriptor().Menus {
+		for _, group := range menu.Groups {
+			wantItems += len(group.Items)
+		}
+	}
+	if wantItems == 0 {
+		t.Fatalf("%s: the settings descriptor declares no items — every assertion below would hold vacuously", tc.model)
+	}
+	snap, err := svc.ReadSettings(ctx)
+	if err != nil {
+		t.Fatalf("%s: ReadSettings: unexpected error: %v", tc.model, err)
+	}
+	if snap.Descriptor != tc.descriptor {
+		t.Errorf("%s: snapshot Descriptor = %q, want %q", tc.model, snap.Descriptor, tc.descriptor)
+	}
+	if !snap.Complete {
+		t.Errorf("%s: snapshot Complete = false, want true — this rig answers every EX address its own inventory lists", tc.model)
+	}
+	if len(snap.Entries) != wantItems {
+		t.Errorf("%s: snapshot has %d entries, want %d (the descriptor's own item count)", tc.model, len(snap.Entries), wantItems)
+	}
+	for _, e := range snap.Entries {
+		if e.State != codeplug.MenuKnown {
+			t.Errorf("%s: settings item %q state = %v, want MenuKnown", tc.model, e.ID, e.State)
 		}
 	}
 }

@@ -19,16 +19,22 @@ import (
 // wrong-radio refusal, and returns "" where no document this milestone reads
 // prints a name.
 //
-// 022 IS DELIBERATELY UNNAMED. The design requires 022 and 024 to be named
-// explicitly when either is what answered, and both ARE — by their ID, which
-// is the refusal's own Got field. What differs is that 024 additionally has a
-// printed model name, "024: TS-890S" in the TS-890S book, while 022 is
-// "printed bare in the TS-990S book with no model name beside it" (matrix
-// §1.2). Supplying "TS-990S" here would put a name in a manufacturer's mouth
-// on the strength of which book the token was found in, which is exactly the
-// cross-document inference this milestone refuses; driver.WrongRadioError
-// renders its ID-only sentence for an empty GotModel, and TestOpen_WrongRadio
-// pins both texts verbatim.
+// 022 IS NAMED, AND IT WAS NOT AT PAIR 1. The rule has not changed; what
+// changed is what this project holds. The rule is that a refusal names the
+// radio that answered when this programme has a name to give it, and gives
+// only the ID when it has not — driver.WrongRadioError renders its ID-only
+// sentence for an empty GotModel, and TestOpen_WrongRadio pins both texts
+// verbatim.
+//
+// At pair 1 this arm was blank because 022 appeared only in ANOTHER radio's
+// book, printed bare with no model name beside it (matrix §1.2), so supplying
+// "TS-990S" would have been a cross-document inference. Tier 6's second pair
+// registers that row: "TS-990S" is now a registry key this PROJECT mints over
+// that documentary silence — a recorded choice, not a transcription (matrix
+// §1.1, plan decision P2) — and naming the row by the key the programme gives
+// it is a statement about this registry rather than about a manufacturer's
+// spelling. core/driver/ts990's modelName mints the same string;
+// core/driver/ts890's siblingModelName binds the same token to it.
 func siblingModelName(catID string) string {
 	switch catID {
 	case "020":
@@ -38,8 +44,12 @@ func siblingModelName(catID string) string {
 		return modelNameS
 	case catIDSG:
 		return modelNameSG
+	case "022":
+		// The tier's second pair's other member, registered as of Tier 6's
+		// second milestone.
+		return "TS-990S"
 	case "024":
-		// The tier's second pair, which this milestone does not build.
+		// The tier's second pair, printed WITH its name — "024: TS-890S".
 		return "TS-890S"
 	default:
 		return ""

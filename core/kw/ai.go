@@ -34,7 +34,8 @@ const (
 	AISetLen = 4
 )
 
-// aiReadFrame is the whole of the AI Read chart on both radios.
+// aiReadFrame is the whole of the AI Read chart on all four radios (AI
+// legend printed at 890:175-181, 990:173-178).
 const aiReadFrame = "AI;"
 
 // BuildAIRead builds the Auto Information read, "AI;" (590:164, 480:193).
@@ -48,7 +49,7 @@ func (l Layout) BuildAIRead() (Command, error) {
 }
 
 // BuildAISetOff builds the ONE Auto Information Set this codec has: "AI0;",
-// "0: AI OFF" (590:159-160, 480:185-189).
+// "0: AI OFF" (590:159-160, 480:185-189, 890:175-181, 990:173-178).
 //
 // IT RETURNS THE SAME DATUM framing.InitSequence WRITES, not a second copy
 // of it: initFrame is the constant both read. A session that had disabled

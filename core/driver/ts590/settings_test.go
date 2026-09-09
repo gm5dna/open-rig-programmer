@@ -616,7 +616,7 @@ func TestReadSetting_IsAtomicUnderOpMu(t *testing.T) {
 //
 // clone.ReadSettings validates every descriptor item ID through
 // codeplug.MenuSnapshot.Validate BEFORE any wire traffic (core/clone/settings.go),
-// and that rule admits exactly 3, 4 or 6 ASCII digits. A three-digit Kenwood ID
+// and that rule admits exactly 3, 4, 5 or 6 ASCII digits. A three-digit Kenwood ID
 // passes only because Stage 0 widened it; without the widening this walk would
 // read the whole radio and fail afterwards. Neither the descriptor tests above
 // nor core/clone's own fixtures can see that: they validate the tree, and

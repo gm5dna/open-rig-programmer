@@ -47,8 +47,11 @@ func TestMenuSnapshot_ValidateTable(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "5-digit id",
-			snap:    &MenuSnapshot{Entries: []MenuEntry{{ID: "00010", Value: "3", State: MenuKnown}}},
+			// Seven, not five: five became an admitted width with the
+			// TS-890S/TS-990S grouped EX address, so the out-of-vocabulary
+			// case this row exists for had to move up one.
+			name:    "7-digit id",
+			snap:    &MenuSnapshot{Entries: []MenuEntry{{ID: "0001011", Value: "3", State: MenuKnown}}},
 			wantErr: true, wantEntry: true,
 		},
 		{
@@ -291,16 +294,16 @@ func TestValidate_IgnoresMenus(t *testing.T) {
 	}
 }
 
-// TestMenuSnapshotValidate_ThreeDigitIDs pins the THIRD exact width the
-// Kenwood line needs, and — the pin that carries the whole decision — pins
-// that FIVE is still refused after it.
+// TestMenuSnapshotValidate_ThreeDigitIDs pins the width the TS-590S/SG and
+// TS-480 needed, and that the widths either side of it still behave.
 //
 // The Kenwood TS-590S/SG and TS-480 address a menu by a three-digit MENU
-// number, so isSettingIDWidth admits three exact widths: 3, 4 and 6. It is
-// three EXACT widths and never a 3..6 range, because a range would admit
-// the truncated (P1,P2,P3) address the rule was written to catch. See
-// isSettingIDWidth's own rationale for the cost the third width re-opens
-// one width down, and why this milestone judges it acceptable.
+// number, so isSettingIDWidth admits 3 as well as 4 and 6. Five was refused
+// when this test was written and is admitted now — the TS-890S/TS-990S
+// grouped EX address is five wire characters — so the admitted set runs
+// from three to six and the row below asserts the acceptance rather than
+// the refusal. See isSettingIDWidth's own rationale for what that costs and
+// for what catches a truncated address in its place.
 func TestMenuSnapshotValidate_ThreeDigitIDs(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -311,8 +314,9 @@ func TestMenuSnapshotValidate_ThreeDigitIDs(t *testing.T) {
 		{"three digits, all zero", "000", true},
 		{"four digits (the pair form) still accepted", "0801", true},
 		{"six digits (the triple form) still accepted", "000101", true},
-		{"five digits is still none of the three", "00010", false},
+		{"five digits (the grouped form) now accepted", "00010", true},
 		{"two digits", "08", false},
+		{"seven digits", "0001011", false},
 		{"three with a non-digit", "08X", false},
 	} {
 		snap := &MenuSnapshot{Entries: []MenuEntry{{ID: tc.id, Value: "3", State: MenuKnown}}}
@@ -364,5 +368,66 @@ func TestMenuSnapshotValidate_KenwoodShapedSnapshot(t *testing.T) {
 	complete := &MenuSnapshot{Complete: true, Entries: []MenuEntry{{ID: "080", State: MenuUnavailable}}}
 	if err := complete.Validate(); err == nil {
 		t.Error("Validate() accepted a Complete snapshot carrying an Unavailable three-digit entry")
+	}
+}
+
+// TestMenuSnapshotValidate_KenwoodGroupedSnapshot is the pin that carries
+// the five-digit decision: a whole snapshot shaped the way a TS-890S or
+// TS-990S settings read will build one — every ID the grouped EX address
+// P1 P2P2 P3P3 rendered as five wire characters, the three entry states
+// mixed, Complete false.
+//
+// WHAT ADMITTING FIVE COSTS, pinned here rather than left in prose alone:
+// the admitted set is now every width from three to six, so a (P1,P2,P3)
+// Yaesu address that lost one digit on its way to an ID validates where it
+// used to be refused. isSettingIDWidth's doc comment records why that is
+// accepted and what catches such an address instead (inventory
+// membership). The last row below is what this rule still reaches — a
+// seven-digit shape no radio in the fleet addresses.
+func TestMenuSnapshotValidate_KenwoodGroupedSnapshot(t *testing.T) {
+	snap := &MenuSnapshot{
+		Descriptor: "ts890s-ex@1",
+		Entries: []MenuEntry{
+			{ID: "00000", Value: "1", State: MenuKnown},
+			{ID: "10203", State: MenuUnavailable},
+			{ID: "90909", Value: "2", State: MenuUnsupported},
+		},
+	}
+	if err := snap.Validate(); err != nil {
+		t.Errorf("Validate() on a Kenwood-grouped snapshot = %v, want accepted", err)
+	}
+
+	dup := &MenuSnapshot{Entries: []MenuEntry{
+		{ID: "10203", Value: "3", State: MenuKnown},
+		{ID: "10203", Value: "5", State: MenuKnown},
+	}}
+	var de *DuplicateMenuIDError
+	if err := dup.Validate(); !errors.As(err, &de) {
+		t.Errorf("Validate() on duplicate five-digit IDs = %v, want *DuplicateMenuIDError", err)
+	}
+
+	// errors.As alone does not discriminate here: a *MenuEntryError is also
+	// what a reverted (pre-widening) isSettingIDWidth would return for this
+	// five-digit ID, for the width reason rather than this one — checking
+	// Reason is what pins "refused for THIS rule", as the width table above
+	// already pins the width rule itself.
+	empty := &MenuSnapshot{Entries: []MenuEntry{{ID: "10203", State: MenuKnown}}}
+	var eme *MenuEntryError
+	wantEmptyReason := "a known entry must have a non-empty value"
+	if err := empty.Validate(); !errors.As(err, &eme) || eme.Reason != wantEmptyReason {
+		t.Errorf("Validate() on a Known five-digit entry with an empty value = %v, want *MenuEntryError{Reason: %q}", err, wantEmptyReason)
+	}
+
+	complete := &MenuSnapshot{Complete: true, Entries: []MenuEntry{{ID: "10203", State: MenuUnavailable}}}
+	var cme *MenuEntryError
+	wantCompleteReason := "a complete snapshot must not contain an unavailable entry"
+	if err := complete.Validate(); !errors.As(err, &cme) || cme.Reason != wantCompleteReason {
+		t.Errorf("Validate() on a Complete snapshot carrying an Unavailable five-digit entry = %v, want *MenuEntryError{Reason: %q}", err, wantCompleteReason)
+	}
+
+	wide := &MenuSnapshot{Entries: []MenuEntry{{ID: "1020304", Value: "1", State: MenuKnown}}}
+	var mee *MenuEntryError
+	if err := wide.Validate(); !errors.As(err, &mee) {
+		t.Errorf("Validate() on a seven-digit ID = %v, want *MenuEntryError — the widening must not have become 'any width'", err)
 	}
 }

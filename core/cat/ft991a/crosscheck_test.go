@@ -66,7 +66,7 @@ import (
 //     compared below carries the Digits cell as a TOKEN and bounds it
 //     against the profile only where it is numeric. See the normalisations.
 //
-// There is no text row here (TextRowsAbsent, TextWidth 0) and no label
+// There is no text row here (TextRowsAbsent, TextWidths empty) and no label
 // column, exactly as on the FT-891, so neither of those adjudications
 // arises.
 //

@@ -130,9 +130,9 @@ const (
 	textRowP2Label = "DISPLAY"
 	// textRowName carries the chart's verbatim trailing full stop.
 	textRowName = "MY CALL."
-	// textRowDigits is bound to the profile's TextWidth by the pin below, and
-	// is spelt as a literal so that the pin does not check the profile against
-	// itself.
+	// textRowDigits is bound to the profile's sole TextWidths entry by the
+	// pin below, and is spelt as a literal so that the pin does not check the
+	// profile against itself.
 	textRowDigits = 12
 )
 
@@ -183,7 +183,7 @@ type ledgerGroup struct {
 func TestCrossCheckABLedger(t *testing.T) {
 	// The REGISTERED profile, not a literal of this file's own: the whole
 	// point is to read A exactly as the generator reads it, under the same
-	// digit bounds and the same TextWidth. Lookup by name is sufficient here
+	// digit bounds and the same TextWidths. Lookup by name is sufficient here
 	// because this test binds the ARTEFACTS rather than the ownership of the
 	// generated file (which is what makes staleness_test.go select by
 	// Package instead).
@@ -250,8 +250,12 @@ func TestCrossCheckABLedger(t *testing.T) {
 	})
 
 	t.Run("the_text_row_pin", func(t *testing.T) {
-		if textRowDigits != p.TextWidth {
-			t.Errorf("the pinned text-row width %d disagrees with the profile's TextWidth %d", textRowDigits, p.TextWidth)
+		// EXACTLY ONE entry, and it is this width. TextWidths is a set, so
+		// membership alone would pass for a profile that also declared a
+		// second width this chart never prints — a weaker pin than the one
+		// this test has always held.
+		if len(p.TextWidths) != 1 || p.TextWidths[0] != textRowDigits {
+			t.Errorf("the pinned text-row width %d disagrees with the profile's TextWidths %v", textRowDigits, p.TextWidths)
 		}
 		want := entry{
 			P1Label: textRowP1Label,

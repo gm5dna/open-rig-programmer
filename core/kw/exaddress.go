@@ -36,11 +36,17 @@ type EXAddress struct {
 // WHICH IS SAFE HERE. There, an address could not know how many digits its
 // family's field carried — six under EXAddressTriple, four under
 // EXAddressPair — so any wire-shaped method on the address gave every radio
-// the FT-710's answer. This family has ONE width on all three registry
-// rows: the printed frame is three digits on the TS-590S, the TS-590SG and
-// the TS-480 alike (590:552, 480:410), and internal/extable registers all
+// the FT-710's answer. This family has ONE width on the three MR/MW rows:
+// the printed frame is three digits on the TS-590S, the TS-590SG and the
+// TS-480 alike (590:552, 480:410), and internal/extable registers those
 // three profiles as AddressSingle. There is no second form for a method to
 // get wrong.
+//
+// THE SCOPE IS THOSE THREE ROWS, NOT THE WHOLE FAMILY. The TS-890S and the
+// TS-990S rows have their own EX rendering, core/kw/ma's WireEXAddress, and
+// it is a different width — which is core/cat's lesson applied rather than
+// repeated: this method is safe because the rows that can reach it all share
+// one width, not because the family has only one.
 //
 // IT FAILS CLOSED on a non-zero P2 or P3. Such a value is not a Kenwood
 // address at all, and rendering P1 alone from one would silently discard
