@@ -204,11 +204,12 @@ func (d *ts990Driver) fvSpec() transport.CommandSpec {
 //
 // THE MATCHER IS A PARAMETER RATHER THAN A PREFIX AND A LENGTH even though on
 // this row every matcher is in fact a prefix and a length. read.go's ma0Spec
-// passes kw.PrefixLenMatcher("MA0"+slot, 57) and the probes pass their own, so
-// the parameter buys nothing today — what it buys is that each command states
-// its own correlation rule at its own call site, which is where the sibling
-// row's length RANGE lives and where a reader will look for this one's exact
-// width.
+// passes s.layout.MA0AnswerMatcher(slot) — which on Book990 IS
+// kw.PrefixLenMatcher("MA0"+slot, 57), core/kw/ma/shared.go:354 — and the
+// probes pass their own, so the parameter buys nothing today — what it buys
+// is that each command states its own correlation rule at its own call site,
+// which is where the sibling row's length RANGE lives and where a reader
+// will look for this one's exact width.
 func (d *ts990Driver) readSpec(match func(frame []byte) bool, retries int) transport.CommandSpec {
 	return transport.CommandSpec{
 		Class:      transport.ClassRead,

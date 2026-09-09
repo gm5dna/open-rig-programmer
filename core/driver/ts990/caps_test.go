@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -215,7 +216,7 @@ func TestModes_TheModeByteIsNotAHexNibbleOnThisRow(t *testing.T) {
 	if _, ok := ma.Layout890().ModeName('I'); ok {
 		t.Error("the TS-890S names a mode for 'I'; this pin exists because its legend is sixteen values and stops at 'F' (890:3976-3992)")
 	}
-	if !containsString(CapabilitiesUnverified().Modes, "FM-D2") {
+	if !slices.Contains(CapabilitiesUnverified().Modes, "FM-D2") {
 		t.Error("Modes omits FM-D2, which this row's legend prints (§1.5)")
 	}
 }
@@ -302,7 +303,7 @@ func TestBanks_OneMemoryBankAndNothingAbove099(t *testing.T) {
 	// and the E channels (110-119) are published NOWHERE (§1.4.2, §1.4.3).
 	for n := 100; n <= 119; n++ {
 		id := string(rune('0'+n/100)) + string(rune('0'+n/10%10)) + string(rune('0'+n%10))
-		if containsString(b.Slots, id) {
+		if slices.Contains(b.Slots, id) {
 			t.Errorf("slot %q is published; 100-119 appear in no bank of this row (§1.4.2, §1.4.3, P11)", id)
 		}
 	}
@@ -464,15 +465,4 @@ func TestBauds_4800IsAbsentForBothPrintedReasons(t *testing.T) {
 			t.Error("Bauds publishes 4800, which this book makes conditional on the connector (990:23, §1.11)")
 		}
 	}
-}
-
-// containsString is a two-line local rather than slices.Contains so the
-// tests read the same on either.
-func containsString(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
