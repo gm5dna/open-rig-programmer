@@ -79,13 +79,6 @@ const writeTrialsComplete = false
 // to stay equal.
 const memBankLabel = "Memories"
 
-// slotProbeCeiling bounds the walk that derives this row's bank inventory
-// from its layout. MA0 P1 is three cells over a printed domain of "000 ~ 119"
-// (890:3166-3168), so three digits is the widest channel number the grid can
-// address at all; the layout refuses everything above its own printed space
-// long before this.
-const slotProbeCeiling = 999
-
 // narrowSuffix is the name this project appends for a narrow FM record.
 //
 // IT IS THIS PROJECT'S SPELLING AND NOT THE BOOK'S (matrix §1.5): neither
@@ -231,14 +224,24 @@ func modeNames(l ma.Layout) []string {
 // Selecting on kw.SlotMemory rather than on a number range is what keeps the
 // codec's domain and the driver's inventory a single edit apart from each
 // other rather than two independent lists.
+//
+// Walking l.Slots() rather than probing every number 0-999 costs nothing: the
+// layout already publishes its own ranges, so there is no ceiling to derive or
+// defend. The sibling row landed this at T13 and this one did not (review
+// s2-close-review-opus-2.md LOW-2).
 func memSlots(l ma.Layout) []string {
 	var slots []string
-	for n := 0; n <= slotProbeCeiling; n++ {
-		s, err := l.NewSlot(n)
-		if err != nil || s.Class() != kw.SlotMemory {
+	for _, r := range l.Slots() {
+		if r.Class != kw.SlotMemory {
 			continue
 		}
-		slots = append(slots, s.String())
+		for n := r.Lo; n <= r.Hi; n++ {
+			s, err := l.NewSlot(n)
+			if err != nil {
+				continue
+			}
+			slots = append(slots, s.String())
+		}
 	}
 	return slots
 }
