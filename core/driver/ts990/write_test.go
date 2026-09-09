@@ -342,7 +342,11 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 	const id = "042"
 	populated := populatedMA0(id)
 
+	// A DUAL-RECEPTION answer, and its P2 is '1' for the same reason every
+	// live frequency 2 in this file carries one: classFor derives the type
+	// from that side alone (990:2901-2903), and it does not consult P16.
 	dual := populatedFields(id)
+	dual.class = '1'
 	dual.dual = '1'
 	dual.txFreq, dual.txMode = "00014200000", '4'
 
@@ -365,39 +369,35 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 	dualFlagOnlySplit.dual, dualFlagOnlySplit.split = '1', '1'
 
 	dualAndSplit := populatedFields(id)
+	dualAndSplit.class = '1'
 	dualAndSplit.dual, dualAndSplit.split = '1', '1'
 	dualAndSplit.txFreq, dualAndSplit.txMode = "00014200000", '4'
 
-	classDual := populatedFields(id)
-	classDual.class = '1'
-
-	classSection := populatedFields(id)
-	classSection.class = '2'
-
-	// A channel the radio holds as SPLIT with a secondary side of its own —
-	// USB (P10 = '3') where this write, whose candidate is simplex, would
-	// emit the printed zeroed form.
-	secondary := populatedFields(id)
-	secondary.split = '1'
-	secondary.txFreq, secondary.txMode = "00014200000", '3'
-	secondary.txToneType, secondary.txTone, secondary.txCTCSS = '1', "08", "12"
-
-	// Four MORE secondary-side answers, each MIRRORING THE PRIMARY side —
-	// same shape as TestWriteChannel_ASplitChannelRoundTripsWhenTheSetReproducesItsSecondarySide's
-	// own f — except in EXACTLY ONE byte, so each isolates the ONE
-	// secondaryDiffs clause it pins: P11-P14 have no other guard on this
-	// row, and a fixture differing in several at once (like secondary,
-	// above) cannot tell one clause's absence from another's.
+	// THE SPLIT BASE, MIRRORING ITS PRIMARY SIDE ON THE SECONDARY ONE — the
+	// same shape as
+	// TestWriteChannel_ASplitChannelRoundTripsWhenTheSetReproducesItsSecondarySide's
+	// own f, and the answer every one-byte variant below departs from in
+	// EXACTLY ONE byte, so each isolates the ONE secondaryDiffs clause it
+	// pins: P10-P14 have no other guard on this row, and a fixture differing
+	// in several at once cannot tell one clause's absence from another's.
 	//
-	// THE CANDIDATE MUST BE A SPLIT WRITE (splitCandidate mutates TxFreqHz
-	// to Known) so setRecord copies the PRIMARY's own mode, width and tones
-	// onto the Set's P10-P14 — the mirror this answer matches everywhere but
-	// the one byte under test. Written back against the ALL-ZERO baseline
-	// (secondary, above) a mirrored answer's OWN P10 would differ too, which
-	// is exactly what LOW-1's doc note now says: an edit to a mirrored
-	// split's PRIMARY side is refused at this same clause.
+	// ITS P2 IS '1', WHICH IS THE ONLY CLASS A SPLIT ANSWER CAN CARRY. The
+	// chart says the channel type is "decided while setting the P9 and P10
+	// values" (990:2901-2903), so a live frequency 2 is not a Single Memory
+	// channel and internal/fakets990's classFor derives exactly that. A
+	// split fixture with P2 = '0' would be a frame no radio this project
+	// models can send, and rung 11 pinned against one would be pinned
+	// against nothing (review s2-close-review-opus-1.md MED-1).
+	//
+	// THE CANDIDATE MUST BE A SPLIT WRITE for the P10-P14 rows (splitCandidate
+	// mutates TxFreqHz to Known): it makes setRecord copy the PRIMARY's own
+	// mode, width and tones onto the Set's P10-P14 — the mirror this answer
+	// matches everywhere but the one byte under test — and it is also what
+	// carries the write PAST rung 11's A14 clause, which refuses a simplex
+	// candidate over a Dual target before any comparison runs.
 	mirroredSecondary := func() ma0Fields {
 		f := populatedFields(id)
+		f.class = '1'
 		f.split = '1'
 		f.txFreq, f.txMode, f.txNarrow = "00014200000", f.mode, f.narrow
 		f.txToneType, f.txTone, f.txCTCSS = f.toneType, f.tone, f.ctcss
@@ -406,6 +406,22 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 	splitCandidate := func(d *codeplug.ChannelData) {
 		d.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 14_200_000}
 	}
+
+	// The A14 row is that SAME Dual target written by the DEFAULT SIMPLEX
+	// candidate: zeroing the frequency-2 side is what would re-type the
+	// channel, so this write is refused where the split rows below fall
+	// through to the P10-P14 comparison.
+	classDual := mirroredSecondary()
+
+	// P2 = '2' is the class no clause can judge and no fake can compose:
+	// what a Section-defined channel's frequency-2 side holds is unprinted
+	// (A8), so the refusal is unconditional and this answer's own secondary
+	// side — the printed zeroed one — is beside the point.
+	classSection := populatedFields(id)
+	classSection.class = '2'
+
+	secondaryMode := mirroredSecondary()
+	secondaryMode.txMode = '3'
 
 	secondaryNarrow := mirroredSecondary()
 	secondaryNarrow.txNarrow = '1'
@@ -519,20 +535,20 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 		wants:    []string{"990:2962-2963", "does not create channels"},
 		readSent: true,
 	}, {
-		name:     "rung 11 — the target is a Dual channel (P2 = '1')",
+		name:     "rung 11 — a SIMPLEX candidate would re-type a Dual target (P2 = '1')",
 		rung:     "11",
 		answer:   classDual.frame(),
 		slot:     id,
 		kind:     registerA14,
-		wants:    []string{"P2", "'1'", "990:2897-2903"},
+		wants:    []string{"P2", "'1'", "990:2897-2903", "SIMPLEX"},
 		readSent: true,
 	}, {
 		name:     "rung 11 — the target is Section defined (P2 = '2')",
 		rung:     "11",
 		answer:   classSection.frame(),
 		slot:     id,
-		kind:     registerA14,
-		wants:    []string{"P2", "'2'", "990:2897-2903"},
+		kind:     registerA8,
+		wants:    []string{"P2", "'2'", "990:2897-2903", "990:3051-3059"},
 		readSent: true,
 	}, {
 		name:     "the answer contradicts itself — P15 says split and frequency 2 is zero",
@@ -570,6 +586,7 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 		name:     "rung 11 — dual reception is refused unconditionally, whatever P15 says",
 		rung:     "11",
 		answer:   dual.frame(),
+		mutate:   splitCandidate,
 		slot:     id,
 		kind:     registerDecision9,
 		wants:    []string{"P16", "990:2949-2951"},
@@ -578,17 +595,19 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 		name:     "rung 11 — dual reception is refused even alongside a split",
 		rung:     "11",
 		answer:   dualAndSplit.frame(),
+		mutate:   splitCandidate,
 		slot:     id,
 		kind:     registerDecision9,
 		wants:    []string{"P16", "990:2949-2951"},
 		readSent: true,
 	}, {
-		name:     "rung 11 — a secondary side this write would not reproduce",
+		name:     "rung 11 — P10, the mode for frequency 2, differs alone",
 		rung:     "11",
-		answer:   secondary.frame(),
+		answer:   secondaryMode.frame(),
+		mutate:   splitCandidate,
 		slot:     id,
 		kind:     registerDecision9,
-		wants:    []string{"P10", "'3'", "'0'", "990:2929-2945"},
+		wants:    []string{"P10", "'3'", "'4'", "990:2929-2945"},
 		readSent: true,
 	}, {
 		name:     "rung 11 — P11, FM wide/narrow for frequency 2, differs alone",
@@ -748,13 +767,32 @@ func TestWriteChannel_AFreshReadChannelIsNeverRefusedForItsTXDisposition(t *test
 // is §2.4's gain exercised end to end: a split memory is READ with its
 // transmit frequency and written back unrefused, because what the Set emits
 // for P10-P14 is what the radio already holds.
+//
+// THE ANSWER CARRIES P2 = '1', WHICH IS THE ONLY CLASS A SPLIT CHANNEL CAN
+// ANSWER WITH: the chart says the type is "decided while setting the P9 and
+// P10 values" (990:2901-2903), so a live frequency 2 is not a Single Memory
+// channel and internal/fakets990's classFor derives exactly that. A fixture
+// pairing a live frequency 2 with P2 = '0' would be a state no radio this
+// project models can reach, and pinning the round trip on it would have made
+// this test's own claim — "§2.4's gain exercised end to end" — untrue
+// (review s2-close-review-opus-1.md MED-1).
+//
+// THE SET IS THE ANSWER WITH P2 NORMALISED TO '0' AND NOTHING ELSE CHANGED.
+// core/kw/ma emits the dummy class on every build because the book says the
+// parameter "is ignored" and names no value (A14), and the radio re-derives
+// the type from P9/P10 either way — so the one byte that differs is the one
+// byte the book says it may.
 func TestWriteChannel_ASplitChannelRoundTripsWhenTheSetReproducesItsSecondarySide(t *testing.T) {
 	const id = "017"
 	f := populatedFields(id)
+	f.class = '1'
 	f.split = '1'
 	f.txFreq, f.txMode, f.txNarrow = "00014200000", f.mode, f.narrow
 	f.txToneType, f.txTone, f.txCTCSS = f.toneType, f.tone, f.ctcss
 	assertFrameWidth(t, f.frame())
+
+	want := f
+	want.class = '0'
 
 	sess, p := openSessionAt(t, Simulated, writeImage(id, f.frame()))
 	ch, err := sess.ReadChannel(context.Background(), id)
@@ -771,8 +809,23 @@ func TestWriteChannel_ASplitChannelRoundTripsWhenTheSetReproducesItsSecondarySid
 	if len(got) != len(probeFrames)+3 {
 		t.Fatalf("transcript = %v, want the read's MA0, the write's MA0 read and its Set", got)
 	}
-	if set := got[len(got)-1]; set != f.frame() {
-		t.Errorf("Set =\n %q\nwant the channel's own answer reproduced\n %q", set, f.frame())
+	if set := got[len(got)-1]; set != want.frame() {
+		t.Errorf("Set =\n %q\nwant the channel's own answer with P2 normalised to '0'\n %q", set, want.frame())
+	}
+
+	// AND THE EDIT ITSELF, which is the capability secondaryDiffs' doc claims
+	// for P9 and P15: frequency 2 HAS a home in the neutral model, so moving
+	// a split channel's transmit frequency is a change this row can carry —
+	// the five bytes with no home (P10-P14) are untouched and the comparison
+	// passes.
+	ch.Data.TxFreqHz.Value = 14_250_000
+	if _, err := sess.WriteChannel(context.Background(), ch); err != nil {
+		t.Fatalf("changing a split channel's transmit frequency: %v", err)
+	}
+	edited := want
+	edited.txFreq = "00014250000"
+	if set := p.Transcript()[len(p.Transcript())-1]; set != edited.frame() {
+		t.Errorf("Set =\n %q\nwant the same record with P9 moved\n %q", set, edited.frame())
 	}
 }
 

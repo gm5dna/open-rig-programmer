@@ -55,11 +55,16 @@ const (
 	// an unassigned channel is nowhere printed, and every other member of
 	// the family says it cannot. LIFT: L-HW-3, hardware item 1.
 	registerA3 = "A3"
+	// registerA8 is the section-defined channel's frequency 2: whether P9
+	// carries that slot's end frequency is nowhere printed — MA6 is the
+	// end-frequency command here (990:3051-3059) — so what a whole-record
+	// Set would overwrite there is unknown. LIFT: L-HW-6, per registry row.
+	registerA8 = "A8"
 	// registerA14 is the Class byte: the codec emits P2 = '0' on every
 	// build because the book says the parameter "is ignored. Enter a dummy
 	// value" and names no value (990:2901-2903). The milestone's ONLY
-	// defaulted byte, and the reason a Dual or Section-defined TARGET is
-	// this driver's refusal rather than the codec's. LIFT: L-HW-11.
+	// defaulted byte, and the reason a SIMPLEX candidate over a Dual TARGET
+	// is this driver's refusal rather than the codec's. LIFT: L-HW-11.
 	registerA14 = "A14"
 )
 
@@ -280,7 +285,8 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //	PART 2 — read-dependent, and every clause quotes the answer:
 //	   the answer   a flag and the window it describes disagree
 //	10 A3            the answer satisfies the empty predicate
-//	11 A14           P2 says Dual or Section defined
+//	11 A8            P2 says Section defined, unconditionally
+//	   A14           P2 says Dual and the candidate is simplex
 //	   decision 9    P16 = 1, unconditionally
 //	   decision 9    any of P10-P14 is not what the Set would emit
 //	THEN THE WRITE — one MA0 Set, reported Sent, never Confirmed
@@ -535,19 +541,27 @@ func (s *Session) readCurrent(ctx context.Context, slotID string, slot ma.Slot) 
 	return rec, nil
 }
 
-// readDependentRefusal is Part 2: rung 10 and rung 11's three clauses, each
+// readDependentRefusal is Part 2: rung 10 and rung 11's four clauses, each
 // quoting the answer the pre-write read returned.
 //
 // EACH CLAUSE IS PINNED SEPARATELY, which is plan P7's own instruction for
-// the P16 one and the right shape for all three: a channel can satisfy one
+// the P16 one and the right shape for all four: a channel can satisfy one
 // and not another, and a test that could pass on the wrong clause would not
 // be pinning the rung it names.
 //
-// THE ORDER IS WIDEST FIRST. A Dual channel's P2 is a statement about the
-// whole record, dual reception is a statement about the second side's
-// PURPOSE, and the P10-P14 comparison is about its contents; a reader meeting
-// the narrowest message for the widest problem would be told the least useful
+// THE ORDER IS WIDEST FIRST. A channel's P2 is a statement about the whole
+// record, dual reception is a statement about the second side's PURPOSE, and
+// the P10-P14 comparison is about its contents; a reader meeting the
+// narrowest message for the widest problem would be told the least useful
 // true thing.
+//
+// THE TWO P2 CLAUSES REFUSE A CHANGE THIS WRITE WOULD MAKE, NOT THE CLASS
+// ITSELF, and that narrowing is review s2-close-review-opus-1.md MED-1's:
+// refusing every non-Single target outright made tx_frequency write-dead on
+// this row, because the chart's own rule — the type is "decided while setting
+// the P9 and P10 values" (990:2901-2903) — means EVERY split channel answers
+// P2 = '1'. A split candidate onto such a target changes no class and is
+// judged by the P10-P14 comparison below.
 func readDependentRefusal(slotID string, current, set ma.Record) error {
 	if err := selfContradictoryAnswer(slotID, current); err != nil {
 		return err
@@ -559,13 +573,29 @@ func readDependentRefusal(slotID string, current, set ma.Record) error {
 			"channel %s reads back UNASSIGNED: its P2-P18 window is blank, which is this book's own blank-channel answer (990:2962-2963). Whether an MA0 Set ALONE can create a channel is nowhere printed, and every other member of this family says it cannot — \"Setting an unassigned channel causes an error\" on MA2 (990:3008) and MA3 (990:3023), \"You cannot set an unassigned channel\" on MA6 (990:3058). This programme does not create channels; hardware item 1 is what lifts it",
 			slotID)
 	}
-	// Rung 11, first clause — A14. The Class byte is a PARSER output the
-	// codec normalises to '0' on every build, so it does not itself refuse a
-	// channel read back as Dual or Section defined; decision 9's "quote what
-	// you refuse" obligation for such a target is therefore the driver's.
-	if current.Class != '0' {
+	// Rung 11, first clause — A8, and it is UNCONDITIONAL. A Section-defined
+	// channel is the one class whose frequency-2 side this book never
+	// explains: the section's end frequency is MA6's own command, and
+	// whether P9 carries it here is unprinted. A whole-record Set therefore
+	// cannot know what it would overwrite, whatever the candidate holds.
+	if current.Class == '2' {
+		return refuse(slotID, registerA8, nil,
+			"channel %s reads back with P2 = '2', \"2: Section defined Memory channel\" (990:2897-2903). What such a channel's frequency-2 side holds is nowhere printed — the section's end frequency is MA6's own command (990:3051-3059) — so one MA0 Set, which rewrites the whole record, would overwrite bytes this programme cannot read as anything. That is refused rather than written blind",
+			slotID)
+	}
+	// Rung 11, second clause — A14, and it is SCOPED TO A SIMPLEX CANDIDATE.
+	// The Class byte is a PARSER output the codec normalises to '0' on every
+	// build, and the chart says the type is "decided while setting the P9
+	// and P10 values" — so the Set's own P2 changes nothing and what re-types
+	// a channel is the frequency-2 side it carries. A SPLIT candidate leaves
+	// a Dual target Dual and is judged below, by the P10-P14 comparison that
+	// exists for exactly that question; a SIMPLEX one writes the printed
+	// zeroed side and re-types it, which is the change this clause refuses.
+	// TestWriteChannel_ASplitChannelRoundTripsWhenTheSetReproducesItsSecondarySide
+	// pins the fall-through and the ladder's own "P2 = '1'" row pins this.
+	if current.Class != '0' && set.TXMode == 0 {
 		return refuse(slotID, registerA14, nil,
-			"channel %s reads back with P2 = %q, and this book prints three channel types — \"0: Single / 1: Dual / 2: Section defined\" (990:2897-2903). The Set NORMALISES P2 to '0' on every build, because the book says the parameter \"is ignored. Enter a dummy value\" and names no value (A14, the milestone's only defaulted byte), so writing this channel would re-type it as a Single one. That is refused rather than done silently",
+			"channel %s reads back with P2 = %q, and this book prints three channel types — \"0: Single / 1: Dual / 2: Section defined\" (990:2897-2903). The type is \"decided while setting the P9 and P10 values\" (990:2901-2903), and this write's candidate is SIMPLEX: its frequency-2 side is the printed zeroed form (990:2964-2965, A16), so the Set would re-type the channel as a Single one. Its own P2 cannot say otherwise — the book calls that parameter \"ignored. Enter a dummy value\" and names no value (A14, the milestone's only defaulted byte). That is refused rather than done silently",
 			slotID, current.Class)
 	}
 	// Rung 11, second clause — decision 9, and it is UNCONDITIONAL on P16.
@@ -655,6 +685,15 @@ func selfContradictoryAnswer(slotID string, current ma.Record) error {
 // flag DO have a home in the neutral model — TxFreqHz — so a difference there
 // is an edit the user asked for, not a value with nowhere to go. P10 to P14
 // are the five with no home at all.
+//
+// THE GAIN IS REACHABLE, and rung 11's own A14 clause is what makes it so:
+// a split target answers P2 = '1' by the chart's own rule, so a clause
+// refusing every non-Single class would leave this comparison judging
+// nothing. What the write can carry is an edit BETWEEN split shapes — a
+// changed frequency 2 on a channel whose P10-P14 the Set reproduces.
+// CLEARING TxFreqHz on such a target never reaches this comparison: a
+// simplex candidate over a Dual target is refused one clause above, because
+// zeroing the frequency-2 side is what re-types the channel.
 //
 // THE CONSEQUENCE IS WIDER THAN A SIMPLEX/SPLIT CONVERSION: a split channel's
 // secondary side has no source in codeplug.ChannelData at all, so an ORDINARY
@@ -806,8 +845,9 @@ func toneIndex(tone spec.Tone) (int, bool) {
 // decision 7 is why that list is one item long and not sixteen: every other
 // byte of this 57-byte grid carries a live P-number with a printed domain, so
 // there is no printed-fixed class here for pair 1's defaulted-byte register
-// to fill. Rung 11's first clause is what refuses a target whose current P2
-// says otherwise.
+// to fill. What the dummy class cannot do is PRESERVE a type, which is why
+// rung 11 refuses a simplex candidate over a target whose current P2 is not
+// '0': the radio re-derives the type from the P9/P10 this Set does carry.
 //
 // EVERYTHING ELSE IS THE CODEC'S. core/kw/ma re-validates the mode byte
 // against this row's legend, both tone indices against their printed charts,
