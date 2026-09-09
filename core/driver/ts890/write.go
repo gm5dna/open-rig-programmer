@@ -474,6 +474,20 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		writeChannelGapHook()
 	}
 
+	// The radio's own P11 must agree with its own P8-P10. A16 prints the
+	// simplex case as the WHOLE split side zeroed (890:3217-3218) while
+	// core/kw/ma decodes P11 independently of that window, so a frame in
+	// which the two disagree is one the neutral model cannot represent: the
+	// read drops P11 and candidate rebuilds it from tx_frequency, so writing
+	// such a channel back would flip the split flag with nothing in the file
+	// asking for it.
+	if current.Split != (current.TXFreqHz != 0) {
+		return res, &driver.WriteRefusedError{
+			Slot:   ch.Slot,
+			Reason: fmt.Sprintf("the pre-write read's P11 says split=%v while its P8 split transmission frequency is %d (890:3191-3203); a single memory channel's whole split side is zero (890:3217-3218), so this answer is one this programme cannot restate and the write is refused rather than made with a P11 the radio did not send", current.Split, current.TXFreqHz),
+		}
+	}
+
 	// RUNG 10 — the target is unassigned NOW. Whether an MA0 Set can CREATE a
 	// channel is A3: MA2, MA3, MA6, MA4 and MA7 all print an
 	// unassigned-channel prohibition (890:3265, 890:3282, 890:3300-3301,

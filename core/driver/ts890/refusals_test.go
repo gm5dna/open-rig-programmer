@@ -417,6 +417,58 @@ func TestWriteChannel_ANameOutsideP13sDomainIsRefused(t *testing.T) {
 	}
 }
 
+// TestWriteChannel_RefusesWhenThePreWriteReadsP11DisagreesWithP8 pins the
+// check between the read and rung 10, from the T12 review (HIGH-1): no layer
+// of this row holds the invariant P11 = 1 iff P8 != 0, so a pre-write answer
+// whose P11 disagrees with its own P8 is a frame the neutral model cannot
+// represent — read.go drops P11 entirely and candidate rebuilds it from
+// tx_frequency, so writing such a channel back would flip the radio's own
+// split flag with nothing in the file asking for it.
+//
+// BOTH FRAMES ARE HAND-SPELT FROM THE RULER (890:3164-3221), not built
+// through the codec: core/kw/ma's own ParseMA0Answer decodes P11
+// unconditionally at byte 38 while P8-P10 are domain-checked only when they
+// carry content (A16, codec890.go:163-181), so a frame no builder would
+// produce is exactly what a real radio could still answer, and only a
+// hand-spelt fixture can pose it.
+func TestWriteChannel_RefusesWhenThePreWriteReadsP11DisagreesWithP8(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer string
+		quote  string
+	}{
+		{
+			name:   "P11 says simplex but P8 carries a split frequency",
+			answer: "MA0007000142500002035012000142550002001GB3IV;",
+			quote:  "split=false while its P8 split transmission frequency is 14255000",
+		},
+		{
+			name:   "P11 says split but P8-P10 are the printed zeroed side",
+			answer: "MA0007000142500002035012000000000000011GB3IV;",
+			quote:  "split=true while its P8 split transmission frequency is 0",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sess, port := openTestSession(t, Simulated, radioImage{ma0Answers: map[string]string{"007": tc.answer}})
+			_, err := sess.WriteChannel(context.Background(), simplexChannel("007"))
+			var refused *driver.WriteRefusedError
+			if !errors.As(err, &refused) {
+				t.Fatalf("err = %v (%T), want a *driver.WriteRefusedError", err, err)
+			}
+			var semantic *RefusalError
+			if errors.As(err, &semantic) {
+				t.Errorf("err names register %q: this refusal's authority is a printed line, not an assumption", semantic.Register)
+			}
+			for _, want := range []string{tc.quote, "890:3191-3203", "890:3217-3218"} {
+				if !strings.Contains(refused.Reason, want) {
+					t.Errorf("reason %q does not quote %s", refused.Reason, want)
+				}
+			}
+			assertReadButNoSet(t, port, "007", tc.name)
+		})
+	}
+}
+
 // TestWriteChannel_A3RefusesABlankTarget is rung 10, the FIRST read-dependent
 // rung: the pre-write read's answer satisfies the empty predicate, so the
 // target channel is unassigned NOW, and whether an MA0 Set can create one is
