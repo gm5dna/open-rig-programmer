@@ -206,6 +206,30 @@ func TestDefaultImage_EveryLiveLegendValueAppears(t *testing.T) {
 	}
 }
 
+// TestDefaultImage_NoRecordSetsP16OverAZeroedFrequency2 is the constraint the
+// "every live value appears" pin above cannot express on its own: a value may
+// only be placed where the COMBINATION it lands in is one this family's own
+// codec will build.
+//
+// P16 = '1' over a frequency-2 side that is entirely zero describes a second
+// receiver with no frequency to receive on. Every byte of it is printed —
+// "1: Dual reception ON" (990:2950-2951) and the zeroed side a single memory
+// channel answers with (990:2964-2965) — but core/kw/ma refuses to build the
+// pair, and core/driver/ts990 reports such an answer as one that "cannot be
+// written back in any form". An image composing it tells a user their radio
+// answered nonsense on a channel this fixture invented (review
+// s2-close-review-opus-1.md MED-2).
+//
+// It is asserted HERE rather than by importing the codec, which doc.go's HARD
+// RULE forbids: the rule is stated in this file's own terms.
+func TestDefaultImage_NoRecordSetsP16OverAZeroedFrequency2(t *testing.T) {
+	for n, s := range DefaultImage() {
+		if s.DualRX == '1' && s.Freq2 == zeroFreq {
+			t.Errorf("channel %03d carries P16 = '1' over an all-zero frequency 2 — a second receiver with no frequency, which core/kw/ma refuses to build", n)
+		}
+	}
+}
+
 // TestDefaultImage_TheFourToneIndexWindowsAreDistinctAndNonZero. This grid has
 // FOUR two-digit index windows — P7, P8, P13 and P14 at positions 22-23,
 // 24-25, 40-41 and 42-43 — and the TN and CN charts print identical

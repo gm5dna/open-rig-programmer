@@ -147,6 +147,17 @@ func singleRecord(freq string, mode byte) MemState {
 //     types all appear, so no driver behaviour on one of them is a fixture
 //     accident. Nothing in the grid conditions the tone type on the mode, so
 //     the pairing below is free.
+//   - A PRINTED VALUE GOES ONLY WHERE ITS COMBINATION IS ONE THE FAMILY'S OWN
+//     CODEC WILL BUILD, and P16 is the byte where those two rules meet.
+//     "1: Dual reception ON" over a frequency-2 side that is entirely zero
+//     is a second receiver with no frequency to receive on: every byte of it
+//     is printed, the pairing is not, core/kw/ma refuses to build it and
+//     core/driver/ts990 reports such an answer as one that cannot be written
+//     back in any form. So P16's second value sits on the ONE channel with a
+//     live frequency 2 (review s2-close-review-opus-1.md MED-2), which also
+//     gives the image the P15 = 1 WITH P16 = 1 case — two flags the book
+//     never defines against each other (990:2946-2951).
+//     TestDefaultImage_NoRecordSetsP16OverAZeroedFrequency2 is the pin.
 //   - EACH OF THE FOUR TWO-DIGIT INDEX WINDOWS CARRIES A DISTINCT NON-ZERO
 //     PRINTED INDEX SOMEWHERE. P7, P8, P13 and P14 sit at positions 22-23,
 //     24-25, 40-41 and 42-43, and the TN and CN charts print IDENTICAL
@@ -189,12 +200,13 @@ func DefaultImage() map[int]MemState {
 	// this side of the grid carries, so that no record in this image repeats
 	// another on the axes that matter, plus a full ten-character name from
 	// the printed character set (990:2770-2778). Still FM, so P5's "1: FM
-	// Narrow" sits on the mode whose legend prints it.
+	// Narrow" sits on the mode whose legend prints it. P16 is NOT among them:
+	// this channel's frequency-2 side is the printed zeroed one, and dual
+	// reception over it is the combination the constraint list rules out.
 	second := singleRecord(printedAS2, modeFM)
 	second.FMNarrow = '1'      // "1: FM Narrow for frequency 1" (990:2914)
 	second.ToneType = '1'      // "1: Tone for frequency 1" (990:2917)
 	second.ToneNo = "12"       // TN index 12 = 100.0 Hz (990:4972), a NON-ZERO
-	second.DualRX = '1'        // "1: Dual reception ON" (990:2951)
 	second.Lockout = lockoutOn // "2: Scan Lockout ON" (990:2954)
 	second.Name = "MEMORY 001"
 	img[1] = second
@@ -205,6 +217,13 @@ func DefaultImage() map[int]MemState {
 	// answers "1: Dual Memory channel" because the chart says the type is
 	// decided by the P9/P10 values (990:2901-2903) — classFor, not a byte
 	// composed here.
+	//
+	// IT ALSO CARRIES P16 = '1', and this is the only record in the image
+	// that may: dual reception describes a SECOND RECEIVER, so the flag needs
+	// a frequency underneath it (see the constraint list above). The pairing
+	// with P15 = '1' is the case the book leaves undefined — it prints the
+	// two flags side by side and never against each other (990:2946-2951) —
+	// which is what core/driver/ts990's read path calls "P15 DECIDES ALONE".
 	dual := singleRecord(printedFA14, modeUSB)
 	dual.ToneType = '2' // "2: CTCSS for frequency 1" (990:2918)
 	dual.CTCSSNo = "08" // CN index 08 = 88.5 Hz (990:1260), a NON-ZERO index
@@ -215,6 +234,7 @@ func DefaultImage() map[int]MemState {
 	dual.ToneNo2 = "21"  // why BOTH index windows on this side are live: TN 21
 	dual.CTCSSNo2 = "05" // = 136.5 Hz (990:4968) and CN 05 = 79.7 Hz (990:1257)
 	dual.Split = '1'     // "1: Split" (990:2948)
+	dual.DualRX = '1'    // "1: Dual reception ON" (990:2951)
 	dual.Class = classFor(dual.Freq2)
 	dual.Name = "SPLIT     "
 	img[2] = dual

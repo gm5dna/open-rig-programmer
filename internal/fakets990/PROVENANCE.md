@@ -178,6 +178,18 @@ and a full ten-character name, a third with a LIVE frequency 2 (the only class
 of record in which half this grid is not zeroes, and the only way P2's second
 value appears at all), and a fourth carrying the last of the four tone types.
 
+**A printed value goes only where the COMBINATION it lands in is one this
+family's own codec will build**, and P16 is the byte where that rule bites.
+"1: Dual reception ON" (`990:2950-2951`) over a frequency-2 side that is
+entirely zero (`990:2964-2965`) describes a second receiver with no frequency
+to receive on: both bytes are printed, the pairing is not, `core/kw/ma` refuses
+to build it, and `core/driver/ts990` reports such an answer as one that cannot
+be written back in any form. So the dual-reception flag sits on the third
+channel — the one with a live frequency 2 — and not on the second, where "the
+other printed value of every two-value byte" would otherwise have put it. A22
+covers the composition, not the codec's own coherence rules; this constraint is
+what keeps the two from disagreeing.
+
 **Each of the four two-digit index windows carries a distinct non-zero printed
 index somewhere.** P7, P8, P13 and P14 sit at positions 22–23, 24–25, 40–41 and
 42–43, and the `TN` and `CN` charts print identical frequencies at indices
