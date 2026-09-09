@@ -70,10 +70,18 @@ body {
 	font-size: 13px;
 	line-height: 1.45;
 	-webkit-font-smoothing: antialiased;
+	/* The app is a fixed shell: everything that scrolls (the channel grid,
+	 * the settings list, a modal's body) scrolls INSIDE its own box, so the
+	 * document itself never has anything to scroll to. Said explicitly
+	 * because WKWebView can otherwise show a pair of document scrollbars
+	 * after a window resize (reported on v1.4.1, macOS 26). */
+	overflow: hidden;
 }
 
 #app {
-	height: 100vh;
+	/* 100% of the html/body chain, not 100vh: the chain follows the window
+	 * on every resize, whereas a viewport unit can lag behind one. */
+	height: 100%;
 	display: flex;
 	flex-direction: column;
 }
@@ -130,7 +138,7 @@ button:disabled {
 .modal-body {
 	padding: var(--space-4) var(--space-5);
 	overflow-y: auto;
-	flex: 1;
+	flex: 1 1 auto;
 	min-height: 0;
 	font-size: 12.5px;
 	color: var(--colour-text);
