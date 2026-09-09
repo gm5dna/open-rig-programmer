@@ -211,6 +211,33 @@ func TestOpen_AMalformedFVAnswerIsAMalformedFrame(t *testing.T) {
 	}
 }
 
+// TestOpen_TheFVAnswerIsCarriedVerbatim pins that the four characters reach
+// the session exactly as the radio spelled them, whatever they spell — the
+// sibling row's own pin, on this row for the same reason.
+//
+// NOTHING HERE BRANCHES ON THE VERSION (matrix §3.5), so the accessor's whole
+// purpose is that an owner can see what their radio said: without it the datum
+// is unreachable outside this package and rigprog probe prints the firmware
+// line for the TS-890S and silently omits it for the TS-990S (review
+// s2-close-review-opus-1.md LOW-1). A version this programme could not read
+// as a version must therefore still reach the user unedited.
+func TestOpen_TheFVAnswerIsCarriedVerbatim(t *testing.T) {
+	for _, answer := range []string{"FV1.00;", "FV2.31;", "FVABCD;"} {
+		sess, _ := openTestSession(t, radioImage{fvAnswer: answer})
+		if got, want := sess.FirmwareAnswer(), answer[2:6]; got != want {
+			t.Errorf("FirmwareAnswer() = %q, want %q verbatim", got, want)
+		}
+	}
+}
+
+// TestSession_SatisfiesFirmwareAnswerReporter is the seam the accessor exists
+// for: cmd/rigprog/probe.go type-asserts this optional capability and prints
+// the answer quoted, so a session that did not satisfy it would drop the line
+// with no compile error anywhere.
+func TestSession_SatisfiesFirmwareAnswerReporter(t *testing.T) {
+	var _ driver.FirmwareAnswerReporter = (*Session)(nil)
+}
+
 // TestOpen_ClosesThePortOnEveryFailurePath is Open's ownership obligation: it
 // takes the port on BOTH outcomes, and a refused Open must not leak it.
 func TestOpen_ClosesThePortOnEveryFailurePath(t *testing.T) {
