@@ -579,6 +579,32 @@ func TestWriteChannel_Decision9RefusesASecondarySideTheSetWouldNotReproduce(t *t
 		assertReadButNoSet(t, port, "007", "an independent transmit mode")
 	})
 
+	// THE OTHER DIRECTION, and the one write.go's own P8/P11 paragraph now
+	// turns on: clearing tx_frequency to make a currently-split channel
+	// simplex is NOT an edit this model can carry. The candidate emits
+	// TXMode 0 — the printed zeroed split side (890:3217-3218) — against the
+	// radio's live P9, so this rung refuses it structurally, every time. The
+	// comment claimed the opposite until review s2-close-review-opus-1.md
+	// MED-3, which is the standing rule broken: no comment may claim more
+	// than its test pins.
+	t.Run("a split slot the candidate would make simplex", func(t *testing.T) {
+		sess, port := openTestSession(t, Simulated, populatedImage(t, 7, populated()))
+		// simplexChannel carries a Known ZERO tx_frequency, which is this
+		// model's whole spelling of "make it simplex".
+		ch := simplexChannel("007")
+		if got := ch.Data.TxFreqHz; got.State != codeplug.Known || got.Value != 0 {
+			t.Fatalf("the fixture's tx_frequency is %+v, want Known 0", got)
+		}
+		_, err := sess.WriteChannel(context.Background(), ch)
+		ref := assertRegister(t, err, registerDecision9, "a split slot made simplex")
+		for _, want := range []string{"P9", "'2'", "the printed zeroed simplex side (890:3217-3218)"} {
+			if !strings.Contains(ref.Reason, want) {
+				t.Errorf("reason %q does not quote %s", ref.Reason, want)
+			}
+		}
+		assertReadButNoSet(t, port, "007", "a split slot made simplex")
+	})
+
 	t.Run("a simplex slot the candidate would make split", func(t *testing.T) {
 		rec := populated()
 		rec.TXFreqHz, rec.TXMode, rec.Split = 0, 0, false
