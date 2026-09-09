@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Send dialogue / transfer-view tests (task-18 brief §3): a fixture
-// SendPlanView (incl. blocked reasons + a firmware-required variant),
+// SendPlanView (incl. blocked reasons),
 // confirm passing the exact token from THIS fixture, and every outcome
 // rendering (ok/aborted/refused/cancelled) — asserting "snapshot" wording
 // is present and "backup" is never present anywhere in the dialogue,
@@ -31,7 +31,6 @@ const readRadioMock = vi.mocked(readRadio)
 const UI_SPEC = {
 	EraseDialogNote:
 		'The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].',
-	FirmwarePlaceholder: 'e.g. V01-10',
 }
 
 /** @param {object} extra */
@@ -82,8 +81,6 @@ function planFixture(overrides = {}) {
 		BaselineDigestShort: 'abc123def456',
 		ConfirmationDigest: 'confirm-digest-xyz-001',
 		NothingToSend: false,
-		FirmwareRequired: false,
-		FirmwareGuidance: '',
 		...overrides,
 	}
 }
@@ -138,38 +135,12 @@ describe('review phase', () => {
 		expect(within(blockedSection).getByText(/M-02/)).toBeInTheDocument()
 	})
 
-	it('has no firmware field when FirmwareRequired is false', () => {
-		render(SendFlowDialog, { plan: planFixture(), onClose: vi.fn(), onPrepareAgain: vi.fn() })
-		expect(screen.queryByLabelText('Confirmed firmware version')).not.toBeInTheDocument()
-	})
-
-	it('firmware-required variant: renders FirmwareGuidance from the plan VERBATIM (Codex M6 #6, LOW: no FT-710 protocol facts in JS — the dialogue must not compose its own V01-10 sentence); Confirm disabled until filled', async () => {
-		const guidance = 'TEST-ONLY firmware guidance text: needs V01-10 or later, no CAT query exists for it.'
-		render(SendFlowDialog, { plan: planFixture({ FirmwareRequired: true, FirmwareGuidance: guidance }), onClose: vi.fn(), onPrepareAgain: vi.fn() })
-		const input = screen.getByLabelText('Confirmed firmware version')
-		expect(screen.getByText(guidance)).toBeInTheDocument()
-		// Task 42: the input's placeholder is UI_SPEC.FirmwarePlaceholder
-		// (GetUISpec's FirmwarePlaceholder), not a hardcoded "e.g. V01-10".
-		expect(input).toHaveAttribute('placeholder', 'e.g. V01-10')
-		const confirmBtn = screen.getByRole('button', { name: 'Confirm send' })
-		expect(confirmBtn).toBeDisabled()
-
-		await fireEvent.input(input, { target: { value: 'V01-10' } })
-		expect(confirmBtn).not.toBeDisabled()
-	})
-
-	it('task 42: an empty served FirmwarePlaceholder leaves the input with no placeholder (no hardcoded fallback)', () => {
-		appState.uiSpec = { ...UI_SPEC, FirmwarePlaceholder: '' }
-		render(SendFlowDialog, { plan: planFixture({ FirmwareRequired: true, FirmwareGuidance: 'x' }), onClose: vi.fn(), onPrepareAgain: vi.fn() })
-		expect(screen.getByLabelText('Confirmed firmware version')).toHaveAttribute('placeholder', '')
-	})
-
-	it('Confirm passes the exact confirmation digest from THIS plan, plus the firmware field', async () => {
-		const plan = planFixture({ FirmwareRequired: true, ConfirmationDigest: 'this-exact-token' })
+	it('Confirm passes the exact confirmation digest from THIS plan, and asks for nothing else', async () => {
+		const plan = planFixture({ ConfirmationDigest: 'this-exact-token' })
 		render(SendFlowDialog, { plan, onClose: vi.fn(), onPrepareAgain: vi.fn() })
-		await fireEvent.input(screen.getByLabelText('Confirmed firmware version'), { target: { value: 'V01-10' } })
+		expect(screen.queryByLabelText('Confirmed firmware version')).not.toBeInTheDocument()
 		await fireEvent.click(screen.getByRole('button', { name: 'Confirm send' }))
-		expect(confirmSendMock).toHaveBeenCalledWith('this-exact-token', 'V01-10')
+		expect(confirmSendMock).toHaveBeenCalledWith('this-exact-token')
 	})
 
 	it('Cancel closes the dialogue and never calls confirmSend (the plan is simply dropped)', async () => {

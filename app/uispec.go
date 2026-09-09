@@ -590,7 +590,6 @@ func (a *App) GetUISpec() (UISpecView, error) {
 			Tone:     text.PreservationTooltips.Tone,
 			ScanSkip: text.PreservationTooltips.ScanSkip,
 		},
-		FirmwarePlaceholder: text.FirmwarePlaceholder,
 	}, nil
 }
 

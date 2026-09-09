@@ -332,9 +332,9 @@ describe('confirmSend — the asymmetric active-clearing case', () => {
 	it('does NOT clear active on a successful call — only transfer:done does that', async () => {
 		window.go.main.App.ConfirmSend.mockResolvedValue(undefined)
 
-		await bindings.confirmSend('digest-abc', 'v1.23')
+		await bindings.confirmSend('digest-abc')
 
-		expect(window.go.main.App.ConfirmSend).toHaveBeenCalledWith('digest-abc', 'v1.23')
+		expect(window.go.main.App.ConfirmSend).toHaveBeenCalledWith('digest-abc')
 		expect(appState.transfer.kind).toBe('send')
 		// The transfer is still "running" from the frontend's point of view —
 		// ConfirmSend just started a background goroutine.
@@ -348,7 +348,7 @@ describe('confirmSend — the asymmetric active-clearing case', () => {
 	it('DOES clear active on a synchronous pre-flight rejection (nothing was started)', async () => {
 		window.go.main.App.ConfirmSend.mockRejectedValue('app: no active plan')
 
-		await expect(bindings.confirmSend('digest-abc', 'v1.23')).rejects.toBe('app: no active plan')
+		await expect(bindings.confirmSend('digest-abc')).rejects.toBe('app: no active plan')
 		expect(appState.transfer.active).toBe(false)
 		expect(appState.alerts[0].message).toContain('sending to radio')
 	})

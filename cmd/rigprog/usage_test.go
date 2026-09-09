@@ -12,15 +12,15 @@ import (
 
 // TestWriteUsageText_FlagsPrecedeFile pins Fix 6 (LOW, Codex M4 #6):
 // writeUsageText used to advertise "write --port <path> FILE [--yes]
-// [--firmware VER] [--snapshot-dir DIR]", but stdlib flag.Parse stops
+// [--snapshot-dir DIR]", but stdlib flag.Parse stops
 // parsing flags at the first non-flag argument — a caller typing that
 // EXACT documented invocation had every flag after FILE rejected as an
 // unexpected extra argument. The synopsis must list every optional flag
 // BEFORE FILE, and the text must say so explicitly.
 func TestWriteUsageText_FlagsPrecedeFile(t *testing.T) {
 	for _, want := range []string{
-		"rigprog write --port <path> [--model NAME] [--yes] [--firmware VER] [--snapshot-dir DIR] FILE",
-		"rigprog write --fake [--model NAME] [--yes] [--firmware VER] [--snapshot-dir DIR] FILE",
+		"rigprog write --port <path> [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
+		"rigprog write --fake [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
 	} {
 		if !strings.Contains(writeUsageText, want) {
 			t.Errorf("writeUsageText = %q, want it to contain the flags-first synopsis line %q", writeUsageText, want)

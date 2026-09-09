@@ -29,32 +29,9 @@ import (
 // measure against; to be reviewed at M5a alongside those.
 const writeVerifyPairTimeout = 10 * time.Second
 
-// ExecuteOptions carries the caller-side confirmations Execute requires
-// beyond plan and confirmedDigest.
-type ExecuteOptions struct {
-	// FirmwareConfirmed is the firmware version a human has read off the
-	// radio's front panel and confirmed, required (non-empty) the first
-	// time this Service's session performs an Execute call (obligation
-	// 10, the first-write interactive gate). Once accepted, later
-	// Execute calls on the same Service do not need to repeat it. This
-	// layer enforces presence only — obtaining the value from a human is
-	// the CLI/GUI's job.
-	FirmwareConfirmed string
-}
-
 // Report is what Execute returns: exactly what happened, and — if
 // execution stopped early — why, and how far it got.
 type Report struct {
-	// FirmwareConfirmed is the firmware version string confirmed for this
-	// Service's session (obligation 10's audit clause): the value this
-	// Execute call's caller supplied via ExecuteOptions.FirmwareConfirmed
-	// the FIRST time this Service performed an Execute, persisted for
-	// every later Execute call on the same Service regardless of whether
-	// THIS call supplied it again. Callers (CLI/GUI) should display and/or
-	// persist this alongside the rest of the report — it is the durable
-	// record of what a human confirmed they read off the radio's front
-	// panel, not merely a gate that was satisfied and then forgotten.
-	FirmwareConfirmed string
 	// Written counts channels whose WriteChannel call completed without
 	// error (the frame was sent and drew no rejection within its error
 	// window — see driver.WriteResult's doc comment for exactly what
@@ -265,8 +242,8 @@ func errString(err error) string {
 //
 // Order (fixed — see doc.go): refusal checks for obligations 3 (dual-digest
 // recheck + re-Validate against the session's CURRENT capabilities), 4
-// (session identity binding), 5 (confirmation binding), and 10 (first-write
-// firmware gate), each a distinct typed error, nothing written; then the
+// (session identity binding) and 5 (confirmation binding), each a distinct
+// typed error, nothing written; then the
 // delta-write loop itself, once per unblocked Added/Modified entry
 // (obligation 6): obligation 11's verify-read check, obligation 7's
 // write-then-verify, and obligation 8's journaling, all run PER SLOT, in
@@ -289,7 +266,7 @@ func errString(err error) string {
 // partial *Report alongside a non-nil *AbortedError: both matter, since
 // the report's Slots/Written/Verified counts carry forensic detail the
 // error string alone cannot.
-func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest string, opts ExecuteOptions) (*Report, error) {
+func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest string) (*Report, error) {
 	// Fix 2 (adjudicated MEDIUM): acquire this Service's operation lock for
 	// Execute's WHOLE run — refusing a concurrent ReadAll/PrepareSend/
 	// Execute call with a typed *BusyError rather than interleaving their
@@ -339,39 +316,7 @@ func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest s
 		return nil, &ConfirmationMismatchError{Want: want, Got: confirmedDigest}
 	}
 
-	// Obligation 10: first-write interactive gate. The gate state itself
-	// (firmwareConfirmed/firmwareVersion) is held once per Service, as
-	// before — but the confirmed value must now actually flow somewhere
-	// useful (the audit clause this closes): journaled once, the first
-	// time it is accepted, and returned in EVERY Report from here on, not
-	// left to sit in a write-only field nothing ever reads back.
-	s.mu.Lock()
-	firstConfirmation := false
-	if !s.firmwareConfirmed {
-		if opts.FirmwareConfirmed == "" {
-			s.mu.Unlock()
-			return nil, ErrFirmwareUnconfirmed
-		}
-		s.firmwareConfirmed = true
-		s.firmwareVersion = opts.FirmwareConfirmed
-		firstConfirmation = true
-	}
-	firmwareVersion := s.firmwareVersion
-	s.mu.Unlock()
-
-	// Emitted BEFORE the delta loop (and before the verify-read phase
-	// too) — this is a record of a HUMAN'S confirmation, not a radio
-	// interaction, so it belongs beside "prepare" in the journal's
-	// timeline, not interleaved with per-slot write/verify lines.
-	// Best-effort (journalAppend, not appendDeltaJournal): the gate state
-	// this event records already lives safely in memory (s.firmwareConfirmed
-	// above), so a durability hiccup here is worth a diagnostic, not a
-	// refusal — see journalAppend's doc comment.
-	if firstConfirmation {
-		s.journalAppend(journal, "firmware_confirmed", map[string]any{"version": firmwareVersion})
-	}
-
-	report := &Report{JournalPath: journal.Path(), FirmwareConfirmed: firmwareVersion}
+	report := &Report{JournalPath: journal.Path()}
 
 	// Partition the diff (obligation 6): Blocked entries (including every
 	// Erased entry, always Blocked under this project's v1 capability

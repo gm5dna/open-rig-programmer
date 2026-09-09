@@ -480,8 +480,7 @@ func (f *failingJournal) Path() string { return f.inner.Path() }
 
 // readJournalRecords reads path (a journal *.jsonl file) and returns
 // every line's full decoded JSON record, in file order — for tests
-// asserting on a field other than "event"/"slot" (e.g.
-// firmware_confirmed's "version"), where readJournalEvents/
+// asserting on a field other than "event"/"slot", where readJournalEvents/
 // readJournalEventDetails (execute_test.go) are not enough.
 func readJournalRecords(t *testing.T, path string) []map[string]any {
 	t.Helper()

@@ -161,14 +161,6 @@ func (e *ValidationFailedError) Error() string {
 // Unwrap lets errors.Is(err, ErrValidationFailed) match.
 func (e *ValidationFailedError) Unwrap() error { return ErrValidationFailed }
 
-// ErrFirmwareUnconfirmed is the sentinel a caller should compare against
-// (via errors.Is) when Execute's first-write interactive gate (obligation
-// 10) finds that this Service has never had a firmware version confirmed
-// for its session, and ExecuteOptions.FirmwareConfirmed is empty. This
-// layer enforces presence only — obtaining the confirmation from a human
-// reading it off the radio's front panel is the CLI/GUI's job.
-var ErrFirmwareUnconfirmed = fmt.Errorf("clone: firmware version not confirmed for this session's first write")
-
 // ErrVerifyMismatch is the sentinel a caller should compare against (via
 // errors.Is) when a per-channel write's read-back verify (obligation 7)
 // disagrees with what was written, on at least one WRITABLE field

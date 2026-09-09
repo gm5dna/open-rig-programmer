@@ -84,7 +84,6 @@
  * A completed (or aborted) send's report, as attached to transfer:done's
  * Report field — hand-declared, see SlotResultView's doc comment above.
  * @typedef {Object} ReportView
- * @property {string} FirmwareConfirmed
  * @property {number} Written
  * @property {number} Verified
  * @property {number} SkippedBlocked

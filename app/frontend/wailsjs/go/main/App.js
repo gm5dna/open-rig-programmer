@@ -6,8 +6,8 @@ export function CancelTransfer() {
   return window['go']['main']['App']['CancelTransfer']();
 }
 
-export function ConfirmSend(arg1, arg2) {
-  return window['go']['main']['App']['ConfirmSend'](arg1, arg2);
+export function ConfirmSend(arg1) {
+  return window['go']['main']['App']['ConfirmSend'](arg1);
 }
 
 export function Connect(arg1, arg2) {

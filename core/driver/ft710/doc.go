@@ -26,7 +26,7 @@
 // capability veto but the layered choreography the veto used to sit in
 // front of: codeplug.Diff's per-field/Inert/erase gates, the clone
 // service's full send choreography (fresh baseline, immutable plan,
-// digest + session + confirmation binding, firmware gate, per-slot
+// digest + session + confirmation binding, per-slot
 // verify-read and write-then-verify), Session.WriteChannel's own
 // capability re-check before any wire traffic, and internal/guards'
 // repo-wide import-graph pin on the write path. The ledgered

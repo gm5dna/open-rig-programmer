@@ -106,7 +106,7 @@ func TestOperationBusyError_RefusesEditsAndOtherOpsWhileReserved(t *testing.T) {
 		checkOperationBusy(t, "Disconnect", err, "ReadRadio")
 	})
 	t.Run("ConfirmSend", func(t *testing.T) {
-		err := a.ConfirmSend("whatever", "")
+		err := a.ConfirmSend("whatever")
 		checkOperationBusy(t, "ConfirmSend", err, "ReadRadio")
 	})
 	t.Run("another ReadRadio", func(t *testing.T) {

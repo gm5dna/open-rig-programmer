@@ -9,7 +9,6 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
-	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
 // isCancelled reports whether err is (or wraps) a context cancellation —
@@ -106,7 +105,6 @@ func isExecuteRefusalSentinel(err error) bool {
 		errors.Is(err, clone.ErrSessionChanged) ||
 		errors.Is(err, clone.ErrCandidateChanged) ||
 		errors.Is(err, clone.ErrConfirmationMismatch) ||
-		errors.Is(err, clone.ErrFirmwareUnconfirmed) ||
 		errors.Is(err, clone.ErrValidationFailed)
 }
 
@@ -123,8 +121,6 @@ func refusalMessage(err error) string {
 		return "refused: an internal consistency check failed (candidate changed) — prepare send again"
 	case errors.Is(err, clone.ErrConfirmationMismatch):
 		return "refused: the confirmation did not match the plan that was reviewed — prepare send again"
-	case errors.Is(err, clone.ErrFirmwareUnconfirmed):
-		return "refused: firmware version not confirmed for this session's first send"
 	case errors.Is(err, clone.ErrValidationFailed):
 		return "refused: candidate codeplug failed validation at send time — validate and prepare send again"
 	default:
@@ -194,51 +190,6 @@ func classifyExecuteOutcome(err error) (outcome, message string) {
 	return "error", err.Error()
 }
 
-// firmwareGuidance returns the radio-specific advisory PrepareSend attaches
-// to SendPlanView.FirmwareGuidance whenever firmwareRequiredLocked predicts
-// true — moved out of the frontend (Fix 6, adjudicated LOW, Codex M6 #6:
-// "no FT-710 protocol facts in the frontend") so the V01-10 threshold and
-// CAT's lack of a firmware-version query live in exactly one place, next
-// to firmwareRequiredLocked's own FT-710 knowledge below, rather than
-// duplicated as JS prose the frontend previously hardcoded. Restates
-// core/clone's firmware-gate intent (see clone.ErrFirmwareUnconfirmed and
-// ExecuteOptions.FirmwareConfirmed's doc comments) in user-facing wording —
-// core/clone itself deliberately carries no display strings.
-//
-// Task 41 (M9a-5, the GUI-backend neutralisation) sources this from
-// internal/radiotext rather than a hardcoded const — the same served
-// value, byte-identical to the old const, for the FT-710.
-//
-// M9c-5 (E4) keys it off model — currentModel's resolved answer, taken
-// under a.mu by the caller — instead of wiring.DefaultModel, and HONOURS
-// radiotext.For's ok: a model with no radiotext entry yields "" (the
-// frontend then shows no advisory at all), never the FT-710's own
-// firmware sentence attributed to some other radio. The same silence-on-
-// false rule cmd/rigprog's prose sites follow.
-func firmwareGuidance(model string) string {
-	text, ok := radiotext.For(model)
-	if !ok {
-		return ""
-	}
-	return text.FirmwareGuidance
-}
-
-// firmwareRequiredLocked is PrepareSend's best-effort prediction of
-// whether Execute will need ExecuteOptions.FirmwareConfirmed — see
-// SendPlanView.FirmwareRequired's doc comment for why this cannot be
-// authoritative. Callers must hold a.mu.
-func (a *App) firmwareRequiredLocked() bool {
-	workingConfirmed := ""
-	if a.working != nil {
-		workingConfirmed = a.working.Radio.FirmwareConfirmed
-	}
-	baselineConfirmed := ""
-	if a.baseline != nil {
-		baselineConfirmed = a.baseline.Radio.FirmwareConfirmed
-	}
-	return workingConfirmed == "" && baselineConfirmed == ""
-}
-
 // PrepareSend builds a send plan (svc.PrepareSend against a DEEP COPY of
 // working) and stores it as the active plan for a subsequent ConfirmSend.
 // Synchronous: it does not emit transfer:done (only ReadRadio/
@@ -293,17 +244,7 @@ func (a *App) PrepareSend() (SendPlanView, error) {
 
 	a.mu.Lock()
 	a.currentPlan = plan
-	firmwareRequired := a.firmwareRequiredLocked()
-	// Resolved under a.mu (currentModel reads a.conn/a.working), used
-	// outside it: the string it returns is a value, not a live view of
-	// App state.
-	model := currentModel(a.conn, a.working)
 	a.mu.Unlock()
-
-	guidance := ""
-	if firmwareRequired {
-		guidance = firmwareGuidance(model)
-	}
 
 	diff := plan.Diff()
 	return SendPlanView{
@@ -312,8 +253,6 @@ func (a *App) PrepareSend() (SendPlanView, error) {
 		BaselineDigestShort: truncateDigest(plan.BaselineDigest()),
 		ConfirmationDigest:  plan.ConfirmationDigest(),
 		NothingToSend:       countSendable(diff) == 0,
-		FirmwareRequired:    firmwareRequired,
-		FirmwareGuidance:    guidance,
 	}, nil
 }
 
@@ -367,7 +306,7 @@ func countSendable(diff codeplug.DiffResult) int {
 // the transfer state CancelTransfer uses. Returns immediately once the
 // goroutine is started; the eventual outcome arrives via transfer:done
 // (Kind "send").
-func (a *App) ConfirmSend(confirmationDigest, firmware string) error {
+func (a *App) ConfirmSend(confirmationDigest string) error {
 	a.mu.Lock()
 	if a.transfer.running {
 		a.mu.Unlock()
@@ -419,7 +358,7 @@ func (a *App) ConfirmSend(confirmationDigest, firmware string) error {
 
 	snapshotPath := plan.SnapshotPath()
 	go func() {
-		report, err := conn.svc.Execute(ctx, plan, confirmationDigest, clone.ExecuteOptions{FirmwareConfirmed: firmware})
+		report, err := conn.svc.Execute(ctx, plan, confirmationDigest)
 		cancel()
 
 		outcome, message := classifyExecuteOutcome(err)
@@ -439,15 +378,6 @@ func (a *App) ConfirmSend(confirmationDigest, firmware string) error {
 			// candidate is not necessarily what the radio now holds on
 			// an abort) — see CodeplugView.BaselineStale's doc comment.
 			a.baselineStale = true
-		}
-		if report != nil && report.FirmwareConfirmed != "" {
-			if a.working != nil {
-				a.working.Radio.FirmwareConfirmed = report.FirmwareConfirmed
-				a.bumpWorkingRevLocked() // serialised content changed: a concurrent Save must not clear dirty against a stale snapshot
-			}
-			if a.baseline != nil {
-				a.baseline.Radio.FirmwareConfirmed = report.FirmwareConfirmed
-			}
 		}
 		a.mu.Unlock()
 

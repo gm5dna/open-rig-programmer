@@ -41,7 +41,7 @@ func TestExecute_HappyPath(t *testing.T) {
 		t.Fatalf("PrepareSend: %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.23"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestExecute_ConsentedLabels_WriteVerifyPairRuns(t *testing.T) {
 		}
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.23"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -323,26 +323,18 @@ func preparedSinglePlan(t *testing.T) (*Service, *fakeradio.Radio, driver.Sessio
 }
 
 // TestExecute_Refusals covers each pre-write refusal check, one test
-// case each: wrong confirmedDigest, empty firmware, and a session-changed
-// plan handed to a DIFFERENT Service.
+// case each: wrong confirmedDigest, and a session-changed plan handed to
+// a DIFFERENT Service.
 func TestExecute_Refusals(t *testing.T) {
 	t.Run("wrong confirmedDigest", func(t *testing.T) {
 		svc, _, _, plan, _ := preparedSinglePlan(t)
-		_, err := svc.Execute(testCtx(t), plan, "not-the-right-digest", ExecuteOptions{FirmwareConfirmed: "1.0"})
+		_, err := svc.Execute(testCtx(t), plan, "not-the-right-digest")
 		var cme *ConfirmationMismatchError
 		if !errors.As(err, &cme) {
 			t.Fatalf("Execute = %v, want a *ConfirmationMismatchError", err)
 		}
 		if !errors.Is(err, ErrConfirmationMismatch) {
 			t.Error("errors.Is(err, ErrConfirmationMismatch) = false")
-		}
-	})
-
-	t.Run("firmware not confirmed", func(t *testing.T) {
-		svc, _, _, plan, digest := preparedSinglePlan(t)
-		_, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{})
-		if !errors.Is(err, ErrFirmwareUnconfirmed) {
-			t.Fatalf("Execute = %v, want errors.Is match against ErrFirmwareUnconfirmed", err)
 		}
 	})
 
@@ -357,7 +349,7 @@ func TestExecute_Refusals(t *testing.T) {
 		_, sess2 := openSimSession(t, fakeradio.WithFactoryImage(minimalFactoryImage))
 		svc2 := NewService(sess2, newStore(t))
 
-		_, err := svc2.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		_, err := svc2.Execute(testCtx(t), plan, digest)
 		var sce *SessionChangedError
 		if !errors.As(err, &sce) {
 			t.Fatalf("Execute = %v, want a *SessionChangedError", err)
@@ -366,115 +358,6 @@ func TestExecute_Refusals(t *testing.T) {
 			t.Error("errors.Is(err, ErrSessionChanged) = false")
 		}
 	})
-}
-
-// TestExecute_FirmwareConfirmedOnlyOnce: once a Service's first Execute
-// call supplies FirmwareConfirmed, a LATER Execute call on the same
-// Service does not need to repeat it.
-func TestExecute_FirmwareConfirmedOnlyOnce(t *testing.T) {
-	svc, _, sess, plan, digest := preparedSinglePlan(t)
-
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
-	if err != nil {
-		t.Fatalf("first Execute: unexpected error: %v", err)
-	}
-	if report.Written != 1 {
-		t.Fatalf("first Execute Written = %d, want 1", report.Written)
-	}
-
-	// A second PrepareSend/Execute pair, no FirmwareConfirmed this time.
-	// The radio's "001" now holds what the first Execute wrote, not the
-	// factory default — populated2 reflects that, so this second
-	// candidate's only REAL delta is "005".
-	caps := sess.Capabilities()
-	populated2 := minimalFactoryPopulated()
-	populated2["001"] = writableChannel("001", 14_150_000, "MODIFIED").Data
-	file2 := matchingCandidateFile(caps, populated2, map[string]*codeplug.ChannelData{
-		"005": writableChannel("005", 14_400_000, "AGAIN").Data,
-	})
-	plan2, err := svc.PrepareSend(testCtx(t), file2)
-	if err != nil {
-		t.Fatalf("second PrepareSend: %v", err)
-	}
-	report2, err := svc.Execute(testCtx(t), plan2, plan2.ConfirmationDigest(), ExecuteOptions{})
-	if err != nil {
-		t.Fatalf("second Execute (no FirmwareConfirmed): unexpected error: %v", err)
-	}
-	if report2.Written != 1 {
-		t.Errorf("second Execute Written = %d, want 1", report2.Written)
-	}
-}
-
-// TestExecute_FirmwareConfirmed_JournalAndReport (Fix 10b, obligation
-// 10's audit clause): the confirmed firmware version must actually flow
-// somewhere — journaled ONCE, at the first Execute, before the delta
-// loop, and returned in Report.FirmwareConfirmed on that AND every later
-// Execute call for the same Service — not sit in a write-only field
-// nothing ever reads back.
-func TestExecute_FirmwareConfirmed_JournalAndReport(t *testing.T) {
-	const version = "1.23.4"
-	svc, _, sess, plan, digest := preparedSinglePlan(t)
-
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: version})
-	if err != nil {
-		t.Fatalf("first Execute: unexpected error: %v", err)
-	}
-	if report.FirmwareConfirmed != version {
-		t.Errorf("report.FirmwareConfirmed = %q, want %q", report.FirmwareConfirmed, version)
-	}
-
-	records := readJournalRecords(t, report.JournalPath)
-	var firmwareEvents, writeAttemptIdx, firmwareIdx int
-	writeAttemptIdx, firmwareIdx = -1, -1
-	for i, rec := range records {
-		ev, _ := rec["event"].(string)
-		if ev == "firmware_confirmed" {
-			firmwareEvents++
-			if firmwareIdx == -1 {
-				firmwareIdx = i
-			}
-			if v, _ := rec["version"].(string); v != version {
-				t.Errorf("firmware_confirmed event's \"version\" = %v, want %q", rec["version"], version)
-			}
-		}
-		if ev == "write_attempt" && writeAttemptIdx == -1 {
-			writeAttemptIdx = i
-		}
-	}
-	if firmwareEvents != 1 {
-		t.Errorf("journal has %d \"firmware_confirmed\" events, want exactly 1", firmwareEvents)
-	}
-	if writeAttemptIdx != -1 && firmwareIdx != -1 && firmwareIdx > writeAttemptIdx {
-		t.Errorf("\"firmware_confirmed\" (line %d) appeared after the first \"write_attempt\" (line %d) — must be emitted BEFORE the delta-write loop", firmwareIdx, writeAttemptIdx)
-	}
-
-	// A second PrepareSend/Execute pair on the SAME Service, no
-	// FirmwareConfirmed this time: must not re-prompt (already proven by
-	// TestExecute_FirmwareConfirmedOnlyOnce), must not re-emit the
-	// journal event into the SECOND plan's (distinct) journal file, and
-	// the report must still carry the persisted version.
-	caps := sess.Capabilities()
-	populated2 := minimalFactoryPopulated()
-	populated2["001"] = writableChannel("001", 14_150_000, "MODIFIED").Data
-	file2 := matchingCandidateFile(caps, populated2, map[string]*codeplug.ChannelData{
-		"005": writableChannel("005", 14_400_000, "AGAIN").Data,
-	})
-	plan2, err := svc.PrepareSend(testCtx(t), file2)
-	if err != nil {
-		t.Fatalf("second PrepareSend: %v", err)
-	}
-	report2, err := svc.Execute(testCtx(t), plan2, plan2.ConfirmationDigest(), ExecuteOptions{})
-	if err != nil {
-		t.Fatalf("second Execute (no FirmwareConfirmed): unexpected error: %v", err)
-	}
-	if report2.FirmwareConfirmed != version {
-		t.Errorf("second report.FirmwareConfirmed = %q, want the persisted %q", report2.FirmwareConfirmed, version)
-	}
-	for _, e := range readJournalEventDetails(t, report2.JournalPath) {
-		if e.event == "firmware_confirmed" {
-			t.Error("second Execute's journal contains a \"firmware_confirmed\" event, want none (already confirmed for this Service)")
-		}
-	}
 }
 
 // TestExecute_CandidateImmutable: obligation 2's central proof. After
@@ -502,7 +385,7 @@ func TestExecute_CandidateImmutable(t *testing.T) {
 		}
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -550,7 +433,7 @@ func TestExecute_RealHardwareProfile_BlockedEntriesNeverWritten(t *testing.T) {
 
 	writesBeforeExecute := port.writes.Load()
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -623,7 +506,7 @@ func TestExecute_TagDisplayUnknown_BlockedSlotNeverReachesTheWire(t *testing.T) 
 
 	mark := port.mark()
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -708,7 +591,7 @@ func TestExecute_VerifyReadPhase_BaselineDrift(t *testing.T) {
 		t.Fatalf("direct WriteChannel (simulating out-of-band drift): %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err == nil {
 		t.Fatal("Execute = nil error, want ErrStaleBaseline (radio drifted since PrepareSend)")
 	}
@@ -777,7 +660,7 @@ func TestExecute_VerifyReadPerSlot_FirstWrittenBeforeSecondDrifts(t *testing.T) 
 		t.Fatalf("direct WriteChannel (simulating out-of-band drift on \"005\"): %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err == nil {
 		t.Fatal("Execute = nil error, want ErrStaleBaseline (slot \"005\" drifted since PrepareSend)")
 	}
@@ -832,7 +715,7 @@ func TestExecute_VerifyReadPhase_ReadError(t *testing.T) {
 		fakeradio.WithFault(fakeradio.FaultDropReplies(firstVerifyReadExchange)),
 	)
 
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, digest)
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (verify-read phase's re-read never answers)")
 	}
@@ -895,7 +778,7 @@ func TestExecute_DualDigestRecheck_SelfConsistency(t *testing.T) {
 	t.Run("baseline", func(t *testing.T) {
 		svc, _, _, plan, digest := preparedSinglePlan(t)
 		plan.baseline[0].Data.FreqHz++ // corrupt the plan's own private copy
-		_, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		_, err := svc.Execute(testCtx(t), plan, digest)
 		if !errors.Is(err, ErrStaleBaseline) {
 			t.Fatalf("Execute = %v, want errors.Is match against ErrStaleBaseline", err)
 		}
@@ -903,7 +786,7 @@ func TestExecute_DualDigestRecheck_SelfConsistency(t *testing.T) {
 	t.Run("candidate", func(t *testing.T) {
 		svc, _, _, plan, digest := preparedSinglePlan(t)
 		plan.candidate[0].Data.FreqHz++
-		_, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		_, err := svc.Execute(testCtx(t), plan, digest)
 		if !errors.Is(err, ErrCandidateChanged) {
 			t.Fatalf("Execute = %v, want errors.Is match against ErrCandidateChanged", err)
 		}
@@ -918,7 +801,7 @@ func TestExecute_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := svc.Execute(ctx, plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"}); err == nil {
+	if _, err := svc.Execute(ctx, plan, digest); err == nil {
 		t.Error("Execute with an already-cancelled context = nil error, want an error")
 	}
 }
@@ -961,7 +844,7 @@ func TestExecute_CallerCancellation_DoesNotAbandonWriteVerifyPair(t *testing.T) 
 		t.Fatalf("PrepareSend: %v", err)
 	}
 
-	report, err := svc.Execute(ctx, plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(ctx, plan, plan.ConfirmationDigest())
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (caller ctx was cancelled mid-run)")
 	}
@@ -1026,7 +909,7 @@ func TestExecute_ConcurrentCalls_OneBusy(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		close(started)
-		_, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		_, err := svc.Execute(testCtx(t), plan, digest)
 		done <- err
 	}()
 
@@ -1037,7 +920,7 @@ func TestExecute_ConcurrentCalls_OneBusy(t *testing.T) {
 	// settle/error-window pacing), a wide margin against this short sleep.
 	time.Sleep(5 * time.Millisecond)
 
-	_, err2 := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	_, err2 := svc.Execute(testCtx(t), plan, digest)
 	err1 := <-done
 
 	busy1 := errors.Is(err1, ErrBusy)
@@ -1121,7 +1004,7 @@ func TestExecute_Abort_WriteRejected(t *testing.T) {
 		fakeradio.WithFault(fakeradio.FaultDelayedRejection(secondWriteMWExchange, 50*time.Millisecond)),
 	)
 
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, digest)
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (the 2nd write was rejected)")
 	}
@@ -1204,7 +1087,7 @@ func TestExecute_Abort_VerifyAmbiguous(t *testing.T) {
 		fakeradio.WithFault(fakeradio.FaultDropReplies(firstVerifyMRExchange)),
 	)
 
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, digest)
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (the 1st write's verify read-back never answers)")
 	}
@@ -1275,7 +1158,7 @@ func TestExecute_WriteChannelFailure_MTRejectedAfterMWSucceeds_AttemptsReadback(
 		fakeradio.WithFault(fakeradio.FaultDelayedRejection(firstWriteMTExchange, 10*time.Millisecond)),
 	)
 
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, digest)
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (the 1st write's MT was rejected after its MW succeeded)")
 	}
@@ -1404,7 +1287,7 @@ func TestExecute_JournalStepRecords_TheThreeOutcomes(t *testing.T) {
 	t.Run("success: MW then MT, both sent and confirmed", func(t *testing.T) {
 		svc, _, _, plan, digest := preparedThreeDeltaPlan(t)
 
-		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		report, err := svc.Execute(testCtx(t), plan, digest)
 		if err != nil {
 			t.Fatalf("Execute: unexpected error: %v", err)
 		}
@@ -1445,7 +1328,7 @@ func TestExecute_JournalStepRecords_TheThreeOutcomes(t *testing.T) {
 			fakeradio.WithFault(fakeradio.FaultDelayedRejection(firstWriteMWExchange, 10*time.Millisecond)),
 		)
 
-		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		report, err := svc.Execute(testCtx(t), plan, digest)
 		if err == nil {
 			t.Fatal("Execute = nil error, want an abort (the 1st write's MW was rejected)")
 		}
@@ -1471,7 +1354,7 @@ func TestExecute_JournalStepRecords_TheThreeOutcomes(t *testing.T) {
 			fakeradio.WithFault(fakeradio.FaultDelayedRejection(firstWriteMTExchange, 10*time.Millisecond)),
 		)
 
-		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		report, err := svc.Execute(testCtx(t), plan, digest)
 		if err == nil {
 			t.Fatal("Execute = nil error, want an abort (the 1st write's MT was rejected)")
 		}
@@ -1515,7 +1398,7 @@ func TestExecute_InertClarifier_UnchangedFlowsCleanly(t *testing.T) {
 		t.Fatalf("PrepareSend: %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -1570,7 +1453,7 @@ func TestExecute_LiveBugRepro_UnpaddedTagWriteReadBackPadded(t *testing.T) {
 		t.Fatalf("PrepareSend: %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v (live production bug: an unpadded tag edit must not abort verify — the radio's own trailing-space padding is a wire-encoding detail, not a model-level tag difference)", err)
 	}
@@ -1621,7 +1504,7 @@ func TestExecute_TagClear_EndToEnd(t *testing.T) {
 		t.Fatalf("PrepareSend: %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v (tag-clear must use the radio's accepted all-spaces form, not the rejected 0-byte MT Set)", err)
 	}
@@ -1662,7 +1545,7 @@ func TestExecute_InertClarifier_ChangedIsSkippedBlocked(t *testing.T) {
 		t.Fatalf("PrepareSend: %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -1727,7 +1610,7 @@ func TestExecute_MemorySelection_RestoredAfterSuccess(t *testing.T) {
 		t.Fatalf("seed RecallMemory did not move the selection: got %q", got)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, digest)
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v", err)
 	}
@@ -1782,7 +1665,7 @@ func TestExecute_MemorySelection_RestoredAfterAbort(t *testing.T) {
 		t.Fatalf("RecallMemory(seed \"P1L\"): unexpected error: %v", err)
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, digest)
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (the 2nd write was rejected)")
 	}
@@ -1839,7 +1722,7 @@ func TestExecute_JournalFailure_WriteAttempt_RefusesBeforeWire(t *testing.T) {
 		return &failingJournal{inner: store.OpenJournal(path), failOn: "write_attempt"}
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (write_attempt journal append failed)")
 	}
@@ -1890,7 +1773,7 @@ func TestExecute_JournalFailure_WriteResult_AbortsFurtherWrites(t *testing.T) {
 		return &failingJournal{inner: realStore.OpenJournal(path), failOn: "write_result"}
 	}
 
-	report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+	report, err := svc.Execute(testCtx(t), plan, digest)
 	if err == nil {
 		t.Fatal("Execute = nil error, want an abort (write_result journal append failed)")
 	}

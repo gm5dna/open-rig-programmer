@@ -313,7 +313,7 @@ func TestSendPlan_ConfirmationDigest_PlanSpecific(t *testing.T) {
 	// Confirming plan A's diff, but Executing plan B with THAT digest, must
 	// be refused — not silently accepted just because the baseline half
 	// matches.
-	_, err = svc.Execute(testCtx(t), planB, planA.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	_, err = svc.Execute(testCtx(t), planB, planA.ConfirmationDigest())
 	var cme *ConfirmationMismatchError
 	if !errors.As(err, &cme) {
 		t.Fatalf("Execute(planB, planA's ConfirmationDigest) = %v, want a *ConfirmationMismatchError", err)
@@ -323,7 +323,7 @@ func TestSendPlan_ConfirmationDigest_PlanSpecific(t *testing.T) {
 	}
 
 	// The happy path: each plan's OWN ConfirmationDigest is accepted.
-	reportA, err := svc.Execute(testCtx(t), planA, planA.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	reportA, err := svc.Execute(testCtx(t), planA, planA.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute(planA, planA's own ConfirmationDigest): unexpected error: %v", err)
 	}

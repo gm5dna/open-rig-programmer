@@ -56,11 +56,10 @@ func TestBuildDiffSummary_GroupsByKindAndCounts(t *testing.T) {
 
 func TestReportToView(t *testing.T) {
 	report := &clone.Report{
-		FirmwareConfirmed: "V01-10",
-		Written:           2,
-		Verified:          2,
-		SkippedBlocked:    1,
-		Unchanged:         3,
+		Written:        2,
+		Verified:       2,
+		SkippedBlocked: 1,
+		Unchanged:      3,
 		Slots: []clone.SlotResult{
 			{Slot: "001", Action: "write", VerifyOK: true},
 			{Slot: "002", Action: "skipped-blocked", Detail: "unsupported"},
@@ -70,7 +69,7 @@ func TestReportToView(t *testing.T) {
 		JournalPath: "/tmp/journal.jsonl",
 	}
 	got := reportToView(report, "/tmp/snap.json")
-	if got.FirmwareConfirmed != "V01-10" || got.Written != 2 || got.Verified != 2 || got.SkippedBlocked != 1 || got.Unchanged != 3 {
+	if got.Written != 2 || got.Verified != 2 || got.SkippedBlocked != 1 || got.Unchanged != 3 {
 		t.Errorf("reportToView counts wrong: %+v", got)
 	}
 	if got.SnapshotPath != "/tmp/snap.json" || got.JournalPath != "/tmp/journal.jsonl" {

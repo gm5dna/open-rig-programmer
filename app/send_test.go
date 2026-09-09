@@ -15,8 +15,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
-	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
-	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // containsCI reports whether s contains substr, case-insensitively.
@@ -81,15 +79,6 @@ func TestPrepareSend_ConfirmSend_HappyPath(t *testing.T) {
 	if planView.NothingToSend {
 		t.Error("PrepareSend: NothingToSend = true, want false (two edited slots)")
 	}
-	if !planView.FirmwareRequired {
-		t.Error("PrepareSend: FirmwareRequired = false, want true (fresh session, no firmware confirmed yet)")
-	}
-	// Fix 6 (adjudicated LOW, Codex M6 #6): the FT-710 V01-10 threshold
-	// prose lives in Go, not JS — SendPlanView must carry it whenever
-	// FirmwareRequired is true.
-	if !strings.Contains(planView.FirmwareGuidance, "V01-10") {
-		t.Errorf("PrepareSend: FirmwareGuidance = %q, want it to mention V01-10", planView.FirmwareGuidance)
-	}
 	if planView.ConfirmationDigest == "" || planView.SnapshotPath == "" {
 		t.Errorf("PrepareSend: ConfirmationDigest/SnapshotPath empty: %+v", planView)
 	}
@@ -99,7 +88,7 @@ func TestPrepareSend_ConfirmSend_HappyPath(t *testing.T) {
 
 	// Digest-mismatch pre-check: refused synchronously, no transfer
 	// started, no events emitted, the plan stays active.
-	err = a.ConfirmSend("not-the-right-digest", "V01-10")
+	err = a.ConfirmSend("not-the-right-digest")
 	var mismatch *DigestMismatchError
 	if !errors.As(err, &mismatch) {
 		t.Fatalf("ConfirmSend(wrong digest): err = %v, want *DigestMismatchError", err)
@@ -117,7 +106,7 @@ func TestPrepareSend_ConfirmSend_HappyPath(t *testing.T) {
 		t.Error("ConfirmSend(wrong digest): transfer:done emitted, want none")
 	}
 
-	if err := a.ConfirmSend(planView.ConfirmationDigest, "V01-10"); err != nil {
+	if err := a.ConfirmSend(planView.ConfirmationDigest); err != nil {
 		t.Fatalf("ConfirmSend: unexpected error: %v", err)
 	}
 
@@ -155,8 +144,7 @@ func TestPrepareSend_ConfirmSend_HappyPath(t *testing.T) {
 		}
 	}
 
-	// Post-transfer App state: plan cleared, baseline marked stale,
-	// firmware confirmation persisted for future PrepareSend predictions.
+	// Post-transfer App state: plan cleared, baseline marked stale.
 	a.mu.Lock()
 	planCleared := a.currentPlan == nil
 	a.mu.Unlock()
@@ -170,11 +158,8 @@ func TestPrepareSend_ConfirmSend_HappyPath(t *testing.T) {
 	if !view.BaselineStale {
 		t.Error("CodeplugView.BaselineStale = false after a successful send, want true")
 	}
-	if view.Radio.FirmwareConfirmed != "V01-10" {
-		t.Errorf("CodeplugView.Radio.FirmwareConfirmed = %q, want %q", view.Radio.FirmwareConfirmed, "V01-10")
-	}
 
-	if err := a.ConfirmSend(planView.ConfirmationDigest, "V01-10"); !errors.Is(err, ErrNoActivePlan) {
+	if err := a.ConfirmSend(planView.ConfirmationDigest); !errors.Is(err, ErrNoActivePlan) {
 		t.Errorf("ConfirmSend after completion: err = %v, want ErrNoActivePlan", err)
 	}
 }
@@ -243,7 +228,7 @@ func TestConfirmSend_CancelMidTransfer_AndBusyExclusion(t *testing.T) {
 		t.Fatalf("PrepareSend: Diff.Modified = %+v, want 2 entries (test needs two deltas for a between-slots cancel)", planView.Diff.Modified)
 	}
 
-	if err := a.ConfirmSend(planView.ConfirmationDigest, "V01-10"); err != nil {
+	if err := a.ConfirmSend(planView.ConfirmationDigest); err != nil {
 		t.Fatalf("ConfirmSend: unexpected error: %v", err)
 	}
 
@@ -385,7 +370,7 @@ func TestConfirmSend_ConcurrentCalls_ReserveAtomically(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			errs[i] = a.ConfirmSend(planView.ConfirmationDigest, "V01-10")
+			errs[i] = a.ConfirmSend(planView.ConfirmationDigest)
 		}(i)
 	}
 	close(start)
@@ -438,23 +423,5 @@ func TestConfirmSend_ConcurrentCalls_ReserveAtomically(t *testing.T) {
 	}
 	if sendDoneCount != 1 {
 		t.Errorf("transfer:done Kind=send count = %d, want exactly 1", sendDoneCount)
-	}
-}
-
-// TestFirmwareGuidance_FollowsResolvedModel is the send cluster's
-// threading pin (M9c-5 E4): the firmware advisory PrepareSend attaches is
-// keyed off the resolved model, and radiotext.For's ok is honoured — a
-// model with no entry yields "" (no advisory shown at all), never the
-// FT-710's own firmware sentence attributed to a different radio.
-func TestFirmwareGuidance_FollowsResolvedModel(t *testing.T) {
-	want, ok := radiotext.For(wiring.DefaultModel)
-	if !ok || want.FirmwareGuidance == "" {
-		t.Fatalf("test setup: radiotext.For(%q) ok=%v with empty FirmwareGuidance — the contrast below would be vacuous", wiring.DefaultModel, ok)
-	}
-	if got := firmwareGuidance(wiring.DefaultModel); got != want.FirmwareGuidance {
-		t.Errorf("firmwareGuidance(%q) = %q, want %q", wiring.DefaultModel, got, want.FirmwareGuidance)
-	}
-	if got := firmwareGuidance("NoSuchRadioModel"); got != "" {
-		t.Errorf("firmwareGuidance(unknown model) = %q, want \"\" (silence, never another radio's advisory)", got)
 	}
 }

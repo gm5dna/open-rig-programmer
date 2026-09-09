@@ -253,12 +253,9 @@ func (w *triggerWriter) String() string { return w.buf.String() }
 //   - the plan-mandated M4 "unchanged-slot image comparison": a full
 //     SlotState image captured before and after must be byte-for-byte
 //     identical everywhere EXCEPT the two intended slots;
-//   - the FULL interactive path (no --yes, no --firmware — isTTY=true,
-//     stdin supplies "yes" to the confirmation prompt and "V01-10" to
-//     the firmware prompt), proving both prompts are wired correctly
-//     AND that runWrite's single shared *bufio.Reader correctly hands
-//     each prompt its own line without one prompt's over-read stranding
-//     the next prompt's answer (see readLine's doc comment).
+//   - the FULL interactive path (no --yes — isTTY=true, stdin supplies
+//     "yes" to the confirmation prompt), proving the prompt is wired
+//     correctly through runWrite's shared *bufio.Reader.
 func TestRunWrite_RoundTripAndUnchangedSlots_Interactive(t *testing.T) {
 	radio, sess := openWriteTestSession(t, fakeradio.WithFactoryImage(minimalFactoryImage))
 	caps := sess.Capabilities()
@@ -271,20 +268,17 @@ func TestRunWrite_RoundTripAndUnchangedSlots_Interactive(t *testing.T) {
 	before := captureImage(caps, radio)
 
 	snapshotDir := t.TempDir()
-	stdin := strings.NewReader("yes\nV01-10\n")
+	stdin := strings.NewReader("yes\n")
 	var stdout, stderr bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, false, "", true, stdin, &stdout, &stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, false, true, stdin, &stdout, &stderr)
 	if got != exitSuccess {
 		t.Fatalf("runWrite = %d, want exitSuccess (%d); stdout=%q stderr=%q", got, exitSuccess, stdout.String(), stderr.String())
 	}
 
-	// The interactive path was genuinely exercised (both prompts fired
-	// and were answered from the SAME shared reader).
+	// The interactive path was genuinely exercised (the confirmation
+	// prompt fired and was answered from stdin).
 	if !strings.Contains(stderr.String(), "Type \"yes\"") {
 		t.Errorf("stderr = %q, want the confirmation prompt", stderr.String())
-	}
-	if !strings.Contains(stderr.String(), "Firmware version:") {
-		t.Errorf("stderr = %q, want the firmware prompt", stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "Written:        2") {
 		t.Errorf("stdout = %q, want Written: 2", stdout.String())
@@ -366,7 +360,7 @@ func TestRunWrite_VerifyMismatch_Aborts(t *testing.T) {
 
 	snapshotDir := t.TempDir()
 	var stdout bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, "V01-10", false, strings.NewReader(""), &stdout, stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, false, strings.NewReader(""), &stdout, stderr)
 	if got != exitAborted {
 		t.Fatalf("runWrite = %d, want exitAborted (%d); stdout=%q stderr=%q", got, exitAborted, stdout.String(), stderr.String())
 	}
@@ -408,7 +402,7 @@ func TestRunWrite_MidTransferDisconnect_Aborts(t *testing.T) {
 
 	snapshotDir := t.TempDir()
 	var stdout bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, "V01-10", false, strings.NewReader(""), &stdout, stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, false, strings.NewReader(""), &stdout, stderr)
 	if got != exitAborted {
 		t.Fatalf("runWrite = %d, want exitAborted (%d); stdout=%q stderr=%q", got, exitAborted, stdout.String(), stderr.String())
 	}
@@ -466,7 +460,7 @@ func TestRunWrite_FailingStdout_AbortsBeforeExecute(t *testing.T) {
 	snapshotDir := t.TempDir()
 	fw := &failingWriter{err: errors.New("simulated broken stdout")}
 	var stderr bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, "V01-10", false, strings.NewReader(""), fw, &stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, false, strings.NewReader(""), fw, &stderr)
 	if got != exitError {
 		t.Fatalf("runWrite(failing stdout, --yes) = %d, want exitError (%d); stderr=%q", got, exitError, stderr.String())
 	}
@@ -626,7 +620,7 @@ func TestCmdWrite_FTdx10_ConsentGovernsTheWrite(t *testing.T) {
 	mutateForWrite(t, baseline, candidate)
 
 	writeArgs := func(snapshotDir string) []string {
-		return []string{"write", "--port", "seam-port", "--model", "FTdx10", "--yes", "--firmware", "V01-10", "--snapshot-dir", snapshotDir, candidate}
+		return []string{"write", "--port", "seam-port", "--model", "FTdx10", "--yes", "--snapshot-dir", snapshotDir, candidate}
 	}
 
 	unconsentedDir := t.TempDir()

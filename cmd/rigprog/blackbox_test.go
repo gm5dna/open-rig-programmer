@@ -784,9 +784,9 @@ func TestBlackbox_Write(t *testing.T) {
 	mutateForWrite(t, baseline, mutated)
 
 	t.Run("happy path", func(t *testing.T) {
-		r := runBinary(t, "", "write", "--fake", "--yes", "--firmware", "V01-10", mutated)
+		r := runBinary(t, "", "write", "--fake", "--yes", mutated)
 		if r.exitCode != exitSuccess {
-			t.Fatalf("write --fake --yes --firmware: exit code = %d, want exitSuccess (%d); stdout=%q stderr=%q", r.exitCode, exitSuccess, r.stdout, r.stderr)
+			t.Fatalf("write --fake --yes: exit code = %d, want exitSuccess (%d); stdout=%q stderr=%q", r.exitCode, exitSuccess, r.stdout, r.stderr)
 		}
 		for _, want := range []string{
 			"Added:", "Modified:", // the plan render (step 4, reusing writeDiffReport)
@@ -913,18 +913,6 @@ func TestBlackbox_Write(t *testing.T) {
 		}
 	})
 
-	t.Run("missing firmware", func(t *testing.T) {
-		r := runBinary(t, "", "write", "--fake", "--yes", mutated)
-		if r.exitCode != exitRefused {
-			t.Errorf("write --fake --yes (no --firmware) = %d, want exitRefused (%d); stdout=%q stderr=%q", r.exitCode, exitRefused, r.stdout, r.stderr)
-		}
-		if !strings.Contains(r.stderr, "front panel") && !strings.Contains(r.stderr, "SD-card") {
-			t.Errorf("write --fake --yes (no --firmware) stderr = %q, want front-panel/SD-card guidance", r.stderr)
-		}
-		if !strings.Contains(r.stderr, "--firmware") {
-			t.Errorf("write --fake --yes (no --firmware) stderr = %q, want it to mention --firmware", r.stderr)
-		}
-	})
 }
 
 // TestBlackbox_SettingsUnverifiedWritesRefusals pins the consent

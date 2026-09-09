@@ -3730,9 +3730,6 @@ func TestGetUISpec_ServesProse(t *testing.T) {
 		if got.PreservationTooltips.ScanSkip != want.PreservationTooltips.ScanSkip {
 			t.Errorf("PreservationTooltips.ScanSkip = %q, want %q", got.PreservationTooltips.ScanSkip, want.PreservationTooltips.ScanSkip)
 		}
-		if got.FirmwarePlaceholder != want.FirmwarePlaceholder {
-			t.Errorf("FirmwarePlaceholder = %q, want %q", got.FirmwarePlaceholder, want.FirmwarePlaceholder)
-		}
 	}
 
 	t.Run("offline", func(t *testing.T) {
@@ -3796,7 +3793,6 @@ func TestGetUISpec_ProseFollowsResolvedModel(t *testing.T) {
 		{"EraseDialogNote", got.EraseDialogNote},
 		{"PreservationTooltips.Tone", got.PreservationTooltips.Tone},
 		{"PreservationTooltips.ScanSkip", got.PreservationTooltips.ScanSkip},
-		{"FirmwarePlaceholder", got.FirmwarePlaceholder},
 	} {
 		if f.got != "" {
 			t.Errorf("%s = %q for a model radiotext has no entry for, want \"\" (silence, never another radio's wording)", f.name, f.got)

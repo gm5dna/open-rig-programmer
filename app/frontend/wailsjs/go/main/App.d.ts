@@ -5,7 +5,7 @@ import {codeplug} from '../models';
 
 export function CancelTransfer():Promise<void>;
 
-export function ConfirmSend(arg1:string,arg2:string):Promise<void>;
+export function ConfirmSend(arg1:string):Promise<void>;
 
 export function Connect(arg1:string,arg2:string):Promise<main.ConnectionInfo>;
 

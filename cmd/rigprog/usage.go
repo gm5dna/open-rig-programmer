@@ -168,8 +168,8 @@ func printDiffUsage(w io.Writer) {
 const writeUsageText = `rigprog write — send a codeplug file's changes to a radio.
 
 Usage:
-  rigprog write --port <path> [--model NAME] [--yes] [--firmware VER] [--snapshot-dir DIR] FILE
-  rigprog write --fake [--model NAME] [--yes] [--firmware VER] [--snapshot-dir DIR] FILE
+  rigprog write --port <path> [--model NAME] [--yes] [--snapshot-dir DIR] FILE
+  rigprog write --fake [--model NAME] [--yes] [--snapshot-dir DIR] FILE
 
 All flags must precede the FILE argument: stdlib flag parsing stops
 reading flags at the first non-flag argument, so a flag placed after
@@ -180,7 +180,6 @@ Flags:
   --fake                 use the in-process simulated radio instead of a real port
   --model NAME           radio model to target (default: FT-710)
   --yes                  skip the interactive confirmation prompt (required for non-interactive runs)
-  --firmware VER         confirmed radio firmware version (required on this session's first write, non-interactively)
   --snapshot-dir DIR     snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)
 
 Exactly one of --port or --fake is required, together with exactly one FILE
@@ -198,11 +197,6 @@ whose pending changes are ALL blocked exits 3 instead — never the same
 "nothing to send" message, since the working copy does NOT match the
 radio in that case, only nothing could be honoured.
 
-The FIRST write on a session requires a firmware version confirmed by a
-human reading it off the radio's front panel (or SD-card version screen)
-— there is no CAT query for it. Once confirmed, later writes on the same
-session do not need to repeat it.
-
 Ctrl-C is honoured only BETWEEN slots: an in-flight write+verify pair
 always completes before a cancellation is acted on.
 
@@ -211,7 +205,7 @@ genuinely matches the radio; 2 usage (also: a non-interactive run without
 --yes); 3 the candidate file failed validation, OR every pending change
 is blocked (nothing was sendable, named with reasons — see above); 4
 refused before any write reached the radio (stale baseline, session
-changed, confirmation declined or mismatched, or firmware unconfirmed); 5
+changed, confirmation declined or mismatched); 5
 aborted after at least one write reached the radio — the printed journal
 records exactly what happened, and the printed snapshot can be re-sent
 with a later "rigprog write" run.

@@ -566,11 +566,11 @@ export async function readSettingsRadio() {
  * already reports on rejection, so the catch here only needs to clear
  * `active` for the synchronous-refusal case before rethrowing.
  * @param {string} confirmationDigest
- * @param {string} firmware */
-export async function confirmSend(confirmationDigest, firmware) {
+ */
+export async function confirmSend(confirmationDigest) {
 	appState.beginTransfer('send')
 	try {
-		await call('sending to radio', () => App.ConfirmSend(confirmationDigest, firmware))
+		await call('sending to radio', () => App.ConfirmSend(confirmationDigest))
 	} catch (err) {
 		appState.endTransfer()
 		throw err

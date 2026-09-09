@@ -223,8 +223,7 @@ func writeAbortReport(w io.Writer, abortErr *clone.AbortedError, report *clone.R
 
 // refusalMessage maps a pre-write refusal error (task-14 brief §1 step
 // 8's ErrStaleBaseline/ErrSessionChanged/ErrCandidateChanged/
-// ErrConfirmationMismatch, plus — Fix 2, adjudicated MEDIUM, Codex M4
-// #2 — the defensive ErrFirmwareUnconfirmed case) to a plain-language
+// ErrConfirmationMismatch) to a plain-language
 // line. The stale-baseline wording matches the brief's own example
 // verbatim. Falls back to err.Error() for anything else (defensive only
 // — handleExecuteOutcome only calls this once every other error class
@@ -240,8 +239,6 @@ func refusalMessage(err error) string {
 		return "refused: an internal consistency check failed (candidate changed) — re-run write"
 	case errors.Is(err, clone.ErrConfirmationMismatch):
 		return "refused: the confirmation did not match the plan that was reviewed — re-run write"
-	case errors.Is(err, clone.ErrFirmwareUnconfirmed):
-		return "refused: firmware version not confirmed for this session's first write"
 	default:
 		return err.Error()
 	}
@@ -250,15 +247,12 @@ func refusalMessage(err error) string {
 // isExecuteRefusalSentinel reports whether err is one of Execute's
 // documented pre-write refusal sentinels (Fix 2, adjudicated MEDIUM,
 // Codex M4 #2): the dual-digest/session/confirmation checks (obligations
-// 3-5), plus ErrFirmwareUnconfirmed for the defensive case where it
-// reaches handleExecuteOutcome at all — the ordinary path handles it
-// earlier, in executeAndReport, via the firmware prompt/retry.
+// 3-5).
 func isExecuteRefusalSentinel(err error) bool {
 	return errors.Is(err, clone.ErrStaleBaseline) ||
 		errors.Is(err, clone.ErrSessionChanged) ||
 		errors.Is(err, clone.ErrCandidateChanged) ||
-		errors.Is(err, clone.ErrConfirmationMismatch) ||
-		errors.Is(err, clone.ErrFirmwareUnconfirmed)
+		errors.Is(err, clone.ErrConfirmationMismatch)
 }
 
 // writeValidationIssues renders every Issue PrepareSend's
@@ -328,7 +322,7 @@ func isStdinTTY(r io.Reader) bool {
 // character device on Unix) as an interactive terminal, so `</dev/null`
 // reaches a prompt built on this function. An EOF here means there was
 // no answer to read at all, regardless of what isTTY claimed — see
-// resolveConfirmation/promptFirmwareVersion for how that gets
+// resolveConfirmation for how that gets
 // reclassified as non-interactive rather than a typed decline.
 func readLine(in *bufio.Reader) (line string, eof bool) {
 	s, err := in.ReadString('\n')
@@ -393,66 +387,6 @@ func resolveConfirmation(in *bufio.Reader, stdout, stderr io.Writer, isTTY, yesF
 		return false, exitRefused
 	}
 	return true, exitSuccess
-}
-
-// writeFirmwareNonInteractiveGuidance is promptFirmwareVersion's message
-// for every case where this run cannot obtain a firmware confirmation
-// interactively — isTTY said so outright, or (Fix 4, adjudicated MEDIUM,
-// Codex M4 #4) an EOF read revealed isTTY was wrong. Printing the
-// identical text either way is deliberate, mirroring
-// nonInteractiveConfirmationGuidance's own reasoning above.
-func writeFirmwareNonInteractiveGuidance(w io.Writer) {
-	fmt.Fprintln(w, "rigprog write: refused: firmware version not confirmed for this session's first write")
-	fmt.Fprintln(w, "  memory CAT requires firmware >= V01-10; there is no CAT query for it —")
-	fmt.Fprintln(w, "  check the radio's front panel (or SD-card version screen), then re-run with --firmware VER")
-}
-
-// promptFirmwareVersion implements task-14 brief §1 step 7's first-write
-// firmware gate follow-up: on a TTY, explains why a firmware version is
-// needed (memory CAT requires firmware >= V01-10; there is no CAT query
-// for it; it is shown on the radio's front panel or SD-card version
-// screen) and reads a non-empty version string; off a TTY, refuses and
-// tells the caller to pass --firmware. isTTY is injected for the same
-// testability reason as resolveConfirmation's.
-//
-// The third return, err, is non-nil only when writing the guidance/
-// prompt text itself failed (Fix 1, adjudicated HIGH, Codex M4 #1) — as
-// opposed to ok==false, which means the prompt was rendered fine but
-// refused/declined/empty/EOF. executeAndReport treats a non-nil err as
-// an abort distinct from an ordinary refusal: nothing further should be
-// attempted, since the caller never actually saw the prompt.
-//
-// An EOF read on an allegedly-interactive stdin (Fix 4, adjudicated
-// MEDIUM, Codex M4 #4 — the same /dev/null quirk resolveConfirmation's
-// doc comment explains) is reclassified as non-interactive: ok==false
-// with writeFirmwareNonInteractiveGuidance's text, NOT the unrelated
-// "no firmware version entered" wording an empty typed LINE gets. Either
-// way ok==false maps to exitRefused (4) in executeAndReport — unlike the
-// confirmation prompt's EOF case, the firmware prompt keeps its
-// documented non-interactive exit code.
-func promptFirmwareVersion(in *bufio.Reader, isTTY bool, stdout, stderr io.Writer) (version string, ok bool, err error) {
-	tw := &errTrackingWriter{w: stderr}
-	if !isTTY {
-		writeFirmwareNonInteractiveGuidance(tw)
-		return "", false, tw.err
-	}
-	fmt.Fprintln(tw, "Memory CAT requires firmware >= V01-10. There is no CAT query for the firmware version —")
-	fmt.Fprintln(tw, "check the radio's front panel (or SD-card version screen).")
-	fmt.Fprint(tw, "Firmware version: ")
-	if tw.err != nil {
-		return "", false, tw.err
-	}
-	line, eof := readLine(in)
-	if eof {
-		writeFirmwareNonInteractiveGuidance(tw)
-		return "", false, tw.err
-	}
-	v := strings.TrimSpace(line)
-	if v == "" {
-		fmt.Fprintln(tw, "rigprog write: refused: no firmware version entered")
-		return "", false, nil
-	}
-	return v, true, nil
 }
 
 // handleExecuteOutcome implements task-14 brief §1 step 8's outcome
@@ -544,33 +478,12 @@ func reportPrepareSendFailure(stderr io.Writer, err error) int {
 	return exitError
 }
 
-// executeAndReport implements task-14 brief §1 steps 7-8: calls Execute,
-// and if it refuses specifically with ErrFirmwareUnconfirmed (the
-// first-write interactive gate), obtains a firmware version via
-// promptFirmwareVersion and re-Executes exactly once with it — "Execute
-// is refusal-safe to retry here: the firmware refusal happens before any
-// write reaches the radio" (task-14 brief §1 step 7). Either way, the
-// final (report, err) pair is handed to handleExecuteOutcome.
-//
-// If promptFirmwareVersion itself could not render (Fix 1, adjudicated
-// HIGH, Codex M4 #1), this aborts with exitError BEFORE the retry
-// Execute call that would actually reach the radio — no write has
-// happened yet at this point either way (the first Execute call refused
-// with ErrFirmwareUnconfirmed before touching the radio at all).
-func executeAndReport(ctx context.Context, svc *clone.Service, plan *clone.SendPlan, firmwareFlag string, isTTY bool, in *bufio.Reader, stdout, stderr io.Writer) int {
-	digest := plan.ConfirmationDigest()
-	report, err := svc.Execute(ctx, plan, digest, clone.ExecuteOptions{FirmwareConfirmed: firmwareFlag})
-	if errors.Is(err, clone.ErrFirmwareUnconfirmed) {
-		version, ok, werr := promptFirmwareVersion(in, isTTY, stdout, stderr)
-		if werr != nil {
-			fmt.Fprintf(stderr, "rigprog write: rendering firmware prompt: %v (nothing was sent)\n", werr)
-			return exitError
-		}
-		if !ok {
-			return exitRefused
-		}
-		report, err = svc.Execute(ctx, plan, digest, clone.ExecuteOptions{FirmwareConfirmed: version})
-	}
+// executeAndReport calls Execute and hands the outcome to
+// handleExecuteOutcome. The first-write firmware prompt that used to
+// live here is gone: PrepareSend's fresh read has already proven memory
+// CAT works on this radio (core/clone/doc.go, obligation 10).
+func executeAndReport(ctx context.Context, svc *clone.Service, plan *clone.SendPlan, stdout, stderr io.Writer) int {
+	report, err := svc.Execute(ctx, plan, plan.ConfirmationDigest())
 	return handleExecuteOutcome(stdout, stderr, report, err, plan.SnapshotPath())
 }
 
@@ -580,7 +493,7 @@ func executeAndReport(ctx context.Context, svc *clone.Service, plan *clone.SendP
 // sendable — exitSuccess for the genuine "matches the radio" case,
 // exitBlocked when the short-circuit is reached only because every
 // pending change is Blocked (task-25 brief; see writeNothingSendableReport) —
-// gate on confirmation, Execute (with the firmware retry), and report the
+// gate on confirmation, Execute, and report the
 // outcome. Split out from cmdWrite (which owns flag parsing
 // and session construction, exactly like every other radio-touching
 // subcommand in this package) so a test can drive this flow directly
@@ -596,7 +509,7 @@ func executeAndReport(ctx context.Context, svc *clone.Service, plan *clone.SendP
 // through to writeNothingSendableReport's radiotext.For lookup — the
 // caller (cmdWrite) already validated it against wiring.SupportedModels()
 // before opening sess.
-func runWrite(ctx context.Context, model string, sess driver.Session, snapshotDir string, file *codeplug.Codeplug, yesFlag bool, firmwareFlag string, isTTY bool, stdin io.Reader, stdout, stderr io.Writer) int {
+func runWrite(ctx context.Context, model string, sess driver.Session, snapshotDir string, file *codeplug.Codeplug, yesFlag bool, isTTY bool, stdin io.Reader, stdout, stderr io.Writer) int {
 	svc := clone.NewService(sess, clone.SnapshotStore{Dir: snapshotDir}, clone.WithProgress(progressPrinter(stderr)))
 
 	plan, err := svc.PrepareSend(ctx, file)
@@ -646,7 +559,7 @@ func runWrite(ctx context.Context, model string, sess driver.Session, snapshotDi
 		return code
 	}
 
-	return executeAndReport(ctx, svc, plan, firmwareFlag, isTTY, in, stdout, stderr)
+	return executeAndReport(ctx, svc, plan, stdout, stderr)
 }
 
 // cmdWrite implements "rigprog write" (task-14 brief §1): load FILE
@@ -661,7 +574,6 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	port := fs.String("port", "", "real serial port device path")
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
 	yes := fs.Bool("yes", false, "skip the interactive confirmation prompt (required for non-interactive runs)")
-	firmware := fs.String("firmware", "", "confirmed radio firmware version (see the radio's front panel or SD-card version screen)")
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 	snapshotDirFlag := fs.String("snapshot-dir", "", "snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)")
 
@@ -709,5 +621,5 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	}
 	defer func() { _ = closeAll() }()
 
-	return runWrite(ctx, *model, sess, snapshotDir, file, *yes, *firmware, isStdinTTY(stdin), stdin, stdout, stderr)
+	return runWrite(ctx, *model, sess, snapshotDir, file, *yes, isStdinTTY(stdin), stdin, stdout, stderr)
 }
