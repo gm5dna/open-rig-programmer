@@ -263,8 +263,8 @@ const testModel = "TESTMODEL"
 
 // recogniseTestModel makes capsForModel (app.go's seam) recognise
 // testModel, returning caps of the test's own, and restores the real
-// function afterwards. internal/wiring registers nineteen models today,
-// but none can serve here (see capsForModel's doc comment): these tests
+// function afterwards. internal/wiring registers only real models, none of
+// which can serve here (see capsForModel's doc comment): these tests
 // need a model wiring itself REFUSES, so that "the resolved model reached
 // this call site" shows up as an outcome no default-model path could
 // produce.

@@ -2049,8 +2049,8 @@ func TestModelSlug(t *testing.T) {
 		// be unique and still be wrong, and wiring.go's FT991AModel doc
 		// comment says this test is what pins it.
 		{"FT-991A", "ft-991a"},
-		// Tier 6's three Kenwood slugs (plan decision P2). The two 590 rows
-		// are REGISTERED and the TS-480 is not, and all three are pinned
+		// Tier 6's Kenwood slugs (plan decision P2). The two 590 rows
+		// are REGISTERED and the TS-480 is not, and all are pinned
 		// here anyway: ModelSlug is a pure string function, the 480's slug
 		// is the name its snapshot directory will take on the day its row
 		// registers, and pinning it now means that day's commit cannot
@@ -2941,11 +2941,12 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 // 8-N-2 against radios whose manuals print one stop bit (matrix §3.1), and
 // fail exactly like a dead port. Nothing in this repository would go red.
 //
-// ALL THREE KENWOOD DRIVERS, and the TS-480 is the one that could not be
-// reached any other way: its row is BUILT and NOT REGISTERED (plan decision
-// P3), so realDriverFor cannot produce it and it is constructed DIRECTLY
-// here. That leg is the one that will matter on the day the row registers,
-// which is precisely when nobody will think to write it.
+// EVERY KENWOOD DRIVER, registered or not, and the TS-480 is the one that
+// could not be reached any other way: its row is BUILT and NOT REGISTERED
+// (plan decision P3), so realDriverFor cannot produce it and it is
+// constructed DIRECTLY here. That leg is the one that will matter on the
+// day the row registers, which is precisely when nobody will think to
+// write it.
 //
 // THE CONTRAST KEEPS IT HONEST, twice over: a registered Yaesu model, which
 // implements nothing and must still come back with transport.DefaultStopBits;
