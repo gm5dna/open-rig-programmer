@@ -79,8 +79,9 @@ func IsRejection(frame []byte) bool {
 // All four books print the two beside "?;" in one error-message table
 // (590:97-113, 480:126-144, 890:106-123, 990:108-121) and nothing else in
 // any of them is one. The comparison is exact and case-sensitive: no
-// sentence in either document admits a lower-case token, and a codec that
-// guessed at one would be inventing a frame.
+// sentence in any of the four books — the TS-590S/SG, the TS-480, the
+// TS-890S or the TS-990S manual — admits a lower-case token, and a codec
+// that guessed at one would be inventing a frame.
 func streamErrorToken(frame []byte) string {
 	switch string(frame) {
 	case communicationErrorFrame:
