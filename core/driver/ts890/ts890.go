@@ -75,6 +75,10 @@ type Option func(*ts890Driver)
 // discarded (plan P14). The logger is the only sink a driver has —
 // codeplug.Channel has no per-channel note and driver.SessionDiagnostics is a
 // counter — so the read path reports it there. See read.go.
+//
+// The note is reachable only when a caller supplies a logger; nothing
+// outside core/driver does so today, so T17's registration must wire one
+// for this row or the residue is unobservable in the shipping programme.
 func WithTransportLogger(l transport.Logger) Option {
 	return func(d *ts890Driver) {
 		if l != nil {
