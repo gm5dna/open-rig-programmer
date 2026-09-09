@@ -47,12 +47,10 @@ type Radio struct {
 	// EX Set, and nothing models a front panel.
 	exSettings map[string]string
 	// ai is '0', '2' or '4' — the three values this book's AI legend prints
-	// with a meaning (890:175-181). It is OFF at construction, which is this
-	// package's own choice rather than a printed one: unlike the TS-590's
-	// book, this one prints no initial AI state, so the entry sits in the
-	// register as AUTOMATIC-INFORMATION SUPPRESSION's companion fact and the
-	// value chosen is the one the transport engine sets on every Init
-	// anyway.
+	// with a meaning (890:175-181). It starts OFF, which is this package's
+	// own choice rather than a printed one: unlike the TS-590's book, this
+	// one prints no power-on AI state anywhere — doc.go's register entry THE
+	// AI STATE AT CONSTRUCTION.
 	ai byte
 }
 
