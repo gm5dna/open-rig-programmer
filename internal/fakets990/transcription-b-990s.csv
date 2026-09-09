@@ -1,0 +1,195 @@
+p1,p2,p3,name,digits,text
+0,00,00,Color Display Pattern (Main screen),3,0
+0,00,01,Color Display Pattern (Sub screen),3,0
+0,00,02,Font Style (Frequency display),3,0
+0,00,03,Dial Color Pattern,3,0
+0,00,04,Screen Saver,3,0
+0,00,05,Screen Saver Wait Time,3,0
+0,00,06,Screen Saver Message,10,1
+0,00,07,Power-on Message,15,1
+0,00,08,FM Mode S-meter Sensitivity,3,0
+0,00,09,Meter Response Speed,3,0
+0,00,10,Meter Display Pattern,3,0
+0,00,11,Meter Display Peak Hold,3,0
+0,00,12,Long Press Duration of Panel Keys,3,0
+0,00,13,Touchscreen Tuning,3,0
+0,00,14,Operating Band (High/Low & Shift/Width Controls),3,0
+0,00,15,PF A: Key Assignment,3,0
+0,00,16,PF B: Key Assignment,3,0
+0,00,17,Voice (Main Band): Key Assignment,3,0
+0,00,18,Voice (Sub Band): Key Assignment,3,0
+0,00,19,External PF 1: Key Assignment,3,0
+0,00,20,External PF 2: Key Assignment,3,0
+0,00,21,External PF 3: Key Assignment,3,0
+0,00,22,External PF 4: Key Assignment,3,0
+0,00,23,External PF 5: Key Assignment,3,0
+0,00,24,External PF 6: Key Assignment,3,0
+0,00,25,External PF 7: Key Assignment,3,0
+0,00,26,External PF 8: Key Assignment,3,0
+0,00,27,Microphone PF 1: Key Assignment,3,0
+0,00,28,Microphone PF 2: Key Assignment,3,0
+0,00,29,Microphone PF 3: Key Assignment,3,0
+0,00,30,Microphone PF 4: Key Assignment,3,0
+0,00,31,Microphone Down: Key Assignment,3,0
+0,00,32,Microphone Up: Key Assignment,3,0
+0,00,33,Automatic Power Off,3,0
+0,00,34,Data Mode Numbers <Firmware version 1.20 or later>,3,0
+0,01,00,Beep Volume,3,0
+0,01,01,Voice Message Volume (Play),3,0
+0,01,02,Sidetone Volume,3,0
+0,01,03,Voice Guidance Volume,3,0
+0,01,04,Voice Guidance Speed,3,0
+0,01,05,User Interface Language (Voice Guidance & Messages),3,0
+0,01,06,Automatic Voice Guidance,3,0
+0,01,07,Headphones Mixing Balance,3,0
+0,01,08,Headphones Left/Right Reverse,3,0
+0,02,00,FFT Scope Averaging (RTTY Decode),3,0
+0,02,01,RX UOS,3,0
+0,02,02,Newline Code,3,0
+0,02,03,Diddle,3,0
+0,02,04,TX UOS,3,0
+0,02,05,Automatic Newline Insertion,3,0
+0,02,06,FSK Spacing,3,0
+0,02,07,FSK Keying Polarity,3,0
+0,02,08,FSK Tone Frequency,3,0
+0,02,09,FFT Scope Averaging (PSK Decode),3,0
+0,02,10,PSK AFC Tuning Range,3,0
+0,02,11,PSK Tone Frequency,3,0
+0,02,12,CW/RTTY/PSK Log File Format <Rename with firmware version 1.20 or later>,3,0
+0,02,13,CW/RTTY/PSK Time Stamp <Rename with firmware version 1.20 or later>,3,0
+0,02,14,Clock (CW/RTTY/PSK Time Stamp) <Rename with firmware version 1.20 or later>,3,0
+0,03,00,Frequency Rounding Off (Multi/Channel Control),3,0
+0,03,01,SSB Mode Frequency Step Size (Multi/Channel Control) <Firmware version 1.20 or later>,3,0
+0,03,02,AM Mode Frequency Step Size (Multi/Channel Control),3,0
+0,03,03,FM Mode Frequency Step Size (Multi/Channel Control),3,0
+0,03,04,Frequency Step Size (Up/Down Keys),3,0
+0,03,05,9 kHz Step in AM Broadcast Band (Multi/Channel Control),3,0
+0,03,06,Tuning Control (Main): Number of Steps per Revolution,3,0
+0,03,07,Tuning Control (Sub): Number of Steps per Revolution,3,0
+0,03,08,Number of Band Memories,3,0
+0,03,09,CW/FSK/PSK Mode Frequency Step Size (Multi/Channel Control) <Firmware version 1.20 or later>,3,0
+0,03,10,Lock Function <Firmware version 1.20 or later>,3,0
+0,03,11,Tuning Speed Control (Main) <Firmware version 1.20 or later>,3,0
+0,03,12,Sensitivity (Main) <Firmware version 1.20 or later>,3,0
+0,03,13,Tuning Speed Control (Sub) <Firmware version 1.20 or later>,3,0
+0,03,14,Tuning Speed Control Sensitivity (Sub) <Firmware version 1.20 or later>,3,0
+0,04,00,Number of Quick Memory Channels,3,0
+0,04,01,Temporary Change (Memory Channel Configurations),3,0
+0,04,02,Program Slow Scan,3,0
+0,04,03,Program Slow Scan Range,3,0
+0,04,04,Scan Hold,3,0
+0,04,05,Scan Resume,3,0
+0,05,00,Paddle Jack Configuration (Front),3,0
+0,05,01,Key Jack Configuration (Rear),3,0
+0,05,02,Electronic Keyer Squeeze Mode,3,0
+0,05,03,Dot and Dash Reversed Keying,3,0
+0,05,04,Paddle (Microphone Up/Down Keys),3,0
+0,05,05,Automatic CW TX with Keying in SSB Mode,3,0
+0,05,06,Carrier Frequency Offset (SSB Mode to CW Mode),3,0
+0,05,07,CW Keying Weight Ratio,3,0
+0,05,08,CW Keying Reversed Weight Ratio,3,0
+0,05,09,Interrupt Keying,3,0
+0,05,10,CW Message Entry,3,0
+0,05,11,Contest Number,4,1
+0,05,12,Contest Number Format,3,0
+0,05,13,Channel Number (Count-up Message),3,0
+0,05,14,CW Rise Time,3,0
+0,05,15,CW/ Voice Message Retransmit Interval Time,3,0
+0,06,00,Playback Time (Full-time Recording),3,0
+0,06,01,Recorded Audio File Storage Location,3,0
+0,06,02,Time-out Timer,3,0
+0,06,03,TX Inhibit,3,0
+0,06,04,Transmit Power Step Size,3,0
+0,06,05,TX Filter Numbers,3,0
+0,06,06,RX Filter Numbers,3,0
+0,06,07,Filter Control in SSB Mode (High/Low and Shift/Width),3,0
+0,06,08,Filter Control in SSB-Data Mode (High/Low and Shift/Width),3,0
+0,06,09,VOX Voice Delay (Microphone),3,0
+0,06,10,VOX Voice Delay (except Microphone),3,0
+0,07,00,Baud Rate (COM Port),3,0
+0,07,01,Baud Rate (USB Port),3,0
+0,07,02,Quick Data Transfer,3,0
+0,07,03,Overwrite Location (Quick Data Transfer),3,0
+0,07,04,Overwrite Location (DX Packet Cluster Tuned Data),3,0
+0,07,05,USB: Audio Input Level,3,0
+0,07,06,ACC 2: Audio Input Level,3,0
+0,07,07,Optical: Audio Input Level,3,0
+0,07,08,USB: Audio Output Level (Main Band),3,0
+0,07,09,USB: Audio Output Level (Sub Band),3,0
+0,07,10,ACC 2: Audio Output Level (Main Band),3,0
+0,07,11,ACC 2: Audio Output Level (Sub Band),3,0
+0,07,12,Optical: Audio Output Level (Main Band),3,0
+0,07,13,Optical: Audio Output Level (Sub Band),3,0
+0,07,14,Audio Output Type (Rear Connectors),3,0
+0,07,15,Speaker Output Configuration,3,0
+0,07,16,USB: Audio Output Configuration,3,0
+0,07,17,ACC2: Audio Output Configuration,3,0
+0,07,18,Optical: Audio Output Configuration,3,0
+0,07,19,Antenna Numbers <Firmware version 1.20 or later>,3,0
+0,08,00,Bandscope Display During TX,3,0
+0,08,01,TX Audio Signal Waveform Display,3,0
+0,08,02,Bandscope Maximum Hold,3,0
+0,08,03,Marker Offset Frequency (SSB Mode),3,0
+0,08,04,Frequency Scale (Center Mode),3,0
+0,08,05,Fixed Mode LF Band Lower Limit (min. 0.03 MHz),8,1
+0,08,06,Fixed Mode LF Band Upper Limit (max. 0.300 MHz),8,1
+0,08,07,Fixed Mode MF Band 1 Lower Limit (min. 0.300 MHz),8,1
+0,08,08,Fixed Mode MF Band 1 Upper Limit (max. 0.522 MHz),8,1
+0,08,09,Fixed Mode MF Band 2 Lower Limit (min. 0.522 MHz),8,1
+0,08,10,Fixed Mode MF Band 2 Upper Limit (max. 1.705 MHz),8,1
+0,08,11,Fixed Mode 1.8 MHz Band Lower Limit (min. 1.705 MHz),8,1
+0,08,12,Fixed Mode 1.8 MHz Band Upper Limit (max. 2.0 MHz),8,1
+0,08,13,Fixed Mode 3.5 MHz Band Lower Limit (min. 2.0 MHz),8,1
+0,08,14,Fixed Mode 3.5 MHz Band Upper Limit (max. 4.0 MHz),8,1
+0,08,15,Fixed Mode 5 MHz Band Lower Limit (min. 4.0 MHz),8,1
+0,08,16,Fixed Mode 5 MHz Band Upper Limit (max. 6.0 MHz),8,1
+0,08,17,Fixed Mode 7 MHz Band Lower Limit (min. 6.0 MHz),8,1
+0,08,18,Fixed Mode 7 MHz Band Upper Limit (max. 8.0 MHz),8,1
+0,08,19,Fixed Mode 10 MHz Band Lower Limit (min. 8.0 MHz),8,1
+0,08,20,Fixed Mode 10 MHz Band Upper Limit (max. 11 MHz),8,1
+0,08,21,Fixed Mode 14 MHz Band Lower Limit (min. 11 MHz),8,1
+0,08,22,Fixed Mode 14 MHz Band Upper Limit (max. 15 MHz),8,1
+0,08,23,Fixed Mode 18 MHz Band Lower Limit (min. 15 MHz),8,1
+0,08,24,Fixed Mode 18 MHz Band Upper Limit (max. 20 MHz),8,1
+0,08,25,Fixed Mode 21 MHz Band Lower Limit (min. 20 MHz),8,1
+0,08,26,Fixed Mode 21 MHz Band Upper Limit (max. 22 MHz),8,1
+0,08,27,Fixed Mode 24 MHz Band Lower Limit (min. 22 MHz),8,1
+0,08,28,Fixed Mode 24 MHz Band Upper Limit (max. 26 MHz),8,1
+0,08,29,Fixed Mode 28 MHz Band Lower Limit (min. 26 MHz),8,1
+0,08,30,Fixed Mode 28 MHz Band Upper Limit (max. 30 MHz),8,1
+0,08,31,Fixed Mode 50 MHz Band Lower Limit (min. 30 MHz),8,1
+0,08,32,Fixed Mode 50 MHz Band Upper Limit (max. 60 MHz),8,1
+0,08,33,Waterfall Pause when Tuning (Center Mode) <Firmware version 1.20 or later>,3,0
+0,08,34,Touchscreen Tuning Step Correction (SSB/ CW/ FSK/ PSK) <Firmware version 1.20 or later>,3,0
+0,08,35,Waterfall Color Type <Firmware version 1.20 or later>,3,0
+0,09,00,Send Message by Function Keys (USB Keyboard),3,0
+0,09,01,Keyboard Language (USB Keyboard),3,0
+0,09,02,Repeat Delay Time (USB Keyboard),3,0
+0,09,03,Repeat Speed (USB Keyboard),3,0
+1,00,00,Indication Signal Type (Main Band),3,0
+1,00,01,Indication Signal Type (Sub Band),3,0
+1,00,02,Output Level (Main Band),3,0
+1,00,03,Output Level (Sub Band),3,0
+1,00,04,REF I/O Connector Configuration,3,0
+1,00,05,Reference Oscillator Calibration,3,0
+1,00,06,Bandwidth (Additional Roofing Filter),3,0
+1,00,07,Attenuation (Additional Roofing Filter),3,0
+1,00,08,TX Power Down with Transverter Enabled,3,0
+1,00,09,TX Hold After Antenna Tuning,3,0
+1,00,10,Antenna Tuner During RX,3,0
+1,00,11,Linear Amplifier Control (HF Band),3,0
+1,00,12,Linear Amplifier Control (50 MHz Band),3,0
+1,00,13,Microphone Gain (FM Mode),3,0
+1,00,14,PKS Polarity Reverse,3,0
+1,00,15,TX Inhibit While Busy,3,0
+1,00,16,CTCSS Unmute for Internal Speaker (Main Band),3,0
+1,00,17,CTCSS Unmute for Internal Speaker (Sub Band),3,0
+1,00,18,MSQ Logic State,3,0
+1,00,19,SSQ Logic State,3,0
+1,00,20,MSQ Reverse Condition,3,0
+1,00,21,SSQ Reverse Condition,3,0
+1,00,22,Standby State Low Power Consumption,3,0
+1,00,23,Cooling Fan Control After Shutdown,3,0
+1,00,24,MSQ/PKS Pin Assignment,3,0
+1,00,25,External Display,3,0
+1,00,26,Resolution (External Display),3,0
