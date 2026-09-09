@@ -78,7 +78,7 @@ type radioImage struct {
 	idSilent bool
 	idReject bool
 	// fvAnswer is the WHOLE frame "FV;" is answered with. Empty selects
-	// "FV1.00;", the book's own worked example (990:2532).
+	// "FV1.00;", the book's own worked example (990:2533).
 	fvAnswer string
 	// fvSilent makes "FV;" draw no reply at all — the probe's timeout row.
 	fvSilent bool

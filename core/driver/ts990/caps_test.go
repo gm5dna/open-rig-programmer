@@ -240,7 +240,7 @@ func TestCTCSSTones_AreNeitherSharedChart(t *testing.T) {
 	// 43-entry chart does not carry, so its presence is what makes the
 	// domain per row rather than per manufacturer (§1.9).
 	if tones[26] != 1598 {
-		t.Errorf("index 26 is %v, want 159.8 Hz (990:4966) — one of the eight tones pair 1's chart drops", tones[26])
+		t.Errorf("index 26 is %v, want 159.8 Hz (990:4960) — one of the eight tones pair 1's chart drops", tones[26])
 	}
 	// Index 50 is 1750 Hz, which TN prints and CN does not (990:4971).
 	if tones[50] != 17500 {
