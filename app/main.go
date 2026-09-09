@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 //go:embed all:frontend/dist
@@ -29,8 +30,13 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
-		OnStartup:        app.startup,
-		OnBeforeClose:    app.OnBeforeClose,
+		// Non-nil so Wails v2 computes the macOS zoomable flag at all: with
+		// Mac nil the flag stays zero and the green title-bar button is
+		// disabled (wails/v2 darwin/window.go, `zoomable` only set in the
+		// Mac != nil branch).
+		Mac:           &mac.Options{},
+		OnStartup:     app.startup,
+		OnBeforeClose: app.OnBeforeClose,
 		Bind: []interface{}{
 			app,
 		},

@@ -165,6 +165,30 @@ describe('grants panel (manage mode)', () => {
 		expect(applyMock).toHaveBeenCalledWith('FTdx10', true, { sessionUnconsented: false })
 	})
 
+	it('the all-radios toggle grants every eligible radio not already granted, and skips hardware-verified ones', async () => {
+		appState.unverifiedConsents = ROWS
+		render(UnverifiedWritesDialog, { mode: 'manage' })
+
+		await fireEvent.click(screen.getByLabelText('Unverified writes for all radios'))
+
+		// FTDX101D is already granted, FT-710 is hardware-verified: one call.
+		expect(applyMock.mock.calls).toEqual([['FTdx10', true]])
+	})
+
+	it('the all-radios toggle revokes every grant when every eligible radio is granted', async () => {
+		appState.unverifiedConsents = ROWS.map((r) => (r.NeedsConsent ? { ...r, Granted: true } : r))
+		render(UnverifiedWritesDialog, { mode: 'manage' })
+
+		const all = screen.getByLabelText('Unverified writes for all radios')
+		expect(all).toBeChecked()
+		await fireEvent.click(all)
+
+		expect(applyMock.mock.calls.map((c) => c.slice(0, 2))).toEqual([
+			['FTDX101D', false],
+			['FTdx10', false],
+		])
+	})
+
 	it('revoking a granted radio calls the bridge with false, claiming NO knowledge of the live session', async () => {
 		appState.unverifiedConsents = ROWS
 		render(UnverifiedWritesDialog, { mode: 'manage' })
