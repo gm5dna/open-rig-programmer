@@ -358,6 +358,12 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 	dualFlagOnly := populatedFields(id)
 	dualFlagOnly.dual = '1'
 
+	// The EIGHTH (P15, P16) cell — both flags set, frequency 2 entirely
+	// zero — refused by the SAME P16 arm as dualFlagOnly alone: the check is
+	// `DualRecv && TXFreqHz == 0` and does not consult Split.
+	dualFlagOnlySplit := populatedFields(id)
+	dualFlagOnlySplit.dual, dualFlagOnlySplit.split = '1', '1'
+
 	dualAndSplit := populatedFields(id)
 	dualAndSplit.dual, dualAndSplit.split = '1', '1'
 	dualAndSplit.txFreq, dualAndSplit.txMode = "00014200000", '4'
@@ -375,6 +381,43 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 	secondary.split = '1'
 	secondary.txFreq, secondary.txMode = "00014200000", '3'
 	secondary.txToneType, secondary.txTone, secondary.txCTCSS = '1', "08", "12"
+
+	// Four MORE secondary-side answers, each MIRRORING THE PRIMARY side —
+	// same shape as TestWriteChannel_ASplitChannelRoundTripsWhenTheSetReproducesItsSecondarySide's
+	// own f — except in EXACTLY ONE byte, so each isolates the ONE
+	// secondaryDiffs clause it pins: P11-P14 have no other guard on this
+	// row, and a fixture differing in several at once (like secondary,
+	// above) cannot tell one clause's absence from another's.
+	//
+	// THE CANDIDATE MUST BE A SPLIT WRITE (splitCandidate mutates TxFreqHz
+	// to Known) so setRecord copies the PRIMARY's own mode, width and tones
+	// onto the Set's P10-P14 — the mirror this answer matches everywhere but
+	// the one byte under test. Written back against the ALL-ZERO baseline
+	// (secondary, above) a mirrored answer's OWN P10 would differ too, which
+	// is exactly what LOW-1's doc note now says: an edit to a mirrored
+	// split's PRIMARY side is refused at this same clause.
+	mirroredSecondary := func() ma0Fields {
+		f := populatedFields(id)
+		f.split = '1'
+		f.txFreq, f.txMode, f.txNarrow = "00014200000", f.mode, f.narrow
+		f.txToneType, f.txTone, f.txCTCSS = f.toneType, f.tone, f.ctcss
+		return f
+	}
+	splitCandidate := func(d *codeplug.ChannelData) {
+		d.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 14_200_000}
+	}
+
+	secondaryNarrow := mirroredSecondary()
+	secondaryNarrow.txNarrow = '1'
+
+	secondaryToneType := mirroredSecondary()
+	secondaryToneType.txToneType = '2'
+
+	secondaryTone := mirroredSecondary()
+	secondaryTone.txTone = "09"
+
+	secondaryCTCSS := mirroredSecondary()
+	secondaryCTCSS.txCTCSS = "13"
 
 	const (
 		kindSlot  = "slot"  // *UnknownSlotError
@@ -516,6 +559,14 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 		wants:    []string{"P16", "990:2949-2951", "990:2964-2965"},
 		readSent: true,
 	}, {
+		name:     "the answer contradicts itself — P15 AND P16 both say split/dual and frequency 2 is zero",
+		rung:     "10a",
+		answer:   dualFlagOnlySplit.frame(),
+		slot:     id,
+		kind:     kindPlain,
+		wants:    []string{"P16", "990:2949-2951", "990:2964-2965"},
+		readSent: true,
+	}, {
 		name:     "rung 11 — dual reception is refused unconditionally, whatever P15 says",
 		rung:     "11",
 		answer:   dual.frame(),
@@ -538,6 +589,42 @@ func TestWriteChannel_TheLadder(t *testing.T) {
 		slot:     id,
 		kind:     registerDecision9,
 		wants:    []string{"P10", "'3'", "'0'", "990:2929-2945"},
+		readSent: true,
+	}, {
+		name:     "rung 11 — P11, FM wide/narrow for frequency 2, differs alone",
+		rung:     "11",
+		answer:   secondaryNarrow.frame(),
+		mutate:   splitCandidate,
+		slot:     id,
+		kind:     registerDecision9,
+		wants:    []string{"P11", "'1'", "'0'", "990:2929-2945"},
+		readSent: true,
+	}, {
+		name:     "rung 11 — P12, the tone function for frequency 2, differs alone",
+		rung:     "11",
+		answer:   secondaryToneType.frame(),
+		mutate:   splitCandidate,
+		slot:     id,
+		kind:     registerDecision9,
+		wants:    []string{"P12", "'2'", "'1'", "990:2929-2945"},
+		readSent: true,
+	}, {
+		name:     "rung 11 — P13, the tone frequency for frequency 2, differs alone",
+		rung:     "11",
+		answer:   secondaryTone.frame(),
+		mutate:   splitCandidate,
+		slot:     id,
+		kind:     registerDecision9,
+		wants:    []string{"P13", "09", "08", "990:2929-2945"},
+		readSent: true,
+	}, {
+		name:     "rung 11 — P14, the CTCSS frequency for frequency 2, differs alone",
+		rung:     "11",
+		answer:   secondaryCTCSS.frame(),
+		mutate:   splitCandidate,
+		slot:     id,
+		kind:     registerDecision9,
+		wants:    []string{"P14", "13", "12", "990:2929-2945"},
 		readSent: true,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
