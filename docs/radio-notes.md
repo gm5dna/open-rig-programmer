@@ -21,9 +21,10 @@ Two words are used throughout:
   commands are sent.
 
 Shared by every radio: a channel cannot be deleted from the program
-(the Yaesu radios have no such command; the Icom radios do, and the
-program deliberately does not use it), and menu settings are never
-written (`docs/menu-write-decision.md`).
+(the Yaesu radios have no such command; the Icom radios and the
+TS-890S and TS-990S do, and the program deliberately does not use
+it), and menu settings are never written
+(`docs/menu-write-decision.md`).
 
 ## Yaesu
 
