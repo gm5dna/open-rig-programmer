@@ -133,8 +133,10 @@ var ctcssTones = []spec.Tone{
 //
 // THE LEGEND IS THE LAYOUT'S AND THE SUFFIX IS THIS PACKAGE'S. MA0 carries no
 // mode legend of its own — P4 says "refer to the P2 value of the OM command"
-// (990:2907-2910) and P10 the same for frequency 2 — so the vocabulary is
-// OM's, transcribed once in core/kw/ma (990:3706-3730). What the layout does
+// (990:2907-2910), and P10 prints "refer to the P1 value of the OM command"
+// for frequency 2 (990:2930) — the book's own erratum E9, since the legend it
+// means is OM P2's, not P1's — so the vocabulary is OM's, transcribed once in
+// core/kw/ma (990:3706-3730). What the layout does
 // NOT carry is the width byte: P5 is "0: FM Wide for frequency 1 / 1: FM
 // Narrow for frequency 1" (990:2912-2914), a flag ORTHOGONAL to the mode byte
 // whose legend scopes it to no particular mode value, and pair 1's
@@ -564,7 +566,7 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// (990:32-39) — so narrowing to 0x7E is the direction that cannot
 		// put a byte of ambiguous meaning on the wire. The ';' exclusion is
 		// FORCED rather than assumed: the terminator's position "differs
-		// depending on the command used" (990:94-98), so a name containing
+		// depending on the command used" (990:96-99), so a name containing
 		// one would split the frame at the radio's own parser. A2 is the
 		// register home, and its upper bound at 0x7E stays open.
 		TagCharset: "",

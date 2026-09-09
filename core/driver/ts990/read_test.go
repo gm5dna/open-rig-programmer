@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -131,7 +132,7 @@ func TestReadChannel_TheNarrowFMNameIsSynthesisedFromTwoBytes(t *testing.T) {
 		if ch.Data.Mode != tc.want {
 			t.Errorf("%s: Mode = %q, want %q (§1.5)", name, ch.Data.Mode, tc.want)
 		}
-		if !containsString(sess.Capabilities().Modes, ch.Data.Mode) {
+		if !slices.Contains(sess.Capabilities().Modes, ch.Data.Mode) {
 			t.Errorf("%s: the read produced %q, which Capabilities().Modes does not advertise", name, ch.Data.Mode)
 		}
 	}

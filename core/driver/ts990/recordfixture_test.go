@@ -15,7 +15,7 @@ import (
 //
 // The defaults are one ordinary populated simplex channel: 14.175 MHz FM with
 // a transmit tone, scan lockout off, named. The frequency is the book's own
-// worked example (990:116-119), the mode and tone bytes are printed legend
+// worked example (990:344-345), the mode and tone bytes are printed legend
 // values, and the whole frequency-2 side is the printed zeroed form
 // (990:2964-2965) — so nothing here is a byte this book does not print.
 type ma0Fields struct {
