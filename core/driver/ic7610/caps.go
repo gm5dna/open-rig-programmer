@@ -118,6 +118,7 @@ var deliberatelyZero = map[string]string{
 	"AttenuatorDB":           "additions design D8 — the IC-7610 record carries no attenuator field",
 	"PreampOptions":          "additions design D8 — the IC-7610 record carries no preamp field",
 	"AntennaOptions":         "additions design D8 — the IC-7610 record carries no antenna field",
+	"SimplexTx":              "SimplexTxUnstated is the positive declaration that nothing in this model's record says what a simplex channel's transmit frequency holds, so core/csvio's CHIRP importer leaves TxFreqHz Unknown on a blank Duplex row exactly as it did before the datum existed (the 09/09/2026 CHIRP transmit-disposition design)",
 	"DuplexOptions":          "the Icom repeater vocabulary. The 1A 00 record has no duplex field, FieldDuplex carries the zero FieldSupport on both banks, and E5b's guard makes the empty list lawful",
 	"DTCSPolarities":         "DTCS is printed NOWHERE in this document's 17 pages — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
 	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document",

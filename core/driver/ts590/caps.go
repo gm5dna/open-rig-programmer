@@ -501,6 +501,15 @@ func baseCapabilities(row Row, rw spec.FieldSupport) spec.Capabilities {
 		// spec.Validate refuses the zero value, so this is a declaration
 		// each row must make.
 		Transmit: spec.HasTransmitter,
+		// MANUAL-EVIDENCED: MW/MR carries NO transmit-frequency field at
+		// all — split is two frames over one channel number, selected by P1,
+		// and "When registering a simplex channel, set parameter P1 to 0.
+		// After setting P1 to 0, the channel becomes a simplex channel, even
+		// if it was already a split channel" (590:1521-1523). Simplex here
+		// is arithmetic, tx == rx, which is the rule write.go's own A9 rung
+		// refuses on. Read only by core/csvio's CHIRP importer, on the blank
+		// Duplex arm; pinned by TestCapabilities_SimplexTx.
+		SimplexTx: spec.SimplexTxEqualsRx,
 		Banks: []spec.Bank{
 			{
 				ID:    spec.BankMemory,

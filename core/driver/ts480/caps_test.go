@@ -188,7 +188,7 @@ func TestCapabilities_MatrixValues(t *testing.T) {
 }
 
 // TestCapabilities_EveryFieldExplicit is the FTdx10 discipline: every one of
-// spec.Capabilities' twenty-eight fields is populated deliberately, the
+// spec.Capabilities' twenty-nine fields is populated deliberately, the
 // non-zero ones and the deliberately empty ones alike, so an omission and a
 // decision cannot read the same.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
@@ -215,12 +215,13 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"PreampOptions":          "§1.26",
 		"AntennaOptions":         "§1.27",
 		"TagCharset":             "§1.28",
+		"SimplexTx":              "SimplexTxUnstated is the positive declaration that nothing in this model's record says what a simplex channel's transmit frequency holds, so core/csvio's CHIRP importer leaves TxFreqHz Unknown on a blank Duplex row exactly as it did before the datum existed (the 09/09/2026 CHIRP transmit-disposition design). THE TS-480 IS UNREGISTERED, and the 09/09/2026 design declared only the six registered rows",
 	}
 	caps := CapabilitiesSimulated()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 28 {
-		t.Fatalf("spec.Capabilities has %d fields, this test knows 28", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, this test knows 29", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name

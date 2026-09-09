@@ -118,6 +118,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 	"AttenuatorDB":           true,
 	"PreampOptions":          true,
 	"AntennaOptions":         true,
+	"SimplexTx":              true,
 	"TagCharset":             true,
 	// CTCSSToneRange (Wave 2.5, E3) is the OPTIONAL numeric tone domain a
 	// radio whose tone field is a number declares INSTEAD of a chart.
@@ -167,7 +168,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // waived, and the test still fails if one is ever filled in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// 28 since additions design D4.2 added the transmit declaration.
-	const wantFieldCount = 28
+	const wantFieldCount = 29
 
 	for _, tt := range []struct {
 		name string

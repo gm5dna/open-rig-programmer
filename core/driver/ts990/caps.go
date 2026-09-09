@@ -388,6 +388,13 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// frequency-2 side (990:2927-2948). spec.Validate refuses the zero
 		// value, so this is a declaration this row must make.
 		Transmit: spec.HasTransmitter,
+		// MANUAL-EVIDENCED from THIS book: MA0's frequency-2 side and P15
+		// "0: Simplex / 1: Split" (990:2946-2948), with the printed answer
+		// "…all parameters for frequency 2 become 0" (990:2964-2965), which
+		// is why write.go derives split as TxFreqHz.Value != 0. Read only by
+		// core/csvio's CHIRP importer, on the blank Duplex arm; pinned by
+		// TestCapabilities_SimplexTx.
+		SimplexTx: spec.SimplexTxZero,
 		Banks: []spec.Bank{{
 			ID:    spec.BankMemory,
 			Label: memBankLabel,
