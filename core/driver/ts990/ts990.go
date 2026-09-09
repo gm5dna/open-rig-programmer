@@ -364,10 +364,13 @@ func (d *ts990Driver) probeID(ctx context.Context, eng *transport.Engine, layout
 // THE FRAME IS SENT FOR WHAT ITS ABSENCE WOULD MEAN, NOT FOR ITS CONTENT, and
 // that is this row's difference from pair 1 (matrix §3.5). The TS-590S gates
 // byte 28's write policy on its firmware version, so that driver carries the
-// answer into the session and publishes it. NOTHING ON THIS ROW BRANCHES ON
-// THE VERSION: this radio has no field whose meaning depends on firmware, and
-// the only firmware sentence in the whole book concerns an AI parameter this
-// programme never sets (990:189). Keeping a value nothing consults would be a
+// answer into the session and publishes it. NO COMMAND ON THIS DRIVER'S
+// ROSTER BRANCHES ON THE VERSION — ID, AI, FV and MA0 each print one grid.
+// The book's firmware conditions attach to commands this programme never
+// sends (BS4's two P1 domains at 990:527/540 are the sharpest) and to five
+// EX menu rows (990:1814, 1866, 1924, 2054, 2163) whose markers
+// core/kw/ma's generated inventory already carries — a settings-surface
+// note, not a read-path one. Keeping a value nothing consults would be a
 // surface a later reader would have to check for callers.
 //
 // What the frame still does is refuse a session. The EXISTENCE of FV is

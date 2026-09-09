@@ -311,6 +311,12 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 // stores no independent transmit frequency" — which is a fact the answer
 // carries, not an absence.
 //
+// P15 DECIDES ALONE: a channel with both P15 and P16 set publishes frequency
+// 2 as the transmit frequency, because P15 says it is one, and T14's rung 11
+// refuses the WRITE unconditionally on P16 regardless. The book does not
+// define the two flags against each other (990:2946-2951); dual reception is
+// an orthogonal receiver state, not a qualifier on what P15 already states.
+//
 // THE MODE NAME IS modeDisplayName's, the same function the capability list
 // asks, so the name a read produces is byte-for-byte one Capabilities().Modes
 // advertises. On this row it is a function of TWO bytes: P4 is the OM P2

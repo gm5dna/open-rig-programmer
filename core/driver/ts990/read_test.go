@@ -198,6 +198,12 @@ func TestReadChannel_TheSecondarySideIsReadAndPublishedNowhere(t *testing.T) {
 	if ch.Data.Mode == "CW" || ch.Data.ToneTx.Value == 1365 || ch.Data.ToneRx.Value == 1738 {
 		t.Errorf("a frequency-2 value reached the neutral model: %+v (§2.7)", *ch.Data)
 	}
+	// P15 = 1 decides ALONE: with P16 = 1 too, frequency 2 still publishes as
+	// the transmit frequency — dual reception does not override the split
+	// flag (see channelData's doc comment).
+	if want := (codeplug.FreqField{State: codeplug.Known, Value: 21_300_000}); ch.Data.TxFreqHz != want {
+		t.Errorf("split+dual: TxFreqHz = %+v, want %+v — P15 decides alone", ch.Data.TxFreqHz, want)
+	}
 }
 
 // TestReadChannel_AnUnassignedSlotIsNotAnError is plan P14, and the NEGATIVE
