@@ -570,7 +570,7 @@ func readDependentRefusal(slotID string, current, set ma.Record) error {
 		// Rung 10 — A3. The channel is unassigned NOW, established by this
 		// driver's own read rather than by a cached pass.
 		return refuse(slotID, registerA3, nil,
-			"channel %s reads back UNASSIGNED: its P2-P18 window is blank, which is this book's own blank-channel answer (990:2962-2963). Whether an MA0 Set ALONE can create a channel is nowhere printed, and every other member of this family says it cannot — \"Setting an unassigned channel causes an error\" on MA2 (990:3008) and MA3 (990:3023), \"You cannot set an unassigned channel\" on MA6 (990:3058). This programme does not create channels; hardware item 1 is what lifts it",
+			"channel %s reads back UNASSIGNED: its P2-P18 window is blank, which is this book's own blank-channel answer (990:2962-2963). Whether an MA0 Set ALONE can create a channel is nowhere printed, and every other member of this family says it cannot — \"Setting an unassigned channel causes an error\" on MA2 (990:3008) and MA3 (990:3023), \"You cannot set an unassigned channel\" on MA6 (990:3058), and an unassigned original \"cannot be copied\" on MA4 (990:3037-3038). This programme does not create channels; hardware item 1 is what lifts it",
 			slotID)
 	}
 	// Rung 11, first clause — A8, and it is UNCONDITIONAL. A Section-defined
