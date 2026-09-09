@@ -37,6 +37,7 @@
 	import { appState } from './state/app.svelte.js'
 	import { applyUnverifiedWriteConsent, refreshUnverifiedConsents } from './bridge/bindings.js'
 	import { describeError } from './errorText.js'
+	import { BrowserOpenURL } from '../../wailsjs/runtime'
 
 	/** @typedef {import('../../wailsjs/go/models').main.UnverifiedWriteConsentView} UnverifiedWriteConsentView */
 
@@ -108,11 +109,45 @@
 		}
 	}
 
+	/** Sets every consent-eligible radio to `on`, one bridge call at a time
+	 * (at most one of them is the live session, so at most one reconnect).
+	 * Stops at the first refusal: the rows already changed stay changed,
+	 * the state text beside each says which, and the error says why.
+	 * @param {boolean} on
+	 * @param {HTMLInputElement} toggle */
+	async function recordAll(on, toggle) {
+		if (locked) return
+		error = ''
+		pending = '*'
+		pendingOn = on
+		try {
+			for (const row of appState.unverifiedConsents) {
+				if (row.NeedsConsent && row.Granted !== on) await applyUnverifiedWriteConsent(row.Model, on)
+			}
+		} catch (err) {
+			error = describeError(err)
+		} finally {
+			pending = ''
+			toggle.checked = allGranted
+		}
+	}
+
+	const eligible = $derived(appState.unverifiedConsents.filter((r) => r.NeedsConsent))
+	const allGranted = $derived(eligible.length > 0 && eligible.every((r) => r.Granted))
+	const someGranted = $derived(eligible.some((r) => r.Granted))
+
 	/** @param {UnverifiedWriteConsentView} row */
 	function stateText(row) {
 		if (!row.NeedsConsent) return 'n/a — this radio’s writes are hardware-verified'
 		if (row.Granted) return 'Enabled'
 		return row.Recorded ? 'Not enabled' : 'Never asked'
+	}
+
+	/** The webview has no browser of its own: hand the link to the system one.
+	 * @param {MouseEvent} e */
+	function openIssues(e) {
+		e.preventDefault()
+		BrowserOpenURL(/** @type {HTMLAnchorElement} */ (e.currentTarget).href)
 	}
 
 	function close() {
@@ -161,9 +196,10 @@
 		<div class="modal-header">
 			<h2 class="modal-title" id="unverified-writes-title">Unverified writes</h2>
 			<p class="modal-subtitle">
-				Enabling unverified writes applies from the next connection to that radio. Changing it for the
-				radio you are connected to re-opens the session; your working copy is kept, and its baseline is
-				marked stale until you read the radio again.
+				Enabling a radio here lets you write to it even though this project has not yet tested writing
+				to that model. If you try it, reporting how it went on
+				<a href="https://github.com/gm5dna/open-rig-programmer/issues" onclick={openIssues}>GitHub</a>
+				helps everyone.
 			</p>
 		</div>
 		<div class="modal-body">
@@ -174,6 +210,22 @@
 				<p class="consent-error">{error}</p>
 			{/if}
 			<ul class="grant-list">
+				<li class="grant-row grant-row-all">
+					<span class="grant-model">All radios</span>
+					<span class="grant-state" data-testid="consent-state-all">
+						{pending === '*' ? (pendingOn ? 'Enabling…' : 'Disabling…') : 'Every radio that can be enabled'}
+					</span>
+					<input
+						type="checkbox"
+						class="grant-toggle"
+						aria-label="Unverified writes for all radios"
+						checked={allGranted}
+						indeterminate={someGranted && !allGranted}
+						disabled={eligible.length === 0 || locked}
+						title={blockedReason}
+						onchange={(e) => recordAll(!allGranted, e.currentTarget)}
+					/>
+				</li>
 				{#each appState.unverifiedConsents as row (row.Model)}
 					<li class="grant-row">
 						<span class="grant-model">{row.Model}</span>
@@ -233,6 +285,10 @@
 		gap: var(--space-3);
 		padding: var(--space-2) 0;
 		border-bottom: 1px solid var(--colour-hairline-soft);
+	}
+
+	.grant-row-all {
+		border-bottom: 1px solid var(--colour-hairline);
 	}
 
 	.grant-model {
