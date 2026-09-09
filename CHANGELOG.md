@@ -11,6 +11,8 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-09
+
 ### Fixed
 - The desktop app no longer shows a pair of document scrollbars after the
   window is resized, and the *Unverified writes* panel no longer squashes
@@ -313,7 +315,10 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.4.1...v1.5.0
+[1.4.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.1...v1.2.2
