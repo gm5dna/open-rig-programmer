@@ -47,12 +47,6 @@ const memBankLabel = "Memories"
 // manufacturer.
 const narrowSuffix = "-N"
 
-// slotProbeCeiling bounds the walk that derives this row's bank inventory
-// from the layout. MA0's P1 is three printed cells (990:2893-2895), so three
-// digits is the widest number the grid can address at all; the layout
-// refuses everything above its own printed space long before this.
-const slotProbeCeiling = 999
-
 // writeTrialsComplete is THIS package's hardware write guard, and it is
 // FALSE: no TS-990S has ever been written to by this project — none has ever
 // been ASKED anything at all (matrix §3.12).
@@ -192,8 +186,8 @@ func modeNames(l ma.Layout) []string {
 }
 
 // memSlots returns this row's MEM inventory, "000".."099", built through the
-// LAYOUT's own NewSlot so the wire forms this capability data advertises are
-// the ones the codec's slot space actually accepts.
+// LAYOUT's own Slots() and NewSlot so the wire forms this capability data
+// advertises are the ones the codec's slot space actually accepts.
 //
 // THE CLASS FILTER IS WHAT OMITS 100-119 (plan P11, matrix §1.4.2, §1.4.3;
 // decisions.md row 14). The layout DECLARES those twenty slots, because both
@@ -207,14 +201,23 @@ func modeNames(l ma.Layout) []string {
 // command this programme never sends (§1.4.5). Selecting on kw.SlotMemory
 // rather than on a number range keeps the codec's domain and the driver's
 // inventory a single edit apart from each other.
+//
+// Walking l.Slots() rather than probing every number 0-999 costs nothing:
+// the layout already publishes its own ranges, so there is no ceiling to
+// derive or defend.
 func memSlots(l ma.Layout) []string {
 	var slots []string
-	for n := 0; n <= slotProbeCeiling; n++ {
-		s, err := l.NewSlot(n)
-		if err != nil || s.Class() != kw.SlotMemory {
+	for _, r := range l.Slots() {
+		if r.Class != kw.SlotMemory {
 			continue
 		}
-		slots = append(slots, s.String())
+		for n := r.Lo; n <= r.Hi; n++ {
+			s, err := l.NewSlot(n)
+			if err != nil {
+				continue
+			}
+			slots = append(slots, s.String())
+		}
 	}
 	return slots
 }
