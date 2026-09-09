@@ -306,6 +306,62 @@ func TestWriteChannel_TheCapabilityGateIsTheFirstAnswerOnAnUnconsentedSession(t 
 	}
 }
 
+// TestWriteChannel_AnIncoherentFieldIsRefusedNotInterpreted is rung 4, the
+// FLEET's FieldState walk (driver.CheckFieldStates) consumed as a black box —
+// the sibling row's own table (ts890/refusals_test.go), ported here because
+// this row had no case only this rung can answer (review
+// s2-close-review-opus-2.md MED-1).
+//
+// WHAT IT PREVENTS IS SILENT. A value carried alongside a state meaning
+// "preserve whatever the radio has" is never named by requestedFields, so
+// without this rung it is dropped from the frame and the write reports
+// SUCCESS. The ladder's own rung-4 row cannot show that: it carries an
+// Unknown scan_skip, and setRecord refuses a non-Known scan_skip on its own
+// account one rung further down, so the ladder stayed green with rung 4
+// disabled. The FIRST TWO cases here are the value-with-no-claim kind — an
+// Unavailable or stateless field carrying a number — which nothing below this
+// rung reads, and disabling rung 4 fails both. The third, a Known tone outside
+// the printed chart, is also refused by setRecord's own index lookup; it is
+// kept for the sibling's shape and because the two refusals name the same
+// field with different messages.
+func TestWriteChannel_AnIncoherentFieldIsRefusedNotInterpreted(t *testing.T) {
+	const id = "042"
+	for _, tc := range []struct {
+		name   string
+		field  spec.Field
+		mutate func(*codeplug.ChannelData)
+	}{
+		{"a tone with a value and no state", spec.FieldCTCSSTone, func(d *codeplug.ChannelData) {
+			d.CTCSSTone = codeplug.ToneField{Value: 1000}
+		}},
+		{"an Unavailable offset carrying a value", spec.FieldOffset, func(d *codeplug.ChannelData) {
+			d.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable, Value: 600_000}
+		}},
+		{"a Known tone outside this row's chart", spec.FieldToneTx, func(d *codeplug.ChannelData) {
+			d.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: 1}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ch := writableChannel(id)
+			tc.mutate(ch.Data)
+			sess, p := openSessionAt(t, Simulated, writeImage(id, populatedMA0(id)))
+			_, err := sess.WriteChannel(context.Background(), ch)
+			var refused *driver.WriteRefusedError
+			if !errors.As(err, &refused) {
+				t.Fatalf("err = %v (%T), want a *driver.WriteRefusedError", err, err)
+			}
+			var semantic *RefusalError
+			if errors.As(err, &semantic) {
+				t.Errorf("err names register %q: the FieldState walk is the fleet's and carries no register entry", semantic.Register)
+			}
+			if len(refused.Fields) != 1 || refused.Fields[0] != tc.field {
+				t.Errorf("Fields = %v, want [%s]", refused.Fields, tc.field)
+			}
+			assertNoSetReached(t, p)
+		})
+	}
+}
+
 // TestWriteChannel_ConsentOpensTheGateAndEveryRungBelowItStillFires is the
 // other half of the gate: consent widens WHAT may be attempted, never HOW
 // carefully.
