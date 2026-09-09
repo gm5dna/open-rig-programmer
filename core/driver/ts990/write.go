@@ -723,8 +723,14 @@ func toneIndex(tone spec.Tone) (int, bool) {
 // wire.
 //
 // P2 IS NOT SET HERE, and its absence is the design: ma.Record.Class is a
-// PARSER output, and the codec emits '0' on every build (A14). Rung 11's
-// first clause is what refuses a target whose current P2 says otherwise.
+// PARSER output, and core/kw/ma emits '0' on every build because the book
+// says the parameter "is ignored. Enter a dummy value" and names no value
+// (A14, lift L-HW-11). It is the MILESTONE'S ONLY DEFAULTED BYTE, and
+// decision 7 is why that list is one item long and not sixteen: every other
+// byte of this 57-byte grid carries a live P-number with a printed domain, so
+// there is no printed-fixed class here for pair 1's defaulted-byte register
+// to fill. Rung 11's first clause is what refuses a target whose current P2
+// says otherwise.
 //
 // EVERYTHING ELSE IS THE CODEC'S. core/kw/ma re-validates the mode byte
 // against this row's legend, both tone indices against their printed charts,
