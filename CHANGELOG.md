@@ -11,6 +11,11 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Fixed
+- The desktop app no longer shows a pair of document scrollbars after the
+  window is resized, and the *Unverified writes* panel no longer squashes
+  its radio list to a single clipped row (both seen on macOS in v1.4.1).
+
 ### Changed
 - `rigprog diff` and the write plan now name only the fields that actually
   changed on a modified channel, instead of restating unchanged ones as
