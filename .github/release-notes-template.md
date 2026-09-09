@@ -29,45 +29,55 @@ describes under *Switching on writes for an unverified radio*.
 
 ## What changed in this version
 
-<!-- TASK 18 GATE: the bullet below is v1.4.1's byte-identity claim and is
-     replaced wholesale when the v1.5.0 body is written. v1.5.0's own claim
-     may NOT be the unqualified one. Task 18's capture (09/09/2026, the
-     private record docs/superpowers/kenwood2-baseline-manifest.md) measured
-     479 artefacts on each side of THIS milestone's own capture recipe (a
-     different, narrower instrument than v1.4.1's 608-artefact one — do not
-     present the drop as a loss of coverage): 476 identical by hash, and the
-     three that moved are model-list surfaces that gain exactly two rows,
-     TS-890S and TS-990S. The Kenwood-only recipe captures that same
-     "unknown model" refusal a second time, for the TS-480, and it moves
-     identically — a fourth ARTEFACT of a surface already counted, not a
-     fourth surface. Say that, name the two rows, and do not write
-     "identical" without the exception. Then delete this comment: the marker
-     is cleared before tagging, and that clearing belongs to Stuart at the
-     v1.5.0 release commit, where the body is written. -->
-
-- **A simplification sweep, and no new capability.** Nine lanes removed
-  about 10,600 net lines across the tree without changing what any
-  radio is sent or told: the frozen command-line capture (608 artefacts
-  across every supported model) is byte-for-byte identical to v1.4.0,
-  every golden vector, transcription CSV and evidence checksum is
-  untouched, and every fence test still stands.
-- **The desktop app's dialogs are now the platform's own.** Confirmations
-  and the send flow use the browser's native `<dialog>` element, so
-  Escape, focus containment and focus return come from the platform
-  rather than from hand-written code. This is the one change a user can
-  see.
-- **Under the hood.** The five Yaesu drivers share one write, settings
-  and probe body, each radio contributing only its own differences. The
-  IC-7300 and IC-7300MK2 drivers are one package driven by a per-model
-  table, as the FTdx101D and FTdx101MP already were. The simulated
-  radios share one protocol-free pipe chassis and parse their own
-  transcription CSVs at start-up instead of carrying generated tables,
-  while still importing nothing from the codec they test. Hand-rolled
-  helpers gave way to the standard library throughout.
-- **Not included: folding the IC-7610, IC-7760 and IC-7851 drivers into
-  one package.** Their provenance pins are per-model registers by
-  construction; a fold would disable them rather than refactor them, so
-  it waits for a milestone that first decides what replaces the pin.
+- **Kenwood TS-890S and TS-990S: read, opt-in write, menu-settings read.**
+  The 100 memory channels and the menu inventory — 158 settings on the
+  TS-890S, 194 on the TS-990S — over Kenwood's own PC control commands.
+  Tone and scan skip are read and written, as on the TS-590 pair, and
+  one frame carries a whole channel, which removes that pair's largest
+  cost: a channel read off one of these radios comes back with its
+  transmit frequency already known, so reading the memories, editing a
+  name and sending them straight back works. Every published mode can be
+  written — 16 on the TS-890S, 26 on the TS-990S, the data modes spelt
+  into the mode names themselves.
+- **What these two radios refuse is published rather than discovered.**
+  A write to a channel the radio does not already hold is refused: the
+  program reads the target first and will not create a channel the
+  manual never says the command can create. Registering these radios
+  does not mean the program can fill a blank one — they can be
+  re-programmed, not programmed from empty. A channel whose secondary
+  side on the radio is not what the program's own frame would write is
+  refused, naming the parameter and both values. A 1750 Hz receive tone
+  is refused. On the TS-990S, a channel with dual reception switched on
+  is refused outright, and so is a section-defined channel. Channels are
+  never deleted, although both manuals print a deletion command. Slots
+  100–119 are offered on neither radio, no band edges are published, and
+  the 9600 port speed is assumed.
+- **A CHIRP file's ordinary rows import on both new radios** on the same
+  terms as the TS-590 pair's, with one further cost: a single frame
+  carries the transmit frequency, the tone mode, the transmit tone and
+  the receive tone together, and the write path requires all four to be
+  known. A CHIRP row states none of them, and nothing supplies a value
+  the file did not carry, so an imported CHIRP channel is refused at the
+  write until you fill all four in. A `TSQL` row is refused on the tone
+  column besides. The program's own CSV import and export are unaffected.
+- **Also in this version:** a CHIRP file's ordinary rows now import on
+  the Kenwood TS-590S and TS-590SG and on the six Icom models whose
+  memory bank carries no duplex field (a blank `Duplex` column is
+  simplex; `off` is still refused); and a CHIRP `Name` is sanitised
+  against each radio's own published tag charset, so a `;` in a name is
+  kept on the eleven Icom rows that allow it.
+- **No Kenwood radio has ever answered a frame from this program.**
+  Writing stays switched off on both new rows until you switch it on for
+  that radio. Every claim above rests on the two service manuals and on
+  simulated radios transcribed from them.
+- **Byte identity.** This milestone's own command-line capture — 479
+  artefacts on each side, a narrower instrument than v1.4.1's 608 — is
+  identical by hash for every previously supported radio, with one
+  exception: the three surfaces that print the supported-model list
+  gain exactly two rows, TS-890S and TS-990S. Reverting the single
+  registration commit alone returns every artefact to the v1.4.1 base.
+  Every golden vector, transcription CSV and evidence checksum is
+  untouched.
 
 ## Downloads
 
