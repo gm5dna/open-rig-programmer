@@ -57,7 +57,6 @@ type Layout struct {
 	modeNames     map[byte]string
 	maxToneIndex  uint8
 	maxCTCSSIndex uint8
-	mainSub       bool
 	exItems       []kw.EXItem
 }
 
@@ -73,7 +72,6 @@ type layoutConfig struct {
 	ModeNames     map[byte]string
 	MaxToneIndex  uint8
 	MaxCTCSSIndex uint8
-	MainSub       bool
 	EXItems       []kw.EXItem
 }
 
@@ -95,10 +93,13 @@ func Layout890() Layout { return layout890 }
 // Layout990 returns the TS-990S row.
 //
 // It differs from Layout890 in the frame grid, the field count, the mode
-// legend, the lockout encoding, the number of tone tuples and the Main/Sub
-// band pointer — two grammars, not two rows of one grammar — and
-// layout_test.go pins the axes this type carries in BOTH directions, so a
-// value copied from one row to the other fails there rather than shipping.
+// legend, the lockout encoding and the number of tone tuples — two grammars,
+// not two rows of one grammar — and layout_test.go pins the axes this type
+// carries in BOTH directions, so a value copied from one row to the other
+// fails there rather than shipping. The books' Main/Sub difference is a sixth
+// such divergence and is NOT an axis of this type: nothing here branches on
+// it, so it is recorded in the two configs and in
+// core/driver/ts990/doc.go rather than carried.
 func Layout990() Layout { return layout990 }
 
 // layout890Config is the TS-890S's axes, each read off that book's own
@@ -149,8 +150,10 @@ func layout890Config() layoutConfig {
 		// is why a Known tone_rx of 1750 Hz has no receive encoding and is
 		// refused on write by the driver.
 		MaxCTCSSIndex: 49,
-		// This book gives no command a Main/Sub band pointer: MN, MV, OM, TN
-		// and CN all carry their parameters without one (890:3647-3657,
+		// NOT AN AXIS OF THIS TYPE, recorded here because it is this book's
+		// own reading and nothing else in the tree carries it: this book
+		// gives no command a Main/Sub band pointer. MN, MV, OM, TN and CN
+		// all carry their parameters without one (890:3647-3657,
 		// 890:3781-3792, 890:3955-3975, 890:5143-5155, 890:1348-1360). OM
 		// DOES have a P1 at those lines — but it selects a display area,
 		// "0: Left-hand frequency display" / "1: Right-hand frequency
@@ -158,7 +161,6 @@ func layout890Config() layoutConfig {
 		// 990S's own Main/Sub pointer is a different axis entirely, on the
 		// SAME command (990:3699-3705, "0: Main Band / 1: Sub Band" —
 		// already cited below for that row's OM P1).
-		MainSub: false,
 		EXItems: EXItems890S(),
 	}
 }
@@ -191,16 +193,17 @@ func layout990Config() layoutConfig {
 		MaxToneIndex: 50,
 		// CN runs 00-49 with no index 50 (990:1251-1264).
 		MaxCTCSSIndex: 49,
-		// THIS BOOK PUTS A MAIN/SUB POINTER ON FIVE COMMANDS — MN
-		// (990:3325-3336), MV (990:3461-3474), OM P1 (990:3699-3705), TN P1
-		// (990:4952-4954) and CN P1 (990:1241-1245) — and the TS-890S has one
-		// nowhere. It is a COMMAND-GRAMMAR difference and not a record
+		// NOT AN AXIS OF THIS TYPE either, and recorded here for the five
+		// line cites: THIS BOOK PUTS A MAIN/SUB POINTER ON FIVE COMMANDS —
+		// MN (990:3325-3336), MV (990:3461-3474), OM P1 (990:3699-3705), TN
+		// P1 (990:4952-4954) and CN P1 (990:1241-1245) — and the TS-890S has
+		// one nowhere. It is a COMMAND-GRAMMAR difference and not a record
 		// difference: no byte of MA0 names a band on this radio either
 		// (990:2891-2903 is the whole parameter list), which is why MN is off
-		// the outbound roster in both directions. The axis is carried so that
-		// a refusal or a driver-side note can say which grammar it is looking
-		// at without re-deriving it from the model name.
-		MainSub: true,
+		// the outbound roster in both directions. Nothing this package builds
+		// or parses branches on it — core/driver/ts990/doc.go is where the
+		// driver-side consequence (main band only, and it is not a bank)
+		// lives — so it is a note rather than a field.
 		EXItems: EXItems990S(),
 	}
 }
@@ -335,7 +338,6 @@ func newLayout(cfg layoutConfig) (Layout, error) {
 		modeNames:     make(map[byte]string, len(cfg.ModeNames)),
 		maxToneIndex:  cfg.MaxToneIndex,
 		maxCTCSSIndex: cfg.MaxCTCSSIndex,
-		mainSub:       cfg.MainSub,
 		exItems:       kw.CopyEXItems(cfg.EXItems),
 	}
 	for k, v := range cfg.ModeNames {
@@ -475,10 +477,6 @@ func (l Layout) MaxToneIndex() uint8 { return l.maxToneIndex }
 // (890:1367, 990:1262). There is no CN index 50 on either radio, which is
 // why 1750 Hz has no receive encoding at all.
 func (l Layout) MaxCTCSSIndex() uint8 { return l.maxCTCSSIndex }
-
-// HasMainSub reports whether this row's BOOK gives its commands a Main/Sub
-// band pointer. See layout990Config for what the axis is and is not.
-func (l Layout) HasMainSub() bool { return l.mainSub }
 
 // EXItems is this row's whole menu inventory, as a copy.
 func (l Layout) EXItems() []kw.EXItem { return kw.CopyEXItems(l.exItems) }
