@@ -84,6 +84,16 @@
 //	    Lift: L-HW-2, observing the MA0 family — write a name containing '@',
 //	    '/' and a high-ASCII character and read back what survives. A pass
 //	    narrows the doubt to those three; it does not sweep the domain.
+//	    (ii) THE OUTBOUND WIRE REFUSES 0x00-0x1F on every frame this codec
+//	    builds for either radio, through core/kw's envelopeAllows, which
+//	    NewFramingFor keeps in front of this package's own gate. The
+//	    prohibition is printed by the TS-480 alone ("Do not use the control
+//	    characters 00 to 1Fh", 480:127-129); NEITHER of these two books
+//	    prints it in any form, so applying it here is this design's choice,
+//	    not a read. It is KEPT because the failure direction is safe — an
+//	    over-cautious Allow, never a malformed frame reaching hardware — and
+//	    for that reason it has NO LIFT: there is no wire trial that would
+//	    relax it.
 //
 //	A3  An MA0 Set to an unassigned channel cannot create it. MA2, MA3, MA6,
 //	    MA4 and MA7 all print an unassigned-channel prohibition (890:3265,
@@ -120,6 +130,12 @@
 //	A6  "Blank", where the MA0 notes use it, means ASCII space 0x20. Neither
 //	    MA0 block defines it; both books define it for QR — "this setting is
 //	    space" (890:4362-4363) and "this setting is blank <0x20>" (990:4082).
+//	    THE PREDICATE IS ALL-OR-NOTHING OVER THE WINDOW (isBlankWindow: all
+//	    space OR all '0'); a MIXED window — spaces in some fields, '0' in
+//	    others — is NOT covered and routes to the field parse, where one such
+//	    slot aborts the whole read. This is a residual risk, not a defect: no
+//	    per-field predicate is derivable from either book, and inventing one
+//	    would be the guess this design refuses.
 //	    Lift: L-HW-4, the same read.
 //
 //	A7  On the 890S, MA0 P8 on a Programmable VFO channel does NOT carry that
@@ -378,7 +394,7 @@
 //	    two-digit address form can express. THE 990S PRINTS THE SAME FOUR
 //	    NOTICE ROWS WITH AN EM DASH IN ALL THREE ADDRESS COLUMNS and has no
 //	    "1 — 27" row at all.
-//	    890:2273-2279, 890:2281, 890:2283, 890:1909-1911 vs 990:2272-2278.
+//	    890:2273-2280, 890:2281, 890:2283, 890:1909-1911 vs 990:2272-2279.
 //
 //	E17 990S. CN's READ FORM OMITS P1: the Set row is "C N P1 P2 P2 ;" and
 //	    the Answer row is "C N P1 P2 P2 ;", both carrying the Main/Sub P1,

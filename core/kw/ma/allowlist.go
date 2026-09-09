@@ -104,10 +104,14 @@ func (l Layout) AllowedCommand(frame []byte) bool {
 		return string(frame) == idReadFrame
 	case "AI":
 		// The read, and the ONE Set this codec builds. No other AI state:
-		// the two books' legends differ (890:175-181, 990:173-178) and
-		// every non-zero value in either turns Auto Information ON, which
-		// pushes unasked-for frames into a session that correlates answers
-		// by prefix and length.
+		// BOTH books print the same five-value legend — 0 OFF, 1 Not used,
+		// 2 ON (not backed up), 3 Not used, 4 ON (backed up) (890:175-181,
+		// 990:173-178) — so 1 and 3 are values neither radio uses and 2 and 4
+		// both turn Auto Information ON, which pushes unasked-for frames into
+		// a session that correlates answers by prefix and length. Only the
+		// printed OFF state is ever built. (Pair 1's arm refuses on a
+		// DIFFERENT ground: core/kw's two books print DIFFERENT legends,
+		// 0/2/4 against 0/1/2/3 — core/kw/allowlist.go:144-147.)
 		return string(frame) == aiReadFrame || string(frame) == aiSetFrame
 	case "FV":
 		// BOTH books print FV, which is the difference from core/kw's arm:
@@ -171,11 +175,16 @@ func (l Layout) validEXRead(frame []byte) bool {
 // refused ones, and the third byte is the whole of that split.
 //
 // MA1-MA7, MI, MV AND MN ARE ALL REFUSED HERE OR ON THE DEFAULT ARM ABOVE,
-// which is spec decision 15 landing in one comparison: MA5's Set is
-// "M A 5 P1 P1 P1 ;" (890:3305-3311, 990:3042-3047), seven bytes, the MA0
-// Read's shape with a different third byte, and it is the printed ERASE this
-// programme's standing no-erase rule declines. A gate keyed on "MA" and a
-// length would admit it.
+// which is spec decision 15: MA5's Set is "M A 5 P1 P1 P1 ;"
+// (890:3305-3311, 990:3042-3047), seven bytes, the MA0 Read's shape with a
+// different third byte, and it is the printed ERASE this programme's
+// standing no-erase rule declines. THE RE-ENCODE IS WHAT REFUSES IT:
+// validMA0Read compares against BuildMA0Read's own "MA0…" output and
+// validMA0Set's first act is ParseMA0Answer's ma0Prefix check, so a gate
+// keyed on "MA" and a length alone would already refuse MA5. The
+// frame[2] != '0' comparison below is a SECOND, INDEPENDENT refusal, kept
+// as defence in depth (the same class as exactlyOneTrailingSemicolon, T8
+// NIT-4) even though a mutation of it alone survives the suite.
 func (l Layout) validMA0Command(frame []byte) bool {
 	if frame[2] != '0' {
 		return false
