@@ -314,6 +314,28 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// IC-7100's, IC-R8600's and FT-891's do: internal/fakets590's Port()
 		// already returns io.ReadWriteCloser, so no adapter wraps it.
 		{"ts590", "Simulated", "fakets590.New", "internal/fakets590", []string{"TS-590S", "TS-590SG"}},
+		// The TS-890S and TS-990S (Tier 6's SECOND Kenwood pair): TWO ROWS
+		// FOR TWO REGISTERED MODELS, which is the ic7610/ft891 shape rather
+		// than either of the pair shapes above it, and the column definition
+		// is again what decides. A row is (package, token, fake
+		// CONSTRUCTOR); these two radios' memory records are different
+		// shapes, so plan decision P1 gives each its own driver package and
+		// its own simulator — two packages, two Simulated tokens, two
+		// constructors, one registered model each. Nothing is shared for a
+		// pairing clause to have to disambiguate.
+		//
+		// Each token is a Profile CONSTANT: both New functions take the
+		// profile as their FIRST and only required argument, so
+		// ts890.Simulated and ts990.Simulated are the selectors a stray
+		// non-test reference would have to smuggle in. The IC-7851 pair's
+		// WithSimulatedProfile row remains the one option-shaped exception in
+		// this table.
+		//
+		// Both fake constructors sit BARE at their one call site each:
+		// internal/fakets890's and internal/fakets990's Port() methods
+		// already return io.ReadWriteCloser, so neither needs an adapter.
+		{"ts890", "Simulated", "fakets890.New", "internal/fakets890", []string{"TS-890S"}},
+		{"ts990", "Simulated", "fakets990.New", "internal/fakets990", []string{"TS-990S"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site
