@@ -469,6 +469,15 @@ func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 // idiom for a difference between the two charts: a package function handed a
 // frame could not know which grid it was looking at and would have to infer
 // the book from the byte count.
+//
+// THE RULE IS A MAXIMUM, NOT A MINIMUM, and the consequence is deliberate: a
+// nine-byte frame — "EX", the five address digits, P4's space, the terminator
+// — carries an EMPTY P5, which this function admits on both books and
+// ParseEXAnswer returns as "". NEITHER BOOK PRINTS SUCH AN ANSWER, and it is
+// not refused for the same reason nothing else here is invented: A19 is a
+// printed CEILING, no printed width forbids a zero, and a floor this codec
+// made up would be its own assumed entry against a chart that states none.
+// TestParseEXAnswer_AnEmptyP5IsAdmittedBecauseTheWidthRuleIsAMaximum pins it.
 func (l Layout) checkEXP5Width(frame, p5 []byte, item kw.EXItem) error {
 	if l.book == kw.Book990 {
 		if len(frame) == ex990AnswerLen && len(p5) == ex990P5Window {

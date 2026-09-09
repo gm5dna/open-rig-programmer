@@ -514,3 +514,38 @@ func TestParseEXAnswer_990SFixedFormPadIsForTheCallerToStrip(t *testing.T) {
 		t.Errorf("the row's own leading %d characters = %q, want %q — that slice, not the whole string, is the value a settings reader must take", fixtureItem.Digits, value, "005")
 	}
 }
+
+// TestParseEXAnswer_AnEmptyP5IsAdmittedBecauseTheWidthRuleIsAMaximum pins the
+// bottom of the width rule, which is checkEXP5Width's doc comment in a test:
+// A19 prints a CEILING, so the nine-byte frame — "EX", five address digits,
+// P4's space, the terminator, and no P5 at all — is admitted on both books
+// and comes back as the empty string.
+//
+// NEITHER BOOK PRINTS THIS ANSWER. It is admitted anyway because refusing it
+// would mean this codec inventing a floor no chart states, which is the same
+// assumption in the other direction; a caller that needs a non-empty value is
+// the layer that knows so. Recorded rather than left to be re-derived (the
+// milestone-close review's S2-LOW-2).
+func TestParseEXAnswer_AnEmptyP5IsAdmittedBecauseTheWidthRuleIsAMaximum(t *testing.T) {
+	const frame = "EX00301 ;"
+	if len(frame) != 9 {
+		t.Fatalf("the fixture is %d bytes, want 9 — the test is wrong", len(frame))
+	}
+	for _, tc := range []struct {
+		book string
+		l    Layout
+	}{
+		{"TS-890S", testLayoutWithEXItems(t, []kw.EXItem{fixtureItem})},
+		{"TS-990S", testLayout990WithEXItems(t, []kw.EXItem{fixtureItem})},
+	} {
+		t.Run(tc.book, func(t *testing.T) {
+			got, err := tc.l.ParseEXAnswer([]byte(frame), fixtureItem)
+			if err != nil {
+				t.Fatalf("ParseEXAnswer(%q) = %v — the width rule is a maximum, and %d is not above the row's printed %d", frame, err, 0, fixtureItem.Digits)
+			}
+			if got != "" {
+				t.Errorf("ParseEXAnswer(%q) = %q, want the empty string", frame, got)
+			}
+		})
+	}
+}
