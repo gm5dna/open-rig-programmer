@@ -478,7 +478,7 @@ func rulings890S(p extable.Profile) []ruling {
 		addrs: profileParameterlessAddrs(p),
 		holds: shapeParameterless,
 		why: "The chart's P5 cell on these four rows reads \"Does not correspond to a command\" " +
-			"(890:2270-2279), so no EX frame can read or write them. A spells that as the hyphen cell " +
+			"(890:2273-2279), so no EX frame can read or write them. A spells that as the hyphen cell " +
 			"extable.ParseCSV admits under ParameterlessExcluded; B was told nothing of the convention and " +
 			"recorded the ordinary 3. The rows ARE counted in the 162 and are omitted from the inventory BY " +
 			"ADDRESS, which TestCrossCheck_The890SExclusionsArePinnedByAddress pins.",
@@ -501,7 +501,8 @@ func rulings890S(p extable.Profile) []ruling {
 		why: "Five Function cells wrap mid-token in the printed chart — \"Multi/ Channel Control\", " +
 			"\"AM- DATA\" — and B, derived from a render, carries the wrap as a space where A, derived from " +
 			"the layout text and closed up by lane P's fix 1, does not. The difference is spaces alone, " +
-			"which shapeWrapSpace requires; A's reading is the inventory's.",
+			"which shapeWrapSpace requires; A's reading is the inventory's " +
+			"(890:2026-2027, 2036-2038, 2041-2043, 2127-2129, 2130-2132).",
 	}}
 }
 
