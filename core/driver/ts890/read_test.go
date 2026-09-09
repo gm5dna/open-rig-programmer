@@ -361,18 +361,20 @@ func TestReadChannel_ATimeoutIsNotAnInferenceOfAbsence(t *testing.T) {
 	}
 }
 
-// TestReadChannel_AnAnswerNamingAnotherSlotIsRefused documents the SECOND
-// line of defence, not the first: Layout.MA0AnswerMatcher's prefix is
-// ma0Prefix plus the three channel digits (core/kw/ma/shared.go), and
-// rec.Slot is decoded from those same bytes, so on this row the matcher's
-// prefix already carries the whole correlation key and a stale answer for
-// another slot is refused before AnswerMismatchError's comparison in
-// read.go ever runs — unlike the 590, whose P1 sits too deep in the frame
-// to spell as a prefix. The guard stays (T12's read-then-Set wants the same
-// comparison), but on this row it can only be exercised by a fault the
-// matcher cannot see, which this fixture does not construct. What IS
-// observable, and what this test asserts, is the timeout: the peer's
-// slot-008 frame never matches a read of 007, so nothing answers.
+// TestReadChannel_AnAnswerNamingAnotherSlotIsRefused pins the ONE line of
+// defence this row has, and the reason there is only one: Layout.
+// MA0AnswerMatcher's prefix is ma0Prefix plus the three channel digits
+// (core/kw/ma/shared.go), and rec.Slot is decoded from those same bytes, so
+// the matcher's prefix already carries the whole correlation key — unlike the
+// 590, whose P1 sits too deep in the frame to spell as a prefix. A read that
+// meets another slot's answer therefore TIMES OUT rather than mismatching,
+// which is what this test asserts.
+//
+// The comparison read.go once made after the parse was deleted at the Stage 2
+// close (review s2-close-review-opus-2.md MED-3, overriding the T11
+// adjudication's KEEP): no fixture in this package could reach it, disabling
+// it left the whole suite green, and lane B had already dropped its
+// equivalent. A rung whose red proof cannot be written honestly is a costume.
 func TestReadChannel_AnAnswerNamingAnotherSlotIsRefused(t *testing.T) {
 	// The peer is keyed on the READ's channel digits, so serving 008's frame
 	// for a read of 007 is exactly the fault under test.
@@ -382,10 +384,7 @@ func TestReadChannel_AnAnswerNamingAnotherSlotIsRefused(t *testing.T) {
 	_, err := sess.ReadChannel(context.Background(), "007")
 	var to *kw.TimeoutError
 	if !errors.As(err, &to) {
-		t.Fatalf("err = %v, want a *kw.TimeoutError: the matcher's prefix refuses slot 008's answer before AnswerMismatchError's comparison can run", err)
-	}
-	if errors.Is(err, ErrAnswerMismatch) {
-		t.Error("errors.Is(err, ErrAnswerMismatch) = true, want false: the mismatch guard is unreachable on this row")
+		t.Fatalf("err = %v, want a *kw.TimeoutError: the matcher's prefix carries the slot digits, so slot 008's answer is not this read's answer at all", err)
 	}
 }
 
