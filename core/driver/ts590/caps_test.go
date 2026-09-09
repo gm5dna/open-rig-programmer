@@ -206,7 +206,7 @@ func TestCapabilities_MatrixValuesPerRow(t *testing.T) {
 }
 
 // TestCapabilities_EveryFieldExplicit reflects over spec.Capabilities and
-// requires each of its twenty-eight fields to be either populated or
+// requires each of its twenty-nine fields to be either populated or
 // DELIBERATELY empty by name, the core/driver/ftdx10 shape. A zero left in one
 // of the populated ones is not a neutral omission: a zero MaxFreqHz reads as
 // "no ceiling" to every validator, and a zero TagLen makes CHIRP import
@@ -239,8 +239,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		caps := CapabilitiesUnverified(row)
 		v := reflect.ValueOf(caps)
 		typ := v.Type()
-		if typ.NumField() != 28 {
-			t.Fatalf("spec.Capabilities has %d fields, want 28 — this test's list is stale", typ.NumField())
+		if typ.NumField() != 29 {
+			t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
 		}
 		for i := 0; i < typ.NumField(); i++ {
 			name := typ.Field(i).Name
@@ -627,6 +627,21 @@ func TestCapabilities_ASessionHandsOutDefensiveCopies(t *testing.T) {
 		}
 		if next.Banks[0].Fields[spec.FieldErase].CanWrite() {
 			t.Errorf("%s: a mutated field grade reached the next Session.Capabilities caller — this is the write gate T12 enforces against, and no Kenwood row grades an erase at all", modelNameFor(row))
+		}
+	}
+}
+
+// TestCapabilities_SimplexTx pins the transmit disposition of a channel
+// this record calls simplex. MW/MR carries NO transmit-frequency field at
+// all: split is two frames over one channel number, selected by P1, and
+// "When registering a simplex channel, set parameter P1 to 0. After
+// setting P1 to 0, the channel becomes a simplex channel, even if it was
+// already a split channel" (590:1521-1523). So simplex here is arithmetic,
+// tx == rx, which is exactly what write.go refuses on when it is not so.
+func TestCapabilities_SimplexTx(t *testing.T) {
+	for _, row := range bothRows {
+		if got := CapabilitiesUnverified(row).SimplexTx; got != spec.SimplexTxEqualsRx {
+			t.Errorf("%s SimplexTx = %v, want SimplexTxEqualsRx (590:1521-1523)", modelNameFor(row), got)
 		}
 	}
 }

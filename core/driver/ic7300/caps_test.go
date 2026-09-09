@@ -203,8 +203,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// a NEW capability field arriving with a plausible zero value and no
 	// entry would be caught — but a field REMOVED, or the struct reshaped,
 	// would not, so the exact shape remains pinned alongside the table.
-	if ty.NumField() != 28 {
-		t.Errorf("spec.Capabilities has %d fields, want 28 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
+	if ty.NumField() != 29 {
+		t.Errorf("spec.Capabilities has %d fields, want 29 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name
@@ -258,6 +258,31 @@ func TestTagCharsetComesFromTheProfile(t *testing.T) {
 	for i := 0; i < len(caps.TagCharset); i++ {
 		if !caps.TagByteOK(caps.TagCharset[i]) {
 			t.Errorf("TagCharset byte %#02x is not accepted by TagByteOK", caps.TagCharset[i])
+		}
+	}
+}
+
+// TestCapabilities_SimplexTx pins the transmit disposition of a channel
+// the 1A 00 record calls simplex, on both models this package registers.
+//
+// This one is A READING OF THE RECORD'S SHAPE, not a printed sentence
+// (design 09/09/2026 §8): doc.go's ❹–⑧ block is "used when Split is ON"
+// and the transmit frequency is a distinct field, and the record carries
+// no split flag at all (caps.go, spec.FieldDuplex is the zero
+// FieldSupport). "Transmits where it receives" is the only reading such a
+// record admits, but it is not the class of evidence the Kenwood cites
+// are, and it mints no ASSUMED register entry because nothing is assumed
+// about the radio's behaviour — only about which reading is meant.
+func TestCapabilities_SimplexTx(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		caps spec.Capabilities
+	}{
+		{"IC-7300", New(RealHardware).Capabilities()},
+		{"IC-7300MK2", NewMK2(RealHardware).Capabilities()},
+	} {
+		if tc.caps.SimplexTx != spec.SimplexTxEqualsRx {
+			t.Errorf("%s SimplexTx = %v, want SimplexTxEqualsRx", tc.name, tc.caps.SimplexTx)
 		}
 	}
 }
