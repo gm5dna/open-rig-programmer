@@ -45,11 +45,11 @@ const (
 // the wrong slot, a mis-sized MA0 answer, or SILENCE — which is exactly what
 // the error paths need and what a self-consistent fake will never produce.
 //
-// WHAT IT KNOWS: "AI0;" (silence), "ID;", "FV;" and the seven-byte MA0 read.
-// ANY OTHER frame is answered "?;" — including an MA0 SET, because no test in
-// this task sends one and a task that adds a command class and forgets to
-// teach this helper about it should see its frame rejected loudly rather than
-// silently succeed.
+// WHAT IT KNOWS: "AI0;" (silence), "ID;", "FV;", the seven-byte MA0 read and
+// — since task 14 — the 57-byte MA0 Set, which draws SILENCE unless
+// ma0SetReject scripts a "?;". ANY OTHER frame is answered "?;", so a task
+// that adds a command class and forgets to teach this helper about it sees
+// its frame rejected loudly rather than silently succeed.
 //
 // THE ACKNOWLEDGEMENT SEMANTICS OF THOSE ANSWERS ARE AN ASSUMED CONVENTION
 // APPLIED, NOT AN OBSERVED RADIO TRANSCRIBED — no TS-990S has ever been
@@ -94,6 +94,10 @@ type radioImage struct {
 	// timeout row of the read choreography, which the book states carries no
 	// information at all.
 	ma0Silent map[string]bool
+	// ma0SetReject makes every MA0 SET answer "?;" instead of the silence
+	// an accepted Set draws (A6). It is the write path's REJECTION row,
+	// which is the only wire outcome of a Set that is attributable at all.
+	ma0SetReject bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -228,6 +232,16 @@ func (img radioImage) reply(frame string) string {
 		}
 		return img.fvAnswer
 	case strings.HasPrefix(frame, "AI"):
+		return ""
+	case strings.HasPrefix(frame, "MA0") && len(frame) == ma0AnswerLen:
+		// AN ACCEPTED SET DRAWS NOTHING, which is A6 applied and not a
+		// TS-990S observed: no radio of this family has ever been written
+		// to by this project. The Set and the Answer share one grid
+		// (990:2893-2938), so the two MA0 forms are told apart by LENGTH
+		// alone here exactly as the codec's own gate tells them apart.
+		if img.ma0SetReject {
+			return "?;"
+		}
 		return ""
 	case strings.HasPrefix(frame, "MA0") && len(frame) == ma0ReadLen:
 		slot := frame[3:6]
