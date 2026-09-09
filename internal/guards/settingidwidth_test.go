@@ -92,27 +92,40 @@ import (
 // subpackages (dialectconfig.go calls EXAddressTriple "the six-digit …
 // field, the form"), core/driver/<model>, internal/fake*. Each such
 // statement is true as written and becomes FALSE if generalised, which is
-// the opposite of the drift this guard catches. Counted with the two
-// passes below, over every git-tracked .go file, RE-MEASURED at Tier 1's
-// FT-991A registration: 105 of them in non-test files outside the scoped
-// directories, and 245 across every .go file including tests — 50 of that
-// last number are this file's own samples and prose, which the guard never
-// scans. Re-measure before citing either; the passes widened at the Stage 0
-// close, and this milestone's three new packages (core/cat/ft991a,
-// core/driver/ft991a, internal/fakeft991a) moved both figures again — which
-// is why the INSTRUCTION is the load-bearing part of this paragraph and the
-// figures are not. A guard that swept them would need an allowlist longer
-// than the rule.
+// the opposite of the drift this guard catches. RE-MEASURED at the
+// TS-890S/TS-990S registration (task 18, 09/09/2026): 96 of them in
+// non-test files outside the scoped directories, and 267 across every .go
+// file outside them including tests — 68 of that last number are this
+// file's own samples and prose, which the guard never scans.
 //
-// BOTH FIGURES ARE STALE AGAIN AND WERE NOT RE-MEASURED HERE. The
-// TS-890S/TS-990S milestone adds five width-stating packages — core/kw/ma,
-// core/driver/ts890, core/driver/ts990, internal/fakets890 and
-// internal/fakets990 — every one of them OUTSIDE the scoped directories,
-// so no arm of this guard fires on any of them and nothing above needed to
-// change for the guard to keep working. Re-measuring at the width widening
-// would have counted a tree three stages short of the one the figures
-// describe, so the count belongs to the milestone's closing byte-identity
-// task and not to this file's own edit.
+// THE METHOD IS PART OF THE FIGURE, because the pair this replaces (105 and
+// 245) could not be reproduced from the sentence that carried them. A file's
+// count is the number of staleRe matches left after admittedRe has blanked
+// its normalised whole-file text — the two passes below, run exactly as
+// TestNoStaleSettingIDWidthProse runs them — over every git-tracked .go
+// file; "outside the scoped directories" means every file the guard's own
+// walk does not reach, so the immediate non-test children of
+// settingIDWidthScopedDirs are excluded and their subdirectories are not.
+// Repository-wide the second figure is 269, and the two extra are the
+// allowlisted statements in core/driver/settings.go: it is the only in-scope
+// file that states a width the admitted set does not cover, so the
+// difference between the two figures is itself a check that this guard is
+// green rather than vacuous.
+//
+// Re-measure before citing any of them; the passes widened at the Stage 0
+// close and every registration moves the numbers again — which is why the
+// INSTRUCTION is the load-bearing part of this paragraph and the numbers are
+// not. A guard that swept them would need an allowlist longer than the rule.
+//
+// THE FIVE NEW WIDTH-STATING PACKAGES OF THIS MILESTONE ARE ALL OUT OF
+// SCOPE, which is why nothing above had to change for the guard to keep
+// working: core/kw/ma, core/driver/ts890, core/driver/ts990,
+// internal/fakets890 and internal/fakets990 contribute NINE of the counts
+// above — five in non-test files, four in tests — and no arm of this guard
+// reaches any of them. The count was deferred from the width widening to
+// the milestone's closing byte-identity task because measuring at the
+// widening would have counted a tree three stages short of the finished
+// one; task 18 is where it was taken.
 //
 // TWO out-of-scope statements are NOT of that kind, and neither is this
 // guard's to fix. internal/extable states a six-digit width six times,
