@@ -393,6 +393,38 @@ func TestParseEXAnswer_RefusesWhatTheChartDoesNotPrint(t *testing.T) {
 	}
 }
 
+// TestParseEXAnswer_RefusesAForgedDigitsThatDisagreesWithTheCanonicalRow is
+// C-MED-2 / S1-MED-1: the width bound must come from the inventory row at
+// item.Addr, not from the caller's own (mutable) copy — kw.Layout.EXItems
+// deliberately returns copies, so a caller that reconstructs an item wrongly
+// widens the inbound grammar rather than being told. On the real TS-890S,
+// menu 0/03/01 (SSB Mode Frequency Step Size) prints three digits
+// (menu890s.csv); a caller-forged Digits of 15 must be refused even though
+// 15 is itself a legal width for SOME row, and the canonical item must still
+// be accepted.
+func TestParseEXAnswer_RefusesAForgedDigitsThatDisagreesWithTheCanonicalRow(t *testing.T) {
+	l := Layout890()
+	addr := kw.EXAddress{P1: 0, P2: 3, P3: 1}
+	canon, ok := l.EXItem(addr)
+	if !ok {
+		t.Fatalf("%v is not in the 890S's transcribed inventory — the test's address is wrong", addr)
+	}
+	if canon.Digits != 3 {
+		t.Fatalf("canonical Digits for %v is %d, want 3 — the test's assumed fixture is stale", addr, canon.Digits)
+	}
+
+	forged := kw.EXItem{Addr: addr, Name: canon.Name, Digits: 15}
+	forgedFrame := []byte("EX00301 123456789012345;")
+	if got, err := l.ParseEXAnswer(forgedFrame, forged); err == nil {
+		t.Errorf("ParseEXAnswer(%q, forged Digits 15) = %q, want a refusal — the row's own Digits is 3", forgedFrame, got)
+	}
+
+	canonFrame := []byte("EX00301 123;")
+	if _, err := l.ParseEXAnswer(canonFrame, canon); err != nil {
+		t.Errorf("ParseEXAnswer(%q, the canonical item) was refused: %v", canonFrame, err)
+	}
+}
+
 // TestParseEXAnswer_The990SAnswerIsPrintedFIXEDAndTheS890SFloats is ERRATUM
 // E19, pinned both ways: the one place the two books' EX charts genuinely
 // differ, and a finding read off the printed rulers rather than off the prose.
