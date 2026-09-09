@@ -381,3 +381,30 @@ func TestMA0Set_DoesNotDisturbAnotherChannel(t *testing.T) {
 		t.Errorf("channel 000 changed from %+v to %+v (ok=%v) after a Set to 016", before, after, ok)
 	}
 }
+
+// TestMA0Set_ARefusedSetDoesNotDisturbTheTargetChannel. The validation switch
+// (parser.go:391-428) runs before the store (:430-432), so a rejected frame
+// never reaches it — but nothing pinned that ORDERING. Moving the store above
+// the switch leaves the whole package suite green apart from this test: the
+// reply is "?;" either way, so the corruption is silent, and T17/T18 would
+// read it as channel data. This is the "erase-by-side-effect" class the
+// repository's standing no-erase rule exists to prevent.
+func TestMA0Set_ARefusedSetDoesNotDisturbTheTargetChannel(t *testing.T) {
+	_, conn := newTestRadio(t)
+	f := fieldsWithName("018", "OK")
+	writeFrame(t, conn, f.frame())
+	assertNoReply(t, conn)
+
+	before := exchange(t, conn, "MA0018;")
+	if before != f.frame() {
+		t.Fatalf("the populating Set was not stored: MA0018; -> %q, want %q", before, f.frame())
+	}
+
+	bad := f
+	bad.mode = "G" // outside OM's sixteen mode nibbles (890:3976-3992) — refused
+	assertRejected(t, conn, bad.frame())
+
+	if got := exchange(t, conn, "MA0018;"); got != before {
+		t.Errorf("after a REFUSED Set, MA0018; -> %q, want the pre-Set answer %q, byte-identical", got, before)
+	}
+}
