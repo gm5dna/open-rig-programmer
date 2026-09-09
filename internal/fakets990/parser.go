@@ -257,6 +257,11 @@ const (
 )
 
 // The three values P2 prints (990:2898-2900).
+//
+// classSectionDefined has no consumer: classFor cannot produce it (register
+// entry 4, THE SET'S P2 IS IGNORED AND THE ANSWER'S CLASS FOLLOWS FREQUENCY
+// 2), and it is kept so the legend the chart prints at 990:2898-2900 has no
+// gap.
 const (
 	classSingle         = '0'
 	classDual           = '1'

@@ -299,6 +299,7 @@ func TestMA0Set_P2IsIgnoredAndTheClassComesFromFrequency2(t *testing.T) {
 		{"a dummy 9 on a channel with no frequency 2", "9", "00000000000", "0"},
 		{"a dummy 0 on a channel with a live frequency 2", "0", "00014195000", "1"},
 		{"a dummy 2 on a channel with no frequency 2", "2", "00000000000", "0"},
+		{"a dummy 2 on a channel with a live frequency 2", "2", "00014195000", "1"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			r, conn := newTestRadio(t)
