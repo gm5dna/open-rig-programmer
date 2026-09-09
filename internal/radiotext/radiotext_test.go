@@ -302,7 +302,7 @@ var ownParticulars = map[string][]string{
 	"IC-7760":    {"IC-7760", "B2h"},
 	"IC-7100":    {"IC-7100", "88h"},
 	"IC-R8600":   {"IC-R8600", "96h"},
-	// The two REGISTERED Kenwood rows (Tier 6). Each entry is the bare
+	// The REGISTERED Kenwood rows (Tier 6). Each entry is the bare
 	// name and nothing else: this family's prose carries no address hex
 	// (it is not a CI-V family) and no finding from a real radio to
 	// guard, so the name is the whole of each row's distinguishing
@@ -1910,7 +1910,7 @@ func TestRadiotext_TS480Verbatim(t *testing.T) {
 	// self-comparison to skip and no ownParticulars entry needed for it.
 	// What it proves is what matters: this radio's prose is not any other
 	// registered radio's, byte for byte or particular by particular — its
-	// two Kenwood stablemates included, whose book it shares nothing with
+	// Kenwood stablemates included, whose book it shares nothing with
 	// but a manufacturer.
 	assertNotBorrowedFromAnyOtherModel(t, "TS-480", got)
 }
