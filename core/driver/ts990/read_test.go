@@ -336,15 +336,22 @@ func TestReadChannel_AMisSizedAnswerNeverReachesTheParser(t *testing.T) {
 		t.Errorf("transcript = %v, want the MA0 read to have gone out", got)
 	}
 
-	// The codec's own width predicate, on the same bytes.
+	// The codec's own width predicate, on the same bytes, through the FLEET
+	// helper — the MA-family sibling of the one core/driver/ts590 and
+	// core/driver/ts480 call. It asserts the SHARED half only: the failure
+	// is classifiable (kw.ErrParse), recoverable as a *kw.ParseError, and
+	// its Reason opens by naming the frame and the MEASURED width.
 	_, perr := sess.layout.ParseMA0Answer([]byte(short))
-	if !errors.Is(perr, kw.ErrParse) {
-		t.Errorf("ParseMA0Answer(56 bytes) = %v, want an error wrapping kw.ErrParse", perr)
-	}
-	for _, want := range []string{"56", "57"} {
-		if !strings.Contains(perr.Error(), want) {
-			t.Errorf("ParseMA0Answer's refusal %q does not carry the measured length %s", perr, want)
-		}
+	drivertest.AssertKenwoodMAFrameLengthMismatch(t, perr, "MA0 answer", ma0AnswerLen-1)
+
+	// THE BOUND CLAUSE IS THIS ROW'S OWN AND IS PINNED HERE RATHER THAN IN
+	// THE HELPER. The two codecs' clauses differ in KIND — the TS-890S's
+	// terminator floats, so its bound is a RANGE, and this row's is an
+	// EQUALITY at 57 (990:2919-2938) — and pinning either in a shared helper
+	// would make one row's assertion the other's, which is the sibling
+	// inheritance this milestone's per-row rule exists to prevent.
+	if !strings.Contains(perr.Error(), "exactly 57") {
+		t.Errorf("the refusal %q does not spell this row's own bound, an equality at 57", perr)
 	}
 }
 
