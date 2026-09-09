@@ -167,6 +167,12 @@ func invertToneModes() map[string]byte {
 // channel can reach them — which is how P7's rung 7 is satisfied by
 // construction, and TestModeWire_IsTheExactInverseOfModeName proves both
 // halves.
+//
+// A NON-FM RECORD CARRYING P4 = '1' IS NOT REPRODUCED, for the same reason:
+// normal is tried first, so a narrow flag the book gives no meaning to off FM
+// comes back as the same name as normal and the write side re-emits '0'. The
+// ladder does not refuse it, because the book assigns the byte no meaning
+// there — there is nothing printed to refuse.
 func modeWire(l ma.Layout, name string) (mode byte, fmNarrow bool, ok bool) {
 	for b := 0; b <= 0xFF; b++ {
 		for _, narrow := range []bool{false, true} {
@@ -450,6 +456,11 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 			"this channel's state for tx_frequency is %q, not %q. The MA0 record states a channel's transmit disposition on EVERY write — P8's eleven digits and P11's split flag are positions in the one frame (890:3191-3203) — so there is no frame in which the field can be left unsaid, and a value this programme does not hold could only be manufactured. A channel READ from this radio always carries one; this refusal is what a file or a CHIRP import meets",
 			data.TxFreqHz.State, codeplug.Known)
 	}
+	// A CHIRP IMPORT ALWAYS ARRIVES HERE: core/csvio/chirp.go's
+	// importCHIRPDuplexShift leaves tx_frequency Unknown on every row of a
+	// file imported for a bank that grades the field (chirp.go:663-666), so
+	// no CHIRP file is writable to this row until the importer carries a
+	// split disposition of its own.
 
 	// RUNGS 7-9 and the live-byte refusals, then the record the Set would
 	// emit. Still locally decidable: nothing has reached the wire.
