@@ -316,6 +316,10 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 // refuses the WRITE unconditionally on P16 regardless. The book does not
 // define the two flags against each other (990:2946-2951); dual reception is
 // an orthogonal receiver state, not a qualifier on what P15 already states.
+// read_test.go's "split+dual" case is the pin, and internal/fakets990's
+// DEFAULT IMAGE now carries that combination on channel 002 — the one record
+// with a live frequency 2, which is the only place a dual-reception flag can
+// honestly sit (its image.go constraint list says why).
 //
 // THE MODE NAME IS modeDisplayName's, the same function the capability list
 // asks, so the name a read produces is byte-for-byte one Capabilities().Modes
