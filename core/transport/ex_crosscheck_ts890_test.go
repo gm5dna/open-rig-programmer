@@ -52,6 +52,9 @@ import (
 // nor internal/extable, so the two sides still meet here as two derivations.
 // TestEXInventoryCrossCheck_TS890PFKeyWidthsAgreeUnderRulingRB pins that the
 // correction is doing work rather than agreeing with what was already there.
+// It is the SAME CLASS AS THE FOUR EXCLUDED ADDRESSES BELOW: a fact this book
+// prints that the leg does not carry, applied at this side from an
+// independently written list.
 //
 // THE TWO SIDES ARE NOT THE SAME LENGTH AS TRANSCRIPTION B. The chart prints
 // FOUR Advanced Menu rows with real addresses and the body "Does not correspond

@@ -116,10 +116,11 @@ var parameterlessAddresses = []string{
 // APPLYING IT IS NOT "EDITING A TABLE TO MAKE THE CROSS-CHECK PASS", and the
 // distinction matters. The authority is the book's own sentence, read at this
 // side independently; nothing here consults transcription A, the generated
-// inventory or internal/extable. It is the same move internal/fakets590 makes
-// when it declines to project B's text flag under the repository's own ruling
-// — a fake that answered a width the book contradicts would be modelling the
-// radio wrongly on a point the book settles, which is not what an independent
+// inventory or internal/extable. It is the SAME CLASS AS THIS FILE'S
+// FOUR-ADDRESS EXCLUSION ABOVE: a fact this book prints that the leg does not
+// carry, applied at this side from an independently written list — a fake
+// that answered a width the book contradicts would be modelling the radio
+// wrongly on a point the book settles, which is not what an independent
 // evidence leg is for.
 //
 // The correction is applied BY ADDRESS, and it is refused unless every one of
@@ -127,7 +128,7 @@ var parameterlessAddresses = []string{
 // requires (projectWidths). "The PF rows differ" must not quietly become "the
 // PF rows differ by something else".
 var pfKeyAddresses = []string{
-	"00015", "00016", "00017", // PF A, PF B, PF C (890:2286-2288 in the chart, 890:1918-1919 for the width)
+	"00015", "00016", "00017", // PF A, PF B, PF C (890:1960-1976 in the chart; 890:1918-1919 for the width; 890:2288 onwards, the PF Key Assignment Lists, for the four-digit allotment IDs — R-B's second support)
 	"00018", "00019", "00020", "00021", "00022", "00023", "00024", "00025", // External PF 1-8
 	"00026", "00027", "00028", "00029", // Microphone PF 1-4
 	"00030", "00031", // Microphone DOWN, Microphone UP

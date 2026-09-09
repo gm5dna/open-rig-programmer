@@ -235,6 +235,12 @@ table to make the cross-check pass":
 facts together: both inventories carry four, the leg carries three, and the
 correction touches those seventeen addresses and no others.
 
+This correction is the **same class** as the four excluded addresses above: a
+fact this book prints that the leg does not carry, applied at this side from an
+independently written list — not the same move as this file's own text-flag
+omission below, which DECLINES to project a *convention* column rather than
+SUBSTITUTING a datum the leg records. Same conclusion, different class.
+
 ### What the menu VALUES are, and what they are not
 
 Each menu's default raw P5 is its **printed width in `0` bytes** — an INVENTED
