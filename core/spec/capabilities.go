@@ -30,6 +30,33 @@ func (t Transmit) String() string {
 	}
 }
 
+// SimplexTx says what spec.FieldTxFrequency holds on a channel this
+// radio's own record calls simplex. There is no fleet-wide answer: the
+// TS-890S/TS-990S records print that every split parameter reads 0 on a
+// simplex channel, whilst the TS-590 pair has no transmit-frequency
+// field at all and expresses simplex arithmetically, tx == rx.
+//
+// THE ZERO VALUE IS "UNSTATED", deliberately: a radio that declares
+// nothing keeps the behaviour it had before this datum existed — the
+// CHIRP importer leaves TxFreqHz Unknown on a blank-Duplex row and the
+// write is refused — so no row is defaulted into an encoding nobody
+// read. The idiom is this repository's own (see "the zero FieldSupport,
+// named", core/driver/ic7300/caps.go). Pinned by
+// TestSimplexTxZeroValueIsUnstated; the only reader is
+// core/csvio.importCHIRPDuplexShift's blank arm.
+type SimplexTx int
+
+const (
+	// SimplexTxUnstated is the zero value: this radio says nothing about
+	// what a simplex channel's transmit frequency holds.
+	SimplexTxUnstated SimplexTx = iota
+	// SimplexTxZero means a simplex channel's transmit frequency reads 0.
+	SimplexTxZero
+	// SimplexTxEqualsRx means a simplex channel transmits where it
+	// receives, so the transmit frequency equals the receive frequency.
+	SimplexTxEqualsRx
+)
+
 // StepRange is a contiguous, evenly spaced range of tuning-step values in
 // hertz. It is used through a pointer on Capabilities so nil means that a
 // radio declares no programmable tuning-step domain, mirroring ToneRange's
@@ -59,6 +86,12 @@ type Capabilities struct {
 	// Transmit states whether this radio has a transmitter. The zero value
 	// is refused so every driver must make the anatomy explicit.
 	Transmit Transmit
+	// SimplexTx states what FieldTxFrequency holds on a channel this
+	// radio's record calls simplex; see SimplexTx. The zero value,
+	// SimplexTxUnstated, is a legal declaration and Validate adds no rule
+	// for it — a model grading neither FieldTxFrequency nor FieldDuplex
+	// must not be made to answer a question its record never asks.
+	SimplexTx SimplexTx
 	// Banks lists every memory-slot family this radio supports.
 	Banks []Bank
 	// Modes lists display-name modes in the UI's preferred order, e.g.
