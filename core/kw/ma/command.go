@@ -52,7 +52,7 @@ func newCommand(frame []byte) Command {
 // returns an independent copy: callers may freely mutate what they get back,
 // with no effect on c or on any other copy.
 func (c Command) Bytes() []byte {
-	return copyBytes(c.frame)
+	return bytes.Clone(c.frame)
 }
 
 // String renders c safely for logs: %q-quoted, so control bytes, embedded
@@ -67,14 +67,4 @@ func (c Command) String() string {
 // error.
 func (c Command) IsZero() bool {
 	return c.frame == nil
-}
-
-// copyBytes returns an independent copy of b, and nil for nil.
-//
-// IT IS THIS PACKAGE'S OWN because kw's is unexported. One line on stdlib's
-// bytes.Clone (which already returns nil for nil) — the alternative,
-// exporting kw's, would put a copy helper on the family's public surface for
-// no caller's benefit.
-func copyBytes(b []byte) []byte {
-	return bytes.Clone(b)
 }

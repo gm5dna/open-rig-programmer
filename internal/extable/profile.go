@@ -1330,8 +1330,11 @@ var ts480Profile = Profile{
 //     in length from 0 to 10 characters." (1920-1921).
 //
 //   - MinDigits 3 / MaxDigits 4: the P5 column headings give every
-//     enumerating row 3, and RULING R-B settles the seventeen PF-key rows
-//     at 4, on the EX command page's own citation (1918-1919); see
+//     enumerating row 3, and RULING R-B settles NINETEEN rows at 4 — the
+//     seventeen PF-key rows 0/00/15-0/00/31, on the EX command page's own
+//     citation (1918-1919), plus 0/05/12 Contest Number ("0001 ~ 9999
+//     (Must be a 4-digit number)", 2108) and 1/00/05 Reference Oscillator
+//     Calibration ("Parameter value of 0000 ~ 1000", 2235-2236); see
 //     core/kw/ma/menu890s.csv's own provenance header for the rest of this
 //     transcription's judgements.
 //

@@ -300,6 +300,16 @@ func TestAllowedCommand_RefusesTheShapesTheDisciplineForbids(t *testing.T) {
 			}
 		}
 	}
+
+	// S2-LOW-3: the four addresses the 890S chart PRINTS and the profile
+	// excludes: the book prints them, and this gate must still refuse them,
+	// because a row reading "Does not correspond to a command" names no
+	// field to read.
+	for _, f := range []string{"EX10023;", "EX10024;", "EX10025;", "EX10026;"} {
+		if Layout890().AllowedCommand([]byte(f)) {
+			t.Errorf("the gate admitted %q — 890:2273-2280 prints that row with no parameter", f)
+		}
+	}
 }
 
 // TestZeroLayout_BuildsNothingParsesNothingAdmitsNothing is RunZeroValue's

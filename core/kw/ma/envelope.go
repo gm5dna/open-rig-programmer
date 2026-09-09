@@ -3,6 +3,7 @@
 package ma
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/gm5dna/open-rig-programmer/core/kw"
@@ -118,7 +119,7 @@ const maxParseErrorFrameLen = 64
 // lets one driver-side errors.As arm cover both codecs of one family.
 func newParseError(input []byte, format string, args ...any) *kw.ParseError {
 	n := min(len(input), maxParseErrorFrameLen)
-	return &kw.ParseError{Frame: copyBytes(input[:n]), Reason: fmt.Sprintf(format, args...)}
+	return &kw.ParseError{Frame: bytes.Clone(input[:n]), Reason: fmt.Sprintf(format, args...)}
 }
 
 // BuildIDRead builds the transceiver-identity read, "ID;" (890:2735,
@@ -321,7 +322,7 @@ func (l Layout) BuildEXRead(addr kw.EXAddress) (Command, error) {
 		return Command{}, newParseError(nil, "EX read: this layout is unconfigured and describes no radio")
 	}
 	if _, ok := l.EXItem(addr); !ok {
-		return Command{}, newParseError(nil, "EX read: menu %v is not in %s's transcribed menu inventory — both books' charts are sparse, and the book says an address the chart does not print \"causes an error to occur\" (890:1904, 990:1727)", addr, l.model)
+		return Command{}, newParseError(nil, "EX read: menu %d %02d %02d is not in %s's transcribed menu inventory — both books' charts are sparse, and the book says an address the chart does not print \"causes an error to occur\" (890:1904, 990:1727)", addr.P1, addr.P2, addr.P3, l.model)
 	}
 	wire := l.WireEXAddress(addr)
 	if len(wire) != exAddrLen {
