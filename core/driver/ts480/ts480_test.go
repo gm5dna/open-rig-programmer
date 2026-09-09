@@ -70,13 +70,12 @@ func TestOpen_IdentityReachesTheSession(t *testing.T) {
 // frame, names the sibling where a document prints a name for it, and closes
 // the port.
 //
-// 022 IS DELIBERATELY UNNAMED. The design requires 022 and 024 to be named
-// explicitly when either is what answered, and both ARE — by their ID, which
-// is the refusal's own Got field. What differs is that 024 additionally has a
-// printed model name in the TS-890S book, while 022 is printed bare in the
-// TS-990S book with no model name beside it (matrix §1.2). Supplying a name
-// here would put one in a manufacturer's mouth on the strength of which book
-// the token was found in.
+// 022 IS NAMED, AND IT WAS NOT AT PAIR 1: its book prints the ID bare with no
+// model name beside it (matrix §1.2), so at pair 1 this row expected the
+// ID-only refusal; "TS-990S" is now a registry key this PROJECT mints over
+// that silence (plan decision P2), so the refusal names it. 099 keeps the
+// ID-only sentence a case, which is the half that must not rot: an ID in no
+// Kenwood legend at all is where this programme has no name to give.
 func TestOpen_WrongRadio(t *testing.T) {
 	for _, tc := range []struct {
 		got      string
@@ -84,7 +83,7 @@ func TestOpen_WrongRadio(t *testing.T) {
 	}{
 		{"021", "TS-590S"},
 		{"023", "TS-590SG"},
-		{"022", ""},
+		{"022", "TS-990S"},
 		{"024", "TS-890S"},
 		{"099", ""},
 	} {
