@@ -479,7 +479,7 @@ func rulings890S(p extable.Profile) []ruling {
 		addrs: profileParameterlessAddrs(p),
 		holds: shapeParameterless,
 		why: "The chart's P5 cell on these four rows reads \"Does not correspond to a command\" " +
-			"(890:2273-2279), so no EX frame can read or write them. A spells that as the hyphen cell " +
+			"(890:2273-2280), so no EX frame can read or write them. A spells that as the hyphen cell " +
 			"extable.ParseCSV admits under ParameterlessExcluded; B was told nothing of the convention and " +
 			"recorded the ordinary 3. The rows ARE counted in the 162 and are omitted from the inventory BY " +
 			"ADDRESS, which TestCrossCheck_The890SExclusionsArePinnedByAddress pins.",
@@ -1550,7 +1550,10 @@ var goldenRoster = []goldenVector{
 
 	// MN — Set 7, Read 4, Answer 7. The TS-890S book prints MN too; leg G
 	// derived it for the 990S only, which is the row this book gives a
-	// Main/Sub pointer.
+	// Main/Sub pointer. MN-990.golden line 3's "the 890S book has no MN
+	// command" is FALSE (890:3645-3657 prints MN Set, Read and Answer); the
+	// file is frozen evidence, and the error is recorded here rather than
+	// corrected there (C-LOW-3).
 	{"MN-990.golden", "set", 7, replayNone, whyMNOffTheRoster},
 	{"MN-990.golden", "read", 4, replayNone, whyMNOffTheRoster},
 	{"MN-990.golden", "answer", 7, replayNone, whyMNOffTheRoster},
