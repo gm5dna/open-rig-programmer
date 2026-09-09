@@ -17,6 +17,28 @@ tag. The full release notes for each version are on the
   its radio list to a single clipped row (both seen on macOS in v1.4.1).
 
 ### Changed
+- **A CHIRP file's blank `Duplex` column now states a transmit
+  disposition** on the six radios whose memory record grades a transmit
+  frequency but has no duplex selector — the TS-590S, TS-590SG, TS-890S,
+  TS-990S, IC-7300 and IC-7300MK2. A blank column is CHIRP's ordinary
+  simplex row, and the import used to leave the transmit frequency
+  *unknown*, which said the file had been silent when it had not; that
+  unknown then travelled into the CSV export, into `rigprog diff` and
+  into the loss report. Each radio's own record now supplies the value:
+  zero on the TS-890S and TS-990S, whose books print that a simplex
+  channel's split parameters all read zero, and the channel's own receive
+  frequency on the other four, whose records have no split flag at all. A
+  `Duplex` column reading `off` is unchanged and still refused. No
+  channel becomes writable that was not writable before.
+- **The published recovery for an imported CHIRP channel was overstated
+  on five radios and is now measured.** The TS-890S and TS-990S ask for
+  two values, the transmit tone and the receive tone, not four. The
+  TS-590S asks for the data mode and both tone numbers, the TS-590SG for
+  those plus the filter, and the IC-7300 and IC-7300MK2 for the filter,
+  the data mode and a slot the radio already holds — and CHIRP has no
+  column for a data mode or a filter, so on those four rows a CHIRP file
+  alone can never complete a write. Said plainly now in the model list,
+  in `docs/radio-notes.md` and in `docs/kenwood-models.md`.
 - `rigprog diff` and the write plan now name only the fields that actually
   changed on a modified channel, instead of restating unchanged ones as
   `X→X`; a channel modified only in a field the summary does not print
@@ -60,16 +82,18 @@ tag. The full release notes for each version are on the
 - **A CHIRP file's ordinary rows import on both new radios** on the same
   terms as the TS-590 pair's — a blank `Duplex` column is simplex, `off`
   is refused, and `CW`, `CWR` and `RTTY` are refused on the mode — with
-  one further cost, which is four values rather than one. A single frame
-  carries the transmit frequency, the tone mode, the transmit tone and
-  the receive tone together, and these radios' write path requires all
-  four to be known. A CHIRP row states no transmit frequency, and its
-  blank `Tone` column states only that tone is off, leaving both tone
-  values unsaid; a `TSQL` row is refused on the tone column besides,
-  because neither radio's memory chart prints a transmit-and-receive tone
-  mode. Nothing supplies a value the file did not carry, so an imported
-  CHIRP channel is refused at the write until you fill all four in. The
-  program's own CSV import and export are unaffected.
+  one further cost, which is the two tone numbers. A single frame carries
+  the tone mode, the transmit tone and the receive tone together, and
+  these radios' write path requires all three to be known; a CHIRP row's
+  blank `Tone` column states only that tone is off, leaving both numbers
+  unsaid, and a `TSQL` row is refused on the tone column besides, because
+  neither radio's memory chart prints a transmit-and-receive tone mode.
+  Nothing supplies a value the file did not carry, so an imported CHIRP
+  channel is refused at the write until you fill both numbers in. (The
+  transmit frequency was a third cost when this version shipped; v1.5.1
+  removed it, and this bullet describes today's behaviour rather than the
+  history of the tag.) The program's own CSV import and export are
+  unaffected.
 - No Kenwood radio has ever answered a frame from this program. Writing
   stays switched off on both rows until you switch it on for that radio.
 
