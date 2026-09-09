@@ -457,8 +457,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 			"this channel's state for tx_frequency is %q, not %q. The MA0 record states a channel's transmit disposition on EVERY write — P8's eleven digits and P11's split flag are positions in the one frame (890:3191-3203) — so there is no frame in which the field can be left unsaid, and a value this programme does not hold could only be manufactured. A channel READ from this radio always carries one; this refusal is what a file or a CHIRP import meets",
 			data.TxFreqHz.State, codeplug.Known)
 	}
-	// A CHIRP IMPORT NO LONGER ARRIVES HERE, and the stale cite that said it
-	// did read chirp.go:663-666 for an assignment that was already at :664.
+	// A CHIRP IMPORT NO LONGER ARRIVES HERE (the earlier comment here said
+	// it always did, and its line cite was already one line stale).
 	// Since the 09/09/2026 transmit-disposition design,
 	// core/csvio/chirp.go's importCHIRPDuplexShift reads this row's own
 	// spec.SimplexTx on a BLANK Duplex cell (chirp.go:688-694) and states

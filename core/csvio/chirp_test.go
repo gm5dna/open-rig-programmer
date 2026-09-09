@@ -3260,7 +3260,7 @@ func TestImportCHIRP_TS890And990BlockCWAndRTTYRows(t *testing.T) {
 // took the WRONG one until the milestone-close review (C-MED-1) measured it:
 // both real rows grade FieldToneMode/FieldToneTx/FieldToneRx
 // (core/driver/ts890/caps.go:267-269, core/driver/ts990/caps.go:246-248), so
-// ImportCHIRP dispatches to importCHIRPToneIcom (core/csvio/chirp.go:595-600)
+// ImportCHIRP dispatches to importCHIRPToneIcom (core/csvio/chirp.go:596-600)
 // and NOT to importCHIRPToneCTCSS, which is what a fixture that graded none
 // of the three silently proved instead.
 //
