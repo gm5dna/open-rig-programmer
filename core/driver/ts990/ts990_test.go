@@ -148,7 +148,7 @@ func TestOpen_AnUnprintedIdentityIsRefusedWithoutInventingAName(t *testing.T) {
 //
 // THE FV LEG IS A DECISION AND NOT AN OVERSIGHT. The EXISTENCE of FV is
 // printed for this row, with a Read chart, an Answer chart and a worked
-// example (990:2526-2536); a radio that answered "ID;" with this row's
+// example (990:2527-2536); a radio that answered "ID;" with this row's
 // identity and then rejects or ignores "FV;" is outside a document that is
 // complete here, and the standing rule is to REFUSE where the document is
 // complete and we are outside it.

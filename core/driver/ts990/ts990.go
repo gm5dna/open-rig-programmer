@@ -372,7 +372,9 @@ func (d *ts990Driver) probeID(ctx context.Context, eng *transport.Engine, layout
 //
 // What the frame still does is refuse a session. The EXISTENCE of FV is
 // printed for this row, with a Read chart, an Answer chart and a worked
-// example — "for firmware version 1.00, it reads FV1.00;" (990:2526-2536) — so
+// example — "for firmware version 1.00, it reads FV1.00;" (the block at
+// 990:2527-2536; the Read grid at 990:2532, the Answer grid at 990:2536 and
+// the example at 990:2533) — so
 // a radio that answered "ID;" with 022 and then rejects or ignores "FV;" is
 // outside a document that is complete here, and the standing rule is to REFUSE
 // where the document is complete and we are outside it. The 7-byte structural
