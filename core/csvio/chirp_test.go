@@ -2421,6 +2421,108 @@ func ts590LikeCapabilities(model, catID string) spec.Capabilities {
 	return caps
 }
 
+// ts890Modes and ts990Modes are Tier 6's second pair's own mode legends, each
+// derived by its own driver from its own book's OM P2 chart
+// (core/driver/ts890/caps.go and core/driver/ts990/caps.go, both via
+// core/kw/ma's per-row ModeNames legend) rather than transcribed twice.
+//
+// SIXTEEN AND TWENTY-SIX, and the difference is entirely in how each radio
+// spells its DATA modes: the 890S has one data set (LSB-D, USB-D, FM-D,
+// FM-D-N, AM-D) and the 990S has three (D1, D2, D3), which is matrix erratum
+// M-E3's consequence for CSV and CHIRP alike — a channel's data disposition
+// travels in the mode column on these rows, because neither record has a
+// separate byte for it.
+//
+// NEITHER LIST CONTAINS "CW-U", "CW-L" OR "RTTY-U", which is what
+// TestImportCHIRP_TS890And990BlockCWAndRTTYRows turns on: Kenwood spells RTTY
+// "FSK" and prints CW and CW-R without a sideband suffix.
+var (
+	ts890Modes = []string{
+		"LSB", "USB", "CW", "FM", "FM-N", "AM", "FSK", "CW-R", "FSK-R",
+		"PSK", "PSK-R", "LSB-D", "USB-D", "FM-D", "FM-D-N", "AM-D",
+	}
+	ts990Modes = []string{
+		"LSB", "USB", "CW", "FM", "FM-N", "AM", "FSK", "CW-R", "FSK-R",
+		"PSK", "PSK-R",
+		"LSB-D1", "USB-D1", "FM-D1", "FM-D1-N", "AM-D1",
+		"LSB-D2", "USB-D2", "FM-D2", "FM-D2-N", "AM-D2",
+		"LSB-D3", "USB-D3", "FM-D3", "FM-D3-N", "AM-D3",
+	}
+)
+
+// maLikeCapabilities mirrors Tier 6's SECOND pair's fields ImportCHIRP
+// consults, on ts590LikeCapabilities' terms exactly: hand-built rather than
+// the real drivers' Capabilities, because core/csvio sits BELOW core/driver
+// in the import graph and must not depend on it even in tests.
+//
+// FOUR THINGS ARE MIRRORED FAITHFULLY AND THE REST IS INHERITED UNEXAMINED:
+//
+//  1. Modes — the caller's, one row's own legend per call (see ts890Modes and
+//     ts990Modes above). This is the ONE parameter on which the two rows
+//     genuinely differ here, which is why this constructor takes it rather
+//     than picking it from the model name.
+//  2. The MEM bank's Fields, and in particular a REACHABLE scan_skip: both
+//     records carry a channel-lockout flag at a printed position
+//     (890:3205-3207, 990:2952-2954), so a CHIRP Skip cell has somewhere to
+//     go on these rows as it does on the 590 pair's.
+//  3. ShiftOptions — nil, as both drivers' own are (§1.16 on each row:
+//     neither record carries a duplex selector of any kind), and NOT the
+//     FT-710's standard three. This decides the whole family's CHIRP import
+//     outcome, and since the 07/09/2026 fleet ruling it decides it in the
+//     PERMISSIVE direction: a blank Duplex cell asks for a ShiftNone option,
+//     none is published, and that arm now reports nothing at all rather than
+//     blocking.
+//  4. spec.FieldTxFrequency on the MEM bank — GRADED (each driver's own
+//     bankFields), and on these rows it is graded unconditionally rather than
+//     per bank, because each row publishes one bank. It decides what a row
+//     this branch says nothing about leaves TxFreqHz at: Unknown, never the
+//     zero value the map would otherwise give.
+//
+// Everything else — the tone chart, the CTCSS-state vocabulary, the tag
+// charset — is ft710LikeCapabilities' and is NOT a claim about a Kenwood
+// radio. TagLen IS corrected to 10 (890:3208-3209, 990:2955-2956) because the
+// name-length path reads it.
+//
+// ONE CONSTRUCTOR FOR TWO ROWS, as the 590 pair has, and for a related but
+// weaker reason: these two radios are driven by two different packages and
+// their records are different shapes, but NOTHING ImportCHIRP consults
+// differs between them except the mode legend — so the legend is a parameter
+// and everything else is shared. A future divergence in anything else must
+// widen this constructor rather than be absorbed by it.
+func maLikeCapabilities(model, catID string, modes []string) spec.Capabilities {
+	caps := ft710LikeCapabilities()
+	caps.Model = model
+	caps.CATID = catID
+	caps.TagLen = 10
+	caps.Modes = modes
+	caps.ShiftOptions = nil
+	rw := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		banks[i].Fields = map[spec.Field]spec.FieldSupport{
+			spec.FieldFrequency:   rw,
+			spec.FieldMode:        rw,
+			spec.FieldTag:         rw,
+			spec.FieldScanSkip:    rw,
+			spec.FieldTxFrequency: rw,
+			// No per-channel clarifier field, no shift selector and no
+			// ctcss_state/ctcss_tone pair in either record: both express tone
+			// as a mode selector with two independent indices, which is the
+			// tone_mode/tone_tx/tone_rx vocabulary, and repeater operation as
+			// an independent transmit frequency rather than a shift.
+			spec.FieldClarifier:  {},
+			spec.FieldShift:      {},
+			spec.FieldCTCSSState: {},
+			spec.FieldCTCSSTone:  {},
+			// No tag-display flag anywhere in either record.
+			spec.FieldTagDisplay: {},
+		}
+	}
+	caps.Banks = banks
+	return caps
+}
+
 // chirpFixtures is every capability fixture in this file that stands for a
 // REGISTERED model — the unreachable-scan-skip set plus the TS-590 pair,
 // which takes the other branch. It is the set
@@ -2430,6 +2532,8 @@ func chirpFixtures() []spec.Capabilities {
 	return append(out,
 		ts590LikeCapabilities("TS-590S", "021"),
 		ts590LikeCapabilities("TS-590SG", "023"),
+		maLikeCapabilities("TS-890S", "024", ts890Modes),
+		maLikeCapabilities("TS-990S", "022", ts990Modes),
 	)
 }
 
@@ -2806,6 +2910,255 @@ func TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch(t *testing.T) {
 			if report.HasBlocking() {
 				t.Errorf("HasBlocking() = true, want false — the Skip column is carried and the blank Duplex cells are this radio's own simplex state, so both rows reach a radio: %+v", report.Entries)
 			}
+		})
+	}
+}
+
+// TestImportCHIRP_TS890And990BlockCWAndRTTYRows is Tier 6's SECOND pair's
+// per-row CHIRP pin (plan decision P15), and it records the same LIMITATION
+// the TS-590 pair's does for the same reason, one book family further on.
+//
+// chirpModeMap resolves CHIRP's "CW" to "CW-U", its "CWR" to "CW-L" and its
+// "RTTY" to "RTTY-U" — the sideband-specific names three registered Yaesu
+// models print. Kenwood spells RTTY "FSK" and prints CW and CW-R with no
+// sideband suffix, so none of those three mapped names is in either row's
+// caps.Modes and containsMode says no. Each such row therefore BLOCKS with a
+// Blocking ActionUnsupported entry naming the Mode column.
+//
+// THE DEFERRAL IS UNCHANGED AND IS NOT A DECISION AGAINST THESE RADIOS.
+// Teaching chirpModeMap to consult caps for a sideband-agnostic alternative
+// would change eleven Icom models', the FT-891's and the TS-590 pair's CHIRP
+// outcome as well as these two, and every one of those models' byte-identity
+// baselines with it. It stays a fleet question and a recorded roadmap
+// follow-up; this test makes the answer EXPLICIT, so the day it is settled the
+// change shows up here as a deliberate edit rather than as a baseline that
+// silently moved.
+//
+// BOTH ROWS, and here that is NOT a coincidence of one book: these two radios
+// have two books and two mode legends of different lengths (sixteen against
+// twenty-six), so the shared outcome is a shared FACT about how Kenwood spells
+// those three modes rather than one legend standing in for two.
+func TestImportCHIRP_TS890And990BlockCWAndRTTYRows(t *testing.T) {
+	for _, caps := range []spec.Capabilities{
+		maLikeCapabilities("TS-890S", "024", ts890Modes),
+		maLikeCapabilities("TS-990S", "022", ts990Modes),
+	} {
+		t.Run(caps.Model, func(t *testing.T) {
+			// Precondition, stated rather than assumed: the three mapped
+			// names are genuinely absent from this row's mode list.
+			for _, absent := range []string{"CW-U", "CW-L", "RTTY-U"} {
+				if containsMode(caps, absent) {
+					t.Fatalf("fixture precondition: %q IS in the %s's Modes — this test is about the three names its legend does NOT print", absent, caps.Model)
+				}
+			}
+			// And the four names this radio DOES print for those two
+			// families, so a reader can see the refusal is about a spelling
+			// rather than about a missing capability.
+			for _, present := range []string{"CW", "CW-R", "FSK", "FSK-R"} {
+				if !containsMode(caps, present) {
+					t.Fatalf("fixture precondition: %q is NOT in the %s's Modes — this radio's own legend prints it, so the fixture has drifted from the driver", present, caps.Model)
+				}
+			}
+
+			t.Run("CW, CWR and RTTY block", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Mode\n" +
+					"1,MORSE,7.030000,CW\n" +
+					"2,MORSER,7.031000,CWR\n" +
+					"3,TELETYPE,14.080000,RTTY\n"
+
+				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if !report.HasBlocking() {
+					t.Fatalf("HasBlocking() = false, want true: %+v", report.Entries)
+				}
+				for i, want := range []struct {
+					line   int
+					raw    string
+					mapped string
+				}{
+					// LossEntry.Line counts the FILE's lines, so the header
+					// is 1 and the three data rows are 2, 3 and 4.
+					{2, "CW", "CW-U"},
+					{3, "CWR", "CW-L"},
+					{4, "RTTY", "RTTY-U"},
+				} {
+					var modeEntries []LossEntry
+					for _, e := range entriesForLine(report, want.line) {
+						if e.Column == "Mode" {
+							modeEntries = append(modeEntries, e)
+						}
+					}
+					if len(modeEntries) != 1 {
+						t.Errorf("row %d: %d Mode entries, want exactly 1: %+v", i+1, len(modeEntries), modeEntries)
+						continue
+					}
+					e := modeEntries[0]
+					if e.Action != ActionUnsupported || !e.Blocking {
+						t.Errorf("row %d: Mode entry = %+v, want a Blocking ActionUnsupported one", i+1, e)
+					}
+					if e.Value != want.raw {
+						t.Errorf("row %d: entry Value = %q, want the CHIRP cell %q", i+1, e.Value, want.raw)
+					}
+					// The detail must name BOTH names, so a user can see the
+					// refusal is about a NAME this radio's legend does not
+					// print rather than about a mode it lacks.
+					if !strings.Contains(e.Detail, want.raw) || !strings.Contains(e.Detail, want.mapped) {
+						t.Errorf("row %d: Detail = %q, want it to name both the CHIRP mode %q and the mapped name %q", i+1, e.Detail, want.raw, want.mapped)
+					}
+				}
+				for _, ch := range channels {
+					if ch.Data != nil && ch.Data.Mode != "" {
+						t.Errorf("channel %q imported Mode %q — a blocked row must not carry a mode at all", ch.Slot, ch.Data.Mode)
+					}
+				}
+			})
+
+			// THE FIVE ONE-NAME ROWS IMPORT, and this pair is the FIRST
+			// designed under lane L's arm rather than having it applied
+			// retrospectively (plan decision P15): a blank CHIRP Duplex cell
+			// on a radio that publishes NO shift vocabulary at all is not a
+			// loss, it is the radio's only state. Neither record carries a
+			// duplex selector, so importCHIRPDuplexShift's ShiftNone arm
+			// reports NOTHING: data.Shift stays "", which is what each
+			// driver's own read produces and what its write treats as "not
+			// requested".
+			t.Run("the five one-name rows import as simplex with no Duplex entry", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Mode\n" +
+					"1,SIMPLEX,145.500000,FM\n" +
+					"2,NARROW,145.525000,NFM\n" +
+					"3,AIRBAND,118.000000,AM\n" +
+					"4,UPPER,14.250000,USB\n" +
+					"5,LOWER,7.100000,LSB\n"
+
+				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if report.HasBlocking() {
+					t.Fatalf("HasBlocking() = true, want false — a blank Duplex cell on a radio with no shift vocabulary is simplex, not a loss: %+v", report.Entries)
+				}
+				if len(channels) != 5 {
+					t.Fatalf("imported %d channels, want 5", len(channels))
+				}
+				// Lines 2-6: the header is line 1.
+				for line := 2; line <= 6; line++ {
+					for _, e := range entriesForLine(report, line) {
+						if e.Column == "Duplex" || e.Column == "Mode" {
+							t.Errorf("line %d: entry %+v — these five names ARE in this radio's legend, and its blank Duplex cell is its only state, so neither column may report anything", line, e)
+						}
+					}
+				}
+				for i, ch := range channels {
+					if ch.Data == nil {
+						t.Fatalf("channels[%d].Data = nil", i)
+					}
+					if ch.Data.Shift != "" {
+						t.Errorf("channels[%d].Shift = %q, want \"\" — this radio publishes no shift value to store, and \"\" is what its own read produces", i, ch.Data.Shift)
+					}
+					// TxFreqHz IS REACHED ON THESE ROWS and this branch says
+					// nothing about it, so it is left UNKNOWN, never invented
+					// and never ABSENT (Absent is what codeplug.Validate
+					// reports as an error, and a row that never mentioned
+					// split is not an invalid channel).
+					//
+					// AND UNKNOWN IS WHAT MAKES SUCH A ROW UNWRITABLE ON THESE
+					// TWO RADIOS TODAY, which this pin records rather than
+					// hides: both drivers' rung 6 refuses a candidate with no
+					// Known transmit disposition (M-E8), so a CHIRP file
+					// imports cleanly here and every one of its channels is
+					// then refused at the write. The ROOT FIX — grading a
+					// blank/off Duplex on a bank that reaches this field as
+					// Known 0, the radio's own simplex statement — was
+					// measured at this task and MOVES THE TS-590 PAIR's
+					// import artefact too, because those rows reach the field
+					// as well (core/driver/ts590/caps.go grades it on MEM,
+					// contrary to the T12 MED-1 ruling's premise). It is
+					// therefore DEFERRED to a v1.5.x follow-up under that
+					// ruling's own escape clause, and this line is what will
+					// have to change when it lands.
+					if ch.Data.TxFreqHz.State != codeplug.Unknown {
+						t.Errorf("channels[%d].TxFreqHz.State = %v, want codeplug.Unknown", i, ch.Data.TxFreqHz.State)
+					}
+				}
+				if issues := validateImported(t, channels, caps); codeplug.HasErrors(issues) {
+					t.Errorf("codeplug.Validate reported an error on a row that never mentioned split: %+v", issues)
+				}
+			})
+
+			// "off" is the OTHER side of the same arm and still blocks:
+			// CHIRP's "off" asserts "no duplex configured" as distinct from
+			// simplex, and that distinction is one neither record can carry,
+			// so refusing it is honest where agreeing with a blank cell is
+			// not. The two subtests together are the guard on the arm:
+			// re-adding an entry to the blank arm fails the zero-entry
+			// assertion above, and flipping this arm's Blocking to false
+			// fails here.
+			t.Run("an off Duplex row still blocks", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Duplex,Mode\n" +
+					"1,OFFDUP,145.500000,off,FM\n"
+
+				_, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if !report.HasBlocking() {
+					t.Fatalf("HasBlocking() = false, want true — CHIRP's \"off\" says something this radio cannot say: %+v", report.Entries)
+				}
+				var duplex []LossEntry
+				for _, e := range entriesForLine(report, 2) {
+					if e.Column == "Duplex" {
+						duplex = append(duplex, e)
+					}
+				}
+				if len(duplex) != 1 {
+					t.Fatalf("%d Duplex entries, want exactly 1: %+v", len(duplex), duplex)
+				}
+				if e := duplex[0]; e.Action != ActionUnsupported || !e.Blocking || e.Value != "off" {
+					t.Errorf("Duplex entry = %+v, want a Blocking ActionUnsupported one carrying the \"off\" cell", e)
+				}
+			})
+
+			// THE TAG WIDTH IS TEN ON THESE ROWS, not the 590 pair's eight,
+			// and the truncation path reads caps.TagLen — so a name of
+			// exactly ten survives whole where a longer one is truncated with
+			// a reported loss. Pinned here because this fixture is the only
+			// place in this package that carries a ten-character Kenwood tag.
+			t.Run("a ten-character name survives and an eleven-character one truncates", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Mode\n" +
+					"1,TENCHARSXX,145.500000,FM\n" +
+					"2,ELEVENCHARS,145.525000,FM\n"
+
+				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if report.HasBlocking() {
+					t.Fatalf("HasBlocking() = true, want false: %+v", report.Entries)
+				}
+				if len(channels) != 2 {
+					t.Fatalf("imported %d channels, want 2", len(channels))
+				}
+				if got := channels[0].Data.Tag; got != "TENCHARSXX" {
+					t.Errorf("a ten-character name imported as %q, want it whole — caps.TagLen is 10 on this row", got)
+				}
+				if got := channels[1].Data.Tag; got != "ELEVENCHAR" {
+					t.Errorf("an eleven-character name imported as %q, want it truncated to ten", got)
+				}
+				var nameEntries []LossEntry
+				for _, e := range entriesForLine(report, 3) {
+					if e.Column == "Name" {
+						nameEntries = append(nameEntries, e)
+					}
+				}
+				if len(nameEntries) != 1 {
+					t.Errorf("%d Name entries on the eleven-character row, want exactly 1: %+v", len(nameEntries), nameEntries)
+				}
+				if len(entriesForLine(report, 2)) != 0 {
+					t.Errorf("the ten-character row reported %+v, want nothing at all", entriesForLine(report, 2))
+				}
+			})
 		})
 	}
 }
