@@ -125,26 +125,6 @@ func TestEXItems990S_HasExpectedRows(t *testing.T) {
 	}
 }
 
-// csvBody990S returns menu990s.csv's data rows with its provenance comments
-// and blank lines removed, so a test can perturb ONE row without reproducing
-// the transcription's facts in this file.
-func csvBody990S(t *testing.T) []string {
-	t.Helper()
-	p := profile990S(t)
-	data, err := os.ReadFile(p.ManualCSV)
-	if err != nil {
-		t.Fatalf("reading %s: %v", p.ManualCSV, err)
-	}
-	var out []string
-	for _, l := range strings.Split(string(data), "\n") {
-		if l == "" || strings.HasPrefix(l, "#") {
-			continue
-		}
-		out = append(out, l)
-	}
-	return out
-}
-
 // TestRedProof990S_DeletingARowIsRefused is the completeness gate fired.
 // RenderGo compares the manual and observation sets against each other only,
 // so neither regime can see a jointly truncated pair of sources;
@@ -153,7 +133,7 @@ func csvBody990S(t *testing.T) []string {
 // plausible menu table.
 func TestRedProof990S_DeletingARowIsRefused(t *testing.T) {
 	p := profile990S(t)
-	body := csvBody990S(t)
+	body := csvBody(t, p.ManualCSV)
 	if len(body) != p.ExpectedRows {
 		t.Fatalf("menu990s.csv holds %d data rows, want %d", len(body), p.ExpectedRows)
 	}
@@ -181,7 +161,7 @@ func TestRedProof990S_DeletingARowIsRefused(t *testing.T) {
 // else.
 func TestRedProof990S_P1OutsideTheMenuTypeEnumerationIsRefused(t *testing.T) {
 	p := profile990S(t)
-	first := strings.Split(csvBody990S(t)[0], ",")
+	first := strings.Split(csvBody(t, p.ManualCSV)[0], ",")
 	if len(first) < 1 {
 		t.Fatalf("the first CSV row is empty")
 	}
@@ -236,7 +216,7 @@ func TestRedProof990S_ATextRowOfAnUndeclaredWidthIsRefused(t *testing.T) {
 	// text rows as such. They are taken from the transcription rather than
 	// restated here.
 	var text []string
-	for _, l := range csvBody990S(t) {
+	for _, l := range csvBody(t, p.ManualCSV) {
 		if f := strings.Split(l, ","); f[len(f)-2] == "true" {
 			text = append(text, l)
 		}
