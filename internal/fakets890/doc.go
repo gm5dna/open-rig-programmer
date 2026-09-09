@@ -129,9 +129,10 @@
 //     records — a leg that has moved is an arbitration, not a correction to
 //     apply blind. A fake answering a width the book contradicts would be
 //     modelling the radio wrongly on a point the book settles, which is not
-//     what an independent evidence leg is for; it is the same move
-//     internal/fakets590 makes when it declines to project B's text flag under
-//     the repository's own ruling.
+//     what an independent evidence leg is for; it is the SAME CLASS AS THE
+//     FOUR EXCLUDED ADDRESSES ABOVE: a fact this book prints that the leg
+//     does not carry, applied at this side from an independently written
+//     list.
 //
 // # What this fake deliberately does NOT model
 //
