@@ -752,6 +752,114 @@ var ts590sgCoreFour = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip, spec.FieldTag,
 }
 
+// ts890sCoreFour and ts990sCoreFour are Tier 6's second pair's core sets:
+// frequency, mode, scan_skip and tag, in bankCoreCandidates order, on the ONE
+// bank each row publishes and on every reachable profile.
+//
+// THE TWO LISTS ARE IDENTICAL AND THAT IS A RESULT, NOT A COPY. Each is read
+// off its own driver's own bankFields table (core/driver/ts890/caps.go,
+// core/driver/ts990/caps.go — two packages, plan decision P1, and T13's rule
+// that not one value is copied from the sibling), and the two radios' records
+// are different shapes: forty-to-fifty bytes with thirteen parameters against
+// fifty-seven with eighteen. They differ in seventeen ways — the mode legend's
+// length, the lockout flag's printed values, a dual-reception flag one has and
+// the other has not, a channel-class byte, a whole second frequency side, the
+// name window's padding rule — and NOT ONE of those differences changes a
+// field's STATUS. Both records express the same eight fields (matrix §2.1),
+// four of which are bankCoreCandidates members, so both core sets are these
+// four.
+//
+// FOUR CORE FIELDS AND NOT MATRIX §2.1's EIGHT, for the reason
+// ts590sCoreFour's comment gives: bankCoreFields derives only from
+// bankCoreCandidates — the grid's own editable data columns — and the other
+// four of the eight (tx_frequency, tone_mode, tone_tx, tone_rx) are TIER
+// fields, asserted by TestBankTierFields_RegisteredTS890And990_OneBankEach
+// below. Four plus four is the matrix's eight.
+//
+// The clarifier, shift, ctcss_state, ctcss_tone and tag_display candidates are
+// all the zero FieldSupport on both rows, per field, for reasons each caps.go
+// states: neither record carries a per-channel clarifier (both radios have RIT
+// and XIT as radio-level settings), both express tone as a mode selector with
+// two independent indices rather than as the ctcss_state/ctcss_tone pair, and
+// neither record has a tag-display flag anywhere.
+//
+// SEPARATE VARIABLES, not one shared name, for the reason every model's are:
+// these two rows are driven by two different packages, and a future divergence
+// must show up as a diff here rather than being absorbed by a shared name.
+var (
+	ts890sCoreFour = []spec.Field{
+		spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip, spec.FieldTag,
+	}
+	ts990sCoreFour = []spec.Field{
+		spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip, spec.FieldTag,
+	}
+)
+
+// The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
+// TS-590 pair needs two each: these radios publish one bank apiece (plan
+// decision P11), so there is no second bank to disagree with.
+//
+// tx_frequency is graded on both rows and it is this pair's largest gain over
+// pair 1 (matrix §2.4, M-E7): one memory answer returns both frequencies AND
+// the split flag, where the 590 rows needed a second frame nobody could send
+// blind and had to publish every channel's transmit side Unavailable.
+//
+// filter and data_mode are ABSENT from both lists, and each absence has its
+// own reason rather than a shared one. filter: neither record has a
+// filter-selecting position at all, so there is nothing here answering to the
+// SG's firmware-conditional column. data_mode: both radios spell their data
+// modes INTO THE MODE NAMES themselves (the 890S's LSB-D/USB-D/FM-D/AM-D, the
+// 990S's three D1/D2/D3 sets), so a channel's data disposition is carried by
+// the mode field and there is no separate byte for this column to grade —
+// matrix M-E3, which is also why a CSV or CHIRP round trip on these rows
+// carries the data mode in the mode column.
+//
+// Each list is in tierFields' own declaration order (app/uispec.go), which is
+// codeplug.ChannelData's, and NOT the matrix's reading order.
+var (
+	ts890sMEMTierFields = []string{"tx_frequency", "tone_mode", "tone_tx", "tone_rx"}
+	ts990sMEMTierFields = []string{"tx_frequency", "tone_mode", "tone_tx", "tone_rx"}
+)
+
+// TestBankTierFields_RegisteredTS890And990_OneBankEach is the TS-590 pair's
+// per-bank test one pair over, driven through REAL REGISTRATION on every
+// reachable profile (registeredProfileCaps): the static baseline internal/wiring
+// serves for the real-hardware driver, and the effective capabilities of a
+// session opened against that row's own registered fake.
+//
+// WHAT IT CATCHES that the membership map below cannot: the four tier fields
+// are not bankCoreCandidates members, so a driver that stopped grading
+// tx_frequency — publishing every channel's transmit side as unreachable, which
+// is exactly what pair 1 had to do — would leave the core-set expectation true
+// and would be visible only here.
+//
+// THE ONE-BANK ASSERTION IS PART OF IT. Both rows publish a single dense MEM
+// bank and neither discovers anything (plan decision P11), so a second bank
+// appearing at all is a change this test refuses to pass over quietly.
+func TestBankTierFields_RegisteredTS890And990_OneBankEach(t *testing.T) {
+	for _, tc := range []struct {
+		model string
+		mem   []string
+	}{
+		{wiring.TS890SModel, ts890sMEMTierFields},
+		{wiring.TS990SModel, ts990sMEMTierFields},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			for profile, caps := range registeredProfileCaps(t, tc.model) {
+				if len(caps.Banks) != 1 {
+					t.Fatalf("%s: %d banks, want exactly 1 (MEM) — this radio discovers nothing and publishes no scan bank, because neither book prints what selects a section channel's start or end frequency (matrix §1.4.5)", profile, len(caps.Banks))
+				}
+				if got := bankTierFields(caps, spec.BankMemory); !reflect.DeepEqual(got, tc.mem) {
+					t.Errorf("%s MEM tier fields = %v, want %v", profile, got, tc.mem)
+				}
+				if got := bankTierFields(caps, spec.BankScan); len(got) != 0 {
+					t.Errorf("%s SCAN tier fields = %v, want none — this row publishes no scan bank at all", profile, got)
+				}
+			}
+		})
+	}
+}
+
 // The four tier-field sets the TS-590 pair derives — TWO PER ROW, which no
 // earlier model in this file needs, because these are the first registered
 // radios whose two banks DISAGREE about a tier field.
@@ -1135,6 +1243,23 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// loop below walks.
 		"TS-590S":  ts590sCoreFour,
 		"TS-590SG": ts590sgCoreFour,
+		// The TS-890S and TS-990S (Tier 6's second pair). FOUR fields each,
+		// each row its own variable, each reached from its OWN driver's own
+		// bankFields table rather than by reusing the 590 pair's
+		// identically-membered list — see ts890sCoreFour's doc comment for
+		// why two rows that differ in seventeen ways still produce the same
+		// four names, and why that is a result rather than a copy.
+		//
+		// ONE ENTRY COVERS THE WHOLE OF EACH ROW, and here that is arithmetic
+		// rather than an assumption: each row publishes exactly ONE bank and
+		// discovers nothing, so the static baseline and the default fake
+		// session are the whole of what the loop below walks. The four fields
+		// on which these rows differ from the 590 pair — tx_frequency graded
+		// where pair 1 published it Unavailable, and data_mode and filter
+		// absent where pair 1 grades them — are all TIER fields, asserted by
+		// TestBankTierFields_RegisteredTS890And990_OneBankEach.
+		"TS-890S": ts890sCoreFour,
+		"TS-990S": ts990sCoreFour,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -3223,6 +3348,14 @@ func TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace(t *testin
 	// about. The FT-991A's two static banks are dense too (MEM "001".."099",
 	// PMS "100".."117") and it discovers nothing at all.
 	//
+	// Tier 6's SECOND pair's ONE static bank each is dense too — MEM
+	// "000".."099" on both rows, Sparse stated false (core/driver/ts890 and
+	// core/driver/ts990's caps.go, plan decision P11) — and neither row
+	// discovers anything, so "every static bank" is again simply "every
+	// bank". Slots 100-119 exist in both radios and are slot IDs on neither
+	// row, so there is no partial space here for a dense promise to be wrong
+	// about.
+	//
 	// THE FT-991A's PMS SLOTS ARE THE ONES THIS TEST MOST WANTS. They are
 	// decimal wire numbers where every sibling's are "P1L".."P9U" (plan
 	// decision P20), and codeplug.DisplaySlot passes "100".."117" through
@@ -3230,7 +3363,7 @@ func TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace(t *testin
 	// — so this model exercises BOTH arms of that function inside one
 	// working copy, and the byte-identical comparison below is what would
 	// catch a per-model display override arriving without a decision.
-	for _, model := range []string{wiring.DefaultModel, "FTdx10", "FTdx101D", "FTdx101MP", "FT-891", "FT-991A", wiring.TS590SModel, wiring.TS590SGModel} {
+	for _, model := range []string{wiring.DefaultModel, "FTdx10", "FTdx101D", "FTdx101MP", "FT-891", "FT-991A", wiring.TS590SModel, wiring.TS590SGModel, wiring.TS890SModel, wiring.TS990SModel} {
 		t.Run(model, func(t *testing.T) {
 			caps, err := wiring.StaticCapabilities(model)
 			if err != nil {
