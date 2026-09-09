@@ -67,7 +67,8 @@ type Option func(*ts990Driver)
 // (transport safety obligation 3: "surfaced, never silently discarded") —
 // fall into the engine's own drop-everything default with no way for a caller
 // of this driver to receive them. A nil l is ignored (the engine's default is
-// kept). TestWithTransportLogger_ReachesTheEngine is the pin.
+// kept): TestWithTransportLogger_ReachesTheEngine pins the non-nil case,
+// TestWithTransportLogger_NilIsIgnored the nil one.
 func WithTransportLogger(l transport.Logger) Option {
 	return func(d *ts990Driver) {
 		if l != nil {

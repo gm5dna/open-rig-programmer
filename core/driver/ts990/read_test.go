@@ -206,6 +206,46 @@ func TestReadChannel_TheSecondarySideIsReadAndPublishedNowhere(t *testing.T) {
 	}
 }
 
+// TestReadChannel_ClassByteReadSide pins doc.go's forward note (LOW-5): P2,
+// the channel type, is parsed and kept on the record but published nowhere —
+// a Dual ('1') or Section-defined ('2') channel reads as the SAME plain
+// record as a Single ('0') one, and only the class itself refuses the read
+// (T14's decision 9). '3' is outside the three values the book prints
+// (990:2897-2903) and the codec refuses it.
+func TestReadChannel_ClassByteReadSide(t *testing.T) {
+	var baseline *codeplug.ChannelData
+	for _, class := range []byte{'0', '1', '2'} {
+		f := populatedFields("014")
+		f.class = class
+		sess, _ := openTestSession(t, ma0Image("014", f.frame()))
+		ch, err := sess.ReadChannel(context.Background(), "014")
+		if err != nil {
+			t.Fatalf("class %q: ReadChannel: %v", class, err)
+		}
+		if baseline == nil {
+			baseline = ch.Data
+			continue
+		}
+		if !reflect.DeepEqual(*ch.Data, *baseline) {
+			t.Errorf("class %q: ChannelData =\n %+v\nwant the same record as class '0':\n %+v", class, *ch.Data, *baseline)
+		}
+	}
+
+	f := populatedFields("014")
+	f.class = '3'
+	sess, _ := openTestSession(t, ma0Image("014", f.frame()))
+	_, err := sess.ReadChannel(context.Background(), "014")
+	if err == nil {
+		t.Fatal("class '3' was accepted; the book prints only three values (990:2897-2903)")
+	}
+	if !errors.Is(err, kw.ErrParse) {
+		t.Errorf("class '3': err = %v, want one wrapping kw.ErrParse", err)
+	}
+	if !strings.Contains(err.Error(), "2897-2903") {
+		t.Errorf("class '3': %q does not cite 990:2897-2903", err)
+	}
+}
+
 // TestReadChannel_AnUnassignedSlotIsNotAnError is plan P14, and the NEGATIVE
 // is the half that matters: clone.ReadAll returns on the FIRST channel error
 // and abandons the whole read, so one unassigned slot on a fresh radio must

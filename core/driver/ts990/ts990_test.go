@@ -275,6 +275,19 @@ func TestWithTransportLogger_ReachesTheEngine(t *testing.T) {
 	}
 }
 
+// TestWithTransportLogger_NilIsIgnored: a nil logger leaves the engine's own
+// drop-everything default in place rather than installing a nil that would
+// panic on the first diagnostic.
+func TestWithTransportLogger_NilIsIgnored(t *testing.T) {
+	d, ok := New(Simulated, WithTransportLogger(nil)).(*ts990Driver)
+	if !ok {
+		t.Fatal("New did not return a *ts990Driver")
+	}
+	if d.transportLogger != nil {
+		t.Error("WithTransportLogger(nil) installed a logger, want the engine's default kept")
+	}
+}
+
 // testLogger is a counting transport.Logger.
 type testLogger struct {
 	mu sync.Mutex
