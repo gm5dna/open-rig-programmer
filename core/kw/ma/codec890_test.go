@@ -48,20 +48,51 @@ func TestParseMA0Answer890_ReadsThePrintedGrid(t *testing.T) {
 	}
 }
 
-// MED-1 fix round 2: a GENUINE TS-890S answer whose name ends in a space
-// PARSES — A1's stated limit is that it reads back one character shorter,
-// not that the read is refused. checkName is domain-only (length, ';',
-// printable) and carries no row discriminator; the trailing-space refusal
-// belongs to buildMA0Set890, which is the one direction the round trip
-// cannot carry it.
-func TestParseMA0Answer890_ATrailingSpaceNameParsesOneCharacterShorter(t *testing.T) {
+// C-MED-1 REVERSAL (adjudication): a GENUINE TS-890S answer whose name ends
+// in a space PARSES VERBATIM. The terminator FLOATS at 40 + len(name)
+// (890:3181-3182), so "...AB ;" and "...AB;" are DISTINCT, unambiguous
+// frames — the space is real content, not padding, and trimming it on read
+// is the lossy, unregistered assumption the adjudication overturns (T8
+// MED-1, both rounds). checkName is domain-only (length, ';', printable);
+// this row's codec no longer calls parseName, which stays TS-990S only.
+func TestParseMA0Answer890_ATrailingSpaceNameParsesVerbatim(t *testing.T) {
 	l := Layout890()
 	rec, err := l.ParseMA0Answer([]byte(frame890("AB ")))
 	if err != nil {
-		t.Fatalf("a trailing-space name must parse (A1's stated limit, not a refusal): %v", err)
+		t.Fatalf("a trailing-space name must parse verbatim, not be refused: %v", err)
 	}
-	if rec.Name != "AB" {
-		t.Errorf("Name = %q, want %q — A1: the parser right-trims, so the name reads back one character shorter", rec.Name, "AB")
+	if rec.Name != "AB " {
+		t.Errorf("Name = %q, want %q — the 890S carries P13 verbatim, including a trailing space (C-MED-1 reversal)", rec.Name, "AB ")
+	}
+}
+
+// C-MED-1 REVERSAL: Parse ∘ Build is the identity on the 890S, including a
+// trailing-space name. buildMA0Set890 now ADMITS it (no HasSuffix refusal),
+// AllowedCommand's re-render admits the built frame, and ParseMA0Answer reads
+// the space back byte-identical.
+func TestMA0Set890_TrailingSpaceNameRoundTripsVerbatimAndIsAdmitted(t *testing.T) {
+	l := Layout890()
+	rec := Record{Slot: slotOf(t, l, 7), FreqHz: 14_250_000, Mode: '2', ToneType: '0', Name: "AB "}
+	cmd, err := l.BuildMA0Set(rec)
+	if err != nil {
+		t.Fatalf("BuildMA0Set with a trailing-space name was refused: %v", err)
+	}
+	frame := cmd.Bytes()
+	if want := frame890("AB "); string(frame) != want {
+		t.Errorf("BuildMA0Set = %q, want %q", frame, want)
+	}
+	if len(frame) != 43 {
+		t.Errorf("built %d bytes, want 43 = 40 + len(%q)", len(frame), rec.Name)
+	}
+	if !l.AllowedCommand(frame) {
+		t.Error("the gate refused a frame its own builder produced")
+	}
+	got, err := l.ParseMA0Answer(frame)
+	if err != nil {
+		t.Fatalf("ParseMA0Answer on the built frame: %v", err)
+	}
+	if got.Name != "AB " {
+		t.Errorf("round trip Name = %q, want %q", got.Name, "AB ")
 	}
 }
 
@@ -223,19 +254,8 @@ func TestBuildMA0Set890_EmitsTheGridAndPadsNothing(t *testing.T) {
 	if got, want := len(mustBuild(t, l, short)), 41; got != want {
 		t.Errorf("a one-character name built %d bytes, want %d — this grid pads nothing", got, want)
 	}
-
-	// MED-1 (was LOW-4 / A1): the terminator floats straight after the name
-	// with no pad byte, so a trailing space would build the wire form
-	// "AB ;" and parse back as "AB" — Parse ∘ Build is not the identity for
-	// that name, and AllowedCommand's own re-render then refuses a frame
-	// this codec built (see TestAllowedCommand_AdmitsEveryNameBuildMA0SetProduces).
-	// checkName now refuses the name at build rather than carrying it; the
-	// refusal itself is pinned in TestBuildMA0Set890_Refusals.
-	trailing := rec
-	trailing.Name = "AB "
-	if _, err := l.BuildMA0Set(trailing); err == nil {
-		t.Error("BuildMA0Set with a trailing-space name built; want a refusal (MED-1)")
-	}
+	// A trailing-space name BUILDS (C-MED-1 reversal); the round trip is
+	// pinned in TestMA0Set890_TrailingSpaceNameRoundTripsVerbatimAndIsAdmitted.
 }
 
 func TestBuildMA0Set890_Refusals(t *testing.T) {
@@ -265,9 +285,6 @@ func TestBuildMA0Set890_Refusals(t *testing.T) {
 		{"a name over ten characters", spoil(ok, func(r *Record) { r.Name = "ELEVENCHARS" }), "10 characters"},
 		{"a name outside A2's charset", spoil(ok, func(r *Record) { r.Name = "A\x01" }), "A2"},
 		{"a name containing ';'", spoil(ok, func(r *Record) { r.Name = "A;B" }), "';'"},
-		// MED-1: the 890S grid pads nothing, so a trailing space cannot
-		// survive a build round trip and is refused rather than carried.
-		{"a name ending in a space", spoil(ok, func(r *Record) { r.Name = "AB " }), "ends in a space"},
 		{"a tone type outside 0-3", spoil(ok, func(r *Record) { r.ToneType = '4' }), "P5"},
 		{"a frequency wider than eleven digits", spoil(ok, func(r *Record) { r.FreqHz = 100_000_000_000 }), "11 digits"},
 		{"an empty record", spoil(ok, func(r *Record) { r.Empty = true }), "no erase"},
