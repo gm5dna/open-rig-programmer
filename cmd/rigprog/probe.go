@@ -121,7 +121,8 @@ func writeProbeReport(stdout, stderr io.Writer, model string, sess driver.Sessio
 
 	// The radio's own firmware answer, VERBATIM and %q-quoted, for the
 	// sessions whose concrete type has one to give (driver.
-	// FirmwareAnswerReporter — the TS-590 pair today, and nothing else).
+	// FirmwareAnswerReporter — every Kenwood row registered today, and
+	// nothing else).
 	// Absent capability, absent line: a fabricated "-" would read as "the
 	// radio answered nothing" where the truth is "this radio has no such
 	// question".
