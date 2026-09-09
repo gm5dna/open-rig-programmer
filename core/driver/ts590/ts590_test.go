@@ -182,13 +182,21 @@ func TestOpen_WrongRadio(t *testing.T) {
 			wantText: `driver: connected radio identifies as TS-890S (CAT ID "024"); you selected TS-590S (CAT ID "021") — wrong radio model on this port`,
 		},
 		{
-			// 022 is the tier's other second-pair sibling, and its book
-			// prints the ID BARE with no model name beside it (matrix §1.2),
-			// so this refusal names the ID and invents no model for it.
-			name: "the bare 022", row: RowS, answered: "022",
-			wantText: `driver: connected radio identified as CAT ID "022", want "021" — wrong radio model on this port`,
+			// 022 is the tier's other second-pair member, and this arm is the
+			// one that MOVED when that row registered. Its book prints the ID
+			// BARE with no model name beside it (matrix §1.2), so at pair 1
+			// this refusal named the ID and invented no model; "TS-990S" is
+			// now a registry key this PROJECT mints over that silence
+			// (plan decision P2), so the refusal names it — a statement about
+			// this programme's registry rather than a cross-document
+			// inference about a manufacturer's spelling.
+			name: "the named 022", row: RowS, answered: "022",
+			wantText: `driver: connected radio identifies as TS-990S (CAT ID "022"); you selected TS-590S (CAT ID "021") — wrong radio model on this port`,
 		},
 		{
+			// The ID-only sentence still has a case, and it must: an ID in no
+			// Kenwood legend at all is where this programme has no name to
+			// give and says so.
 			name: "an ID in no Kenwood legend", row: RowSG, answered: "999",
 			wantText: `driver: connected radio identified as CAT ID "999", want "023" — wrong radio model on this port`,
 		},

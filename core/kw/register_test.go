@@ -298,7 +298,7 @@ func TestDoc_NamesTheCeilingConstant(t *testing.T) {
 // it for spare generality.
 func TestDoc_StatesTheOneVariableLengthFrame(t *testing.T) {
 	src := docSource(t)
-	if !strings.Contains(src, "THE EX ANSWER IS THE ONLY VARIABLE-LENGTH FRAME THIS MILESTONE PARSES") {
-		t.Error("doc.go no longer states that the EX answer is the only variable-length frame this milestone parses")
+	if !strings.Contains(src, "THE EX ANSWER IS THE ONLY VARIABLE-LENGTH FRAME THIS CODEC PARSES") {
+		t.Error("doc.go no longer states that the EX answer is the only variable-length frame this codec parses")
 	}
 }

@@ -92,13 +92,16 @@ func (t TypeRefPolicy) String() string {
 // THEY ARE extable's OWN TYPES, not core/cat's. This package imports no
 // core/cat — it is build-time tooling that RENDERS core/cat source text, and
 // an import would make the transcoder depend on the package it generates
-// into. All three correspond ONE-FOR-ONE with core/cat's forms —
-// AddressTriple with EXAddressTriple, AddressPair with EXAddressPair,
-// AddressSingle with EXAddressSingle — and each correspondence is a fact
-// about the radios' charts rather than a type relationship: a Pair
+// into. THREE OF THE FOUR address forms correspond ONE-FOR-ONE with
+// core/cat's — AddressTriple with EXAddressTriple, AddressPair with
+// EXAddressPair, AddressSingle with EXAddressSingle — and each correspondence
+// is a fact about the radios' charts rather than a type relationship: a Pair
 // profile's CSV carries P3 == 0 on every row and a Single profile's carries
 // P2 AND P3 == 0, which is exactly what core/cat's rule V12 requires of a
-// Pair and a Single dialect's inventory. This comment used to say
+// Pair and a Single dialect's inventory. AddressGrouped has NO core/cat
+// counterpart and is not owed one: no Yaesu chart in this repository prints
+// its shape, and the absence of a counterpart is not a gap to be filled by
+// inventing one. This comment used to say
 // AddressSingle had no core/cat counterpart and rendered through a separate
 // Kenwood package; cat.EXAddressSingle is the seam the FT-991A milestone
 // added, and the generated ft991a inventory is what consumes it (Codex
@@ -138,6 +141,39 @@ const (
 	// moved from "08" to "008" with the rest, which is the half a "wider
 	// domain is a superset" argument does not cover.
 	AddressSingle
+	// AddressGrouped: the chart prints a (P1,P2,P3) triple whose components
+	// are ONE, TWO and TWO digits — five wire characters. All three are on
+	// the wire, so unlike AddressPair and AddressSingle this form refuses no
+	// component; TestParseCSV_AddressGroupedCarriesAllThreeComponents is the
+	// discriminating pin, because an arm that copied its neighbours' "must
+	// be 0" rules would refuse every row of a real chart.
+	//
+	// P1's DOMAIN IS 0..1, AND IT IS THE ONE BOUND IN THIS TYPE THAT IS NOT
+	// A FIELD'S CAPACITY. A one-digit field carries 0..9; the manuals
+	// enumerate the values instead — "P1 (Menu type number) 0: Menu 1:
+	// Advanced Menu" (docs/fixtures-private/manuals/
+	// ts890s_pc_rev1_layout.txt:1897-1900, ts990s_pc_rev2_layout.txt:1720-1723
+	// — the parenthetical is the 890S's wording; the 990S prints a bare
+	// "P1" over the same two-value list) — so the domain is the
+	// enumeration and a P1 of 2 names a group no chart prints.
+	// TestParseCSV_AddressGroupedP1DomainIs0To1 pins it, including the 9 a
+	// capacity argument would have admitted. P2 and P3 keep the two-digit
+	// domain and its SHIPPED refusal sentence, because their fields really
+	// are two digits wide.
+	//
+	// The observation key is "%d%02d%02d" — five characters, one token per
+	// component, on both sides of the join
+	// (TestRenderGo_GroupedProfileKeysObservationsByFiveDigitForm).
+	//
+	// REUSING AddressTriple WAS REJECTED. Its components' domains are 0..99
+	// each and its wire width is six. Narrowing P1 to 0..1 for some profiles
+	// and not others would make the domain a PER-PROFILE width datum — this
+	// member with a worse name and a shared enum constant — and the
+	// observation key's width would move for the Yaesu rows that use the
+	// form, silently, which is exactly the failure AddressSingle's comment
+	// above records from the FT-991A widening: widening one side alone makes
+	// every observation miss, on a complete CSV, with nothing to see.
+	AddressGrouped
 )
 
 func (a AddressForm) String() string {
@@ -148,6 +184,8 @@ func (a AddressForm) String() string {
 		return "AddressPair"
 	case AddressSingle:
 		return "AddressSingle"
+	case AddressGrouped:
+		return "AddressGrouped"
 	default:
 		return fmt.Sprintf("AddressForm(%d)", int(a))
 	}
@@ -190,10 +228,11 @@ func (l Labels) String() string {
 type TextRows int
 
 const (
-	// TextRowsAllowed: text rows exist and carry exactly TextWidth digits.
+	// TextRowsAllowed: text rows exist and each carries one of the widths
+	// TextWidths names.
 	TextRowsAllowed TextRows = iota + 1
-	// TextRowsAbsent: the chart has none, TextWidth must be 0, and any row
-	// flagged text is refused.
+	// TextRowsAbsent: the chart has none, TextWidths must be empty, and any
+	// row flagged text is refused.
 	TextRowsAbsent
 )
 
@@ -319,7 +358,8 @@ type Profile struct {
 	ParameterlessAddresses [][3]int
 
 	// DigitsCeiling is the largest width THIS profile's family admits, and
-	// it is what bounds MaxDigits, TextWidth and MaxObservedWidth. It is a
+	// it is what bounds MaxDigits, every TextWidths entry and
+	// MaxObservedWidth. It is a
 	// PER-FAMILY datum because the bound is a property of the family's own
 	// frame budget: the five Yaesu profiles render into core/cat and carry
 	// MaxDigitsCeiling, which core/cat/exdigits_ceiling_test.go pins to that
@@ -336,17 +376,27 @@ type Profile struct {
 	// MinDigits and MaxDigits bound a non-text row's Digits column.
 	MinDigits int
 	MaxDigits int
-	// TextWidth is the exact Digits a text row must carry. It is a
+	// TextWidths names every Digits a text row may carry. It is a
 	// MANUAL-SCHEMA fact and must never be used as an evidence bound: see
 	// MaxObservedWidth.
 	//
-	// It is positive under TextRowsAllowed and EXACTLY 0 under
-	// TextRowsAbsent — the one cross-field rule the three new policies
-	// carry. A model with no text rows and a text width of 12 is stating
-	// two incompatible things about one chart.
-	TextWidth int
+	// It is a SET rather than a single width because a chart may print text
+	// rows of more than one length — a screen-saver message of up to 10
+	// characters beside a power-on message of up to 15 — and no single value
+	// admits both. Membership is what ParseCSV tests
+	// (TestParseCSV_TextRowMatchesAnyDeclaredWidth), so a chart with one
+	// width declares a one-entry set and loses nothing.
+	//
+	// It carries at least one STRICTLY POSITIVE entry under TextRowsAllowed
+	// and is EMPTY under TextRowsAbsent — the one cross-field rule the three
+	// new policies carry. A model with no text rows and a text width of 12
+	// is stating two incompatible things about one chart, and so is one
+	// whose absence is spelt []int{0}: that declares a text row whose width
+	// is nothing, which is why absence is the NIL SLICE and Validate refuses
+	// the zero entry in both directions.
+	TextWidths []int
 	// MaxObservedWidth bounds a hardware observation's P4 width. It is
-	// deliberately independent of MinDigits/MaxDigits/TextWidth, which are
+	// deliberately independent of MinDigits/MaxDigits/TextWidths, which are
 	// manual-schema facts. The two categories can disagree — this repository
 	// holds the proof in core/cat/table2-corrections.csv, where TONE FREQ
 	// declares two digits and answered three — so deriving one from the
@@ -422,7 +472,7 @@ func (p Profile) Validate() error {
 		return fmt.Errorf("extable: profile %s: TypeRefPolicy %v must be set explicitly", p.Model, p.Types)
 	}
 	switch p.Addresses {
-	case AddressTriple, AddressPair, AddressSingle:
+	case AddressTriple, AddressPair, AddressSingle, AddressGrouped:
 	default:
 		return fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 	}
@@ -431,22 +481,30 @@ func (p Profile) Validate() error {
 	default:
 		return fmt.Errorf("extable: profile %s: Labels %v must be set explicitly", p.Model, p.LabelPolicy)
 	}
-	// TextWidth is validated INSIDE this switch rather than in the
-	// positive-integer sweep below, because its permitted value is the
-	// policy's to say: positive under Allowed, exactly 0 under Absent.
+	// TextWidths is validated INSIDE this switch rather than in the
+	// positive-integer sweep below, because its permitted shape is the
+	// policy's to say: at least one strictly positive entry under Allowed,
+	// empty under Absent. The check is POSITIVE-ONLY — every entry must be a
+	// width a chart could print — so neither an empty set under Allowed nor
+	// a zero entry under either policy can pass as "no text row".
 	switch p.TextRowPolicy {
 	case TextRowsAllowed:
-		if p.TextWidth <= 0 {
-			return fmt.Errorf("extable: profile %s: TextWidth must be positive under TextRowsAllowed, got %d", p.Model, p.TextWidth)
+		if len(p.TextWidths) == 0 {
+			return fmt.Errorf("extable: profile %s: TextWidths is empty under TextRowsAllowed — a chart that prints a text row must say how wide", p.Model)
+		}
+		for _, w := range p.TextWidths {
+			if w <= 0 {
+				return fmt.Errorf("extable: profile %s: TextWidths entry %d is not positive — every text width is a width a chart prints", p.Model, w)
+			}
 		}
 	case TextRowsAbsent:
-		if p.TextWidth != 0 {
-			return fmt.Errorf("extable: profile %s: TextWidth is %d under TextRowsAbsent, want 0 — a model whose chart prints no text row has no text width", p.Model, p.TextWidth)
+		if len(p.TextWidths) != 0 {
+			return fmt.Errorf("extable: profile %s: TextWidths is %v under TextRowsAbsent, want empty — a model whose chart prints no text row has no text width, and []int{0} would declare one of width nothing", p.Model, p.TextWidths)
 		}
 	default:
 		return fmt.Errorf("extable: profile %s: TextRows %v must be set explicitly", p.Model, p.TextRowPolicy)
 	}
-	// The exclusion SET is validated inside this switch, as TextWidth is
+	// The exclusion SET is validated inside this switch, as TextWidths is
 	// inside the one above and for the same reason: whether it may be
 	// populated is the policy's to say, in both directions. A Refused
 	// profile carrying an address would declare an exclusion nothing acts
@@ -503,7 +561,6 @@ func (p Profile) Validate() error {
 		val  int
 	}{
 		{"MaxDigits", p.MaxDigits},
-		{"TextWidth", p.TextWidth},
 		{"MaxObservedWidth", p.MaxObservedWidth},
 	} {
 		// The bound is the PROFILE'S, not this package's constant: see
@@ -511,6 +568,15 @@ func (p Profile) Validate() error {
 		// TestProfileValidate_CeilingComesFromTheProfile for the pin.
 		if f.val > p.DigitsCeiling {
 			return fmt.Errorf("extable: profile %s: %s %d exceeds the %d-digit ceiling this profile declares", p.Model, f.name, f.val, p.DigitsCeiling)
+		}
+	}
+	// The ceiling sweep walks TextWidths ENTRY BY ENTRY rather than taking
+	// the set's first or largest member: the ceiling bounds each width a
+	// frame must carry, so a set whose second entry overflows is as
+	// unrenderable as one whose first does.
+	for _, w := range p.TextWidths {
+		if w > p.DigitsCeiling {
+			return fmt.Errorf("extable: profile %s: TextWidths entry %d exceeds the %d-digit ceiling this profile declares", p.Model, w, p.DigitsCeiling)
 		}
 	}
 	switch p.Observations {
@@ -602,7 +668,7 @@ var ft710Profile = Profile{
 	DigitsCeiling:    MaxDigitsCeiling,
 	MinDigits:        1,
 	MaxDigits:        4,
-	TextWidth:        12,
+	TextWidths:       []int{12},
 	MaxObservedWidth: 12,
 	ExpectedRows:     296,
 
@@ -626,7 +692,7 @@ var ft710Profile = Profile{
 // core/cat/ftdx10/table2.csv's own provenance header, which records the
 // chart's header-vs-chart anomaly): the chart's Digits column runs 1..4 for
 // every numeric row, and its ONE text row — MY CALL. at (04,01,01) — is 12.
-// MinDigits/MaxDigits/TextWidth are therefore chart-verified for THIS radio,
+// MinDigits/MaxDigits/TextWidths are therefore chart-verified for THIS radio,
 // not inherited from the FT-710's identical-looking values.
 //
 // Deliberately NOT given a named accessor of its own (compare FT710Profile):
@@ -656,7 +722,7 @@ var ftdx10Profile = Profile{
 	DigitsCeiling: MaxDigitsCeiling,
 	MinDigits:     1,
 	MaxDigits:     4,
-	TextWidth:     12,
+	TextWidths:    []int{12},
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here. Validate
 	// demands a positive value from every profile, but this profile declares
 	// ObservationsAbsent — no FTdx10 hardware exists to this project, so no
@@ -715,7 +781,7 @@ var ftdx101Profile = Profile{
 	DigitsCeiling: MaxDigitsCeiling,
 	MinDigits:     1,
 	MaxDigits:     4,
-	TextWidth:     12,
+	TextWidths:    []int{12},
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
 	// on the ftdx10 profile: ObservationsAbsent means no observation CSV
 	// is ever parsed and this bound is never consulted. No hardware claim.
@@ -756,10 +822,10 @@ var ftdx101Profile = Profile{
 // other three profiles carry 4, and it is a reading of THIS chart rather
 // than a widening of theirs.
 //
-// TextWidth is 0, which under TextRowsAbsent is the only value Validate
-// admits: a chart with no text row has no text width, and spelling 12 here
-// out of resemblance to the other three would state two incompatible things
-// about one chart.
+// TextWidths is EMPTY, which under TextRowsAbsent is the only shape
+// Validate admits: a chart with no text row has no text width, and spelling
+// 12 here out of resemblance to the other three would state two incompatible
+// things about one chart.
 //
 // Deliberately NOT given a named accessor, for the reason the ftdx10 and
 // ftdx101 profiles are not: its only consumers reach it through
@@ -788,7 +854,7 @@ var ft891Profile = Profile{
 	DigitsCeiling: MaxDigitsCeiling,
 	MinDigits:     1,
 	MaxDigits:     5,
-	TextWidth:     0,
+	TextWidths:    nil,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
 	// on the ftdx10 and ftdx101 profiles: ObservationsAbsent means no
 	// observation CSV is ever parsed and this bound is never consulted. It
@@ -843,10 +909,10 @@ var ft891Profile = Profile{
 //     from the inventory: a menu number naming no field is not an address an
 //     EX frame could read or write.
 //
-// TextWidth is 0, which under TextRowsAbsent is the only value Validate
-// admits: this chart prints no free-text row, and spelling 12 here out of
-// resemblance to the FT-710 family would state two incompatible things about
-// one chart.
+// TextWidths is EMPTY, which under TextRowsAbsent is the only shape
+// Validate admits: this chart prints no free-text row, and spelling 12 here
+// out of resemblance to the FT-710 family would state two incompatible things
+// about one chart.
 //
 // Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
 // and ft891 profiles are not: its consumers reach it through
@@ -874,7 +940,7 @@ var ft991aProfile = Profile{
 	DigitsCeiling: MaxDigitsCeiling,
 	MinDigits:     1,
 	MaxDigits:     8,
-	TextWidth:     0,
+	TextWidths:    nil,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
 	// the ftdx10, ftdx101 and ft891 profiles: ObservationsAbsent means no
 	// observation CSV is ever parsed and this bound is never consulted. It
@@ -907,7 +973,7 @@ var ft991aProfile = Profile{
 }
 
 // ts590sProfile carries the TS-590S's menu-chart transcription facts. It is
-// one of the three Kenwood registrations, all of which render OUTSIDE
+// one of the five Kenwood registrations, all of which render OUTSIDE
 // core/cat: the inventory is emitted into core/kw/ts590, so EXItem and
 // EXAddress are qualified by the explicit "kw" alias, and — the part that
 // matters — the ceiling it declares is core/kw's, not this package's
@@ -951,7 +1017,7 @@ var ft991aProfile = Profile{
 //     ARE the P5 codes: 75 rows stop at or before header 9 (width 1), four
 //     reach the "10 ~" column (width 2), and the eight PF rows print their
 //     own "000 ~ 255 (3-digit)" (width 3).
-//   - TextRowsAllowed with TextWidth 8: menu 087 Power on message, "Power on
+//   - TextRowsAllowed with TextWidths {8}: menu 087 Power on message, "Power on
 //     Message (up to 8 ASCII characters)", the chart's only free-text field.
 //     The PF rows' fixed-width character field is NOT one, on the FT-891's
 //     version-row precedent.
@@ -988,7 +1054,7 @@ var ts590sProfile = Profile{
 	DigitsCeiling: 246,
 	MinDigits:     1,
 	MaxDigits:     3,
-	TextWidth:     8,
+	TextWidths:    []int{8},
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
 	// the three ObservationsAbsent profiles above: no TS-590S has ever been
 	// asked anything by this project, so no observation CSV is ever parsed
@@ -1020,7 +1086,7 @@ var ts590sProfile = Profile{
 }
 
 // ts590sgProfile carries the TS-590SG's menu-chart transcription facts. It is
-// one of the three Kenwood registrations, which are the reason DigitsCeiling
+// one of the five Kenwood registrations, which are the reason DigitsCeiling
 // is a per-profile field at all: they render outside core/cat, so their
 // ceiling is core/kw's MaxEXDigits and not this package's MaxDigitsCeiling.
 // None of the three is "first" — the registry is a map, and under
@@ -1051,9 +1117,9 @@ var ts590sProfile = Profile{
 // information (4 ASCII characters) read only", carried as digits=4 text=false
 // on the FT-891's 18/01/00 MAIN VERSION precedent. Every other numbered row is
 // 1, 2 or 3 — 3 being the thirteen PF-assignment rows whose merged cell prints
-// "000 ~ 255 (3-digit)". TextWidth is 8, the width of the chart's single
-// free-text row, 001 Power on message; a second text row of a different width
-// is what ParseCSV refuses, and is why 000 is not one.
+// "000 ~ 255 (3-digit)". TextWidths is {8}, the width of the chart's single
+// free-text row, 001 Power on message; a text row of a width this set does not
+// name is what ParseCSV refuses, and is why 000 is not one.
 //
 // Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
 // and ft891 profiles are not: its only consumers reach it through
@@ -1086,7 +1152,7 @@ var ts590sgProfile = Profile{
 	DigitsCeiling: 246,
 	MinDigits:     1,
 	MaxDigits:     4,
-	TextWidth:     8,
+	TextWidths:    []int{8},
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
 	// the three Yaesu profiles that carry one: ObservationsAbsent means no
 	// observation CSV is ever parsed and this bound is never consulted. It
@@ -1140,12 +1206,12 @@ var ts590sgProfile = Profile{
 // printed menu number IS the whole address, so ParseCSV requires p2 AND p3 to
 // be 0 on every row.
 //
-// TextRowPolicy is TextRowsAbsent and TextWidth 0, which under that policy is
-// the only value Validate admits. The five PF-key rows are the near miss and
-// are deliberately not text: their shared cell prints "00 ~ 99 (2-digit)",
-// which is a numeric code range, and Text marks the chart's free-text row —
-// the one a transcriber must stop at — not any row whose values happen to be
-// looked up elsewhere.
+// TextRowPolicy is TextRowsAbsent and TextWidths empty, which under that
+// policy is the only shape Validate admits. The five PF-key rows are the
+// near miss and are deliberately not text: their shared cell prints
+// "00 ~ 99 (2-digit)", which is a numeric code range, and Text marks the
+// chart's free-text row — the one a transcriber must stop at — not any
+// row whose values happen to be looked up elsewhere.
 //
 // Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
 // and ft891 profiles are not: its only consumers reach it through
@@ -1186,7 +1252,7 @@ var ts480Profile = Profile{
 	DigitsCeiling: 246,
 	MinDigits:     1,
 	MaxDigits:     2,
-	TextWidth:     0,
+	TextWidths:    nil,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
 	// the ftdx10, ftdx101 and ft891 profiles: ObservationsAbsent means no
 	// observation CSV is ever parsed and this bound is never consulted. It
@@ -1221,6 +1287,267 @@ var ts480Profile = Profile{
 	},
 }
 
+// ts890sProfile carries the TS-890S's menu-chart transcription facts. Like
+// the three older Kenwood registrations it renders OUTSIDE core/cat — the
+// inventory is emitted into core/kw/ma, so EXItem and EXAddress are
+// qualified by the explicit "kw" alias and the ceiling it declares is
+// core/kw's, not this package's constant.
+//
+// IT IS THE FIRST AddressGrouped REGISTRATION. This book prints THREE
+// address cells whose widths are one, two and two — "P1 (Menu type number)
+// 0: Menu 1: Advanced Menu", "P2 (Category number) 00 ~ 99", "P3 (Item
+// number) 00 ~ 99" (ts890s_pc_rev1_layout.txt:1897-1910) — five wire
+// characters in all, which is neither the six of AddressTriple nor the four
+// of AddressPair. All three components are on the wire, so unlike the Pair
+// and Single forms this one refuses no component; see AddressForm's own doc
+// comment, which already cites this book for the P1 enumeration that makes
+// that component's domain 0..1 rather than a one-digit field's 0..9.
+//
+// THE CHART IS TWO LISTS UNDER ONE HEADING, NOT TWO CHARTS. "EX Command
+// Parameter Lists" (1934) prints a "Menu" table (1935-2204) and an
+// "Advanced Menu" table (2212-2281) whose rows differ only in P1, so both
+// belong to one inventory and one CSV — which is why ExpectedRows counts
+// across both and why the Advanced rows are not a second registration.
+//
+// EVIDENCE FOR EACH POLICY, all from that layout text and confirmed on the
+// renders named above:
+//
+//   - LabelsAbsent. The table's heading rows are P1 | P2 | P3 | Function |
+//     P5, and P5's own sub-heading row is the code list "000 001 002 003
+//     004 005 006 ~" (1935-1938, 2006-2009, 2098-2101, 2181-2184,
+//     2212-2215). There is no group-label column of any kind. This was read
+//     off the layout text AND confirmed against renders of PDF pages 26, 27,
+//     28, 29 and 30 (printed 25-29), which show the ruled table headings
+//     directly.
+//
+//   - TextRowsAllowed with TextWidths {10, 15}. The chart prints exactly two
+//     free-text fields, and their widths differ, which is the case
+//     TextWidths is a SET for: 0/00/05 Screen Saver Message, "Up to 10
+//     alphanumeric characters" (1946), and 0/00/06 Power-on Message, "Up to
+//     15 alphanumeric characters" (1947). The EX command's own P5 legend
+//     states the same two lengths from the other side — "A power-on message
+//     can vary in length from 0 to 15 characters. Screen saver text can vary
+//     in length from 0 to 10 characters." (1920-1921).
+//
+//   - MinDigits 3 / MaxDigits 4: the P5 column headings give every
+//     enumerating row 3, and RULING R-B settles NINETEEN rows at 4 — the
+//     seventeen PF-key rows 0/00/15-0/00/31, on the EX command page's own
+//     citation (1918-1919), plus 0/05/12 Contest Number ("0001 ~ 9999
+//     (Must be a 4-digit number)", 2108) and 1/00/05 Reference Oscillator
+//     Calibration ("Parameter value of 0000 ~ 1000", 2235-2236); see
+//     core/kw/ma/menu890s.csv's own provenance header for the rest of this
+//     transcription's judgements.
+//
+//   - ParameterlessExcluded over the four addresses ParameterlessAddresses
+//     names below, each of which prints "Does not correspond to a command"
+//     where a parameter table would be. They are transcribed and COUNTED —
+//     ExpectedRows includes them — and omitted from the inventory by
+//     address, because a menu line that names no field is not an address
+//     an EX frame may read or write.
+//
+// THE CEILING IS TRANSCRIBED, AS THE OTHER KENWOOD STANZAS' ARE. 246 is
+// core/kw.MaxEXDigits (core/kw/exdigits.go), and it cannot be written here
+// as the symbol — this package is build-time tooling that RENDERS core/kw
+// source text, and importing core/kw would cycle the dependency that
+// one-way rule exists to keep. core/kw/exdigits_ceiling_test.go pins every
+// profile with this ImportPath to it.
+//
+// THIS BOOK'S OWN ARITHMETIC WOULD GIVE 247, AND IT IS NOT USED. An EX
+// answer here is "EX"(2) + P1(1) + P2(2) + P3(2) + P4(1) + ";"(1) = NINE
+// fixed bytes before P5 (the frame table at 1898-1913), one fewer than the
+// ten core/kw derives from pair 1's three-digit menu number, so 256 − 9 =
+// 247 — which is numerically core/cat's MaxDigitsCeiling, the Yaesu number
+// this family's ceiling test exists to keep distinct from its own. The
+// family ceiling is what a Kenwood profile declares, so this stanza
+// declares 246 and stays inside the arithmetic rather than one byte outside
+// it. Neither figure is a claim about the widest value the radio prints:
+// that argument rests on the ASSUMED-register entry the design labels A19,
+// and an assumption is not lifted by a chart.
+//
+// ExpectedRows is 162: the printed ADDRESSED rows of both lists, 135 with
+// P1=0 and 27 with P1=1. The chart's last printed line, "Firmware Version"
+// (2281), is not among them — its P2 cell prints an em dash rather than an
+// address, under the table's own note "P2 is any value." (2283) — and the
+// four parameterless rows above ARE among them. If a transcription disagrees
+// with this number, the answer is arbitration against the PDF, never an edit
+// here.
+//
+// Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101,
+// ft891 and ts590 profiles are not.
+var ts890sProfile = Profile{
+	Model:       "TS-890S",
+	Package:     "ma",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/kw",
+	ImportAlias: "kw",
+	VarName:     "exItems890S",
+	OutFile:     "exinventory890s_gen.go",
+	ManualCSV:   "menu890s.csv",
+
+	Addresses:     AddressGrouped,
+	LabelPolicy:   LabelsAbsent,
+	TextRowPolicy: TextRowsAllowed,
+	// Named BY ADDRESS, never by a count: a count-only gate would accept an
+	// inventory that omitted the wrong four rows and still satisfied the
+	// arithmetic. staleness890s_test.go fires exactly that falsification.
+	ParameterlessPolicy: ParameterlessExcluded,
+	ParameterlessAddresses: [][3]int{
+		{1, 0, 23}, // Touchscreen Calibration
+		{1, 0, 24}, // Software License Agreement
+		{1, 0, 25}, // Important Notices concerning Free Open Source
+		{1, 0, 26}, // About Various Software License Agreements
+	},
+
+	// core/kw's ceiling, transcribed from kw.MaxEXDigits; see above for why
+	// this book's own 247 is not what a Kenwood profile declares.
+	DigitsCeiling: 246,
+	MinDigits:     3,
+	MaxDigits:     4,
+	TextWidths:    []int{10, 15},
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
+	// the ObservationsAbsent profiles above: no TS-890S has ever been asked
+	// anything by this project, so no observation CSV is ever parsed and this
+	// bound is never consulted. It carries NO hardware claim and must not be
+	// read as one; the moment observations do exist it is re-derived from
+	// them rather than kept. It is spelt 12 for the reason ts480Profile
+	// gives: that is what the other absent profiles spell, and a sentinel
+	// that coincided with this chart's own widest width would look derived
+	// from the chart, which is the one property a sentinel must not have.
+	MaxObservedWidth: 12,
+	ExpectedRows:     162,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems890S is the TS-890S's EX menu inventory, sorted by menu address,",
+		"built from ONE source: the manual transcription in menu890s.csv (the",
+		`TS-890S PC Control Command Reference Guide's "EX Command Parameter`,
+		`Lists"). The address is a GROUPED triple — a one-digit menu type, a`,
+		"two-digit category and a two-digit item, five wire characters — and the",
+		"book prints its two menu types as two tables under one heading, so both",
+		"are here: P1 0 is the Menu list and P1 1 the Advanced Menu list. The",
+		"chart prints no group labels, so every P1Label and P2Label is \"\". There",
+		"are no hardware READ observations to join — no TS-890S has ever been",
+		"asked anything — so every item carries the absence sentinels",
+		`ObservedReadWidth 0 and ObservedReadShape "".`,
+		"Regenerate with `go generate ./core/kw/ma`; do not edit by hand.",
+	},
+}
+
+// ts990sProfile carries the TS-990S's menu-chart transcription facts. Its
+// inventory is emitted into core/kw/ma, outside core/cat, so EXItem and
+// EXAddress are qualified by the explicit "kw" alias — and the ceiling it
+// declares is core/kw's, not this package's constant.
+//
+// THE CEILING IS 246, WHICH IS core/kw.MaxEXDigits (core/kw/exdigits.go),
+// AND THE ARITHMETIC FOR THIS RADIO WOULD HAVE GIVEN 247. Its EX answer is
+// "EX"(2) + P1(1) + P2(2) + P3(2) + P4(1) + ";"(1) = NINE fixed bytes
+// (docs/fixtures-private/manuals/ts990s_pc_rev2_layout.txt:1719-1747), so
+// 256 − 9 = 247 is what a per-radio derivation would produce. 247 is
+// numerically extable.MaxDigitsCeiling — core/cat's number, from a Yaesu
+// answer's own nine bytes — and core/kw/exdigits_ceiling_test.go is what
+// keeps the two distinct by requiring every profile with this ImportPath to
+// carry core/kw's 246. This stanza carries 246 for that reason and not
+// because the chart's widest printed value asks for it: the "widest printed
+// value" argument rests on the ASSUMED bound the design labels A19.
+//
+// Evidence, all from the book whose cover prints "TS-990S / PC CONTROL
+// COMMAND / Reference Guide" over "January/30/2019" (see
+// core/kw/ma/menu990s.csv's own provenance header, which carries every
+// transcription judgement and its layout line):
+//
+//   - The chart prints a (P1,P2,P3) triple of ONE, TWO and TWO digits —
+//     AddressGrouped, all three components on the wire (layout :1767-1768
+//     for the column headers, :1723 for the P1 enumeration "0: Menu /
+//     1: Advanced Menu").
+//   - LabelsAbsent. The chart has no group-label columns at all: its
+//     columns are P1, P2, P3, Function and P5 (:1767-1768). This was read
+//     off the layout text AND CONFIRMED against 300-dpi renders of printed
+//     pages 22, 23, 24, 25, 26 and 27 (PDF pages 23-28). The two table
+//     titles "Menu" (:1765) and "Advanced Menu" (:2194) are the P1
+//     enumeration, not per-row labels.
+//   - MinDigits 3 / MaxDigits 8. The P5 column headers ARE the codes and
+//     they are three characters wide (:1768), which is the width of every
+//     enumerated row and the narrowest the chart prints; 8 is the widest,
+//     from the 28 Fixed Mode band-limit rows' "8-digit frequency (in Hz)
+//     with unused digits entered as 0" (:2070-2159). Nineteen rows lie
+//     between: 0/05/11 Contest Number at 4 (:1972), and the eighteen
+//     PF-key rows 0/00/15 to 0/00/32, whose own cell states no width and
+//     whose width the EX command page prints instead — "PF key settings
+//     use 4 digits (refer to the PF Key assignment ID lists)" (:1747-1748),
+//     the "PF Key Assignment Lists" (:2287) running to four-character IDs
+//     (:2341). The transcription leg read those rows as 3 and recorded the
+//     disagreement; ORCHESTRATOR RULING R-B settled it at 4, on both this
+//     radio and the 890S. MaxDigits did not move.
+//   - TextRowsAllowed with TextWidths {10, 15}: menu 0/00/06 Screen Saver
+//     Message, "Up to 10 alphanumeric characters" (:1778), and menu 0/00/07
+//     Power-on Message, "Up to 15 alphanumeric characters" (:1779). The EX
+//     command page states both counts again (:1751-1752). They are the
+//     chart's only two free-text fields; the numeric-legend rows above
+//     state a WIDTH, not a character count, and are NOT text.
+//   - ParameterlessRefused. Every ADDRESSED row of this chart names a
+//     settable field, so a hyphen in a Digits cell is a transcription
+//     error. The four rows drawn with a dash where the address should be
+//     (:2272-2279) are not rows of the inventory at all: an unaddressed row
+//     names no EX address, so there is nothing for the exclusion policy to
+//     exclude.
+//
+// ExpectedRows is 194 — 167 rows with P1=0 and 27 with P1=1 — and it comes
+// from the transcription leg's own count of the chart's ADDRESSED rows, not
+// from two transcriptions agreeing with each other. If a later leg counts
+// something else, the answer is arbitration against the PDF, never an edit
+// here.
+//
+// Deliberately NOT given a named accessor, for the reason the other
+// TypesImported profiles are not.
+var ts990sProfile = Profile{
+	Model:       "TS-990S",
+	Package:     "ma",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/kw",
+	ImportAlias: "kw",
+	VarName:     "exItems990S",
+	OutFile:     "exinventory990s_gen.go",
+	ManualCSV:   "menu990s.csv",
+
+	Addresses:           AddressGrouped,
+	LabelPolicy:         LabelsAbsent,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
+
+	// core/kw's ceiling, transcribed from kw.MaxEXDigits; see above for why
+	// this radio's own 247 is the one number it must not be.
+	DigitsCeiling: 246,
+	MinDigits:     3,
+	MaxDigits:     8,
+	TextWidths:    []int{10, 15},
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here. Validate
+	// demands a positive value from every profile, but this profile declares
+	// ObservationsAbsent — no TS-990S has ever been asked anything by this
+	// project — so no observation CSV is ever parsed and this bound is never
+	// consulted. It carries NO hardware claim and must not be read as one;
+	// the moment observations do exist it is re-derived from them rather
+	// than kept. It is spelt 12 because that is what the other
+	// ObservationsAbsent profiles spell, and a sentinel that coincided with
+	// one of this chart's own widths would look derived from the chart,
+	// which is the one property a sentinel must not have.
+	MaxObservedWidth: 12,
+	ExpectedRows:     194,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems990S is the TS-990S's EX menu inventory, sorted by (P1,P2,P3),",
+		"built from ONE source: the manual transcription in menu990s.csv (the",
+		`TS-990S PC Control Command Reference Guide's "EX Command Parameter`,
+		`Lists" — both printed lists, "Menu" and "Advanced Menu"). The address`,
+		"is a THREE-component group of one, two and two digits, all of them on",
+		"the wire, and the chart prints no group labels, so every P1Label and",
+		`P2Label is "". There are no hardware READ observations to join — no`,
+		"TS-990S has ever been asked anything — so every item carries the",
+		`absence sentinels ObservedReadWidth 0 and ObservedReadShape "".`,
+		"Regenerate with `go generate ./core/kw/ma`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
@@ -1233,6 +1560,8 @@ var registry = mustRegistry(map[string]Profile{
 	"ts480":   ts480Profile,
 	"ts590s":  ts590sProfile,
 	"ts590sg": ts590sgProfile,
+	"ts890s":  ts890sProfile,
+	"ts990s":  ts990sProfile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {

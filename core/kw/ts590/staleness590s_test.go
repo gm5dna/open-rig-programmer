@@ -231,10 +231,10 @@ func TestRedProof_NonZeroP2OrP3IsRefused(t *testing.T) {
 // the text policy, and it is here because this chart is one row away from
 // needing a policy internal/extable does not have.
 //
-// Profile carries ONE exact TextWidth and ParseCSV refuses any text row whose
-// Digits is not equal to it. This radio's chart prints exactly one free-text
-// field — menu 087, "Power on Message (up to 8 ASCII characters)" — so
-// TextWidth 8 is the whole truth about it. A transcriber who also flagged a
+// Profile carries a SET of text widths and ParseCSV refuses any text row
+// whose Digits the set does not name. This radio's chart prints exactly one
+// free-text field — menu 087, "Power on Message (up to 8 ASCII characters)" —
+// so a one-entry TextWidths of {8} is the whole truth about it. A transcriber who also flagged a
 // fixed-width character field as text, at a width of 4, would be stating two
 // incompatible things about one chart, and this is the refusal that says so
 // rather than letting the second width through as the first.
@@ -248,14 +248,14 @@ func TestRedProof_ASecondTextRowOfADifferentWidthIsRefused(t *testing.T) {
 	const row = "0,0,0,,,Version information,4 ASCII characters,4,true,749\n"
 	_, err := extable.ParseCSV(p, []byte(row))
 	if err == nil {
-		t.Fatalf("ParseCSV accepted a text row of width 4, want a refusal naming TextWidth %d", p.TextWidth)
+		t.Fatalf("ParseCSV accepted a text row of width 4, want a refusal naming TextWidths %v", p.TextWidths)
 	}
-	if !strings.Contains(err.Error(), fmt.Sprint(p.TextWidth)) {
-		t.Errorf("ParseCSV refused with %v, want the message to name the profile's TextWidth %d", err, p.TextWidth)
+	if !strings.Contains(err.Error(), fmt.Sprint(p.TextWidths)) {
+		t.Errorf("ParseCSV refused with %v, want the message to name the profile's TextWidths %v", err, p.TextWidths)
 	}
 	// And the width the chart actually prints still parses, so the refusal
 	// above is about the WIDTH and not about text rows as such.
 	if _, err := extable.ParseCSV(p, []byte("87,0,0,,,Power on message,Power on Message (up to 8 ASCII characters),8,true,741\n")); err != nil {
-		t.Errorf("ParseCSV refused this chart's own text row at width %d: %v", p.TextWidth, err)
+		t.Errorf("ParseCSV refused this chart's own text row at one of its declared widths %v: %v", p.TextWidths, err)
 	}
 }

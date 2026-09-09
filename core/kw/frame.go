@@ -6,17 +6,18 @@ const (
 	// rejectionFrame is the radio's one and only NAK. It means EITHER
 	// "Command syntax was incorrect" OR "Command was not executed due to
 	// the current status of the transceiver (even though the command
-	// syntax was correct)" (590:100-105, 480:130-135), and nothing in
-	// either book distinguishes the two. Treated as definitive; never
-	// retried.
+	// syntax was correct)" (590:100-105, 480:130-135, 890:106-112,
+	// 990:108-113), and nothing in any of the four books distinguishes the
+	// two. Treated as definitive; never retried.
 	rejectionFrame = "?;"
 	// communicationErrorFrame is "E;": "A communication error occurred,
 	// such as an overrun or framing error during a serial data
 	// transmission" (590:110-112, 480:140-142).
 	communicationErrorFrame = "E;"
-	// receiveOverrunFrame is "O;". The two books give it DIFFERENT causes
-	// (erratum E13) — see StreamError, which carries whichever sentence
-	// belongs to the book the session is talking to.
+	// receiveOverrunFrame is "O;". The TS-480 gives it a DIFFERENT cause
+	// from the other three books (erratum E13) — see StreamError, which
+	// carries whichever sentence belongs to the book the session is
+	// talking to.
 	receiveOverrunFrame = "O;"
 )
 
@@ -75,11 +76,12 @@ func IsRejection(frame []byte) bool {
 // streamErrorToken returns the stream-health token frame is — "E;" or "O;"
 // — or "" if it is neither.
 //
-// Both books print the two beside "?;" in one error-message table
-// (590:97-113, 480:126-144) and nothing else in either book is one. The
-// comparison is exact and case-sensitive: no sentence in either document
-// admits a lower-case token, and a codec that guessed at one would be
-// inventing a frame.
+// All four books print the two beside "?;" in one error-message table
+// (590:97-113, 480:126-144, 890:106-123, 990:108-121) and nothing else in
+// any of them is one. The comparison is exact and case-sensitive: no
+// sentence in any of the four books — the TS-590S/SG, the TS-480, the
+// TS-890S or the TS-990S manual — admits a lower-case token, and a codec
+// that guessed at one would be inventing a frame.
 func streamErrorToken(frame []byte) string {
 	switch string(frame) {
 	case communicationErrorFrame:

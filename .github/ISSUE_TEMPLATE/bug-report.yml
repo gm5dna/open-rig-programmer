@@ -31,6 +31,8 @@ body:
         - IC-R8600
         - TS-590S
         - TS-590SG
+        - TS-890S
+        - TS-990S
         - Demo (simulated radio)
         - Not radio-specific
     validations:

@@ -302,7 +302,7 @@ var ownParticulars = map[string][]string{
 	"IC-7760":    {"IC-7760", "B2h"},
 	"IC-7100":    {"IC-7100", "88h"},
 	"IC-R8600":   {"IC-R8600", "96h"},
-	// The two REGISTERED Kenwood rows (Tier 6). Each entry is the bare
+	// The REGISTERED Kenwood rows (Tier 6). Each entry is the bare
 	// name and nothing else: this family's prose carries no address hex
 	// (it is not a CI-V family) and no finding from a real radio to
 	// guard, so the name is the whole of each row's distinguishing
@@ -326,6 +326,19 @@ var ownParticulars = map[string][]string{
 	// the registration commit's ten-edit list is meant to be.
 	"TS-590S":  {"TS-590S"},
 	"TS-590SG": {"TS-590SG"},
+	// Tier 6's SECOND pair. Bare names again, for the 590 pair's reason —
+	// no CI-V address hex and no hardware finding to guard — and neither
+	// name is a prefix of anything else in this table.
+	//
+	// NEITHER ENTRY NAMES THE OTHER, and that is a discipline rather than
+	// an accident of wording. Both rows' lockout flags are printed
+	// differently ("0/1" against "1/2", erratum E8) and each entry says so
+	// — but each says it about ITS OWN radio, describing the other as "the
+	// other Kenwood radio in this model list" rather than naming it,
+	// because a sentence naming the sibling would be this check's own
+	// definition of a borrowed particular.
+	"TS-890S": {"TS-890S"},
+	"TS-990S": {"TS-990S"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -1011,6 +1024,21 @@ func TestFor_UnknownModel(t *testing.T) {
 		// The TS-480's near misses — and NOT the registry spelling. See the
 		// paragraph below for why "TS-480" itself must never join this list.
 		"TS480", "ts-480", "TS-480 ", " TS-480", "TS 480", "480",
+		// TS-890S and TS-990S near misses (Tier 6's second pair): the same
+		// five-shape set as every row above — the no-hyphen spelling, the
+		// lowercase slug this project's own ModelSlug produces ("ts-890s"
+		// and "ts-990s", real strings in this build, which is exactly why
+		// they must not resolve here), a trailing- and a leading-space
+		// variant, the space-for-hyphen spelling, and the bare model number.
+		// Both rows are listed explicitly rather than assumed distinct by
+		// construction: the two names differ in ONE character, which is the
+		// circumstance in which a lookup that had been made loose would
+		// answer one radio's prose to the other's typo. The trailing S is
+		// dropped in a sixth shape on each, because "TS-890" and "TS-990"
+		// are what a person shortening the name would type and neither is a
+		// radio this project registers.
+		"TS890S", "ts-890s", "TS-890S ", " TS-890S", "TS 890S", "890", "TS-890",
+		"TS990S", "ts-990s", "TS-990S ", " TS-990S", "TS 990S", "990", "TS-990",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -1039,6 +1067,30 @@ func TestFor_UnknownModel(t *testing.T) {
 	}
 	if _, ok := radiotext.For("TS480"); ok {
 		t.Error(`For("TS480") ok = true, want false — the hyphenless spelling is a near miss and must keep missing, even though the hyphenated registry spelling now resolves`)
+	}
+
+	// THE TWO SPELLINGS TIER 6's SECOND PAIR MUST NOT PUT ON THE LIST ABOVE,
+	// asserted here explicitly with the reason rather than left as a silent
+	// omission — the sentinel sweep this registration ran names it as the one
+	// place in this package a reflex edit could go wrong.
+	//
+	// "TS-890S" and "TS-990S" are REGISTRY spellings from this milestone on,
+	// so For answers ok for both, and a later reader adding either beside
+	// "TS890S" by reflex — alongside the hyphenless near misses just added —
+	// would be asserting the opposite of what this package does. The
+	// assertion is stated in BOTH directions on purpose, exactly as the
+	// TS-480's above is: it fails if an entry is ever dropped from texts, and
+	// it names the near miss that must keep missing, so the two facts cannot
+	// drift apart.
+	for _, model := range []string{"TS-890S", "TS-990S"} {
+		if _, ok := radiotext.For(model); !ok {
+			t.Errorf("For(%q) ok = false, want true — this row is registered in internal/wiring, so it must never be a near-miss fixture in the list above", model)
+		}
+	}
+	for _, miss := range []string{"TS890S", "TS990S"} {
+		if _, ok := radiotext.For(miss); ok {
+			t.Errorf("For(%q) ok = true, want false — the hyphenless spelling is a near miss and must keep missing, even though the hyphenated registry spelling now resolves", miss)
+		}
 	}
 }
 
@@ -1858,7 +1910,7 @@ func TestRadiotext_TS480Verbatim(t *testing.T) {
 	// self-comparison to skip and no ownParticulars entry needed for it.
 	// What it proves is what matters: this radio's prose is not any other
 	// registered radio's, byte for byte or particular by particular — its
-	// two Kenwood stablemates included, whose book it shares nothing with
+	// Kenwood stablemates included, whose book it shares nothing with
 	// but a manufacturer.
 	assertNotBorrowedFromAnyOtherModel(t, "TS-480", got)
 }
@@ -2067,4 +2119,187 @@ func fieldValues(m map[string]string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+// TestRadiotext_TS890SVerbatim pins every TS-890S Text field byte for byte
+// (Tier 6's second pair, landed with that row's wiring registration —
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a registered
+// model with no prose, which is what makes this entry part of registration
+// rather than a later nicety).
+//
+// THE HONESTY RULE APPLIES UNCHANGED, and this row starts exactly where the
+// TS-590 pair did: no Kenwood radio has ever answered a frame put to it by
+// this project, only the PC control command reference is held here and not the
+// instruction manual, and this row's write trials have not happened. Every
+// string says what is actually known, including where something is not, and
+// borrows the wording of no other entry — assertNotBorrowedFromAnyOtherModel
+// is what enforces the last clause across the whole registry.
+//
+// WHAT THIS ENTRY CAN SAY THAT THE TS-590 PAIR'S COULD NOT: this radio can be
+// written in every mode it publishes, and its transmit frequency comes back
+// from the same frame as everything else — so there is no "supply the
+// transmit frequency yourself" cost on a memory READ here, and no FM-only
+// refusal. That is true of a read and false of a CHIRP import: a CHIRP row
+// carries no transmit frequency either, and this radio's write path refuses
+// it exactly as the read-back one is spared — so the entry states both. What
+// REPLACES the read-side cost is the create-path cost: one frame carries a
+// whole channel, so a blank target is refused rather than created, and the
+// entry says so in the sentence Q10 requires.
+//
+// THE VOCABULARY CHECK RUNS AGAINST THIS PROSE (plan decision P16): Kenwood is
+// deliberately NOT in yaesuModels, because these books say "PC control
+// command" and never the Yaesu family's word.
+func TestRadiotext_TS890SVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:           "The TS-890S has no erase command this build will send, and on this radio the absence is a CHOICE OVER A PRINTED COMMAND rather than over an ambiguous side effect. This radio's own book prints a dedicated deletion command, MA5, \"Memory Channel (Channel Deletion)\", and this programme does not delete a user's channels — so it never builds that frame, and the outbound gate refuses any frame beginning MA5 besides, which means the command cannot be sent even by accident or by a caller that asked for it. That is stronger evidence than the TS-590 pair had, and it is refused for the opposite reason: there the clearing route was a reading of a sentence, here it is printed plainly and declined. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-890S instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		FirmwareGuidance:         "The TS-890S reports its own firmware version and this build asks for it, as the second frame of a two-frame probe: an identity request first, and then a version request on this radio's own identity only. The four characters that come back are printed in the probe report. NOTHING ON THIS ROW BRANCHES ON THE ANSWER. No field of this radio's memory record has a meaning the book makes conditional on firmware, so there is no threshold to compare a version against and no write refusal keyed to one; the version is asked for because the book prints that command complete — a read chart, an answer chart and a worked example — and reported because a reader is entitled to see what the radio said. A version this build cannot read as a version still gives a working session: the grammar is taken from the book's own worked example, and refusing a perfectly good radio on the strength of a parse would cost more than it buys. No minimum firmware version is established for this radio: nothing this project holds states one, and no TS-890S has ever been asked.",
+		GridLegendNote:           "Tone and Scan Skip ARE read and written on the TS-890S, as they are on the TS-590 pair and unlike the Yaesu radios this programme also supports: one memory record carries a tone mode, separate transmit and receive tone numbers and a channel-lockout flag, and one frame carries all of them. THE LOCKOUT FLAG ON THIS ROW READS \"0: Lockout OFF / 1: Lockout ON\", which is this radio's own spelling and NOT the whole family's: another Kenwood radio in this model list prints a different pair of values for the same flag, and a build that carried one radio's convention into another would be writing a byte the radio does not print. This row's codec accepts only the two values this radio's own memory-record chart prints. THIS ROW PUBLISHES SIXTEEN MODES, and every one of them can be written: unlike the TS-590 pair there is no FM-only restriction here, because the width byte this record carries has a printed meaning of its own rather than one the book confines to FM. ONE TONE VALUE IS STILL REFUSED, and it is a disagreement between this radio's own two printed tone charts rather than a limit of this build: 1750 Hz is the last entry of the chart the tone-number command prints and has no entry at all in the chart the tone-squelch command prints, so a 1750 Hz TRANSMIT tone is written normally while a 1750 Hz RECEIVE tone is refused at the write rather than sent as a number the receive chart does not print. REGISTERING THIS RADIO DOES NOT MEAN THIS BUILD CAN PROGRAMME A FRESH ONE, and that is the cost worth knowing before you plan anything. One frame carries a whole channel here, so this build reads the channel it is about to write and refuses when that read comes back blank: whether a memory-set frame can CREATE an unassigned channel is printed nowhere for this command, while five sibling commands in this same book each print an unassigned-channel prohibition of their own — so a channel that does not exist on the radio yet is refused, naming register entry A3, rather than created on an assumption. Channels the radio already holds are written normally. THE SECONDARY SIDE IS READ BUT NEVER REWRITTEN FROM NOTHING. One frame rewrites the whole record, primary side and secondary side together, and this build has a source for the primary side and none for the secondary — so before the write it compares the radio's own secondary parameters against what its frame would emit and refuses, naming the parameter and both values, rather than overwriting a side your file never described. A CHANNEL WRITTEN WHILE THE RADIO IS DISPLAYING IT MAY READ BACK OLD, and that is the radio's own printed behaviour rather than a fault in the write: \"When setting the channel currently being accessed, the new settings are reflected the next time that channel is accessed.\" A verification read of the channel on the radio's own display can therefore show the previous values; move off it and read again. AND A CHIRP FILE'S ORDINARY ROWS DO IMPORT ON THIS RADIO, with four costs. A CHIRP file's blank Duplex column is its ordinary simplex row, and although this radio declares no shift vocabulary for it to land in — its memory record carries no duplex selector of any kind — a blank column asks for nothing this radio cannot do, so such a row is imported as simplex rather than refused. A Duplex column reading \"off\" IS refused, because that asserts a state distinct from simplex — no duplex configured at all — which this record cannot carry. And CW, CWR and RTTY rows are refused on the mode: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, FSK and FSK-R instead. AND AN IMPORTED CHIRP CHANNEL IS REFUSED AT THE WRITE UNTIL YOU SUPPLY FOUR VALUES, not one. A CHIRP row states no transmit frequency, and its ordinary blank Tone column states only that tone is switched off — leaving the transmit tone and the receive tone unsaid. One frame here carries the transmit frequency, the tone mode, the transmit tone and the receive tone together, so the write requires all four to be known, and nothing supplies the ones the file did not carry. A row reading \"Tone\" gives the transmit tone and still leaves the receive tone to you; a row reading \"TSQL\" is refused on the tone column outright, because CHIRP's tone squelch asks for a transmit-and-receive tone mode this radio's own memory chart does not print. This programme's own CSV carries all four already. This programme's own CSV import and export are unaffected.",
+		ToneScanSkipVerification: "",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's PC-control interface on a TS-890S, so nothing here is preserved: one memory record carries a tone mode and separate transmit and receive tone numbers, and one frame carries both. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's PC-control interface on a TS-890S, so nothing here is preserved: one memory record carries a channel-lockout flag, printed \"0: Lockout OFF / 1: Lockout ON\". Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		FirmwarePlaceholder: "as answered by the TS-890S itself, for example 1.00",
+		ProbeFirmwareNote:   "Firmware version IS readable on this radio, and the probe reads it: two frames go out, an identity request and then a version request, and the four characters that come back are printed in the report above. NOTHING ON THIS ROW BRANCHES ON THE ANSWER — no field of this radio's memory record has a firmware-conditional meaning — so the version is reported and not acted on, and a version this build cannot parse still gives a working session. THE PROBE ALSO TURNS AUTO INFORMATION OFF, AND IT DOES SO ON ONE CONNECTOR ONLY. This radio can be set separately for each of its connectors, so the session switches Auto Information off on the one it is using and leaves the others exactly as they were: a logger connected on another port will not see its own stream stop. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: no Kenwood book held here prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a TS-890S set to anything else has to be put back to 9600 at its own menu before it will answer.",
+	}
+
+	got, ok := radiotext.For("TS-890S")
+	if !ok {
+		t.Fatal(`For("TS-890S") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-890S\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-890S", got)
+}
+
+// TestRadiotext_TS990SVerbatim is its pair-mate's twin, on the same terms.
+// See TestRadiotext_TS890SVerbatim for the honesty rule this family is
+// written under, and
+// TestRadiotext_TS890SAnd990SDifferInMoreThanTheModelName for what the two
+// entries may NOT share.
+func TestRadiotext_TS990SVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:           "The TS-990S has no erase command this build will send, and on this radio the absence is a CHOICE OVER A PRINTED COMMAND rather than over an ambiguous side effect. This radio's own book prints a dedicated deletion command, MA5, \"Channel Deletion\", and this programme does not delete a user's channels — so it never builds that frame, and the outbound gate refuses any frame beginning MA5 besides, which means the command cannot be sent even by accident or by a caller that asked for it. That is stronger evidence than the TS-590 pair had, and it is refused for the opposite reason: there the clearing route was a reading of a sentence, here it is printed plainly and declined. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-990S instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		FirmwareGuidance:         "The TS-990S reports its own firmware version and this build asks for it, as the second frame of a two-frame probe: an identity request first, and then a version request on this radio's own identity only. The four characters that come back are printed in the probe report. NOTHING ON THIS ROW BRANCHES ON THE ANSWER. No field of this radio's memory record has a meaning the book makes conditional on firmware, so there is no threshold to compare a version against and no write refusal keyed to one; the version is asked for because the book prints that command complete — a read chart, an answer chart and a worked example — and reported because a reader is entitled to see what the radio said. A version this build cannot read as a version still gives a working session: the grammar is taken from the book's own worked example, and refusing a perfectly good radio on the strength of a parse would cost more than it buys. No minimum firmware version is established for this radio: nothing this project holds states one, and no TS-990S has ever been asked.",
+		GridLegendNote:           "Tone and Scan Skip ARE read and written on the TS-990S, as they are on the TS-590 pair and unlike the Yaesu radios this programme also supports: one memory record carries a tone mode, separate transmit and receive tone numbers and a channel-lockout flag, and one frame carries all of them. THE LOCKOUT FLAG ON THIS ROW READS \"1: Scan Lockout OFF / 2: Scan Lockout ON\", which is this radio's own spelling and not the family's — and not even this radio's own elsewhere, since its channel-lockout command a few pages later prints 0 and 1 for what looks like the same question. Another Kenwood radio in this model list prints \"0\" and \"1\" for the same flag. This build accepts only the two values the memory-record chart itself prints, so a byte from the other convention is refused rather than silently rewritten. THIS ROW PUBLISHES TWENTY-SIX MODES, and every one of them can be written: unlike the TS-590 pair there is no FM-only restriction here, because the width byte this record carries has a printed meaning of its own rather than one the book confines to FM. ONE TONE VALUE IS STILL REFUSED, and it is a disagreement between this radio's own two printed tone charts rather than a limit of this build: 1750 Hz is the last entry of the chart the tone-number command prints and has no entry at all in the chart the tone-squelch command prints, so a 1750 Hz TRANSMIT tone is written normally while a 1750 Hz RECEIVE tone is refused at the write rather than sent as a number the receive chart does not print. REGISTERING THIS RADIO DOES NOT MEAN THIS BUILD CAN PROGRAMME A FRESH ONE, and that is the cost worth knowing before you plan anything. One frame carries a whole channel here, so this build reads the channel it is about to write and refuses when that read comes back blank: whether a memory-set frame can CREATE an unassigned channel is printed nowhere for this command, while four sibling commands in this same book each print an unassigned-channel prohibition of their own — so a channel that does not exist on the radio yet is refused, naming register entry A3, rather than created on an assumption. Channels the radio already holds are written normally. THE SECONDARY SIDE IS READ BUT NEVER REWRITTEN FROM NOTHING. One frame rewrites the whole record, primary side and secondary side together, and this build has a source for the primary side and none for the secondary — so before the write it compares the radio's own secondary parameters against what its frame would emit and refuses, naming the parameter and both values, rather than overwriting a side your file never described. AND A CHANNEL WITH DUAL RECEPTION SWITCHED ON IS REFUSED OUTRIGHT: this record can flag a second RECEIVER over the second side, nothing in this programme's channel model names such a thing, and one frame rewrites the whole record — so a write to that channel would silently switch the second receiver off. It is refused instead, unconditionally, whatever the split flag beside it says. No other radio in the model list has this refusal, because no other radio in the model list has the flag. A CHANNEL WRITTEN WHILE THE RADIO IS DISPLAYING IT MAY READ BACK OLD, and that is the radio's own printed behaviour rather than a fault in the write: \"When setting the channel currently being accessed, the new settings are reflected the next time that channel is accessed.\" A verification read of the channel on the radio's own display can therefore show the previous values; move off it and read again. AND A CHIRP FILE'S ORDINARY ROWS DO IMPORT ON THIS RADIO, with four costs. A CHIRP file's blank Duplex column is its ordinary simplex row, and although this radio declares no shift vocabulary for it to land in — its memory record carries no duplex selector of any kind — a blank column asks for nothing this radio cannot do, so such a row is imported as simplex rather than refused. A Duplex column reading \"off\" IS refused, because that asserts a state distinct from simplex — no duplex configured at all — which this record cannot carry. And CW, CWR and RTTY rows are refused on the mode: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, FSK and FSK-R instead. AND AN IMPORTED CHIRP CHANNEL IS REFUSED AT THE WRITE UNTIL YOU SUPPLY FOUR VALUES, not one. A CHIRP row states no transmit frequency, and its ordinary blank Tone column states only that tone is switched off — leaving the transmit tone and the receive tone unsaid. One frame here carries the transmit frequency, the tone mode, the transmit tone and the receive tone together, so the write requires all four to be known, and nothing supplies the ones the file did not carry. A row reading \"Tone\" gives the transmit tone and still leaves the receive tone to you; a row reading \"TSQL\" is refused on the tone column outright, because CHIRP's tone squelch asks for a transmit-and-receive tone mode this radio's own memory chart does not print. This programme's own CSV carries all four already. This programme's own CSV import and export are unaffected.",
+		ToneScanSkipVerification: "",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's PC-control interface on a TS-990S, so nothing here is preserved: one memory record carries a tone mode and separate transmit and receive tone numbers, and one frame carries both. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's PC-control interface on a TS-990S, so nothing here is preserved: one memory record carries a channel-lockout flag, printed \"1: Scan Lockout OFF / 2: Scan Lockout ON\". Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		FirmwarePlaceholder: "as answered by the TS-990S itself, for example 1.00",
+		ProbeFirmwareNote:   "Firmware version IS readable on this radio, and the probe reads it: two frames go out, an identity request and then a version request, and the four characters that come back are printed in the report above. NOTHING ON THIS ROW BRANCHES ON THE ANSWER — no field of this radio's memory record has a firmware-conditional meaning — so the version is reported and not acted on, and a version this build cannot parse still gives a working session. THE PROBE ALSO TURNS AUTO INFORMATION OFF, AND IT DOES SO ON ONE CONNECTOR ONLY. This radio can be set separately for each of its connectors, so the session switches Auto Information off on the one it is using and leaves the others exactly as they were: a logger connected on another port will not see its own stream stop. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: no Kenwood book held here prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a TS-990S set to anything else has to be put back to 9600 at its own menu before it will answer.",
+	}
+
+	got, ok := radiotext.For("TS-990S")
+	if !ok {
+		t.Fatal(`For("TS-990S") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-990S\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-990S", got)
+}
+
+// TestRadiotext_TS890SAnd990SDifferInMoreThanTheModelName is the TS-590
+// pair's test one pair over, and it asserts the same INVERSION for a stronger
+// reason.
+//
+// The FTdx101 and IC-7851 pairs share one manual that prints their memory
+// surface once, so their entries may differ ONLY where they name the model
+// and a substitution proves it. The TS-590 pair share one manual that
+// QUALIFIES BY ROW. This pair shares NEITHER: two books, two memory records
+// of different shapes, two mode legends of different lengths. An entry pair
+// that differed only in the model name would therefore be wrong twice over —
+// it would mean one entry had been produced by substituting the other's, and
+// one of these two radios would be told something its own book does not say.
+//
+// So the substitution must FAIL, and it must fail on NAMED facts, so that a
+// later edit which flattened the pair into one prose block is caught with the
+// specific difference it destroyed. The four named facts are the ones plan
+// decision P16 requires the pair to differ in: the mode count, the lockout
+// sentence, the dual-reception refusal and the create-path sentence's row
+// scope.
+func TestRadiotext_TS890SAnd990SDifferInMoreThanTheModelName(t *testing.T) {
+	a, ok := radiotext.For("TS-890S")
+	if !ok {
+		t.Fatal(`For("TS-890S") ok = false, want true`)
+	}
+	b, ok := radiotext.For("TS-990S")
+	if !ok {
+		t.Fatal(`For("TS-990S") ok = false, want true`)
+	}
+	if a == b {
+		t.Fatal("the TS-890S's and TS-990S's entries are byte-identical — each radio's prose must at least name its own model")
+	}
+
+	aFields := textFields(a)
+	bFields := textFields(b)
+	substituted := 0
+	for field, bVal := range bFields {
+		if strings.ReplaceAll(bVal, "TS-990S", "TS-890S") == aFields[field] {
+			substituted++
+		}
+	}
+	// Some fields legitimately survive the substitution — an input hint
+	// carries no row-qualified fact — so the count is not pinned; naming it
+	// would be a maintenance trap. What matters is that not ALL of them do,
+	// and that the fields carrying the four named facts do not.
+	if substituted == len(aFields) {
+		t.Error("every TS-990S field reduces to the TS-890S's by substituting the model name — one of these entries was produced from the other, and this pair shares no book for that to be true of")
+	}
+
+	aJoined := strings.Join(fieldValues(aFields), "\n")
+	bJoined := strings.Join(fieldValues(bFields), "\n")
+	for _, tc := range []struct {
+		what  string
+		aOnly string
+		bOnly string
+	}{
+		{
+			what:  "the mode count",
+			aOnly: "THIS ROW PUBLISHES SIXTEEN MODES",
+			bOnly: "THIS ROW PUBLISHES TWENTY-SIX MODES",
+		},
+		{
+			what:  "the lockout sentence",
+			aOnly: `THE LOCKOUT FLAG ON THIS ROW READS "0: Lockout OFF / 1: Lockout ON"`,
+			bOnly: `THE LOCKOUT FLAG ON THIS ROW READS "1: Scan Lockout OFF / 2: Scan Lockout ON"`,
+		},
+		{
+			what: "the create-path sentence's row scope",
+			// A3 is scoped PER ROW: five sibling commands print an
+			// unassigned-channel prohibition in the 890S's book and four
+			// in the 990S's, so each entry counts its own.
+			aOnly: "while five sibling commands in this same book",
+			bOnly: "while four sibling commands in this same book",
+		},
+	} {
+		if !strings.Contains(aJoined, tc.aOnly) {
+			t.Errorf("%s: the TS-890S's prose no longer says %q", tc.what, tc.aOnly)
+		}
+		if strings.Contains(bJoined, tc.aOnly) {
+			t.Errorf("%s: the TS-990S's prose says %q, which is a fact about the 890S row alone", tc.what, tc.aOnly)
+		}
+		if !strings.Contains(bJoined, tc.bOnly) {
+			t.Errorf("%s: the TS-990S's prose no longer says %q", tc.what, tc.bOnly)
+		}
+		if strings.Contains(aJoined, tc.bOnly) {
+			t.Errorf("%s: the TS-890S's prose says %q, which is a fact about the 990S row alone", tc.what, tc.bOnly)
+		}
+	}
+
+	// THE FOURTH NAMED FACT is one-sided by nature: the 890S's record has no
+	// dual-reception flag at all, so its entry must not carry the refusal and
+	// the 990S's must.
+	const dual = "AND A CHANNEL WITH DUAL RECEPTION SWITCHED ON IS REFUSED OUTRIGHT"
+	if !strings.Contains(bJoined, dual) {
+		t.Errorf("the TS-990S's prose no longer says %q — the refusal is this row's most consequential one", dual)
+	}
+	if strings.Contains(aJoined, dual) {
+		t.Errorf("the TS-890S's prose says %q, and this radio's record carries no dual-reception flag for it to be about", dual)
+	}
 }

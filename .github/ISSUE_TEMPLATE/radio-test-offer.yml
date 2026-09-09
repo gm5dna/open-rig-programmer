@@ -32,6 +32,8 @@ body:
         - IC-R8600
         - TS-590S
         - TS-590SG
+        - TS-890S
+        - TS-990S
         - FT-710 on Linux (the one platform the FT-710 has not been tried on)
         - FT-710 on Windows amd64 (only ARM64 has been tried)
     validations:

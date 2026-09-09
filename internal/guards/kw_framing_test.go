@@ -14,10 +14,11 @@ const kwImportPath = modulePrefix + "core/kw"
 
 // TestKenwoodDriversUseNewFramingFor pins the steering core/kw's prose asks
 // for, mechanically: NO NON-TEST FILE UNDER core/driver MAY CALL
-// kw.NewFraming — a driver builds its session's framing with
-// kw.NewFramingFor(layout).
+// kw.NewFraming OR kw.NewFramingWithGate — a driver builds its session's
+// framing with kw.NewFramingFor(layout), or, for the MA family, with
+// ma.NewFramingFor(layout).
 //
-// THE TWO CONSTRUCTORS DIFFER IN THEIR OUTBOUND GATE, WHICH IS THE WHOLE
+// THE CONSTRUCTORS DIFFER IN THEIR OUTBOUND GATE, WHICH IS THE WHOLE
 // POINT. kw.NewFraming(book) knows which document a session speaks, and so
 // which cause sentence an "O;" carries (erratum E13), but it does not know
 // which RADIO — the layout axes are per row — so its Allow can only be the
@@ -36,11 +37,20 @@ const kwImportPath = modulePrefix + "core/kw"
 // repeats it; this is where the repository normally puts such a rule, and it
 // lands before the first Kenwood driver rather than after it.
 //
+// kw.NewFramingWithGate(book, allow) is the SECOND back door, added to this
+// guard at Kenwood pair 2 Stage 0 (spec decision 4). It is the gate hook
+// core/kw/ma builds its own outbound gate through, and from a driver's seat
+// it is worse than NewFraming, not better: the caller supplies the predicate,
+// so a driver passing a permissive one gets the envelope back with a
+// narrower-looking name. A guard that forbids one back door and not the one
+// added beside it is worse than no guard, because it reads as coverage.
+//
 // SCOPE IS core/driver AND EVERYTHING BENEATH IT (inTree, not exact
 // equality): the neutral seam package does not import core/kw at all, and it
 // is the per-radio subpackages — core/driver/ts590, core/driver/ts480 — that
 // will build sessions. NewFramingFor is deliberately NOT matched: the
-// selector names are compared exactly.
+// selector names are compared exactly, against the exact list
+// isKWEnvelopeConstructor holds.
 //
 // TESTS ARE OUT OF SCOPE by parseRepo's own filter, and that is right here:
 // a driver test may legitimately build an envelope-only framing to
@@ -58,7 +68,7 @@ func TestKenwoodDriversUseNewFramingFor(t *testing.T) {
 		}
 		seen++
 		if callsKWNewFraming(pf.file) {
-			t.Errorf("%s: calls kw.NewFraming — a driver builds its framing with kw.NewFramingFor(layout), whose outbound gate is the eight per-row grammars; NewFraming's gate is the envelope both books print, which admits the 42-byte erase shape of 590:1579-1581 and every other row's frames", pf.relPath)
+			t.Errorf("%s: calls kw.NewFraming or kw.NewFramingWithGate — the two constructors a driver MAY use are kw.NewFramingFor(layout) and ma.NewFramingFor(layout), whose outbound gates are their family's per-row grammars; the envelope-only pair gate on the shape both books print, which admits the 42-byte erase shape of 590:1579-1581 and every other row's frames, and NewFramingWithGate hands the predicate to the caller", pf.relPath)
 		}
 	}
 
@@ -67,8 +77,25 @@ func TestKenwoodDriversUseNewFramingFor(t *testing.T) {
 	}
 }
 
-// callsKWNewFraming reports whether f calls NewFraming through its core/kw
-// import, under whatever local name that import carries.
+// isKWEnvelopeConstructor reports whether name is one of core/kw's
+// ENVELOPE-ONLY framing constructors — the ones whose gate is the shape both
+// books print rather than a radio's own per-row grammars.
+//
+// THE LIST IS EXACT AND A NEW ONE MUST BE ADDED HERE BY NAME. NewFramingFor
+// is deliberately absent: it is the constructor a driver SHOULD reach for.
+//
+// NewFramingWithGate joined at Kenwood pair 2 Stage 0 (spec decision 4,
+// 08/09/2026), and it landed BEFORE core/kw gained the constructor — a name
+// list widened for something that is not there yet is inert, and widening it
+// afterwards is the edit everyone forgets. It is the gate hook core/kw/ma
+// builds its outbound gate through, so from core/driver it is a second weaker
+// constructor one identifier's difference from the right one.
+func isKWEnvelopeConstructor(name string) bool {
+	return name == "NewFraming" || name == "NewFramingWithGate"
+}
+
+// callsKWNewFraming reports whether f calls one of those constructors through
+// its core/kw import, under whatever local name that import carries.
 //
 // IT RESOLVES THE IMPORT RATHER THAN MATCHING THE BARE NAME, because
 // core/civ has a NewFraming of its own and the Icom drivers call it
@@ -87,14 +114,15 @@ func callsKWNewFraming(f *ast.File) bool {
 		}
 		switch x := n.(type) {
 		case *ast.SelectorExpr:
-			// kw.NewFraming, under the import's own local name.
+			// kw.NewFraming or kw.NewFramingWithGate, under the import's
+			// own local name.
 			id, isIdent := x.X.(*ast.Ident)
-			if isIdent && id.Name == local && x.Sel.Name == "NewFraming" {
+			if isIdent && id.Name == local && isKWEnvelopeConstructor(x.Sel.Name) {
 				found = true
 			}
 		case *ast.Ident:
 			// A dot-imported core/kw makes the call a bare identifier.
-			if local == "." && x.Name == "NewFraming" {
+			if local == "." && isKWEnvelopeConstructor(x.Name) {
 				found = true
 			}
 		}
@@ -108,9 +136,10 @@ func callsKWNewFraming(f *ast.File) bool {
 // contains no Kenwood driver yet, so without this its "no file calls it"
 // result would be indistinguishable from a predicate that never says yes.
 //
-// The four sources are the four ways this has to come out: the plain call,
-// the aliased call, the constructor a driver SHOULD use, and core/civ's
-// same-named constructor that the Icom drivers really do call.
+// The five sources are the five ways this has to come out: the plain call,
+// the aliased call, the constructor a driver SHOULD use, the gate-hook
+// constructor added at Kenwood pair 2 Stage 0 (spec decision 4), and
+// core/civ's same-named constructor that the Icom drivers really do call.
 func TestCallsKWNewFramingDetector(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -137,6 +166,13 @@ func open() { _, _ = kenwood.NewFraming(kenwood.Book590) }`,
 import "` + kwImportPath + `"
 func open(l kw.Layout) { _, _ = kw.NewFramingFor(l) }`,
 			want: false,
+		},
+		{
+			name: "the gate-hook constructor, the second back door",
+			src: `package ts890
+import "` + kwImportPath + `"
+func open(allow func([]byte) bool) { _, _ = kw.NewFramingWithGate(kw.Book890, allow) }`,
+			want: true,
 		},
 		{
 			name: "core/civ's own NewFraming, which the Icom drivers call",

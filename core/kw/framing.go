@@ -17,14 +17,25 @@ import (
 // of the import direction — the cycle-free one, and the one core/civ's own
 // framing.go already takes. core/transport knows nothing of core/kw.
 
-// Book names which of the two PC-command documents a session speaks to.
+// Book names which of the FOUR PC-command documents a session speaks to.
 //
-// IT IS NOT DECORATION AND IT HAS NO DEFAULT. The two books give the SAME
+// IT IS NOT DECORATION AND IT HAS NO DEFAULT. The books give the SAME
 // stream-health token DIFFERENT causes — "O;" is "A receive buffer overrun
-// error occurred" on the 590 pair (590:113) and "Receive data was sent but
-// processing was not completed" on the TS-480 (480:143-144), erratum E13 —
-// so a diagnostic that names the wrong sentence names the wrong document.
-// The zero value describes no document and NewFraming refuses it.
+// error occurred" on the 590 pair (590:113), the TS-890S (890:121-123) and
+// the TS-990S (990:121), and "Receive data was sent but processing was not
+// completed" on the TS-480 (480:143-144), erratum E13 — so a diagnostic
+// that names the wrong sentence names the wrong document. The zero value
+// describes no document and NewFraming refuses it.
+//
+// valid() NOW ANSWERS TWO DIFFERENT QUESTIONS AND ONLY ONE OF THEM IS
+// NewLayout'S. It says "a document this package has READ", which is what
+// framing, the typed errors and IsFatal need: all four books print the same
+// envelope and the same error-message table, so this package can speak for
+// all four at the stream level. It does NOT say "a document this package's
+// 50-byte RECORD describes" — that is two books, the 590 pair's and the
+// TS-480's, and NewLayout tests for those two BY NAME rather than through
+// valid() (layout.go). The TS-890S and TS-990S memory channel is
+// core/kw/ma's, whose layout type is not a kw.Layout at all.
 //
 // It is a BOOK, not a registry row. The TS-590S and the TS-590SG are two
 // registry rows sharing one document (590:*), and nothing in this file
@@ -42,6 +53,10 @@ const (
 	Book590
 	// Book480 is the TS-480 PC control command reference (480:LINE).
 	Book480
+	// Book890 is the TS-890S PC control command reference (890:LINE).
+	Book890
+	// Book990 is the TS-990S PC control command reference (990:LINE).
+	Book990
 )
 
 // String renders a Book for diagnostics.
@@ -51,13 +66,21 @@ func (b Book) String() string {
 		return "TS-590S/SG PC command reference"
 	case Book480:
 		return "TS-480 PC command reference"
+	case Book890:
+		return "TS-890S PC command reference"
+	case Book990:
+		return "TS-990S PC command reference"
 	default:
 		return "unset PC command reference"
 	}
 }
 
-// valid reports whether b names a document this package has read.
-func (b Book) valid() bool { return b == Book590 || b == Book480 }
+// valid reports whether b names a document this package has READ — see the
+// type's doc comment for why that is not the same question as "a document
+// this package's 50-byte record describes", which is NewLayout's.
+func (b Book) valid() bool {
+	return b == Book590 || b == Book480 || b == Book890 || b == Book990
+}
 
 // DrainIdleGap and DrainCap are the Kenwood DrainPolicy. The cap is a
 // NAMED DECISION (plan P20), not transport's default, and the arithmetic is
@@ -75,6 +98,12 @@ func (b Book) valid() bool { return b == Book590 || b == Book480 }
 // until AI0; lands, and the conservative reading of the sentence — a push
 // every 1.5 s regardless of the condition — is the one that must be
 // survivable; the condition only ever makes the flood rarer, never larger.
+//
+// AFTER KENWOOD PAIR 2 STAGE 0 THIS CAP GATES ALL FOUR BOOKS, NOT ONLY THE
+// 590 PAIR AND THE TS-480. Neither the TS-890S's nor the TS-990S's document
+// states its own AI-flood arithmetic; the TS-480's 1.5 s figure is applied
+// to them as the conservative bound this discipline takes on an unprinted
+// fact, not because it is their own datum.
 //
 // The arithmetic: a drain succeeds when it observes one IdleGap of silence.
 // Pushes 1.5 s apart leave that gap open seven times over, so the only way
@@ -215,7 +244,7 @@ func (f framing) IsRejection(frame []byte) bool { return IsRejection(frame) }
 // so no frame can leave whatever this returns.
 // TestFraming_ZeroValueFailsClosed pins all three doors together.
 //
-// TestFatalTokens_FourStatesTwoTokensTwoBooks is the injection matrix;
+// TestFatalTokens_FourStatesTwoTokens is the injection matrix;
 // TestFatalTokens_SameChunk_SuppressesTheAnswerItArrivedWith and
 // TestFatalTokens_PostPurgeRace_NoFrameLeavesAfterAReceivedFatalFrame are
 // core/transport's two adversarial pins re-run through this accumulator and
@@ -234,7 +263,7 @@ func (f framing) IsFatal(frame []byte) error {
 // Allow is the outbound write gate: the last defence before a physical
 // radio sees these bytes.
 //
-// THIS METHOD IS THE ENVELOPE ALONE — the rules both books print about
+// THIS METHOD IS THE ENVELOPE ALONE — the rules all four books print about
 // what a frame LOOKS like — and it does not know which commands exist,
 // because a framing built by NewFraming knows the book and not the layout.
 // T7 built the eight-grammar gate (ID read, AI read/set, FV read, TY read,
@@ -259,24 +288,29 @@ func (f framing) Allow(frame []byte) bool {
 	return envelopeAllows(frame)
 }
 
-// envelopeAllows reports whether frame satisfies the envelope both books
-// print, and nothing more.
+// envelopeAllows reports whether frame satisfies the envelope all four
+// books print, and nothing more.
 //
 // The rules, each with its citation:
 //
 //   - A terminator, exactly one, and it is the LAST byte (590:87-91,
-//     480:113-118). An embedded ';' is refused outright: the 590 book says
-//     of the memory name that "';' cannot be used" (590:1577), and a second
-//     terminator anywhere would split one frame into two on the radio's own
-//     parser.
-//   - At least two bytes of command name before it (590:12-13, 480:76),
-//     upper case — this programme builds no lower-case opcode, and the
-//     books' "either case" permission (590:62, 480:77-78) is about what the
+//     480:113-118, 890:93-96, 990:96-99). An embedded ';' is refused
+//     outright: the 590 book says of the memory name that "';' cannot be
+//     used" (590:1577), and a second terminator anywhere would split one
+//     frame into two on the radio's own parser.
+//   - At least two bytes of command name before it (590:12-13, 480:76,
+//     890:76-80, 990:77-83), upper case — this programme builds no
+//     lower-case opcode, and the four books' "either case" permission
+//     (590:62, 480:77-78, 890:77-78, 990:80-81) is about what the
 //     radio ACCEPTS, not a licence to emit a second spelling of every frame.
 //   - Every body byte printable ASCII, 0x20 to 0x7E. The 480 states the
 //     rule generally — "Do not use the control characters 00 to 1Fh since
-//     they are either ignored or cause a '?' answer" (480:127-129) — and
-//     0x20 is admitted DELIBERATELY, not by accident: a mandatory literal
+//     they are either ignored or cause a '?' answer" (480:127-129) —
+//     PRINTED BY THE TS-480 ALONE: neither the TS-890S's nor the TS-990S's
+//     book states it, so on Book890 and Book990 this floor is an ASSUMED
+//     extension of A2 (core/kw/doc.go's register), kept because refusing
+//     more input is always the safe direction. 0x20 is admitted
+//     DELIBERATELY, not by accident: a mandatory literal
 //     SPACE appears in outbound Set frames (IS P1 "Always a space",
 //     590:1184; MC P1 '0' or a space below 100, 590:1334-1337; KY P1 "A
 //     space must be used for the Set command", 480:768-769). 0x7F and

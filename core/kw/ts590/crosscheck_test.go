@@ -223,9 +223,12 @@ func TestQuarantinedEvidenceFrozen(t *testing.T) {
 }
 
 // chartRow is the tuple both transcriptions carry for a menu number. The
-// address is the map key: all three Kenwood profiles register AddressSingle,
-// so the chart's three-digit Menu number IS the whole address and P2/P3 are
-// zero on every row (checked separately, against the profile's own policy).
+// address is the map key: pair 1's three Kenwood profiles — ts590sProfile,
+// ts590sgProfile and ts480Profile — register AddressSingle, so the chart's
+// three-digit Menu number IS the whole address and P2/P3 are zero on every
+// row (checked separately, against the profile's own policy). Pair 2's two,
+// ts890sProfile and ts990sProfile, register AddressGrouped with a
+// five-character address instead; this package never looks up either.
 type chartRow struct {
 	Name   string
 	Digits int
@@ -452,8 +455,8 @@ func TestCrossCheck_TheChartShapePolicies(t *testing.T) {
 //     SG's 000 "Version information (4 ASCII characters) read only" is
 //     transcribed digits=4 text=false BY DESIGN DECISION, recorded in
 //     menu590sg.csv's own "THE VERSION ROW IS NOT A TEXT ROW" block and
-//     following the FT-891's treatment of its MAIN VERSION row; the profile
-//     carries ONE exact TextWidth and this chart prints strings of two widths.
+//     following the FT-891's treatment of its MAIN VERSION row; the profile's
+//     TextWidths names ONE width and this chart prints strings of two.
 //   - B applied a STRUCTURAL test — "prose printed across the grid instead of
 //     cells" — and so also flagged the SG's 000
 //     (testdata/transcription-b-590sg.md, "TEXT rows (prose across the grid)

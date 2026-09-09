@@ -109,9 +109,10 @@ func TestIsRejection_IsExactlyTheNAKAndNothingElse(t *testing.T) {
 }
 
 // TestStreamErrorToken_NamesTheTwoTokensAndNothingElse pins the recogniser
-// the framing's IsFatal is built on. Both books print the two tokens beside
-// "?;" in one error-message table (590:97-113, 480:126-144); nothing else in
-// either book is a stream-health token.
+// the framing's IsFatal is built on. All four books print the two tokens
+// beside "?;" in one error-message table (590:97-113, 480:126-144,
+// 890:106-123, 990:108-121); nothing else in any of them is a stream-health
+// token.
 func TestStreamErrorToken_NamesTheTwoTokensAndNothingElse(t *testing.T) {
 	tests := []struct {
 		frame string

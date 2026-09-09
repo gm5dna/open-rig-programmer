@@ -1,0 +1,30 @@
+# Kenwood TS-990S PC CONTROL COMMAND REFERENCE GUIDE
+# Printed revision/date: no revision printed; cover date "January/30/2019".
+# Command: FV "Firmware Version"
+# Printed page 31 = PDF page 32. Charts used: Read, Answer. (No Set chart is printed.)
+# Derivation date: 08/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS
+#   Read   : 3 positions. Ruler 1..10; cells 'F' 'V' ';'. Terminator at printed position 3.
+#   Answer : 7 positions. Ruler 1..10; cells 'F' 'V' P1 P1 P1 P1 ';'. Terminator at printed
+#            position 7. Every header is a NUMBER.
+#
+# POSITION MAP
+#   Read    1 'F'   2 'V'   3 ';'
+#   Answer  1 'F'   2 'V'   3-6 P1 (four positions)   7 ';'
+#
+# LEGEND, VERBATIM
+#   "P1"
+#   "  Reads out the character string of the firmware version."
+#   worked example, VERBATIM:
+#   "For example, for firmware version 1.00, it reads "FV1.00;"."
+#
+#   Identical frame to the 890S FV. The two books word the legend and the example
+#   differently but print the same seven positions.
+#
+# INHERITED-ASSUMED bytes: none. The Answer vector below is the book's own printed example.
+#
+# VECTORS
+read	FV;
+answer_printed_example	FV1.00;

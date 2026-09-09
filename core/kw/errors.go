@@ -54,14 +54,14 @@ func (e *FrameTooLongError) Error() string {
 func (e *FrameTooLongError) Unwrap() error { return ErrFrameTooLong }
 
 // ErrUnconfiguredBook is the sentinel NewFraming returns when it is not
-// told which of the two PC-command documents the session is talking to.
+// told which of the four PC-command documents the session is talking to.
 //
 // It fails closed for the house's standing reason — an omitted config
 // semantic is REFUSED, never defaulted — and for a Kenwood-specific one:
 // the book is what decides which cause sentence an "O;" carries, because
-// the two documents give the SAME token DIFFERENT causes (erratum E13). A
-// defaulted book would quote a document the session was never told it was
-// speaking to.
+// the documents do not all give the SAME token the SAME cause (erratum
+// E13). A defaulted book would quote a document the session was never told
+// it was speaking to.
 var ErrUnconfiguredBook = errors.New("kw: framing was given no PC-command document to speak for, refusing to construct")
 
 // maxParseErrorFrameLen bounds how much offending input a ParseError
@@ -96,18 +96,19 @@ func newParseError(input []byte, format string, args ...any) *ParseError {
 	return &ParseError{Frame: copyBytes(input[:n]), Reason: fmt.Sprintf(format, args...)}
 }
 
-// THE TYPED ERROR FAMILY — the three outcomes both books print, each
+// THE TYPED ERROR FAMILY — the three outcomes every book prints, each
 // carrying the document's own words.
 //
-// It exists because this pair prints an explicit error-message table, which
-// is more than any registered Yaesu manual does, and because the table says
-// three things of which one is alarming: "?;" has TWO indistinguishable
-// causes; "E;" and "O;" are stream-health tokens rather than answers; and
-// the NAK itself "may not appear due to microprocessor transients in the
-// transceiver" (590:106-108, 480:136-138). A driver that reported "no
-// answer" as "not present" would be inferring absence from a signal the
-// manufacturer has told us is unreliable, so the timeout is a member of
-// this family too, and its message says so.
+// It exists because every one of these books prints an explicit
+// error-message table, which is more than any registered Yaesu manual does,
+// and because the table says three things of which one is alarming: "?;"
+// has TWO indistinguishable causes; "E;" and "O;" are stream-health tokens
+// rather than answers; and the NAK itself "may not appear due to
+// microprocessor transients in the transceiver" (590:106-108, 480:136-138,
+// 890:114-116, 990:114-116). A driver that reported "no answer" as "not
+// present" would be inferring absence from a signal the manufacturer has
+// told us is unreliable, so the timeout is a member of this family too, and
+// its message says so.
 //
 // All three are recovered with errors.As and all three wrap a sentinel a
 // caller can errors.Is against: ErrStream is this package's own (the engine
@@ -126,13 +127,15 @@ var ErrStream = errors.New("kw: stream-health token")
 // document's own cause sentence. A sentinel would throw away the whole
 // reason the FatalFramer hook exists.
 //
-// THE BOOK IS A FIELD BECAUSE THE TWO BOOKS DISAGREE — erratum E13. "E;" is
-// given the same cause in both (590:110-112, 480:140-142), but "O;" is "A
-// receive buffer overrun error occurred" in the 590 book (590:113) and
-// "Receive data was sent but processing was not completed" in the 480's
-// (480:143-144). Those are different claims about the radio, not two
-// phrasings of one, and a session that quoted the wrong one would be
-// quoting a document it is not talking to.
+// THE BOOK IS A FIELD BECAUSE THE BOOKS DISAGREE — erratum E13. "E;" is
+// given the same cause in all four (590:110-112, 480:140-142, 890:118-120,
+// 990:118-120), but "O;" is "A receive buffer overrun error occurred" in
+// the 590 book (590:113), the TS-890S's (890:121-123) and the TS-990S's
+// (990:121), and "Receive data was sent but processing was not completed"
+// in the 480's (480:143-144) — so the divergence is the TS-480's alone,
+// one document out of four. Those are different claims about the radio,
+// not two phrasings of one, and a session that quoted the wrong one would
+// be quoting a document it is not talking to.
 //
 // IT MUST NEVER WRAP A *transport.FrameTooLongError. FatalFramer's contract
 // says so and the reason is mechanical: the engine delivers this cause as
@@ -148,8 +151,8 @@ type StreamError struct {
 	Book Book
 	// Cause is that document's own cause sentence, verbatim.
 	Cause string
-	// Citation is where the sentence is printed, in this milestone's
-	// "590:LINE" / "480:LINE" layout-text form.
+	// Citation is where the sentence is printed, in the layout-text form
+	// "590:LINE", "480:LINE", "890:LINE" or "990:LINE".
 	Citation string
 }
 
@@ -190,20 +193,32 @@ func newStreamError(token string, book Book) *StreamError {
 		return &StreamError{Token: token, Book: book, Cause: "A receive buffer overrun error occurred", Citation: "590:113"}
 	case token == receiveOverrunFrame && book == Book480:
 		return &StreamError{Token: token, Book: book, Cause: "Receive data was sent but processing was not completed", Citation: "480:143-144"}
+	case token == communicationErrorFrame && book == Book890:
+		return &StreamError{Token: token, Book: book, Cause: commErrorCause, Citation: "890:118-120"}
+	case token == communicationErrorFrame && book == Book990:
+		return &StreamError{Token: token, Book: book, Cause: commErrorCause, Citation: "990:118-120"}
+	// THE TWO NEW BOOKS SIDE WITH THE 590 ON "O;", WHICH NARROWS E13 rather
+	// than widening it: both print "A receive buffer overrun error occurred"
+	// verbatim, so the TS-480 is the one document out of four that says
+	// something else. No new sentence is minted here, only citations.
+	case token == receiveOverrunFrame && book == Book890:
+		return &StreamError{Token: token, Book: book, Cause: "A receive buffer overrun error occurred", Citation: "890:121-123"}
+	case token == receiveOverrunFrame && book == Book990:
+		return &StreamError{Token: token, Book: book, Cause: "A receive buffer overrun error occurred", Citation: "990:121"}
 	default:
 		panic(fmt.Sprintf("kw: newStreamError(%q, %v): not a stream-health token, or no book to quote — IsFatal is the only caller and it has already recognised the token", token, book))
 	}
 }
 
-// commErrorCause is the sentence BOTH books give for "E;", printed
-// identically in each (590:110-112, 480:140-142). It is written once
-// because the two documents agree here, which is exactly what makes their
-// disagreement about "O;" (E13) worth recording rather than smoothing over.
+// commErrorCause is the sentence EVERY book gives for "E;", printed
+// identically in each (590:110-112, 480:140-142, 890:118-120, 990:118-120).
+// It is written once because the documents agree here, which is exactly what
+// makes the TS-480's disagreement about "O;" (E13) worth recording.
 const commErrorCause = "A communication error occurred, such as an overrun or framing error during a serial data transmission"
 
-// rejectionCauses is the whole of what either book says a "?;" means — TWO
-// causes, printed as alternatives, with nothing anywhere to tell them apart
-// (590:100-105, 480:130-135).
+// rejectionCauses is the whole of what all four books say a "?;" means —
+// TWO causes, printed as alternatives, with nothing anywhere to tell them
+// apart (590:100-105, 480:130-135, 890:106-112, 990:108-113).
 const rejectionCauses = "either \"Command syntax was incorrect\" or \"Command was not executed due to the current status of the transceiver (even though the command syntax was correct)\" — the two are printed as alternatives and nothing in the document distinguishes them"
 
 // transientSentence is the sentence that makes silence uninformative, and
@@ -211,6 +226,29 @@ const rejectionCauses = "either \"Command syntax was incorrect\" or \"Command wa
 // both: a NAK that did not arrive is not evidence that none was sent
 // (590:106-108, 480:136-138).
 const transientSentence = "the document also warns that \"Occasionally, this message may not appear due to microprocessor transients in the transceiver\""
+
+// bookCitations gives, per book, the lines that book prints the two "?;"
+// causes on and the line it prints the transient warning on. All four print
+// the same two SENTENCES — which is why rejectionCauses and
+// transientSentence are written once — and only the lines differ.
+//
+// IT IS ONE TABLE WITH TWO READERS, and that is the point. RejectionError
+// quotes both entries and TimeoutError quotes the transient one alone; with
+// a citation pair written out in each method, the two would be one edit from
+// citing different lines for the same warning in the same book. A bound is
+// consulted from the same place as its datum.
+//
+// A BOOK ABSENT FROM THIS TABLE GETS NO LINE AT ALL. That is what makes an
+// error naming no document say so rather than fall through to the TS-590's
+// numbers — TestTypedErrors_QuoteNoDocumentTheyWereNotGiven is the pin —
+// and it is why the lookup is a map rather than a switch with a default arm
+// that has to remember to be empty.
+var bookCitations = map[Book]struct{ causes, transient string }{
+	Book590: {"590:100-105", "590:106-108"},
+	Book480: {"480:130-135", "480:136-138"},
+	Book890: {"890:106-112", "890:114-116"},
+	Book990: {"990:108-113", "990:114-116"},
+}
 
 // RejectionError is the typed refusal a "?;" produces.
 //
@@ -230,26 +268,20 @@ type RejectionError struct {
 }
 
 func (e *RejectionError) Error() string {
-	// THE SENTENCES ARE COMMON TO BOTH BOOKS; ONLY THE LINES DIFFER. Each
+	// THE SENTENCES ARE COMMON TO EVERY BOOK; ONLY THE LINES DIFFER. Each
 	// document prints the same two alternative causes and the same
 	// transient warning, which is why rejectionCauses and
-	// transientSentence are written once. So a value that names no
-	// document can still say WHAT a "?;" means — it simply may not say
-	// WHERE, and it says that it cannot rather than falling through to
-	// one book's line numbers.
-	// TestTypedErrors_QuoteNoDocumentTheyWereNotGiven pins the third arm.
-	switch e.Book {
-	case Book590, Book480:
-		cite, transientCite := "590:100-105", "590:106-108"
-		if e.Book == Book480 {
-			cite, transientCite = "480:130-135", "480:136-138"
-		}
+	// transientSentence are written once and only bookCitations is per
+	// book. So a value that names no document can still say WHAT a "?;"
+	// means — it simply may not say WHERE, and it says that it cannot
+	// rather than falling through to one book's line numbers.
+	// TestTypedErrors_QuoteNoDocumentTheyWereNotGiven pins that branch.
+	if c, ok := bookCitations[e.Book]; ok {
 		return fmt.Sprintf("kw: the radio refused %q with \"?;\": %s (%s); %s (%s), so a refusal that did not arrive is not evidence that none was sent",
-			e.Command, rejectionCauses, cite, transientSentence, transientCite)
-	default:
-		return fmt.Sprintf("kw: the radio refused %q with \"?;\": %s; %s — this error names no document (%s), so no line is cited: both books print these sentences, but naming a document this session was never told it was speaking to is what ErrUnconfiguredBook exists to prevent",
-			e.Command, rejectionCauses, transientSentence, e.Book)
+			e.Command, rejectionCauses, c.causes, transientSentence, c.transient)
 	}
+	return fmt.Sprintf("kw: the radio refused %q with \"?;\": %s; %s — this error names no document (%s), so no line is cited: every book prints these sentences, but naming a document this session was never told it was speaking to is what ErrUnconfiguredBook exists to prevent",
+		e.Command, rejectionCauses, transientSentence, e.Book)
 }
 
 // Unwrap lets errors.Is(err, transport.ErrRejected) match.
@@ -273,16 +305,16 @@ func NewRejectionError(book Book, command string) (*RejectionError, error) {
 
 // TimeoutError is the typed cause a read timeout produces, and it is a
 // member of this family for one reason: SILENCE CARRIES NO INFORMATION ON
-// THIS PAIR.
+// THIS FAMILY.
 //
-// Both books say the NAK is unreliable (590:106-108, 480:136-138), so a
-// read that times out is neither "the thing is absent" nor "the radio
-// refused". The session read fails WHOLE, with no retry and NO INFERENCE OF
-// ABSENCE — and the message says that in as many words, because the
-// inference is the one a reader will otherwise make. (The FT-891's
-// "?;-means-absent" discovery is unavailable here for the same reason and
-// one more: this family's slot space is printed, so nothing needs
-// discovering.)
+// Every book says the NAK is unreliable (590:106-108, 480:136-138,
+// 890:114-116, 990:114-116), so a read that times out is neither "the thing
+// is absent" nor "the radio refused". The session read fails WHOLE, with no
+// retry and NO INFERENCE OF ABSENCE — and the message says that in as many
+// words, because the inference is the one a reader will otherwise make.
+// (The FT-891's "?;-means-absent" discovery is unavailable here for the
+// same reason and one more: this family's slot space is printed, so nothing
+// needs discovering.)
 type TimeoutError struct {
 	// Book is the document quoted.
 	Book Book
@@ -291,22 +323,18 @@ type TimeoutError struct {
 }
 
 func (e *TimeoutError) Error() string {
-	// The three arms are RejectionError.Error's exactly, for its reason:
-	// the transient sentence is printed in both books, so a value that
+	// The two branches are RejectionError.Error's exactly, for its reason:
+	// the transient sentence is printed in every book, so a value that
 	// names no document may still quote it and must not invent a line
-	// number for it.
-	switch e.Book {
-	case Book590, Book480:
-		cite := "590:106-108"
-		if e.Book == Book480 {
-			cite = "480:136-138"
-		}
+	// number for it. The line itself comes from bookCitations, the same
+	// table RejectionError reads, so the two cannot cite the same warning
+	// in the same book at different lines.
+	if c, ok := bookCitations[e.Book]; ok {
 		return fmt.Sprintf("kw: no answer to %q within the read timeout: this is not evidence of absence and not a refusal — %s (%s), so silence carries no information; the session read fails whole and is not retried",
-			e.Command, transientSentence, cite)
-	default:
-		return fmt.Sprintf("kw: no answer to %q within the read timeout: this is not evidence of absence and not a refusal — %s; this error names no document (%s), so no line is cited; the session read fails whole and is not retried",
-			e.Command, transientSentence, e.Book)
+			e.Command, transientSentence, c.transient)
 	}
+	return fmt.Sprintf("kw: no answer to %q within the read timeout: this is not evidence of absence and not a refusal — %s; this error names no document (%s), so no line is cited; the session read fails whole and is not retried",
+		e.Command, transientSentence, e.Book)
 }
 
 // Unwrap lets errors.Is(err, transport.ErrTimeout) match.

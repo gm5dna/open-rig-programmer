@@ -819,7 +819,10 @@ func TestLoad_V2EntryShape_Rejected(t *testing.T) {
 		name  string
 		menus string
 	}{
-		{"5-digit id", `,"menus":{"descriptor":"x","complete":false,"entries":[{"id":"00010","value":"3","state":"known"}]}`},
+		// Seven digits, not five: the TS-890S/TS-990S grouped EX address made
+		// five an admitted width (isSettingIDWidth), so the out-of-vocabulary
+		// width this case needs moved up one.
+		{"7-digit id", `,"menus":{"descriptor":"x","complete":false,"entries":[{"id":"0001011","value":"3","state":"known"}]}`},
 		{"non-digit id", `,"menus":{"descriptor":"x","complete":false,"entries":[{"id":"0001A1","value":"3","state":"known"}]}`},
 		{"unknown state", `,"menus":{"descriptor":"x","complete":false,"entries":[{"id":"000101","value":"3","state":"bogus"}]}`},
 		{"unavailable with value", `,"menus":{"descriptor":"x","complete":false,"entries":[{"id":"000101","value":"3","state":"unavailable"}]}`},
