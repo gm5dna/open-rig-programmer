@@ -3294,8 +3294,12 @@ func TestImportCHIRP_TS890And990TakeTheToneModeBranch(t *testing.T) {
 			// A blank Tone cell is the ordinary CHIRP row, and it is the one
 			// the release prose describes a recovery for.
 			t.Run("a blank Tone row leaves both indices Unknown and the mode Known OFF", func(t *testing.T) {
+				// rToneFreq/cToneFreq are populated (88.5) although Tone is
+				// blank: an Unknown index beside a populated tone column is
+				// ruling B2's statement, not B1's — a fixture with both
+				// columns empty cannot tell the two apart.
 				const csv = "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n" +
-					"1,SIMPLEX,145.500000,FM,,,\n"
+					"1,SIMPLEX,145.500000,FM,,88.5,88.5\n"
 
 				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
 				if err != nil {

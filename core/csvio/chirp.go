@@ -680,12 +680,13 @@ func consumedByThisRadio(caps spec.Capabilities, bank spec.BankID, column string
 // TestImportCHIRP_BlankDuplexTakesTheRowsOwnSimplexStatement.
 func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) []LossEntry {
 	var entries []LossEntry
-	if reaches(caps, bank, spec.FieldTxFrequency) {
+	reachesTxFrequency := reaches(caps, bank, spec.FieldTxFrequency)
+	if reachesTxFrequency {
 		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
 	}
 	switch duplexRaw := cell("Duplex"); duplexRaw {
 	case "", "off":
-		if duplexRaw == "" && reaches(caps, bank, spec.FieldTxFrequency) {
+		if duplexRaw == "" && reachesTxFrequency {
 			switch caps.SimplexTx {
 			case spec.SimplexTxZero:
 				data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 0}

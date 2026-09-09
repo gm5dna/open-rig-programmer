@@ -215,7 +215,7 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"PreampOptions":          "§1.26",
 		"AntennaOptions":         "§1.27",
 		"TagCharset":             "§1.28",
-		"SimplexTx":              "SimplexTxUnstated is the positive declaration that nothing in this model's record says what a simplex channel's transmit frequency holds, so core/csvio's CHIRP importer leaves TxFreqHz Unknown on a blank Duplex row exactly as it did before the datum existed (the 09/09/2026 CHIRP transmit-disposition design). THE TS-480 IS UNREGISTERED, and the 09/09/2026 design declared only the six registered rows",
+		"SimplexTx":              "this row does not grade FieldTxFrequency, so the blank arm leaves nothing to state. THE TS-480 IS UNREGISTERED, and the 09/09/2026 design declared only the six registered rows",
 	}
 	caps := CapabilitiesSimulated()
 	v := reflect.ValueOf(caps)

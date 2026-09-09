@@ -37,8 +37,9 @@ tag. The full release notes for each version are on the
   those plus the filter, and the IC-7300 and IC-7300MK2 for the filter,
   the data mode and a slot the radio already holds — and CHIRP has no
   column for a data mode or a filter, so on those four rows a CHIRP file
-  alone can never complete a write. Said plainly now in the model list,
-  in `docs/radio-notes.md` and in `docs/kenwood-models.md`.
+  alone can never complete a write. Said plainly now in the model list
+  and in `docs/kenwood-models.md` for the TS-590S, TS-590SG, TS-890S and
+  TS-990S, and in `docs/radio-notes.md` for the IC-7300 pair.
 - `rigprog diff` and the write plan now name only the fields that actually
   changed on a modified channel, instead of restating unchanged ones as
   `X→X`; a channel modified only in a field the summary does not print
