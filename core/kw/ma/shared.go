@@ -470,9 +470,12 @@ func (l Layout) checkModeByte(field string, b byte) error {
 }
 
 // checkName refuses a name the printed field cannot carry. It is domain
-// only — length, ';', printable — with no row discriminator: a trailing
-// space is a row-specific build-time concern (buildMA0Set890, MED-1), not a
-// property of the name's own domain, so it does not belong here.
+// only — length, ';', printable — with no row discriminator and no trailing-
+// space rule of its own: whether a trailing space is padding or content is
+// PER ROW (A1), decided by each row's own codec, not by this shared check.
+// On the 890S (codec890.go, C-MED-1 reversal) it is content, carried
+// verbatim by checkName's caller directly. On the 990S it is padding,
+// stripped by parseName below.
 //
 // THE ';' EXCLUSION IS FORCED BY THE ENVELOPE (890:92-96) and is NOT an
 // assumption: a name carrying one is two frames to the radio's own parser and
@@ -492,9 +495,13 @@ func checkName(field, name string) error {
 	return nil
 }
 
-// parseName checks a name window against checkName's domain and right-trims
-// the trailing spaces (A1). It reports the window's bytes verbatim in the
-// refusal, so out-of-domain data is REPORTED rather than repaired.
+// parseName is TS-990S ONLY (A1): it checks a name window against
+// checkName's domain and right-trims the trailing spaces that row's fixed
+// ten-byte window pads on write. The 890S has no fixed window — its
+// terminator floats straight after the name (890:3181-3182) — so its codec
+// calls checkName directly and carries the window verbatim; it does not call
+// parseName. It reports the window's bytes verbatim in the refusal, so
+// out-of-domain data is REPORTED rather than repaired.
 func parseName(field string, window []byte) (string, error) {
 	if err := checkName(field, string(window)); err != nil {
 		return "", err

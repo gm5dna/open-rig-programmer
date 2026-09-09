@@ -126,7 +126,16 @@ func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 		// is CARRIED rather than discarded or raised on — reporting the
 		// channel unassigned is the safe reading, and an error here would
 		// abandon the whole radio's read.
-		rec.NameResidue = strings.TrimRight(string(frame[ma890NameOff:len(frame)-1]), " ")
+		// S1-LOW-1: the residue is not exempt from A2's charset check —
+		// run it through checkName first, and on refusal (a control byte,
+		// an ANSI escape, 0x80-0xFF) drop it rather than raise, since A21
+		// already says a residue is not channel content. Whatever survives
+		// is carried VERBATIM (C-MED-1's reversal applies here too: no
+		// TrimRight).
+		residue := string(frame[ma890NameOff : len(frame)-1])
+		if checkName("P13, the channel name residue", residue) == nil {
+			rec.NameResidue = residue
+		}
 		return rec, nil
 	}
 
@@ -174,9 +183,15 @@ func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 	if rec.Lockout, err = decodeFlag("P12, the scan lockout", frame[ma890LockoutOff]); err != nil {
 		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
-	if rec.Name, err = parseName("P13, the channel name", frame[ma890NameOff:len(frame)-1]); err != nil {
+	// C-MED-1 REVERSAL (adjudication): the terminator FLOATS at 40 + len(name)
+	// (890:3181-3182), so "...AB ;" and "...AB;" are DISTINCT, unambiguous
+	// frames — a trailing space is real content, not padding this row's grid
+	// applies. checkName is domain-only (length, ';', printable); no trim.
+	// A1's pad/trim rule is TS-990S ONLY (parseName, doc.go A1).
+	if err = checkName("P13, the channel name", string(frame[ma890NameOff:len(frame)-1])); err != nil {
 		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
+	rec.Name = string(frame[ma890NameOff : len(frame)-1])
 	return rec, nil
 }
 
@@ -221,17 +236,15 @@ func (l Layout) buildMA0Set890(rec Record) (Command, error) {
 	if err := l.checkCTCSSIndex("P7, the CTCSS frequency", rec.CTCSSIndex); err != nil {
 		return Command{}, newParseError(nil, "%s: %v", what, err)
 	}
+	// C-MED-1 REVERSAL (adjudication): checkName's domain (length, ';',
+	// printable) is the whole of P13's rule on this row. THIS ROW'S GRID
+	// PADS NOTHING (this function's own doc), so a trailing space is real
+	// content with no pad byte to distinguish it from, and the floating
+	// terminator carries it losslessly in both directions — buildMA0Set890
+	// therefore ADMITS a trailing-space name rather than refusing it; A1's
+	// pad/trim rule is TS-990S ONLY (doc.go A1).
 	if err := checkName("P13, the channel name", rec.Name); err != nil {
 		return Command{}, newParseError(nil, "%s: %v", what, err)
-	}
-	// MED-1, fix round 2: THIS ROW'S GRID PADS NOTHING (this function's own
-	// doc), so a trailing space is real content with no pad byte to
-	// distinguish it from — and cannot survive a build round trip. A1's pad
-	// rule is TS-990S ONLY (doc.go): P18's fixed ten-byte window absorbs any
-	// trailing content identically whichever way it is spelled, so this
-	// refusal belongs here, on build, and not in checkName's shared domain.
-	if strings.HasSuffix(rec.Name, " ") {
-		return Command{}, newParseError(nil, "%s: P13, the channel name ends in a space, and the TS-890S grid carries no pad (A1 is TS-990S ONLY) — such a name cannot survive a build round trip and is refused on build rather than carried", what)
 	}
 
 	second, err := l.buildSecond890(what, rec)

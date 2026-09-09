@@ -48,24 +48,28 @@
 //	    990:2788-2789), which is about the CW keying buffer and not the
 //	    memory name, and which on the 890S sits in a block with its own
 //	    defect (E6).
-//	    THE 890S HALF IS NOT AN ASSUMPTION AND IS NOT HERE: its terminator
-//	    floats after the name (890:3181-3182, confirmed on the printed p.41
-//	    render), so its encoder emits the name as-is followed by ';' and pads
-//	    nothing. The cost of that is RECORDED rather than assumed — on the
-//	    890S a name's TRAILING SPACES cannot survive a round trip, because
-//	    the parser right-trims the window and a trailing space is
-//	    indistinguishable from the absence of one, so a name ending in a
-//	    space is written back one character shorter. That is a stated
-//	    capability limit, not a defect: the 890S PARSES a trailing-space name
-//	    by trimming it, exactly as stated, and REFUSES to BUILD one — the
-//	    round trip cannot carry it, so buildMA0Set890 (MED-1, fix round 2)
-//	    refuses it there, rather than carrying or silently trimming it. The
-//	    refusal is not in checkName: that function is domain-only and shared
-//	    with the read side, which must go on accepting the frames the radio
-//	    itself sends.
+//	    THE 890S HALF IS NOT AN ASSUMPTION AND IS NOT HERE, AND THE CLAUSE IS
+//	    REVERSED (C-MED-1, adjudication overturning the T8 MED-1 ruling, both
+//	    rounds): its terminator floats after the name (890:3181-3182,
+//	    confirmed on the printed p.41 render), so "...AB ;" and "...AB;" are
+//	    DISTINCT, unambiguous frames — the space is real content, not a pad
+//	    byte a fixed window would absorb. This row's codec therefore carries
+//	    P13 VERBATIM in BOTH directions: buildMA0Set890 emits the name as-is
+//	    with no pad, and parseMA0Answer890 calls checkName directly (not
+//	    parseName, which stays TS-990S ONLY) and applies no trim. Parse ∘
+//	    Build is then the identity on the 890S for every name this design
+//	    admits, including one ending in a space, and the outbound gate admits
+//	    every frame buildMA0Set890 produces with no special pleading. Verbatim
+//	    is lossless whichever way the real hardware turns out to behave: if a
+//	    real 890S pads the field on write, the pad round-trips unchanged; if
+//	    it does not, verbatim is exact either way — so the hardware lift below
+//	    is a curiosity about the radio's own behaviour, not a correctness
+//	    question for this codec.
 //	    Lift: L-HW-1, observing the MA0 family — write a 3-character name to
 //	    a scratch channel, read it back, record the ten bytes exactly.
-//	    TS-990S.
+//	    TS-990S. (On the 890S the same write/read, with a trailing-space
+//	    name, would settle only whether a real radio pads the field; this
+//	    codec's own behaviour does not depend on the answer.)
 //
 //	A2  A memory name may contain the printable-ASCII characters this design
 //	    writes: the KY charset's members plus the digits and letters, all
