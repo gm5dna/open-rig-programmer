@@ -21,9 +21,10 @@ type RadioInfo struct {
 	Port string `json:"port,omitempty"`
 	// USBSerial is the USB device serial number, when known.
 	USBSerial string `json:"usb_serial,omitempty"`
-	// FirmwareConfirmed is the firmware version the user has manually
-	// entered after reading it off the radio's front panel — CAT has no
-	// command to read this, so it can only ever come from the user.
+	// FirmwareConfirmed is a legacy key: builds before the removal of the
+	// send flow's firmware box (CHANGELOG, Unreleased) wrote the version
+	// a user typed in here. Nothing writes it now; it is kept so files
+	// that carry it still load under DisallowUnknownFields.
 	FirmwareConfirmed string `json:"firmware_confirmed,omitempty"`
 	// Region is the regulatory region this read assumed, e.g. "UK" — it
 	// is the basis for band-plan-dependent decisions such as the 60 m

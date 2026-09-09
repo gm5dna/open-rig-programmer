@@ -28,7 +28,7 @@ const (
 	exitBlocked = 3
 	// exitRefused means a send was refused before any write reached the
 	// radio: stale baseline, session changed, confirmation mismatch or
-	// declined, or firmware unconfirmed.
+	// declined.
 	exitRefused = 4
 	// exitAborted means a transfer was aborted after at least one write
 	// attempt reached the radio — see the run's journal.

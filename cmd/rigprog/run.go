@@ -13,8 +13,8 @@ import (
 // from here, so black-box tests (the compiled binary) and in-process
 // tests exercise identically the same logic.
 //
-// stdin flows through to write (its confirmation and firmware prompts —
-// task 14); every other subcommand ignores it.
+// stdin flows through to write (its confirmation prompt — task 14);
+// every other subcommand ignores it.
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		printUsage(stderr)

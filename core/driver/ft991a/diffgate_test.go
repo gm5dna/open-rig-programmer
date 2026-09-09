@@ -191,12 +191,7 @@ func TestClone_WriteThenVerifyIsClonesOwnPair(t *testing.T) {
 	}
 
 	before := len(p.Transcript())
-	report, err := service.Execute(testCtx(t), plan, plan.ConfirmationDigest(), clone.ExecuteOptions{
-		// Obligation 10's first-write gate: a human-supplied string. It is
-		// not a claim about any real radio — no FT-991A has ever been
-		// connected to this project — only the value the gate requires.
-		FirmwareConfirmed: "scripted-peer",
-	})
+	report, err := service.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

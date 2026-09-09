@@ -27,7 +27,6 @@
 
 	/** @type {'review' | 'transferring' | 'result'} */
 	let phase = $state('review')
-	let firmware = $state('')
 	let confirming = $state(false)
 	let confirmError = $state('')
 	let cancelling = $state(false)
@@ -67,14 +66,12 @@
 		return `${hzToMHz(data.freq_hz)} MHz${mode}`
 	}
 
-	const firmwareMissing = $derived(plan.FirmwareRequired && firmware.trim() === '')
-
 	async function handleConfirm() {
-		if (firmwareMissing || confirming) return
+		if (confirming) return
 		confirmError = ''
 		confirming = true
 		try {
-			await confirmSend(plan.ConfirmationDigest, firmware.trim())
+			await confirmSend(plan.ConfirmationDigest)
 			phase = 'transferring'
 		} catch (err) {
 			// A synchronous pre-flight rejection (digest mismatch / no
@@ -214,13 +211,6 @@
 				</section>
 			{/if}
 
-			{#if plan.FirmwareRequired}
-				<div class="field-group">
-					<label for="firmware-input">Confirmed firmware version</label>
-					<input id="firmware-input" type="text" bind:value={firmware} placeholder={appState.uiSpec?.FirmwarePlaceholder ?? ''} />
-					<p class="modal-subtitle">{plan.FirmwareGuidance}</p>
-				</div>
-			{/if}
 
 			{#if confirmError}
 				<p class="confirm-error">{confirmError}</p>
@@ -238,7 +228,7 @@
 				<button
 					type="button"
 					class="modal-btn modal-btn-primary"
-					disabled={plan.NothingToSend || firmwareMissing || confirming}
+					disabled={plan.NothingToSend || confirming}
 					onclick={handleConfirm}
 				>
 					{confirming ? 'Confirming…' : 'Confirm send'}
@@ -402,25 +392,6 @@
 		margin-right: var(--space-1);
 	}
 
-	.field-group {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-	}
-
-	.field-group label {
-		font-size: 11.5px;
-		font-weight: 600;
-	}
-
-	.field-group input {
-		background: var(--colour-panel-sunken);
-		border: 1px solid var(--colour-hairline);
-		border-radius: var(--radius-sm);
-		padding: var(--space-2) var(--space-3);
-		font-family: var(--font-mono);
-		max-width: 12rem;
-	}
 
 	.confirm-error {
 		color: var(--colour-danger);

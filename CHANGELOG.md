@@ -11,6 +11,18 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Changed
+- **The send dialogue no longer asks for a firmware version.** The
+  FT-710's memory CAT arrived in firmware V01-10 and the radio has no
+  version query, so every send used to open with a box to type the
+  version read off the front panel. But the send flow always reads every
+  memory over that same CAT first, so a radio that reaches the dialogue
+  has already proved its firmware by answering. The box, the `rigprog
+  write --firmware` flag and its interactive prompt are gone; the first
+  write on a session needs nothing beyond the ordinary confirmation.
+  Codeplug files that carry a `firmware_confirmed` value still load; the
+  value is no longer written.
+
 ## [1.5.1] - 2026-09-09
 
 ### Fixed

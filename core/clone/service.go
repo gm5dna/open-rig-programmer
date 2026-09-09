@@ -93,9 +93,7 @@ type Service struct {
 	// whose recorded generation does not match it.
 	generation int64
 
-	mu                sync.Mutex
-	firmwareConfirmed bool
-	firmwareVersion   string
+	mu sync.Mutex
 
 	// opBusy/opInProgress implement Fix 2's try-lock pattern (see ErrBusy):
 	// guarded by mu (a short critical section to decide the try-lock
@@ -144,8 +142,7 @@ func WithProgress(p Progress) Option {
 // journalAppend appends one journal line, logging (never returning) a
 // failure via s.logger. Reserved for the journal lines the ratified
 // fail-safe policy (doc.go) does NOT gate anything further on:
-// "firmware_confirmed" (best-effort — the gate state itself is already
-// held in memory, see Execute), "abort" (already terminating the run;
+// "abort" (already terminating the run;
 // nothing left to protect), and "completion" (the run already fully
 // succeeded — a bookkeeping fsync hiccup on the very last line must not
 // retroactively turn a clean run into a reported failure). Every OTHER

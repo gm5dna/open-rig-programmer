@@ -193,23 +193,6 @@ type SendPlanView struct {
 	// Added/Modified entries (matching the CLI's countSendable == 0
 	// case).
 	NothingToSend bool
-	// FirmwareRequired is a BEST-EFFORT prediction of whether Execute
-	// will need ExecuteOptions.FirmwareConfirmed, computed from
-	// working/baseline's RadioInfo.FirmwareConfirmed emptiness (task-15
-	// brief §2) — clone.Service's own firmware-confirmed flag is private
-	// and per-Service (reset on every reconnect), so this cannot be
-	// authoritative. If the prediction is wrong, Execute's own
-	// ErrFirmwareUnconfirmed refusal still surfaces via transfer:done
-	// (Outcome "refused") and the frontend re-prompts.
-	FirmwareRequired bool
-	// FirmwareGuidance is the FT-710-specific prose explaining WHY a
-	// confirmed firmware version is being asked for and how to find it
-	// (send.go's firmwareGuidance func, which serves it from
-	// internal/radiotext) — non-empty iff FirmwareRequired is true. Fix 6
-	// (adjudicated LOW, Codex M6 #6): the frontend renders this verbatim
-	// rather than hardcoding any FT-710 protocol fact (the V01-10 threshold,
-	// the absence of a CAT firmware query) of its own.
-	FirmwareGuidance string
 }
 
 // SlotResultView mirrors one clone.SlotResult for display.
@@ -225,16 +208,15 @@ type SlotResultView struct {
 // Report itself does not carry — only the plan does, so ConfirmSend's
 // goroutine attaches it from the plan it captured before Execute ran).
 type ReportView struct {
-	FirmwareConfirmed string
-	Written           int
-	Verified          int
-	SkippedBlocked    int
-	Unchanged         int
-	Slots             []SlotResultView
-	Aborted           bool
-	AbortReason       string
-	JournalPath       string
-	SnapshotPath      string
+	Written        int
+	Verified       int
+	SkippedBlocked int
+	Unchanged      int
+	Slots          []SlotResultView
+	Aborted        bool
+	AbortReason    string
+	JournalPath    string
+	SnapshotPath   string
 }
 
 // ProgressEvent is transfer:progress's payload, shared by every read/write
@@ -492,10 +474,6 @@ type UISpecView struct {
 	// the channel grid shows for its Tone and Scan Skip columns — served
 	// from internal/radiotext.Text.PreservationTooltips (task 41).
 	PreservationTooltips PreservationTooltipsView
-	// FirmwarePlaceholder is the send-flow firmware-version input's
-	// placeholder text — served from
-	// internal/radiotext.Text.FirmwarePlaceholder (task 41).
-	FirmwarePlaceholder string
 }
 
 // SettingItemView is one leaf setting within a SettingGroupView: the unit

@@ -71,7 +71,7 @@ func testCtx(t *testing.T) context.Context {
 // EXACTLY the six hardware-verified fields and NOTHING else — an
 // over-broad writable set here would arm writes the trials never
 // verified. Real-radio writes are gated by the clone service's
-// choreography (confirmation digest, firmware gate, per-slot
+// choreography (confirmation digest, per-slot
 // write-then-verify) and internal/guards' import-graph pin, not by a
 // capability veto. Asserted via realDrivers[DefaultModel] — task 39's
 // model-keyed real-driver table's FT-710 entry, which is NewRealDriver
@@ -1663,7 +1663,7 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 // as well as a properly populated one, which is exactly the silent-
 // blank-advisory outcome this test exists to prevent. So this also
 // requires a NAMED SUBSET of fields to be non-empty:
-// EraseProcedure, FirmwareGuidance, ProbeFirmwareNote. Deliberately not
+// EraseProcedure, ProbeFirmwareNote. Deliberately not
 // the full set — ToneScanSkipVerification states what IS and is NOT
 // hardware-verified about Tone/Scan Skip preservation for this radio,
 // and for a model pinned at writeTrialsComplete=false it legitimately has
@@ -1701,9 +1701,6 @@ func TestEverySupportedModelHasRadiotext(t *testing.T) {
 		}
 		if text.EraseProcedure == "" {
 			t.Errorf("radiotext.For(%q).EraseProcedure is empty; every model must have prose", model)
-		}
-		if text.FirmwareGuidance == "" {
-			t.Errorf("radiotext.For(%q).FirmwareGuidance is empty; every model must have prose", model)
 		}
 		if text.ProbeFirmwareNote == "" {
 			t.Errorf("radiotext.For(%q).ProbeFirmwareNote is empty; every model must have prose", model)
@@ -4588,12 +4585,7 @@ func TestOpenFakeSessionFor_FT991ACloneWriteVerifyRoundTrip(t *testing.T) {
 		t.Fatalf("PrepareSend's deltas = %v, want %v — one MEM overwrite and one PMS create, and nothing else", deltas, wantDeltas)
 	}
 
-	report, err := service.Execute(ctx, plan, plan.ConfirmationDigest(), clone.ExecuteOptions{
-		// The first-write gate wants a human-supplied string. It is not a
-		// claim about any real radio — no FT-991A has ever been connected to
-		// this project — only the value the gate requires.
-		FirmwareConfirmed: "registered fake",
-	})
+	report, err := service.Execute(ctx, plan, plan.ConfirmationDigest())
 	if err != nil {
 		t.Fatalf("Execute: unexpected error: %v (the Simulated profile must be write-capable against the registered fake)", err)
 	}

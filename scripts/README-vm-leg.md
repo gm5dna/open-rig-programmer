@@ -139,15 +139,13 @@ preamble"):
    Confirm the diff shows exactly the M-96 (or named alternative)
    change from step 5, nothing else. Then:
    ```powershell
-   & "C:\Program Files\Open Rig Programmer\rigprog.exe" write --port COMn --model FT-710 --firmware <version read off the front panel> baseline.json
+   & "C:\Program Files\Open Rig Programmer\rigprog.exe" write --port COMn --model FT-710 baseline.json
    ```
    Answer the interactive confirmation prompt yourself — this is the
    point of running it by hand rather than from a script. Use `--yes`
    only if the session genuinely cannot present the prompt (e.g. a
    remote/non-interactive shell), and say so in the evidence if you
-   do. `--firmware` is required on this session's first write and
-   takes the version string read directly off the radio's front panel
-   or SD-card backup, never guessed.
+   do.
 
    Then:
    ```powershell

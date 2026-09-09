@@ -157,12 +157,7 @@ func withSlot001(cp *codeplug.Codeplug, data *codeplug.ChannelData) *codeplug.Co
 // execute runs plan through service with the confirmations Execute demands.
 func execute(t *testing.T, service *clone.Service, plan *clone.SendPlan) (*clone.Report, error) {
 	t.Helper()
-	return service.Execute(testCtx(t), plan, plan.ConfirmationDigest(), clone.ExecuteOptions{
-		// Obligation 10's first-write gate: a human-supplied string. It is
-		// not a claim about any real radio — no FT-891 has ever been
-		// connected to this project — only the value the gate requires.
-		FirmwareConfirmed: "scripted-peer",
-	})
+	return service.Execute(testCtx(t), plan, plan.ConfirmationDigest())
 }
 
 // TestClone_TxClarTrueAbortsTheSendAtTheDriver is plan P5's end of the

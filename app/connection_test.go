@@ -489,7 +489,7 @@ func TestConfirmSend_NoActivePlan(t *testing.T) {
 	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
-	if err := a.ConfirmSend("anything", ""); !errors.Is(err, ErrNoActivePlan) {
+	if err := a.ConfirmSend("anything"); !errors.Is(err, ErrNoActivePlan) {
 		t.Errorf("ConfirmSend with no plan: err = %v, want ErrNoActivePlan", err)
 	}
 }

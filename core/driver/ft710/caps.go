@@ -76,7 +76,7 @@ const (
 // write, post-flip: codeplug.Diff's per-field/Inert/erase gates, the
 // clone service's full choreography (fresh baseline, immutable plan,
 // dual-digest recheck, session binding, explicit confirmation digest,
-// first-write firmware confirmation, per-slot verify-read +
+// per-slot verify-read +
 // write-then-verify), Session.WriteChannel's own capability re-check,
 // and internal/guards' import-graph pin on the write path itself.
 //

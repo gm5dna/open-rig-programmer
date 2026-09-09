@@ -33,7 +33,9 @@ it), and menu settings are never written
 Reads and writes the 99 memories and the 9 PMS pairs, and reads every
 menu setting. Writes were proven on a real radio, including creating a
 channel in an empty slot and clearing a tag. Needs firmware V01-10 or
-later; the program cannot ask the radio its version.
+later; the program cannot ask the radio its version, but memory CAT
+arrived with that firmware, so a radio that answers the read has
+proved it. Nothing is typed in.
 
 Refused: tone, scan-skip and clarifier cannot be set over CAT, so an
 edit to any of them is refused rather than silently dropped. The

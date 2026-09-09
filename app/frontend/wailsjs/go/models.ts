@@ -619,8 +619,6 @@ export namespace main {
 	    BaselineDigestShort: string;
 	    ConfirmationDigest: string;
 	    NothingToSend: boolean;
-	    FirmwareRequired: boolean;
-	    FirmwareGuidance: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SendPlanView(source);
@@ -633,8 +631,6 @@ export namespace main {
 	        this.BaselineDigestShort = source["BaselineDigestShort"];
 	        this.ConfirmationDigest = source["ConfirmationDigest"];
 	        this.NothingToSend = source["NothingToSend"];
-	        this.FirmwareRequired = source["FirmwareRequired"];
-	        this.FirmwareGuidance = source["FirmwareGuidance"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -859,7 +855,6 @@ export namespace main {
 	    ToneScanSkipVerification: string;
 	    EraseDialogNote: string;
 	    PreservationTooltips: PreservationTooltipsView;
-	    FirmwarePlaceholder: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UISpecView(source);
@@ -882,7 +877,6 @@ export namespace main {
 	        this.ToneScanSkipVerification = source["ToneScanSkipVerification"];
 	        this.EraseDialogNote = source["EraseDialogNote"];
 	        this.PreservationTooltips = this.convertValues(source["PreservationTooltips"], PreservationTooltipsView);
-	        this.FirmwarePlaceholder = source["FirmwarePlaceholder"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

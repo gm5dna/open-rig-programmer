@@ -77,16 +77,15 @@ func reportToView(report *clone.Report, snapshotPath string) ReportView {
 		}
 	}
 	return ReportView{
-		FirmwareConfirmed: report.FirmwareConfirmed,
-		Written:           report.Written,
-		Verified:          report.Verified,
-		SkippedBlocked:    report.SkippedBlocked,
-		Unchanged:         report.Unchanged,
-		Slots:             slots,
-		Aborted:           report.Aborted,
-		AbortReason:       report.AbortReason,
-		JournalPath:       report.JournalPath,
-		SnapshotPath:      snapshotPath,
+		Written:        report.Written,
+		Verified:       report.Verified,
+		SkippedBlocked: report.SkippedBlocked,
+		Unchanged:      report.Unchanged,
+		Slots:          slots,
+		Aborted:        report.Aborted,
+		AbortReason:    report.AbortReason,
+		JournalPath:    report.JournalPath,
+		SnapshotPath:   snapshotPath,
 	}
 }
 

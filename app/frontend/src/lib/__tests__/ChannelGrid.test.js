@@ -87,7 +87,6 @@ const UI_SPEC = {
 		Tone: 'not readable over CAT — preserved when writing (hardware-verified 13/07/2026)',
 		ScanSkip: 'not readable over CAT — preservation when writing is unverified (never probed)',
 	},
-	FirmwarePlaceholder: 'e.g. V01-10',
 }
 
 function data(freqHz, mode, extra = {}) {

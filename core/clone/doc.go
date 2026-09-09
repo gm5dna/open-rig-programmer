@@ -97,21 +97,13 @@
 //     a plan to the caller. The timestamp comes from an injected
 //     Now func() time.Time (WithNow), for determinism in tests.
 //
-//  10. First-write interactive gate. Execute takes
-//     ExecuteOptions.FirmwareConfirmed — the caller must supply a
-//     non-empty, user-confirmed firmware version string (read off the
-//     radio's front panel; CAT has no command to read it) before this
-//     Service's session performs its first Execute. An empty value is a
-//     typed refusal. This layer enforces PRESENCE only; obtaining the
-//     confirmation from a human is the CLI/GUI's job. The audit clause:
-//     the confirmed value is not merely gate-keeping state — the first
-//     time it is accepted, Execute journals a "firmware_confirmed" event
-//     carrying it (before the delta loop, alongside "prepare" in the
-//     journal's timeline, not interleaved with per-slot write/verify
-//     lines), and every Report from then on (this call's and every later
-//     one on the same Service) carries it in Report.FirmwareConfirmed, so
-//     a caller can display or persist it without having to have been the
-//     one that supplied it.
+//  10. Firmware proven by the read, not typed in. Memory CAT on the
+//     FT-710 arrived in firmware V01-10, and the radio has no query for
+//     its version — but PrepareSend's fresh read of every memory slot
+//     goes over that same memory CAT, so a session that reaches Execute
+//     has already had its firmware proven by the radio answering. No
+//     human-typed version string is asked for; the journal's "prepare"
+//     line and the baseline snapshot are the record.
 //
 //  11. Radio-side drift, caught before any write. Obligations 1-10 bind
 //     the plan to what PrepareSend saw and to what the user confirmed —
@@ -187,9 +179,7 @@
 // aborts via the same *AbortedError/*Report machinery a write rejection
 // or verify mismatch uses — with a *JournalFailedError (see
 // ErrJournalFailed) as the abort's Cause. The terminal "abort" and
-// "completion" lines, and the best-effort "firmware_confirmed" line
-// (its gate state already lives safely in memory the instant it is set —
-// see obligation 10), remain best-effort: there is nothing further left
+// "completion" lines remain best-effort: there is nothing further left
 // to protect by refusing at that point, so a durability hiccup on one of
 // those is logged, not surfaced as a failure of an already-decided
 // outcome.
