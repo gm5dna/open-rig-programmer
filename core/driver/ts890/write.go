@@ -573,7 +573,10 @@ func (s *Session) candidate(slotID string, slot ma.Slot, data codeplug.ChannelDa
 	// parse error. A 1750 Hz tone_rx cannot come OFF a radio — the parser
 	// bounds P7 to the same chart — so this is about a value from a FILE.
 	if data.ToneRx.State == codeplug.Known {
-		if idx, ok := toneIndex(data.ToneRx.Value); !ok || idx > int(s.layout.MaxCTCSSIndex()) {
+		// A tone the chart does not carry AT ALL is a different refusal and
+		// is left to the unreachable guard below: calling it "index 0" here
+		// would name a tone the caller never asked for.
+		if idx, ok := toneIndex(data.ToneRx.Value); ok && idx > int(s.layout.MaxCTCSSIndex()) {
 			return ma.Record{}, refuse(slotID, registerDecision8, []spec.Field{spec.FieldToneRx},
 				"tone_rx %v is index %d in the 51-entry TN chart this row publishes (890:5149-5163, the 1750.0 entry at 890:5162), and the printed CN chart stops at %02d (890:1354-1369). spec.Capabilities carries ONE tone domain and one AdmitsTone predicate for both directions, so the domain publishes the value and the write path refuses it; a receive tone this radio cannot be told to listen for is not written",
 				data.ToneRx.Value, idx, s.layout.MaxCTCSSIndex())
@@ -625,7 +628,17 @@ func (s *Session) candidate(slotID string, slot ma.Slot, data codeplug.ChannelDa
 			Reason: fmt.Sprintf("tone_tx %v is not in the 51-entry chart this row publishes (890:5149-5163)", data.ToneTx.Value),
 		}
 	}
-	toneRx, _ := toneIndex(data.ToneRx.Value) // bounded by rung 8 above.
+	toneRx, ok := toneIndex(data.ToneRx.Value)
+	if !ok {
+		// Unreachable for the same reason as toneTx, and written out rather
+		// than discarded with a blank: an ignored miss would encode index 0,
+		// which is a REAL tone (67.0 Hz), so the silent failure here would be
+		// a wrong value on the wire rather than a refusal.
+		return ma.Record{}, &driver.WriteRefusedError{
+			Slot: slotID, Fields: []spec.Field{spec.FieldToneRx},
+			Reason: fmt.Sprintf("tone_rx %v is not in the 51-entry chart this row publishes (890:5149-5163)", data.ToneRx.Value),
+		}
+	}
 
 	rec := ma.Record{
 		Slot:       slot,
