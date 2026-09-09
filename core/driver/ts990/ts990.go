@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/kw/ma"
@@ -456,35 +455,6 @@ func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 // driver.DiagnosticsReporter capability.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
 	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
-}
-
-// WriteChannel implements driver.Session — AND IS A PLACEHOLDER THAT TASK 14
-// REPLACES WHOLE. It exists in this file because driver.Session requires the
-// method and *Session must satisfy that interface for Open to return one at
-// all; it deliberately does NOT attempt a partial choreography. Pair 1's
-// core/driver/ts590 carried the identical placeholder for the identical
-// reason, and its own write task replaced it and its pin together.
-//
-// Every call is refused with a typed *driver.WriteRefusedError BEFORE any
-// frame is built or any byte reaches the wire — which is the correct behaviour
-// for the RealHardware and fail-safe profiles regardless (their capability
-// gate would refuse anyway, writeTrialsComplete being false), and a temporary,
-// visible gap for the Simulated profile.
-//
-// What replaces it is the eleven-rung ladder of plan P7 in that order — the
-// slot, the bank, the EMPTY candidate, driver.CheckFieldStates, THE CAPABILITY
-// GATE, then this row's own pre-wire refusals — and then, after ONE pre-write
-// MA0 read held with the Set under opMu, the two read-dependent rungs: the
-// empty predicate, and the secondary-side comparison that refuses when any of
-// P10-P14 differs from what the Set would emit and refuses UNCONDITIONALLY
-// when P16 = 1. Then one 57-byte MA0 Set, reported Sent, never Confirmed.
-// TestWriteChannel_RefusedUntilTask14 pins this placeholder and is replaced
-// along with it.
-func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{
-		Slot:   ch.Slot,
-		Reason: "the TS-990S driver's write path is not implemented yet (Stage 2 task 14 lands the single MA0 Set and its refusal ladder); no frame is built and nothing reaches the wire",
-	}
 }
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close already

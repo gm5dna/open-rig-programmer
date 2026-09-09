@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -551,30 +550,6 @@ func TestTone_IsAskedOfTheCapabilitySetAndNotOfTheLocalTable(t *testing.T) {
 	}
 	if !sess.Capabilities().AdmitsTone(17500) {
 		t.Error("the capability set does not admit 1750 Hz, which TN index 50 prints")
-	}
-}
-
-// TestWriteChannel_RefusedUntilTask14 pins the placeholder ts990.go carries so
-// that *Session satisfies driver.Session. It is replaced along with the
-// placeholder.
-func TestWriteChannel_RefusedUntilTask14(t *testing.T) {
-	sess, p := openTestSession(t, radioImage{})
-	before := len(p.Transcript())
-	res, err := sess.WriteChannel(context.Background(), codeplug.Channel{
-		Slot: "042",
-		Data: &codeplug.ChannelData{FreqHz: 14_175_000, Mode: "FM"},
-	})
-	if err == nil {
-		t.Fatal("the placeholder WriteChannel accepted a write")
-	}
-	if !errors.Is(err, driver.ErrWriteRefused) {
-		t.Errorf("err = %v, want one matching driver.ErrWriteRefused", err)
-	}
-	if len(res.Steps) != 0 {
-		t.Errorf("res.Steps = %v, want none — no frame is built", res.Steps)
-	}
-	if got := len(p.Transcript()); got != before {
-		t.Errorf("%d frames reached the wire", got-before)
 	}
 }
 
