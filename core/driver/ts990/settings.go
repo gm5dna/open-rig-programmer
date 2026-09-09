@@ -97,7 +97,9 @@ var settings = buildSettingsSurface(layout())
 // RAW VALUES ONLY, AND NO VALUE SEMANTICS AT ALL. The tree carries an
 // address, the chart's own Function name and a display form per item; it
 // carries no value legend, no units, no enumerated options and no default,
-// and ReadSetting returns P5 verbatim. Every legend in this parameter list is
+// and ReadSetting returns the row's own printed width of P5 with no reading
+// of it at all — the ONE thing it does to the answer is the prefix take the
+// codec asks of it. Every legend in this parameter list is
 // therefore untouched by this surface, which is what keeps a menu read a
 // transcription of what the radio said rather than an interpretation of it —
 // and it is why the five FIRMWARE-CONDITIONAL rows this chart prints
@@ -291,6 +293,25 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 		// the driver adds only the context the parser cannot know,
 		// mirroring ReadChannel's own error-typing split.
 		return driver.SettingValue{}, fmt.Errorf("ts990: ReadSetting %s: %w", id, err)
+	}
+	// THE CODEC'S STATED CONSUMER OBLIGATION, DISCHARGED HERE — the only
+	// place in the tree that can. ParseEXAnswer returns P5 verbatim on
+	// purpose, pad included, and says in as many words that "a caller reading
+	// a setting must take the first item.Digits characters as the value and
+	// treat the remainder as pad" (core/kw/ma/envelope.go:376-381). This is
+	// that caller: the inventory row is already in hand two lines into this
+	// function, so the neutral driver.SettingValue never has to carry a width
+	// for the split to be made.
+	//
+	// IT IS A PREFIX TAKE, NOT A TRAILING-SPACE TRIM, and the difference is
+	// what makes it safe on a text row whose trailing space could be content:
+	// A19 is a CEILING, so for a row printed at its full width the prefix is
+	// the whole string and nothing is removed, and only the bytes past the
+	// row's own printed width — which no printed answer occupies — are
+	// dropped. The 890S has no fixed form and needs none of this, which is
+	// why its sibling has no such line.
+	if len(raw) > item.Digits {
+		raw = raw[:item.Digits]
 	}
 	return driver.SettingValue{ID: id, Raw: raw, State: driver.SettingKnown}, nil
 }

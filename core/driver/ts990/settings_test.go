@@ -232,33 +232,42 @@ func TestExSpec_CarriesTheFullAddressAndAdmitsAVariableWidth(t *testing.T) {
 	}
 }
 
-// TestReadSetting_ReadsBothAnswerFormsAndReturnsP5Verbatim is E19 exercised
-// on the wire, and it also states this surface's OWN posture: RAW VALUES
-// ONLY.
+// TestReadSetting_ReadsBothAnswerFormsAndTakesThePrintedWidth is E19
+// exercised on the wire, and it also states this surface's OWN posture: RAW
+// VALUES ONLY, at the row's own printed width.
 //
 // The fixed form's P5 is fifteen bytes with the value and its pad
-// undifferentiated, and NEITHER BOOK SAYS WHICH BYTE THE PAD IS — so this
-// driver returns what the radio said and trims nothing. Trimming would apply
-// a pad rule the register does not carry to a field A1 is explicitly scoped
-// away from (A1 is the MA0 NAME window's), and this tree carries no value
-// semantics at all: no legend, no units, no options, no default. THE
-// OBLIGATION TO MAKE THAT SPLIT IS DISCHARGED NOWHERE TODAY: the codec
-// (core/kw/ma's ParseEXAnswer) states it in terms — take item.Digits
-// characters as the value, the rest is pad — but driver.SettingItem carries
-// only ID, Label and Display, so no layer above this one holds item.Digits
-// either. This driver declines to truncate on its own account because this
-// row's TextWidths are {10, 15} (internal/extable/profile.go) and a text
-// row's trailing space could be content, not pad; the settings seam
-// carrying no per-item width is a milestone-close follow-up (a
-// driver.SettingItem change), not this task's.
-func TestReadSetting_ReadsBothAnswerFormsAndReturnsP5Verbatim(t *testing.T) {
+// undifferentiated, and NEITHER BOOK SAYS WHICH BYTE THE PAD IS — which is
+// exactly why the codec hands the split to its caller rather than guessing:
+// "a caller reading a setting must take the first item.Digits characters as
+// the value and treat the remainder as pad" (core/kw/ma/envelope.go:376-381).
+// THIS IS THAT CALLER, and until the milestone-close review (S1-MED-1) it
+// discharged the obligation nowhere, so 193 of the 194 rows of a shipped
+// settings CSV carried pad in the value column.
+//
+// IT IS A PREFIX TAKE, NOT A TRIM, and that is what answers the objection
+// this comment used to carry — that this row's TextWidths of {10, 15} could
+// make a text row's trailing space content. A19 is a CEILING: for a row
+// printed at fifteen the prefix IS the whole fifteen bytes and nothing is
+// removed; only bytes past the row's own printed width are dropped, and no
+// printed answer occupies those. Nor did the split need a fleet seam change:
+// item.Digits is in hand at ReadSetting's own first line, so
+// driver.SettingItem never has to carry a width.
+//
+// THE SHORT FORM IS UNCHANGED, which is the other half of the pin: a value
+// already at its printed width comes back byte for byte, so this is one
+// behaviour on two answer shapes rather than a rule that fires on one.
+func TestReadSetting_ReadsBothAnswerFormsAndTakesThePrintedWidth(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		frame string
 		want  string
 	}{
 		{"the short form the P5 note requires", exAnswer("00000", "010"), "010"},
-		{"the fixed 24-byte form the diagram draws (E19)", exAnswerFixed("00000", "010"), "010            "},
+		// The fixed form's pad is DROPPED, and the row's printed width is
+		// what draws the line: menu 00000 prints three digits, so the
+		// value is the leading three of the fifteen the radio sent.
+		{"the fixed 24-byte form the diagram draws (E19)", exAnswerFixed("00000", "010"), "010"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sess, p := openTestSession(t, radioImage{exAnswers: map[string]string{"00000": tc.frame}})
