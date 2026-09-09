@@ -56,9 +56,13 @@
 //	    the parser right-trims the window and a trailing space is
 //	    indistinguishable from the absence of one, so a name ending in a
 //	    space is written back one character shorter. That is a stated
-//	    capability limit, not a defect. checkName's reading of that limit
-//	    (MED-1) REFUSES a trailing-space name at build on this row, rather
-//	    than carrying or silently trimming it.
+//	    capability limit, not a defect: the 890S PARSES a trailing-space name
+//	    by trimming it, exactly as stated, and REFUSES to BUILD one — the
+//	    round trip cannot carry it, so buildMA0Set890 (MED-1, fix round 2)
+//	    refuses it there, rather than carrying or silently trimming it. The
+//	    refusal is not in checkName: that function is domain-only and shared
+//	    with the read side, which must go on accepting the frames the radio
+//	    itself sends.
 //	    Lift: L-HW-1, observing the MA0 family — write a 3-character name to
 //	    a scratch channel, read it back, record the ten bytes exactly.
 //	    TS-990S.

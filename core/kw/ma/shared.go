@@ -469,7 +469,10 @@ func (l Layout) checkModeByte(field string, b byte) error {
 	return nil
 }
 
-// checkName refuses a name the printed field cannot carry.
+// checkName refuses a name the printed field cannot carry. It is domain
+// only — length, ';', printable — with no row discriminator: a trailing
+// space is a row-specific build-time concern (buildMA0Set890, MED-1), not a
+// property of the name's own domain, so it does not belong here.
 //
 // THE ';' EXCLUSION IS FORCED BY THE ENVELOPE (890:92-96) and is NOT an
 // assumption: a name carrying one is two frames to the radio's own parser and
@@ -478,16 +481,6 @@ func (l Layout) checkModeByte(field string, b byte) error {
 func checkName(field, name string) error {
 	if len(name) > ma0MaxNameLen {
 		return fmt.Errorf("%s is %d characters, and both books print up to 10 characters (890:3208-3209, 990:2955-2956)", field, len(name))
-	}
-	// P13 IS THE TS-890S'S CHANNEL-NAME FIELD (codec890.go), THE ONLY ROW
-	// THIS APPLIES TO: its grid pads nothing (buildMA0Set890's own doc), so a
-	// trailing space is real content with no pad byte to distinguish it from
-	// — and cannot survive a build round trip (MED-1). A1's pad rule is
-	// TS-990S ONLY (doc.go): P18's fixed ten-byte window absorbs any
-	// trailing content identically whichever way it is spelled, so a P18
-	// name ending in a space is unaffected.
-	if strings.HasPrefix(field, "P13") && strings.HasSuffix(name, " ") {
-		return fmt.Errorf("%s ends in a space, and the TS-890S grid carries no pad (A1 is TS-990S ONLY) — such a name cannot survive a build round trip and is refused rather than carried", field)
 	}
 	for i := 0; i < len(name); i++ {
 		if b := name[i]; b == ';' {
