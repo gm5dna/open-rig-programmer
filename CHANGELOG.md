@@ -11,6 +11,10 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.5.0] - 2026-09-09
+
 ### Added
 - **Kenwood TS-890S and TS-990S**: read, opt-in write, menu-settings
   read. The 100 memory channels and the menu inventory — 158 settings on
