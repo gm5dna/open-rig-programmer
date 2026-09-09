@@ -166,8 +166,8 @@ func writeAddedEntry(w io.Writer, e codeplug.DiffEntry) {
 // The no-named-field fallback is not defensive padding: Diff's equality is
 // over the WHOLE ChannelData (its Equality doc), so a slot whose tone, shift
 // or field state moved is Modified with all three of these fields equal, and
-// a bare "M-01:" would claim nothing. TestWriteDiffReport_
-// ModifiedNamesOnlyChangedFields pins all three shapes.
+// a bare "M-01:" would claim nothing.
+// TestWriteDiffReport_ModifiedNamesOnlyChangedFields pins all three shapes.
 func writeModifiedEntry(w io.Writer, e codeplug.DiffEntry) {
 	var parts []string
 	if e.Before.FreqHz != e.After.FreqHz {
