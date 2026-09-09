@@ -496,6 +496,12 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// participation is unknown — and THIS PROGRAMME DOES NOT CREATE CHANNELS
 	// until it is observed.
 	if current.Empty {
+		// A21's residue is reported here for the same reason read.go reports
+		// it (see noteNameResidue): a caller told this channel is blank
+		// should also learn its name window still holds a name, which is the
+		// one fact that would say the slot is not as fresh as this refusal
+		// implies.
+		s.noteNameResidue(ch.Slot, current)
 		return res, refuse(ch.Slot, registerA3, nil,
 			"the pre-write read shows this channel unassigned now (its P2-P12 window is blank, 890:3215-3216), and whether an MA0 Set can CREATE a channel is nowhere printed: five sibling commands print an unassigned-channel prohibition (890:3265, 890:3282, 890:3300-3301, 890:3324, 890:3356) and MA0 says nothing either way. This programme does not create channels — the observation that would settle it is hardware item 1 (L-HW-3), a Set to a channel confirmed blank from the front panel, read back")
 	}
