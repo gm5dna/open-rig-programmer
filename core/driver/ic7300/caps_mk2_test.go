@@ -208,8 +208,8 @@ func TestCapabilities_EveryFieldExplicit_MK2(t *testing.T) {
 	// a NEW capability field arriving with a plausible zero value and no
 	// entry would be caught — but a field REMOVED, or the struct reshaped,
 	// would not, so the exact shape remains pinned alongside the table.
-	if ty.NumField() != 28 {
-		t.Errorf("spec.Capabilities has %d fields, want 28 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
+	if ty.NumField() != 29 {
+		t.Errorf("spec.Capabilities has %d fields, want 29 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name

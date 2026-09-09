@@ -48,13 +48,14 @@ var deliberatelyZeroCapabilityFields = map[string]string{
 	"AttenuatorDB":           "matrix §1b D8",
 	"PreampOptions":          "matrix §1b D8",
 	"AntennaOptions":         "matrix §1b D8",
+	"SimplexTx":              "SimplexTxUnstated is the positive declaration that nothing in this model's record says what a simplex channel's transmit frequency holds, so core/csvio's CHIRP importer leaves TxFreqHz Unknown on a blank Duplex row exactly as it did before the datum existed (the 09/09/2026 CHIRP transmit-disposition design)",
 }
 
 func TestCapabilitiesEveryStructFieldIsExplicitlyNonZeroOrAudited(t *testing.T) {
 	value := reflect.ValueOf(CapabilitiesUnverified())
 	typeOf := value.Type()
-	if typeOf.NumField() != 28 {
-		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 28", typeOf.NumField())
+	if typeOf.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 29", typeOf.NumField())
 	}
 	for i := 0; i < typeOf.NumField(); i++ {
 		name := typeOf.Field(i).Name

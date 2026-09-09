@@ -420,8 +420,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := CapabilitiesUnverified()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 28 {
-		t.Fatalf("spec.Capabilities has %d fields, want 28 — this test's list is stale", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name
@@ -477,5 +477,17 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 				t.Errorf("%v %s is writable under the RealHardware baseline while writeTrialsComplete is false", bank.ID, f)
 			}
 		}
+	}
+}
+
+// TestCapabilities_SimplexTx pins the transmit disposition of a channel
+// this record calls simplex. MA0 P8 is the "Split transmission frequency
+// information (11 digits)" and P11 "0: Simplex / 1: Split"
+// (890:3191, 890:3201-3203), and the book prints the answer outright:
+// "When reading a single memory channel, all parameters for Split
+// Transmission become 0" (890:3217-3218).
+func TestCapabilities_SimplexTx(t *testing.T) {
+	if got := CapabilitiesUnverified().SimplexTx; got != spec.SimplexTxZero {
+		t.Errorf("SimplexTx = %v, want SimplexTxZero (890:3217-3218)", got)
 	}
 }
