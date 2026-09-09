@@ -3,7 +3,6 @@
 package guards
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -193,27 +192,5 @@ func TestMAFramingGatesTheRoster(t *testing.T) {
 
 	if admitted == 0 || refused == 0 {
 		t.Fatalf("the guard drove %d admitted and %d refused frames — both corpora must be non-empty, or a miswired framing passes on an emptied table", admitted, refused)
-	}
-}
-
-// TestMAFramingRefusesAnUnconfiguredLayout keeps the constructor's own door
-// inside the guard's scope: a framing built for a zero ma.Layout would gate
-// for no radio, and the engine cannot tell such a predicate from a real one
-// because a zero Layout's AllowedCommand is a perfectly non-nil method value.
-func TestMAFramingRefusesAnUnconfiguredLayout(t *testing.T) {
-	f, err := ma.NewFramingFor(ma.Layout{})
-	if err == nil {
-		t.Fatalf("ma.NewFramingFor accepted an unconfigured layout and returned %v", f)
-	}
-	if f != nil {
-		t.Errorf("ma.NewFramingFor returned a non-nil framing alongside its error: %v", f)
-	}
-	if !strings.Contains(err.Error(), "layout") {
-		t.Errorf("the refusal reads %v, and it should name the layout", err)
-	}
-	// It is the family's own typed refusal, so ONE errors.Is arm in a driver
-	// covers both constructors.
-	if !errors.Is(err, kw.ErrLayoutInvalid) {
-		t.Errorf("the refusal %v does not wrap kw.ErrLayoutInvalid", err)
 	}
 }

@@ -374,6 +374,11 @@ func TestNewFramingFor_RefusesAnUnconfiguredLayout(t *testing.T) {
 	if f != nil {
 		t.Errorf("NewFramingFor returned a non-nil framing alongside its error: %v", f)
 	}
+	// LOW-1: moved from internal/guards/ma_framing_test.go, which duplicated
+	// this constructor's own pin — the "layout" wording belongs beside it.
+	if !strings.Contains(err.Error(), "layout") {
+		t.Errorf("the refusal reads %v, and it should name the layout", err)
+	}
 }
 
 // TestNewFramingFor_BuildsForBothRows pins that each row's framing carries
