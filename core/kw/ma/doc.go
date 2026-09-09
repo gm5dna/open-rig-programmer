@@ -26,6 +26,18 @@
 // scoped to the manufacturer would let one radio's session retire the other
 // row's assumption, and register_test.go refuses that wording outright.
 //
+// THESE L-HW-n ARE THIS PAIR'S OWN NUMBERING AND DO NOT CONTINUE
+// core/kw/doc.go's. The two registers restart, so one ID names two different
+// observations: L-HW-3 here is the gate for one-frame writes (an MA0 Set of a
+// channel confirmed blank), and L-HW-3 there is pair 1's release gate for
+// reading an unwritten channel with MR. There is NO L-HW-7 in this pair at
+// all — an earlier draft's ID merged into another and the numbers were not
+// re-flowed — so a reader auditing this register for completeness is not
+// looking for a missing row. Where a row means the OTHER register it says so
+// in as many words, with the label "pair 1's" in front of the number, and
+// internal/guards/kw_register_lift_test.go reads that label as the escape it
+// is while checking every other citation in this package.
+//
 // The errata schedule E1-E19 records what the two documents get wrong, in
 // three categories kept distinct because two of the nineteen rows are not
 // defects at all. The A4 capability matrix's own findings against the design,

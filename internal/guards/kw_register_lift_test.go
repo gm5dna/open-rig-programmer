@@ -67,10 +67,25 @@ func TestKenwoodRegisterCitationsMatchTheRegister(t *testing.T) {
 	}
 }
 
-// kwRegisterCheckedDirs are the four packages a register citation can
-// legitimately name: the two drivers and their two independent fakes.
-// Repo-relative, slash-separated.
+// kwRegisterCheckedDirs are the five packages a register citation can
+// legitimately name: the codec that HOLDS the register, the two drivers and
+// their two independent fakes. Repo-relative, slash-separated.
+//
+// core/kw/ma IS WALKED, doc.go INCLUDED, and that is deliberate rather than
+// incidental (the milestone-close review's S1-LOW-1/S2-LOW-1): the package
+// where the register lives is the package whose own A-citations are densest —
+// shared.go, envelope.go, the two codecs and layout.go — and a wrong A-number
+// there would be the most authoritative wrong number in the tree. Skipping
+// doc.go to dodge its ONE cross-register reference would have taken the
+// register's own rows out of the walk with it; kwOtherRegisterRE below is the
+// narrower escape.
+//
+// Check (c) is inert on this directory by construction: its otherDirs are the
+// two drivers and the two fakes, and the codec is neither row's "other row".
+// That is right — the codec speaks for both radios, so a 890S-only row cited
+// from a file serving both is not the borrow (c) exists to catch.
 var kwRegisterCheckedDirs = []string{
+	"core/kw/ma",
 	"core/driver/ts890",
 	"core/driver/ts990",
 	"internal/fakets890",
@@ -281,6 +296,18 @@ var kwCollisionRE = regexp.MustCompile(`A4-format|A4 matrix`)
 // endpoint's row.
 var kwRangeRE = regexp.MustCompile(`A\d{1,2}(?:\.\.|-)A\d{1,2}`)
 
+// kwOtherRegisterRE strips a labelled cross-reference to PAIR 1's register,
+// which is a DIFFERENT numbering space that happens to share the "A<n>"
+// spelling (core/kw/doc.go's rows against core/kw/ma/doc.go's — the two
+// registers restart, as core/kw/ma/doc.go's header now says in as many
+// words). core/kw/ma/doc.go's A15 says "As pair 1's A17 ... Lift: L-DOC-2",
+// naming pair 1's A17 beside pair 2's own lift; read as a citation of THIS
+// register's A17 it is a mismatch, and it is not one.
+//
+// The escape is the label, not the number: only an A-number preceded by
+// "pair 1's" is stripped, so a bare A17 in the same file is still checked.
+var kwOtherRegisterRE = regexp.MustCompile(`(?i)pair 1's A\d{1,2}`)
+
 // kwBareANumberRE matches a bare "A<n>" register citation.
 var kwBareANumberRE = regexp.MustCompile(`\bA(\d{1,2})\b`)
 
@@ -316,6 +343,7 @@ var kwHeadingRE = regexp.MustCompile(`^#`)
 func kwCiteNumbers(text string) map[int]bool {
 	stripped := kwCollisionRE.ReplaceAllString(text, "")
 	stripped = kwRangeRE.ReplaceAllString(stripped, "")
+	stripped = kwOtherRegisterRE.ReplaceAllString(stripped, "")
 
 	nums := map[int]bool{}
 	for _, m := range kwBareANumberRE.FindAllStringSubmatch(stripped, -1) {
