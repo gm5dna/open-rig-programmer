@@ -269,6 +269,29 @@ func TestReadSetting_ReadsBothAnswerFormsAndReturnsP5Verbatim(t *testing.T) {
 	}
 }
 
+// TestReadSetting_TheWidestPrintedClassIsReadAtItsOwnWidth exercises the
+// eighth-digit class this book prints and the sibling's does not —
+// "Frequency settings use 8 digits" (990:1749-1750) — which is where this
+// row's extable profile gets its MaxDigits of 8. The width is the INVENTORY
+// ROW's, applied by the codec, so a value at the printed width comes back
+// verbatim and a wider one is refused rather than truncated (A19).
+func TestReadSetting_TheWidestPrintedClassIsReadAtItsOwnWidth(t *testing.T) {
+	const id = "00805" // 0 08 05, Fixed Mode LF Band Lower Limit, 8 digits
+	sess, _ := openTestSession(t, radioImage{exAnswers: map[string]string{id: exAnswer(id, "00030000")}})
+	got, err := sess.ReadSetting(context.Background(), id)
+	if err != nil {
+		t.Fatalf("ReadSetting: %v", err)
+	}
+	if got.Raw != "00030000" {
+		t.Errorf("Raw = %q, want the eight digits the chart prints for this row", got.Raw)
+	}
+
+	wide, _ := openTestSession(t, radioImage{exAnswers: map[string]string{id: exAnswer(id, "000300000")}})
+	if _, err := wide.ReadSetting(context.Background(), id); !errors.Is(err, kw.ErrParse) {
+		t.Errorf("a nine-character answer for an eight-digit row = %v, want the codec's A19 refusal", err)
+	}
+}
+
 // TestReadSetting_AnUnknownIDIsRefusedBeforeAnyFrameIsBuilt: membership is
 // checked HERE and not in core/kw/ma, and it covers two refusals a caller
 // cannot tell apart from the id alone and does not need to — a malformed
