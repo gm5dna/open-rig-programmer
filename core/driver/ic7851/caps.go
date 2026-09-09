@@ -145,6 +145,7 @@ var deliberatelyZero = map[string]string{
 	"AttenuatorDB":           "additions design D8 — the IC-7851 record carries no attenuator field",
 	"PreampOptions":          "additions design D8 — the IC-7851 record carries no preamp field",
 	"AntennaOptions":         "additions design D8 — the IC-7851 record carries no antenna field",
+	"SimplexTx":              "this row does not grade FieldTxFrequency, so the blank arm leaves nothing to state: core/csvio's CHIRP importer leaves TxFreqHz Unknown on a blank Duplex row exactly as it did before the datum existed",
 	"DuplexOptions":          "the Icom repeater vocabulary. The 1A 00 record has no duplex field, FieldDuplex carries the zero FieldSupport on both banks, and E5b's guard makes the empty list lawful",
 	"DTCSPolarities":         "the strings \"DTCS\" and \"DCS\" occur ZERO times in all 283 pages — swept for the matrix (§1 row 19). An empty list is the positive statement that this radio expresses no DTCS polarity",
 	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document, and field ⑪'s tone-type nibble stops at 2: TSQL",

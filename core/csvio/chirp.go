@@ -659,13 +659,41 @@ func consumedByThisRadio(caps spec.Capabilities, bank spec.BankID, column string
 // codeplug.Validate reports as an error on a channel the file never said
 // anything invalid about. Pinned by chirp_test.go's TS-590-pair "the five
 // one-name rows import as simplex with no Duplex entry" subtest.
+//
+// THE ONE EXCEPTION, and it is not an invention: a BLANK Duplex cell is
+// decision 4's ordinary simplex row, so the file DID speak to the transmit
+// disposition. On a bank that reaches spec.FieldTxFrequency the blank arm
+// below therefore states what this radio's own record gives a simplex
+// channel, read from caps.SimplexTx — 0 where the book prints that every
+// split parameter reads 0, the receive frequency where the record has no
+// split flag and expresses simplex arithmetically. A radio declaring
+// nothing (SimplexTxUnstated, the zero value) keeps the Unknown above.
+// "off" is untouched: it asserts "no duplex configured" as distinct from
+// simplex, which is not a statement about a transmit frequency.
+//
+// This is NOT the substitution struck in core/driver/ic7300/write.go
+// ("REV 1's TxFreqHz when Known, else FreqHz substitution is STRUCK and
+// must not come back"). That rule let the DRIVER invent a transmit
+// frequency for a channel whose TxFreqHz was simply not Known, with no
+// file behind it; the importer here holds a statement the driver does
+// not. Pinned by
+// TestImportCHIRP_BlankDuplexTakesTheRowsOwnSimplexStatement.
 func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) []LossEntry {
 	var entries []LossEntry
-	if reaches(caps, bank, spec.FieldTxFrequency) {
+	reachesTxFrequency := reaches(caps, bank, spec.FieldTxFrequency)
+	if reachesTxFrequency {
 		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
 	}
 	switch duplexRaw := cell("Duplex"); duplexRaw {
 	case "", "off":
+		if duplexRaw == "" && reachesTxFrequency {
+			switch caps.SimplexTx {
+			case spec.SimplexTxZero:
+				data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 0}
+			case spec.SimplexTxEqualsRx:
+				data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: data.FreqHz}
+			}
+		}
 		v, ok := shiftFor(caps, spec.ShiftNone)
 		if !ok {
 			// A radio with NO shift vocabulary at all reads a BLANK

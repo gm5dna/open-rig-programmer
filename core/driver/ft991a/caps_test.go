@@ -152,6 +152,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 	// nothing points either way, and "" is the conservative direction —
 	// narrowing, not widening, is what cannot put an unexpected byte on the
 	// wire.
+	"SimplexTx":  true,
 	"TagCharset": true,
 	// §1.10: this radio names a tone by INDEX into CTCSSTones (CN's P3,
 	// "000 - 049: Tone Frequency Number", layout 369), so a range would
@@ -189,7 +190,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// 28 since additions design D4.2 added the transmit declaration
 	// (matrix §1, §5).
-	const wantFieldCount = 28
+	const wantFieldCount = 29
 
 	for _, tt := range []struct {
 		name string

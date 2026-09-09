@@ -187,8 +187,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := CapabilitiesUnverified()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 28 {
-		t.Fatalf("spec.Capabilities has %d fields, want 28 — this test's list is stale", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name
@@ -464,5 +464,15 @@ func TestBauds_4800IsAbsentForBothPrintedReasons(t *testing.T) {
 		if b == 4800 {
 			t.Error("Bauds publishes 4800, which this book makes conditional on the connector (990:23, §1.11)")
 		}
+	}
+}
+
+// TestCapabilities_SimplexTx pins the transmit disposition of a channel
+// this record calls simplex, transcribed from THIS book: MA0's frequency-2
+// side and P15 "0: Simplex / 1: Split" (990:2946-2948), with the printed
+// answer "…all parameters for frequency 2 become 0" (990:2964-2965).
+func TestCapabilities_SimplexTx(t *testing.T) {
+	if got := CapabilitiesUnverified().SimplexTx; got != spec.SimplexTxZero {
+		t.Errorf("SimplexTx = %v, want SimplexTxZero (990:2964-2965)", got)
 	}
 }

@@ -369,7 +369,7 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 }
 
 // baseCapabilities builds the whole capability description, with EVERY ONE
-// of spec.Capabilities' twenty-eight fields set explicitly: the fields
+// of spec.Capabilities' twenty-nine fields set explicitly: the fields
 // that are deliberately zero — named by caps_test.go's deliberatelyZero
 // audit, including D8's five receiver vocabularies — are set to their
 // zero value in the literal below, beside the reading that says why, and
@@ -377,7 +377,9 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // nor named in its deliberatelyZero map.
 //
 // Additions design D4.2 moved the pinned count from twenty-seven to
-// twenty-eight by requiring this driver's transmitter anatomy explicitly.
+// twenty-eight by requiring this driver's transmitter anatomy explicitly;
+// the 09/09/2026 CHIRP transmit-disposition design moved it to
+// twenty-nine with SimplexTx.
 func baseCapabilities(m modelParams, memFields, scanFields map[spec.Field]spec.FieldSupport) spec.Capabilities {
 	return spec.Capabilities{
 		// Matrix §1 row 1 (§1 #1 in the MK2's matrix).
@@ -395,6 +397,23 @@ func baseCapabilities(m modelParams, memFields, scanFields map[spec.Field]spec.F
 		// RadioInfo.CATID and downstream comparisons are case-sensitive.
 		CATID:    m.catID,
 		Transmit: spec.HasTransmitter,
+		// A READING OF THE RECORD'S SHAPE, not a printed sentence (design
+		// 09/09/2026 §8): doc.go's ❹–⑧ block is "used when Split is ON" and
+		// the transmit frequency is a distinct field, whilst the 1A 00
+		// record carries no split flag at all (spec.FieldDuplex is the zero
+		// FieldSupport here). "Transmits where it receives" is the only
+		// reading such a record admits. It mints no ASSUMED register entry
+		// — nothing is assumed about the radio, only about which reading of
+		// a record with no split flag is meant — but it is not the class of
+		// evidence the three Kenwood declarations are.
+		//
+		// THIS IS NOT THE RULE STRUCK AT write.go's "REV 1's TxFreqHz when
+		// Known, else FreqHz substitution is STRUCK and must not come back".
+		// That rule let the DRIVER invent a transmit frequency for a channel
+		// whose TxFreqHz is simply not Known, with no file behind it. This
+		// datum lets the IMPORTER state what its file already said: a blank
+		// CHIRP Duplex column is decision 4's ordinary simplex row.
+		SimplexTx: spec.SimplexTxEqualsRx,
 		Banks: []spec.Bank{
 			{
 				ID:    spec.BankMemory,

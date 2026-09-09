@@ -320,18 +320,20 @@ additive (plan decision P11, spec decision 15).
   nowhere to carry the distinction. `CW`, `CWR` and `RTTY` block on the
   mode: `chirpModeMap` resolves them to `CW-U`, `CW-L` and `RTTY-U`, and
   Kenwood spells RTTY `FSK` and prints CW without a sideband suffix. **A
-  CHIRP import is refused at the write on these two rows today**, and
-  that is a fleet question rather than a Kenwood one: a CHIRP row states
-  no transmit frequency, `core/csvio` leaves `TxFreqHz` Unknown for any
-  bank that grades the field, and rung 6 refuses a candidate with no
-  Known transmit disposition (M-E8). The root fix — grading a blank or
-  `off` `Duplex` on such a bank as Known 0, the radio's own simplex
-  statement — moves the TS-590 pair's AND the IC-7300/IC-7300MK2's import
-  artefacts too: every bank that grades `FieldTxFrequency` without grading
-  `FieldDuplex` takes this branch (`core/driver/ts590/caps.go:399`,
-  `core/driver/ic7300/caps.go:349` against `:363`), which is six
-  registered rows, so it is deferred to a v1.5.x follow-up rather than
-  landed inside this registration.
+  CHIRP import is refused at the write on these two rows, and since
+  v1.5.1 what it is refused on is the two tone numbers.** A **blank**
+  `Duplex` cell on a bank that grades `FieldTxFrequency` now takes the
+  row's own `spec.SimplexTx` — `SimplexTxZero` here, since each book
+  prints that a simplex channel's split parameters all read 0
+  (`890:3217-3218`, `990:2964-2965`) — so rung 6 passes. An `off` cell
+  still blocks in the importer and is not a simplex statement. What
+  remains is `tone_tx` and `tone_rx`: a blank `Tone` row carries a Known
+  tone mode and neither index, and decision B is ruled **B2**, so the
+  file's `rToneFreq`/`cToneFreq` columns — CHIRP's per-row "this is not
+  really data" defaults, the same species as `DtcsCode` 023 — are not
+  read for them. The datum moved six registered rows, the TS-590 pair and
+  the IC-7300/IC-7300MK2 with these two: every bank that grades
+  `FieldTxFrequency` without grading `FieldDuplex` takes this branch.
 
 ## Costs the TS-990S pays and the TS-890S does not
 
