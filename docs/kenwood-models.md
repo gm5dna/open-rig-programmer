@@ -6,7 +6,7 @@ The evidence behind the Kenwood entries in `docs/radio-notes.md`. Every
 claim below cites the code that makes it true; the citations are for
 reviewers and contributors.
 
-## Five rows built, four of them selectable
+## The rows built, and which are selectable
 
 The **TS-590S**, the **TS-590SG**, the **TS-890S** and the **TS-990S**
 are in the model list. The **TS-480** is not, although its driver is
