@@ -40,6 +40,33 @@ import (
 // in-package assertion, and core/kw/parse.go's RecordLengthError doc comment
 // records both facts.
 //
+// command is the two-letter frame name ("MR" or "MW"); got and want are the
+// measured and the printed widths.
+func AssertKenwoodRecordLengthMismatch(t testing.TB, err error, command string, got, want int) {
+	t.Helper()
+	if !errors.Is(err, kw.ErrParse) {
+		t.Errorf("errors.Is(err, kw.ErrParse) = false for %v", err)
+	}
+	var lengthErr *kw.RecordLengthError
+	if !errors.As(err, &lengthErr) {
+		t.Fatalf("errors.As(err, **kw.RecordLengthError) = false for %v", err)
+	}
+	if lengthErr.Command != command || lengthErr.Got != got || lengthErr.Want != want {
+		t.Errorf("kw.RecordLengthError = %s %d/%d, want %s %d/%d", lengthErr.Command, lengthErr.Got, lengthErr.Want, command, got, want)
+	}
+	// THE TEXT IS CHECKED BY PREFIX AND NOT BY EQUALITY, which is the one
+	// place this helper's contract is looser than the CI-V one's. kw's
+	// message ends with a %q-quoted copy of the offending frame — radio
+	// bytes, deliberately truncated and deliberately quoted — so an exact
+	// comparison would make every caller restate fifty bytes of fixture. The
+	// half that matters is the opening, which is where the two measured
+	// lengths are.
+	want0 := fmt.Sprintf("kw: %s memory frame is %d bytes, want exactly %d bytes", command, got, want)
+	if text := lengthErr.Error(); !strings.HasPrefix(text, want0) {
+		t.Errorf("Error() = %q, want it to open with %q", text, want0)
+	}
+}
+
 // AssertKenwoodMAFrameLengthMismatch is the RANGE-SHAPED SIBLING of
 // AssertKenwoodRecordLengthMismatch, for the MA-family memory frame — the
 // first frame in this repository whose length is not a constant.
@@ -87,32 +114,5 @@ func AssertKenwoodMAFrameLengthMismatch(t testing.TB, err error, what string, go
 	want0 := fmt.Sprintf("%s: the frame is %d bytes, ", what, got)
 	if !strings.HasPrefix(parseErr.Reason, want0) {
 		t.Errorf("ParseError.Reason = %q, want it to open with %q", parseErr.Reason, want0)
-	}
-}
-
-// command is the two-letter frame name ("MR" or "MW"); got and want are the
-// measured and the printed widths.
-func AssertKenwoodRecordLengthMismatch(t testing.TB, err error, command string, got, want int) {
-	t.Helper()
-	if !errors.Is(err, kw.ErrParse) {
-		t.Errorf("errors.Is(err, kw.ErrParse) = false for %v", err)
-	}
-	var lengthErr *kw.RecordLengthError
-	if !errors.As(err, &lengthErr) {
-		t.Fatalf("errors.As(err, **kw.RecordLengthError) = false for %v", err)
-	}
-	if lengthErr.Command != command || lengthErr.Got != got || lengthErr.Want != want {
-		t.Errorf("kw.RecordLengthError = %s %d/%d, want %s %d/%d", lengthErr.Command, lengthErr.Got, lengthErr.Want, command, got, want)
-	}
-	// THE TEXT IS CHECKED BY PREFIX AND NOT BY EQUALITY, which is the one
-	// place this helper's contract is looser than the CI-V one's. kw's
-	// message ends with a %q-quoted copy of the offending frame — radio
-	// bytes, deliberately truncated and deliberately quoted — so an exact
-	// comparison would make every caller restate fifty bytes of fixture. The
-	// half that matters is the opening, which is where the two measured
-	// lengths are.
-	want0 := fmt.Sprintf("kw: %s memory frame is %d bytes, want exactly %d bytes", command, got, want)
-	if text := lengthErr.Error(); !strings.HasPrefix(text, want0) {
-		t.Errorf("Error() = %q, want it to open with %q", text, want0)
 	}
 }
