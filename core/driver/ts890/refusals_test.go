@@ -215,6 +215,38 @@ func TestWriteChannel_TheCapabilityGateAnswersFirstOnUnconsentedRealHardware(t *
 	assertNoWireTraffic(t, port, "an unconsented real-hardware write")
 }
 
+// TestWriteChannel_TheCapabilityGateAnswersFirstEvenWhenASemanticRungWouldAlsoRefuse
+// pins the gate's POSITION rather than merely its error TYPE. Every other
+// case in this suite runs at the default RealHardware profile OR writes a
+// channel that trips no semantic rung, so none of them can distinguish "the
+// gate fires first" from "the gate was hoisted below a rung that would have
+// refused anyway" — a session must trip BOTH to tell the two apart (review
+// s2-t14-review-opus.md MED-1; the same finding as pair 1's
+// core/driver/ts590/refusals_test.go:100-110). Left unpinned, that gap would
+// let an unconsented session learn which of its channels the programme
+// dislikes before it learned it may not write at all — exactly what plan
+// P7's pinning paragraph forbids.
+//
+// The channel also trips rung 8 (registerDecision8's own fixture, a Known
+// 1750 Hz tone_rx): if the gate answered after rung 8 rather than before it,
+// this case would see a *RefusalError naming "decision 8" instead of the
+// gate's plain *driver.WriteRefusedError.
+func TestWriteChannel_TheCapabilityGateAnswersFirstEvenWhenASemanticRungWouldAlsoRefuse(t *testing.T) {
+	sess, port := openTestSession(t, RealHardware, populatedImage(t, 7, occupiedSimplex()))
+	ch := simplexChannel("007")
+	ch.Data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: 17500}
+	_, err := sess.WriteChannel(context.Background(), ch)
+	var refused *driver.WriteRefusedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("err = %v (%T), want a *driver.WriteRefusedError", err, err)
+	}
+	var semantic *RefusalError
+	if errors.As(err, &semantic) {
+		t.Fatalf("the gate answered with a SEMANTIC refusal naming %q: the capability gate comes BEFORE rung 8, which this channel also trips", semantic.Register)
+	}
+	assertNoWireTraffic(t, port, "an unconsented real-hardware write that also trips rung 8")
+}
+
 // TestWriteChannel_ConsentIsTheRouteThroughTheCapabilityGate is the gate's
 // positive control, and it runs on the SAME RealHardware profile: consent
 // re-labels the write-side Unverified fields ConsentedUnverified at session
