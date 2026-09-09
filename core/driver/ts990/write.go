@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -572,7 +573,7 @@ func readDependentRefusal(slotID string, current, set ma.Record) error {
 	if diffs := secondaryDiffs(current, set); len(diffs) > 0 {
 		return refuse(slotID, registerDecision9, nil,
 			"channel %s carries frequency-2 values this programme cannot represent, and one MA0 Set rewrites the whole record: %s (990:2929-2945). codeplug.ChannelData has ONE mode, ONE FM width and ONE tone tuple, so these bytes have no source in the channel and the write would replace them with the primary side's own. Such a channel is READABLE but not rewritable until the neutral model grows a second tuple",
-			slotID, joinDiffs(diffs))
+			slotID, strings.Join(diffs, "; "))
 	}
 	return nil
 }
@@ -602,15 +603,6 @@ func secondaryDiffs(current, set ma.Record) []string {
 		}
 	}
 	return diffs
-}
-
-// joinDiffs renders secondaryDiffs' list as one clause.
-func joinDiffs(diffs []string) string {
-	out := diffs[0]
-	for _, d := range diffs[1:] {
-		out += "; " + d
-	}
-	return out
 }
 
 // modeByteText spells a record's secondary mode or tone-function byte as the
