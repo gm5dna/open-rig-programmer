@@ -100,6 +100,27 @@
 //	      both are: a USB-B leg's behaviour is partly that supplied driver's,
 //	      which the RS-232C leg does not share.
 //
+// # A1 on this row, and a forward note for the write ladder
+//
+// THE 890S HALF OF A1 IS NOT AN ASSUMPTION, and it is recorded here because a
+// reader who knows the TS-990S's half will expect one. That row pads a fixed
+// ten-byte name window and trims on read, which IS assumed (core/kw/ma's A1).
+// This row's terminator FLOATS at 40 + len(name) — the wrap row heads the
+// second cell "x" with P13 and ';' beneath it (890:3181-3182), confirmed on
+// the printed p.41 render — so "AB ;" and "AB;" are DISTINCT, unambiguous
+// frames and a trailing space is real CONTENT rather than padding. core/kw/ma
+// therefore carries P13 VERBATIM in both directions on this row (the Stage 1
+// close's C-MED-1 reversal), Parse ∘ Build is the identity for every name
+// this design admits, and core/csvio's CHIRP sanitiser leaving a trailing
+// space untrimmed round-trips AS-IS here.
+//
+// THE CONSEQUENCE FOR THE WRITE LADDER, recorded now so task 12 does not
+// re-derive it: THERE IS NO SPECIAL CASE TO BUILD. No refusal, no
+// per-channel loss to surface, no trailing-space rung. The one thing a later
+// write-back AUDIT should do — if one is ever added — is record a
+// trailing-space name in its per-channel detail, so that a field-for-field
+// comparison stays legible rather than silently equal-looking.
+//
 // # What this package deliberately does NOT do
 //
 //   - NO DISCOVERY, on two independent grounds either of which would suffice
