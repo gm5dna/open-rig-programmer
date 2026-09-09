@@ -62,7 +62,7 @@ var tierFieldsMustBeEmpty = map[string]string{
 	"AttenuatorDB":           "additions design D8 — this record carries no attenuator field",
 	"PreampOptions":          "additions design D8 — this record carries no preamp field",
 	"AntennaOptions":         "additions design D8 — this record carries no antenna field",
-	"SimplexTx":              "SimplexTxUnstated is the positive declaration that nothing in this model's record says what a simplex channel's transmit frequency holds, so core/csvio's CHIRP importer leaves TxFreqHz Unknown on a blank Duplex row exactly as it did before the datum existed (the 09/09/2026 CHIRP transmit-disposition design)",
+	"SimplexTx":              "this row grades FieldDuplex, so ImportCHIRP takes importCHIRPDuplexIcom and never reaches the blank arm that reads SimplexTx",
 }
 
 // TestCapabilities_EveryFieldExplicit reflects over spec.Capabilities and
