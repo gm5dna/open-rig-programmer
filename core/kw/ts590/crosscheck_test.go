@@ -223,9 +223,12 @@ func TestQuarantinedEvidenceFrozen(t *testing.T) {
 }
 
 // chartRow is the tuple both transcriptions carry for a menu number. The
-// address is the map key: all three Kenwood profiles register AddressSingle,
-// so the chart's three-digit Menu number IS the whole address and P2/P3 are
-// zero on every row (checked separately, against the profile's own policy).
+// address is the map key: pair 1's three Kenwood profiles — ts590sProfile,
+// ts590sgProfile and ts480Profile — register AddressSingle, so the chart's
+// three-digit Menu number IS the whole address and P2/P3 are zero on every
+// row (checked separately, against the profile's own policy). Pair 2's two,
+// ts890sProfile and ts990sProfile, register AddressGrouped with a
+// five-character address instead; this package never looks up either.
 type chartRow struct {
 	Name   string
 	Digits int

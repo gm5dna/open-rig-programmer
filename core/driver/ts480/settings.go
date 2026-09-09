@@ -43,7 +43,7 @@ const settingsVersion = "ts480-ex@1"
 // least one menu, at least one group inside it and a non-empty ID and Label at
 // every level. This radio's parameter lists print a menu number, a function
 // name and a parameter legend, and NO GROUP HIERARCHY AT ALL — which is why
-// all three Kenwood profiles register LabelsAbsent and every EXItem's P1Label
+// all five Kenwood profiles register LabelsAbsent and every EXItem's P1Label
 // and P2Label is "" (core/kw's EXItem states it). So the two nodes exist to
 // satisfy the neutral type, and they are named for the radio's own word for
 // the surface: both books head the address column of every EX parameter list

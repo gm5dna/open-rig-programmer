@@ -25,7 +25,7 @@ const exAnswerFixedBytes = 10
 // from another — the defect shape internal/extable.Profile's own doc
 // comment says the type exists to prevent, and the one that appeared four
 // times across M9b. Stage 0's task 2 made DigitsCeiling a REQUIRED
-// per-profile field for exactly this reason; the three Kenwood stanzas
+// per-profile field for exactly this reason; the five Kenwood stanzas
 // carry the value below, and core/kw/exdigits_ceiling_test.go pins them to
 // it.
 //
@@ -33,8 +33,8 @@ const exAnswerFixedBytes = 10
 // internal/extable is build-time tooling that renders core/kw source text,
 // and importing the package it generates into would cycle the dependency it
 // exists to keep one-way. The twin test is what makes the transcription
-// safe, and it selects the profiles by ImportPath so a fourth Kenwood
-// stanza nobody planned is caught with the three that were.
+// safe, and it selects the profiles by ImportPath so a sixth Kenwood
+// stanza nobody planned is caught with the five that were.
 //
 // A wider P5 than this describes an answer frame longer than
 // DefaultMaxFrame, which this family's own accumulator would discard as
