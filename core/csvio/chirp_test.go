@@ -3337,6 +3337,13 @@ func TestImportCHIRP_TS890And990TakeTheToneModeBranch(t *testing.T) {
 			// transceiver for spec.ToneModeCTCSSSquelch, which neither row
 			// publishes, so the importer refuses instead of substituting the
 			// receive-only semantic.
+			//
+			// WHAT THIS PINS IS TODAY'S CAPABILITY VALUE, NOT A PROPERTY OF
+			// THE RADIO. That CTCSS-to-ToneModeCTCSSRxSquelch mapping is
+			// ASSUMED on this pair and carries register entry K-D1
+			// (core/driver/ts890/caps.go's own "THE SEMANTICS ARE ASSUMED AND
+			// THE REGISTER ENTRY IS K-D1"), so if K-D1 lifts the other way
+			// this outcome changes and this subtest is what says so.
 			t.Run("a TSQL row is refused and moves no field", func(t *testing.T) {
 				const csv = "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n" +
 					"1,SQUELCH,145.500000,FM,TSQL,88.5,88.5\n"
