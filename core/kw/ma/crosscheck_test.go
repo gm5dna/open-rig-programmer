@@ -1653,6 +1653,58 @@ func TestGoldenVectors_TheUnbuiltFramesRecordWhyNot(t *testing.T) {
 	}
 }
 
+// TestGoldenVectors_AllowedCommandAgreesWithTheDisposition is the outbound
+// gate leg (T10 concern 1): AllowedCommand must admit every frame this
+// package actually builds for a replayBuild vector, and refuse every
+// replayNone vector's frame, on the radio's own layout. It is silent on
+// replayParse — four answer vectors are byte-identical to a Set this package
+// DOES build (MA0-890/990 answer_name_full10 = set_name_full10,
+// answer_*_split = set_*_split; EX-890/990 answer_normal = set_normal; AI
+// answer_off = set_off — see TestGoldenVectors_EveryBuiltFrameIsBuiltByteForByte),
+// so a blanket "every answer is refused" assertion would be false by
+// construction.
+//
+// replayBuild is checked against buildGoldenFrame's OUTPUT, not the golden
+// vector's own bytes: AllowedCommand's contract is "byte-identical to what
+// this package's own builder produces" (validMA0Set re-encodes and compares),
+// and the one vector where those differ — a14DummyByteVector — is a single
+// dummy byte the book calls ignored (990:2897-2903;
+// TestGoldenVectors_The990SSetVectorDiffersOnlyInA14sDummyByte), not a frame
+// this package would ever send.
+func TestGoldenVectors_AllowedCommandAgreesWithTheDisposition(t *testing.T) {
+	l890, l990 := ma.Layout890(), ma.Layout990()
+	build, none := 0, 0
+	for _, v := range goldenRoster {
+		if v.How == replayParse {
+			continue
+		}
+		l := l890
+		if strings.Contains(v.File, "990") {
+			l = l990
+		}
+		switch v.How {
+		case replayBuild:
+			build++
+			got, err := buildGoldenFrame(t, v)
+			if err != nil {
+				t.Fatalf("building %s/%s: %v", v.File, v.Name, err)
+			}
+			if !l.AllowedCommand(got) {
+				t.Errorf("%s/%s is replayBuild and AllowedCommand refuses the frame this package builds:\n  %q", v.File, v.Name, got)
+			}
+		case replayNone:
+			none++
+			frame := []byte(goldenFrame(t, v))
+			if l.AllowedCommand(frame) {
+				t.Errorf("%s/%s is replayNone (%s) and AllowedCommand admits it:\n  %q", v.File, v.Name, v.Why, frame)
+			}
+		}
+	}
+	if build == 0 || none == 0 {
+		t.Fatalf("gate leg ran over %d replayBuild and %d replayNone vectors — both must be non-empty", build, none)
+	}
+}
+
 // TestGoldenVectors_EveryBuiltFrameIsBuiltByteForByte is the outbound half of
 // the replay: for each replayBuild vector, this package's own builder produces
 // exactly the bytes leg G counted.

@@ -973,7 +973,7 @@ var ft991aProfile = Profile{
 }
 
 // ts590sProfile carries the TS-590S's menu-chart transcription facts. It is
-// one of the three Kenwood registrations, all of which render OUTSIDE
+// one of the five Kenwood registrations, all of which render OUTSIDE
 // core/cat: the inventory is emitted into core/kw/ts590, so EXItem and
 // EXAddress are qualified by the explicit "kw" alias, and — the part that
 // matters — the ceiling it declares is core/kw's, not this package's
@@ -1086,7 +1086,7 @@ var ts590sProfile = Profile{
 }
 
 // ts590sgProfile carries the TS-590SG's menu-chart transcription facts. It is
-// one of the three Kenwood registrations, which are the reason DigitsCeiling
+// one of the five Kenwood registrations, which are the reason DigitsCeiling
 // is a per-profile field at all: they render outside core/cat, so their
 // ceiling is core/kw's MaxEXDigits and not this package's MaxDigitsCeiling.
 // None of the three is "first" — the registry is a map, and under

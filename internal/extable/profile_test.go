@@ -520,7 +520,7 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 // between the FT-710 and the FTdx10 — a digit sorts below a letter, so both
 // FT-8/9 names precede every "ftdx" one — which is not the order the models
 // were added in; pinning it by value is how that stops being a surprise. The
-// three Kenwood names sort after every Yaesu one only because "t" follows
+// five Kenwood names sort after every Yaesu one only because "t" follows
 // "f"; that is an accident of the lookup names, not a family
 // grouping the registry knows about, so it too is pinned by value here
 // rather than assumed.
@@ -651,7 +651,7 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 // so that row's pair must be PERMITTED even though one of the four keys is
 // byte-equal across it.
 //
-// Every profile here is test-local. The three Kenwood registrations land in
+// Every profile here is test-local. The five Kenwood registrations land in
 // their own tasks with their own CSVs; nothing in this test registers
 // anything.
 func TestSharedPackageNeedsAllKeysToDiffer(t *testing.T) {

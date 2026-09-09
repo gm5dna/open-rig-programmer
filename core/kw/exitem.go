@@ -22,7 +22,7 @@ type EXItem struct {
 	// row; see EXAddress.
 	Addr EXAddress
 	// P1Label and P2Label are the group labels a Yaesu MENU chart prints.
-	// They are ALWAYS EMPTY here: all three Kenwood profiles register
+	// They are ALWAYS EMPTY here: all five Kenwood profiles register
 	// LabelsAbsent, because these parameter lists print a menu number, a
 	// function name and a parameter legend, and no group hierarchy at
 	// all. internal/extable's ParseCSV requires the columns to be blank

@@ -75,7 +75,7 @@ func TestSettingsDescriptor_IsBuiltFromThisRowsOwnInventory(t *testing.T) {
 // RULED 05/09/2026 (plan P8): FLAT.
 //
 // Kenwood prints NO GROUP STRUCTURE — the EX parameter list is a menu number,
-// a function name and a parameter legend, which is why all three Kenwood
+// a function name and a parameter legend, which is why all five Kenwood
 // profiles register LabelsAbsent and every EXItem's P1Label and P2Label is "".
 // driver.SettingsDescriptor is a two-level tree whose Validate requires at
 // least one menu and at least one group inside it, so the two nodes exist to
