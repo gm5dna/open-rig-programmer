@@ -32,7 +32,7 @@ import (
 //   - NO ANSWER FRAME IS ADMITTED EXCEPT WHERE A SET THIS CODEC BUILDS IS
 //     BYTE-IDENTICAL TO IT, and here there are exactly TWO such cases, both
 //     unavoidable and both named where the check is made: "AI0;", whose Set
-//     and Answer share those four bytes (890:175-181, 990:173-178), and the
+//     and Answer share those four bytes (890:183-184, 990:181-182), and the
 //     MA0 SET, because BOTH BOOKS DRAW ONE GRID FOR SET AND ANSWER ALIKE
 //     (890:3166-3182 Set against 890:3187-3204 Answer; 990:2893-2915 against
 //     990:2919-2938) — see validMA0Set, where that admission is what makes a
@@ -219,8 +219,11 @@ func (l Layout) validMA0Read(frame []byte) bool {
 // Both books draw ONE grid for Set and Answer (890:3166-3182 against
 // 890:3187-3204; 990:2893-2915 against 990:2919-2938), so a well-formed answer
 // for channel 007 is byte-identical to the Set that writes what it reports —
-// there is no byte to tell them apart, and refusing the shape would refuse the
-// only Set this milestone builds. What is NOT admitted is the answer that
+// there is no byte to tell them apart — for a Class-'0' channel. A 990S
+// answer reporting Class '1' or '2' is refused instead, because A14 re-emits
+// P2 as '0' and the re-render then differs (990:2897-2903). Refusing the
+// Class-'0' shape would refuse the only Set this milestone builds. What is
+// NOT admitted is the answer that
 // matters: a BLANK channel's, whose window of spaces or zeros parses as an
 // unassigned record and which BuildMA0Set refuses outright, so the erase this
 // programme never sends cannot arrive wearing a Set's clothes.
