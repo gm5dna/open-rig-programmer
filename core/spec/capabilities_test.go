@@ -246,3 +246,22 @@ func TestExampleFT710Shape(t *testing.T) {
 		t.Errorf("RequiredSlots = %v, want [001]", caps.RequiredSlots)
 	}
 }
+
+// TestSimplexTxZeroValueIsUnstated pins the two halves of the SimplexTx
+// datum's zero value (design 09/09/2026 §2.2, decision A3): a
+// Capabilities literal that declares nothing reads SimplexTxUnstated, so
+// no unregistered row moves; and Validate accepts a bank grading
+// FieldTxFrequency without a SimplexTx declaration, because a row that
+// says nothing about its simplex encoding must keep today's behaviour
+// rather than be forced into a reading nobody made.
+func TestSimplexTxZeroValueIsUnstated(t *testing.T) {
+	if got := (Capabilities{}).SimplexTx; got != SimplexTxUnstated {
+		t.Errorf("undeclared SimplexTx = %v, want SimplexTxUnstated", got)
+	}
+
+	c := validTestCapabilities()
+	c.Banks[0].Fields[FieldTxFrequency] = FieldSupport{Read: Supported, Write: Unverified}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want nil: grading FieldTxFrequency must not force a SimplexTx declaration", err)
+	}
+}
