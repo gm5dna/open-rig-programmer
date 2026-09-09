@@ -29,6 +29,17 @@ describes under *Switching on writes for an unverified radio*.
 
 ## What changed in this version
 
+<!-- TASK 18 GATE: the bullet below is v1.4.1's byte-identity claim and is
+     replaced wholesale when the v1.5.0 body is written. v1.5.0's own claim
+     may NOT be the unqualified one. Task 18's capture (09/09/2026, the
+     private record docs/superpowers/kenwood2-baseline-manifest.md) measured
+     479 artefacts on each side: 476 identical by hash, and the three that
+     moved are model-list surfaces that gain exactly two rows, TS-890S and
+     TS-990S. A fourth model-list surface, the "unknown model" refusal,
+     moves the same way and by the same amount. Say that, name the two
+     rows, and do not write "identical" without the exception. Then delete
+     this comment: the marker is cleared before tagging. -->
+
 - **A simplification sweep, and no new capability.** Nine lanes removed
   about 10,600 net lines across the tree without changing what any
   radio is sent or told: the frozen command-line capture (608 artefacts
