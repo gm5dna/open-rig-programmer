@@ -650,11 +650,14 @@ func TestCrossCheck_TheTextRowsAreTheTwoPrintedOnes(t *testing.T) {
 // to a menu chart, and it is the leg no single-radio test can write.
 //
 // The two books print charts of DIFFERENT LENGTHS whose address spaces overlap
-// heavily and whose meanings do not: 153 addresses appear in both, and only 42
-// of those name the same setting. An address resolved against the wrong row
-// would therefore publish a real, plausible, WRONG setting name a hundred and
-// eleven times over — which is precisely why each layout consults its own
-// inventory and never a shared table.
+// heavily and whose meanings do not. Over the two PUBLISHED INVENTORIES (what
+// a driver actually resolves against — Layout890/Layout990's EXItems, four
+// addresses short of the raw transcriptions on the TS-890S side, which are
+// its own PARAMETERLESS exclusions), 149 addresses appear in both, and only
+// 42 of those name the same setting. An address resolved against the wrong
+// row would therefore publish a real, plausible, WRONG setting name a
+// hundred and seven times over — which is precisely why each layout consults
+// its own inventory and never a shared table.
 func TestCrossCheck_TheTwoChartsArePinnedAsTwo(t *testing.T) {
 	charts := loadCharts(t)
 	c890, c990 := charts[0], charts[1]
@@ -690,20 +693,18 @@ func TestCrossCheck_TheTwoChartsArePinnedAsTwo(t *testing.T) {
 			}
 		}
 	}
-	if only890 == 0 || only990 == 0 {
-		t.Errorf("%d addresses are the TS-890S's alone and %d the TS-990S's alone; if either were zero one chart would be a subset of the other and borrowing would be invisible", only890, only990)
-	}
-
 	// 3. A shared address resolves to ITS OWN BOOK'S setting on each row. This
 	//    is the copy-paste the file split exists to prevent, stated over the
 	//    live inventories.
-	differ := 0
+	shared, same, differ := 0, 0, 0
 	for a, it890 := range in890 {
 		it990, both := in990[a]
 		if !both {
 			continue
 		}
+		shared++
 		if collapseSpace(it890.Name) == collapseSpace(it990.Name) {
+			same++
 			continue
 		}
 		differ++
@@ -714,8 +715,18 @@ func TestCrossCheck_TheTwoChartsArePinnedAsTwo(t *testing.T) {
 			t.Errorf("menu %s: the TS-990S inventory names it %q and its own transcription %q", a, it990.Name, got)
 		}
 	}
-	if differ == 0 {
-		t.Error("no shared address names a different setting on the two radios; that would make cross-model borrowing undetectable, and it is not what the two charts print")
+	// Pinned over the PUBLISHED INVENTORIES (Layout890/Layout990's EXItems, not
+	// the raw transcriptions, which carry four more shared addresses — the
+	// TS-890S's own PARAMETERLESS exclusions the TS-990S chart still names):
+	// 149 addresses appear in both, 42 of those name the same setting, and the
+	// rest — 107 — would publish a real, plausible, WRONG setting name if an
+	// address were ever resolved against the wrong book. Which is precisely
+	// why each layout consults its own inventory and never a shared table.
+	if shared != 149 || same != 42 || differ != 107 {
+		t.Errorf("shared=%d same=%d differ=%d over the two inventories, want 149/42/107", shared, same, differ)
+	}
+	if only890 != 9 || only990 != 45 {
+		t.Errorf("%d addresses are the TS-890S inventory's alone and %d the TS-990S's alone, want 9/45", only890, only990)
 	}
 }
 
@@ -1583,10 +1594,17 @@ func TestGoldenVectors_EveryVectorIsOneFrameToTheSplitter(t *testing.T) {
 // entry to name the rule that keeps it unbuilt, and every replayed one to name
 // none — so "we did not get to it" cannot pass as "the rules forbid it".
 func TestGoldenVectors_TheUnbuiltFramesRecordWhyNot(t *testing.T) {
-	none := 0
+	build, parse, none := 0, 0, 0
 	for _, v := range goldenRoster {
-		if v.How == replayNone {
+		switch v.How {
+		case replayBuild:
+			build++
+		case replayParse:
+			parse++
+		case replayNone:
 			none++
+		}
+		if v.How == replayNone {
 			if v.Why == "" {
 				t.Errorf("%s/%s has no entry point in this package and records no reason", v.File, v.Name)
 			}
@@ -1596,10 +1614,12 @@ func TestGoldenVectors_TheUnbuiltFramesRecordWhyNot(t *testing.T) {
 			t.Errorf("%s/%s is %s and still carries a no-builder reason", v.File, v.Name, v.How)
 		}
 	}
-	// Stated out loud so that the set emptying — every frame suddenly
-	// buildable — is a visible change rather than a quiet one.
-	if want := 15; none != want {
-		t.Errorf("%d vectors have no entry point here, want %d (four AI ON sets and their answers less answer_off's Set twin, four EX Set forms, three MN forms)", none, want)
+	// Stated out loud so that a frame sliding between dispositions — built,
+	// parsed, or no entry point at all — is a visible change rather than a
+	// quiet one; each count is pinned, not just checked non-zero.
+	if wantBuild, wantParse, wantNone := 20, 14, 15; build != wantBuild || parse != wantParse || none != wantNone {
+		t.Errorf("dispositions are %d built / %d parsed / %d no entry point, want %d / %d / %d",
+			build, parse, none, wantBuild, wantParse, wantNone)
 	}
 }
 
