@@ -420,12 +420,21 @@ these radios declare no shift vocabulary at all, so such a row imports
 and nothing is reported. A `Duplex` column reading `off` is refused, and
 `CW`, `CWR` and `RTTY` rows are refused on the mode — they resolve to
 names these radios' own mode lists do not print, which are `CW`, `CW-R`,
-`FSK` and `FSK-R`. **One further cost applies to a CHIRP import on these
-two rows and not to a CSV one**: a CHIRP row says nothing about a
-transmit frequency, and these radios' write path requires one to be
-known, so an imported CHIRP channel is refused at the write until you
-supply it. The program's own CSV import and export are unaffected — a
-CSV read off the radio carries the transmit frequency already.
+`FSK` and `FSK-R`. **Four values must be in place before an imported
+CHIRP channel can be written, and a CHIRP file states at most two of
+them**: one frame carries the transmit frequency, the tone mode, the
+transmit tone and the receive tone together, and these radios' write path
+requires all four to be known. A CHIRP row says nothing about a transmit
+frequency at all, and its ordinary blank `Tone` column says only that
+tone is switched off — the transmit tone and the receive tone are left
+unsaid, and nothing here supplies a value the file did not carry. A row
+reading `Tone` gives the transmit tone and still leaves the receive tone
+to you; a row reading `TSQL` is refused on the tone column outright,
+because CHIRP's tone squelch asks for a transmit-and-receive tone mode
+neither radio's own memory chart prints. So an imported CHIRP channel is
+refused at the write until you fill in the transmit frequency and both
+tone values yourself. The program's own CSV import and export are
+unaffected — a CSV read off the radio carries all four already.
 
 **A write may read back as the old value if the radio is displaying
 that channel.** Both manuals print it in the same words: "When setting

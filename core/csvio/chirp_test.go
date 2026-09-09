@@ -3118,8 +3118,9 @@ func TestImportCHIRP_TS890And990BlockCWAndRTTYRows(t *testing.T) {
 					// transmit frequency alone until the milestone-close
 					// review measured it (C-MED-1). The ROOT FIX of the
 					// transmit-frequency third — grading a
-					// blank/off Duplex on a bank that reaches this field as
-					// Known 0, the radio's own simplex statement — was
+					// BLANK Duplex on a bank that reaches this field as
+					// Known 0, the radio's own simplex statement, an "off"
+					// one still blocking (decision 4, pinned below) — was
 					// measured at this task and MOVES THE TS-590 PAIR's AND
 					// THE IC-7300/IC-7300MK2's import artefacts too: every
 					// bank that grades FieldTxFrequency without grading
