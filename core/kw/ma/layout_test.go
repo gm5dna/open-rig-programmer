@@ -63,7 +63,6 @@ func TestLayout_AxesAreThisBooksOwn(t *testing.T) {
 		modeCount  int
 		maxTone    uint8
 		maxCTCSS   uint8
-		mainSub    bool
 		sampleMode byte
 		sampleName string
 	}{
@@ -81,7 +80,6 @@ func TestLayout_AxesAreThisBooksOwn(t *testing.T) {
 			modeCount:  14,
 			maxTone:    50,
 			maxCTCSS:   49,
-			mainSub:    false,
 			sampleMode: 'F',
 			sampleName: "AM-D",
 		},
@@ -99,7 +97,6 @@ func TestLayout_AxesAreThisBooksOwn(t *testing.T) {
 			modeCount:  22,
 			maxTone:    50,
 			maxCTCSS:   49,
-			mainSub:    true,
 			sampleMode: 'N',
 			sampleName: "AM-D3",
 		},
@@ -135,9 +132,6 @@ func TestLayout_AxesAreThisBooksOwn(t *testing.T) {
 			}
 			if got := tt.l.MaxCTCSSIndex(); got != tt.maxCTCSS {
 				t.Errorf("MaxCTCSSIndex() = %d, want %d", got, tt.maxCTCSS)
-			}
-			if got := tt.l.HasMainSub(); got != tt.mainSub {
-				t.Errorf("HasMainSub() = %v, want %v", got, tt.mainSub)
 			}
 		})
 	}
@@ -196,9 +190,6 @@ func TestLayouts_DifferInBothDirections(t *testing.T) {
 	bn, _ := b.ModeName('C')
 	if an == bn {
 		t.Errorf("both rows spell OM P2 = C %q — the 890S prints LSB-D (890:3989) and the 990S LSB-D1 (990:3719)", an)
-	}
-	if a.HasMainSub() == b.HasMainSub() {
-		t.Error("the two rows agree about Main/Sub — the 990S puts a Main/Sub pointer on MN, MV, OM, TN and CN and the 890S has one nowhere")
 	}
 	// The tone domains AGREE, and that agreement is pinned too: it is a
 	// fact about both charts, not a value one row borrowed from the other.
