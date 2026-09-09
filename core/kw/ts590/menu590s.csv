@@ -91,8 +91,8 @@
 #
 # THE ONE TEXT ROW. Menu 087 Power on message prints "Power on Message (up to
 #   8 ASCII characters)" (layout 741) across the whole parameter area: a
-#   free-text field, transcribed text=true, digits=8, which is the profile's
-#   TextWidth and the only value ParseCSV admits for a text row. Every other
+#   free-text field, transcribed text=true, digits=8 -- the only value
+#   ParseCSV admits, being the profile's one TextWidths entry. Every other
 #   row is a selector over printed codes and is text=false, INCLUDING the
 #   eight PF rows, whose "000 ~ 255 (3-digit)" is a fixed-width numeric field
 #   and not free text -- the FT-891's version rows are the precedent

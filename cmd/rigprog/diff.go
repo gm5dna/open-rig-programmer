@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
@@ -154,10 +155,34 @@ func writeAddedEntry(w io.Writer, e codeplug.DiffEntry) {
 }
 
 // writeModifiedEntry renders one Modified DiffEntry: display slot plus a
-// terse before->after for frequency (Hz), mode, and quoted tag.
+// terse before->after for whichever of frequency (Hz), mode and quoted tag
+// ACTUALLY CHANGED.
+//
+// ONLY THE CHANGED FIELDS (v1.5.x follow-up (j)). This line used to print all
+// three unconditionally, so a one-field edit read "freq 7030000→7030000 Hz,
+// mode CW-U→CW-U, tag ""→"WINTEST"" — two thirds of it restating values that
+// did not move, in the one place a reviewer looks to see what did.
+//
+// The no-named-field fallback is not defensive padding: Diff's equality is
+// over the WHOLE ChannelData (its Equality doc), so a slot whose tone, shift
+// or field state moved is Modified with all three of these fields equal, and
+// a bare "M-01:" would claim nothing.
+// TestWriteDiffReport_ModifiedNamesOnlyChangedFields pins all three shapes.
 func writeModifiedEntry(w io.Writer, e codeplug.DiffEntry) {
-	fmt.Fprintf(w, "  %s: freq %d→%d Hz, mode %s→%s, tag %q→%q\n",
-		codeplug.DisplaySlot(e.Slot), e.Before.FreqHz, e.After.FreqHz, e.Before.Mode, e.After.Mode, e.Before.Tag, e.After.Tag)
+	var parts []string
+	if e.Before.FreqHz != e.After.FreqHz {
+		parts = append(parts, fmt.Sprintf("freq %d→%d Hz", e.Before.FreqHz, e.After.FreqHz))
+	}
+	if e.Before.Mode != e.After.Mode {
+		parts = append(parts, fmt.Sprintf("mode %s→%s", e.Before.Mode, e.After.Mode))
+	}
+	if e.Before.Tag != e.After.Tag {
+		parts = append(parts, fmt.Sprintf("tag %q→%q", e.Before.Tag, e.After.Tag))
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "changed in a field this summary does not print")
+	}
+	fmt.Fprintf(w, "  %s: %s\n", codeplug.DisplaySlot(e.Slot), strings.Join(parts, ", "))
 	writeBlockedAnnotation(w, e)
 }
 

@@ -11,7 +11,11 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+- `rigprog diff` and the write plan now name only the fields that actually
+  changed on a modified channel, instead of restating unchanged ones as
+  `X→X`; a channel modified only in a field the summary does not print
+  says so.
 
 ## [1.5.0] - 2026-09-09
 

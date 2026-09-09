@@ -149,8 +149,8 @@
 #   selector in which "TEXT" NAMES one of the two choices; it does not
 #   make the parameter textual. Every row's text column is therefore
 #   false, and the profile declares TextRowsAbsent so that a text row is
-#   refused by ParseCSV rather than transcribed. TextWidth is 0: a chart
-#   with no text row has no text width.
+#   refused by ParseCSV rather than transcribed. TextWidths is EMPTY: a
+#   chart with no text row has no text width.
 #
 # HEADER-VS-CHART. This manual's grammar block and its chart AGREE. The EX
 #   block (layout 519-528) states "P1 : 001 - 153 (MENU Number)"; the

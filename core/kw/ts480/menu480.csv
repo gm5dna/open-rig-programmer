@@ -100,8 +100,8 @@
 #   (2-digit)", a numeric code range, and the second line refers the reader
 #   to the instruction manual for what each number means. They are
 #   transcribed text=false, digits=2 -- a two-digit numeric field like any
-#   other. The ts480 profile registers TextRowsAbsent with TextWidth 0, and
-#   ParseCSV refuses any row flagged text under that policy.
+#   other. The ts480 profile registers TextRowsAbsent with an EMPTY
+#   TextWidths, and ParseCSV refuses any row flagged text under that policy.
 #
 # PRINTED QUIRKS RECORDED, NOT RESOLVED
 #   1. MENU 034 IS A TWO-DIGIT ROW THE EX BLOCK'S OWN LIST OMITS. The block
