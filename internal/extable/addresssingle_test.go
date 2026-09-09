@@ -15,8 +15,10 @@ import (
 // which policy refused a row an open question.
 //
 // Fixture-only, never registered, so no staleness consumer goes looking for a
-// generated file that does not exist. The three Kenwood registrations land
-// later, each with its own manual CSV.
+// generated file that does not exist. The three AddressSingle Kenwood
+// registrations — ts590s, ts590sg and ts480 — land later, each with its own
+// manual CSV; the other two, ts890s and ts990s, register AddressGrouped
+// instead (addressgrouped_test.go's fixtureGroupedRequired).
 var fixtureSingleRequired = func() Profile {
 	p := fixtureRequired
 	p.Addresses = AddressSingle

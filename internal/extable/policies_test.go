@@ -343,9 +343,9 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// that copy-pasted 247 would pass every other test in this package,
 		// and core/kw/exdigits_ceiling_test.go is the twin pin.
 		"ts480": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, nil, 246},
-		// The TS-590S is one of the three Kenwood registrations, which
+		// The TS-590S is one of the five Kenwood registrations, which
 		// are together the whole reason the ceiling column exists — none of
-		// them is "first": the registry is a map and ts480 heads the three
+		// them is "first": the registry is a map and ts480 heads all five
 		// under RegisteredProfiles' sort. Its inventory renders into core/kw,
 		// whose EX answer carries ten fixed bytes against a Yaesu one's
 		// nine, so its ceiling is core/kw.MaxEXDigits — 246, one less than
