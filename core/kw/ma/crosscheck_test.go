@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1385,20 +1386,13 @@ func ledgerSum(rows []ledgerRow) int {
 // removed or replaced, so a red proof never mutates the map another test is
 // reading.
 func withoutAddr(m map[chartAddr]chartRow, addr chartAddr) map[chartAddr]chartRow {
-	out := make(map[chartAddr]chartRow, len(m))
-	for k, v := range m {
-		if k != addr {
-			out[k] = v
-		}
-	}
+	out := maps.Clone(m)
+	delete(out, addr)
 	return out
 }
 
 func withAddr(m map[chartAddr]chartRow, addr chartAddr, row chartRow) map[chartAddr]chartRow {
-	out := make(map[chartAddr]chartRow, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
+	out := maps.Clone(m)
 	out[addr] = row
 	return out
 }
