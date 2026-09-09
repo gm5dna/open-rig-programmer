@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/kw/ma"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -37,8 +38,9 @@ const ma0ReadLen = 7
 // the wrong slot, a short MA0 answer, or SILENCE — which is exactly what the
 // error paths need and what a self-consistent fake will never produce.
 //
-// WHAT IT KNOWS: "AI0;" (silence), "ID;", "FV;" and the seven-byte MA0 read.
-// ANY OTHER frame is answered "?;".
+// WHAT IT KNOWS: "AI0;" (silence), "ID;", "FV;", the seven-byte MA0 read, the
+// LONGER MA0 Set (T12) and the eight-byte EX read (T12). ANY OTHER frame is
+// answered "?;".
 //
 // THE ACKNOWLEDGEMENT SEMANTICS OF THOSE ANSWERS ARE AN ASSUMED CONVENTION
 // APPLIED, NOT AN OBSERVED RADIO TRANSCRIBED — no TS-890S has ever been
@@ -86,6 +88,17 @@ type radioImage struct {
 	// timeout row of the read choreography, which the book states carries no
 	// information at all (890:106-112).
 	ma0Silent map[string]bool
+	// ma0SetRejects names channels whose MA0 SET is answered "?;" — the one
+	// ATTRIBUTABLE write failure (T12). A Set this image does not reject
+	// draws SILENCE, which is this family's assumed acceptance and the whole
+	// reason WriteChannel reports Sent and never Confirmed.
+	ma0SetRejects map[string]bool
+	// exAnswers maps the FIVE-character menu address of an EX read —
+	// frame[2:7] — to the RAW answer frame served for it, and exSilent names
+	// addresses that draw no reply at all. Raw, so a test can serve a
+	// malformed, over-wide or foreign-addressed frame on purpose.
+	exAnswers map[string]string
+	exSilent  map[string]bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -222,11 +235,28 @@ func (img radioImage) reply(frame string) string {
 			return ans
 		}
 		return "?;"
+	case strings.HasPrefix(frame, "MA0") && len(frame) > ma0ReadLen:
+		// THE SET, which T12's ladder emits — a longer frame under the same
+		// three opening bytes, the two forms told apart by LENGTH exactly as
+		// the book's own two grids are (890:3166-3182 Set, 890:3184-3186
+		// Read). Silence is the reply, and that silence is an ASSUMED
+		// CONVENTION APPLIED rather than an observed radio: no TS-890S has
+		// ever been written to by this project, which is why the driver
+		// reports Sent and never Confirmed.
+		if img.ma0SetRejects[frame[3:6]] {
+			return "?;"
+		}
+		return ""
+	case strings.HasPrefix(frame, "EX") && len(frame) == ma.EXReadLen:
+		addr := frame[2:7]
+		if img.exSilent[addr] {
+			return ""
+		}
+		if ans, ok := img.exAnswers[addr]; ok {
+			return ans
+		}
+		return "?;"
 	default:
-		// AN MA0 SET FALLS THROUGH TO "?;" AT T11, deliberately: this task
-		// builds no write path, and a Set reaching this peer would mean the
-		// placeholder WriteChannel had stopped refusing. T12 teaches it the
-		// Set form along with the ladder that emits one.
 		return "?;"
 	}
 }

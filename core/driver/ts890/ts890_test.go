@@ -8,7 +8,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -226,29 +225,5 @@ func TestDiagnostics_ReportsTheEnginesCounter(t *testing.T) {
 	}
 	if got := r.Diagnostics().UnexpectedFrames; got != 0 {
 		t.Errorf("UnexpectedFrames = %d on a session that met only its own answers, want 0", got)
-	}
-}
-
-// TestWriteChannel_RefusedUntilTask12 pins the PLACEHOLDER, and is replaced
-// along with it when Stage 2 task 12 lands the eleven-rung ladder and the
-// single MA0 Set. Nothing is built and nothing reaches the wire — asserted as
-// the whole transcript, so a partial choreography could not hide behind the
-// refusal.
-func TestWriteChannel_RefusedUntilTask12(t *testing.T) {
-	sess, port := openTestSession(t, Simulated, radioImage{})
-	before := len(port.Transcript())
-	res, err := sess.WriteChannel(context.Background(), codeplug.Channel{
-		Slot: "000",
-		Data: &codeplug.ChannelData{FreqHz: 14_250_000, Mode: "USB"},
-	})
-	var refused *driver.WriteRefusedError
-	if !errors.As(err, &refused) {
-		t.Fatalf("WriteChannel err = %v, want a *driver.WriteRefusedError", err)
-	}
-	if len(res.Steps) != 0 {
-		t.Errorf("WriteResult.Steps = %v, want none", res.Steps)
-	}
-	if got := port.Transcript(); len(got) != before {
-		t.Errorf("the placeholder put %v on the wire", got[before:])
 	}
 }
