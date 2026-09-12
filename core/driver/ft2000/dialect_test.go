@@ -21,23 +21,12 @@ import (
 // MemoryP9=P9ToneIndex (a live tone index, where every other tested
 // dialect fixes P9 at "00").
 //
-// runConformance SKIPS rather than reports FAIL, mirroring
-// core/kw/ts570/layout_test.go's own runConformance in this same wave: it
-// is dialecttest.go itself that is not frame-width-aware (see the doc
-// comment on TestDialectConformance_KnownGap_CTCSSOffsetNotFrameWidthAware
-// below, which proves the underlying claim the suite's own broken forgery
-// fails to establish), core/cat/dialecttest is out of this brief's scope
-// to fix, and papering over one sub-check with a filtering harness would
-// hide the OTHER checks' genuine result rather than report it. See
-// reviews/driver-ft2000.md for the full citation.
-func TestDialectConformance_FT2000(t *testing.T)  { runConformance(t, dialectFT2000) }
-func TestDialectConformance_FT2000D(t *testing.T) { runConformance(t, dialectFT2000D) }
-
-func runConformance(t *testing.T, d cat.Dialect) {
-	t.Helper()
-	t.Skip("dialecttest.go:751's ctcssOffsetInMemoryFrame is hard-coded to P8's offset in the REGISTERED 28-byte/9-digit-P2 frame (23); this family's 27-byte/8-digit-P2 frame puts P8 at offset 22, so the suite's forged DCS byte lands on P9's first digit instead and the gate correctly admits the resulting well-formed frame — a shared-infrastructure bug, not a defect in this dialect's gate (see TestDialectConformance_KnownGap_CTCSSOffsetNotFrameWidthAware, and reviews/driver-ft2000.md)")
-	dialecttest.Run(t, d)
-}
+// core/cat commit 1ca7aac fixed dialecttest.go's own frame-width-blind
+// P8/P5 offsets (ctcssOffsetInMemoryFrame/memoryP5WireOffset), the bug
+// TestDialectConformance_KnownGap_CTCSSOffsetNotFrameWidthAware (below)
+// documented and worked around — Run is called directly again.
+func TestDialectConformance_FT2000(t *testing.T)  { dialecttest.Run(t, dialectFT2000) }
+func TestDialectConformance_FT2000D(t *testing.T) { dialecttest.Run(t, dialectFT2000D) }
 
 // TestDialects_CATIDs pins matrix §1.6/§4's one cross-row divergence.
 func TestDialects_CATIDs(t *testing.T) {
