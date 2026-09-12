@@ -266,6 +266,77 @@ refused rather than allowed to overwrite a channel nothing read.
 
 Evidence: `docs/icom-models.md` (the IC-R8600 bullets).
 
+### IC-7800 (opt-in)
+
+Read and write the memory and scan-edge channels. A HIGH-proximity
+clone of the IC-7610's record shape (25 B record-only over a 2-byte
+flat address) at its own address, 6Ah: same fields mapped, same fields
+left unmapped, and the tone/data-mode nibble pair in byte 8 SWAPPED
+relative to the IC-7610's own — caught and fixed during this radio's
+own build (`core/driver/ic7800`'s `FieldSpan`).
+
+Evidence: `docs/superpowers/icom-matrices/ic7800-capability-matrix.md`.
+
+### IC-7600 (opt-in)
+
+Read and write the memory and scan-edge channels. Another
+HIGH-proximity clone of the IC-7610's record shape at its own address,
+7Ah, with one wire deviation of its own: the SELECT byte is a WHOLE
+unmapped E6 region on this radio, not the IC-7610's nibble split.
+
+Evidence: `docs/superpowers/icom-matrices/ic7600-capability-matrix.md`.
+
+### IC-7410 (opt-in)
+
+Read and write the memory and scan-edge channels. NOT a clone of the
+IC-7610's shape: its own record is 40 bytes, with a genuine
+TX-duplicate block. A write that leaves the transmit frequency unset
+mirrors the receive frequency into it, per this radio's own document,
+rather than refusing.
+
+Evidence: `docs/superpowers/icom-matrices/ic7410-capability-matrix.md`.
+
+### IC-7700 (opt-in)
+
+Read and write the memory and scan-edge channels, and the transmit
+(split) frequency. Its RX fields match the IC-7610 family exactly;
+its own TX-duplicate block reuses existing field types rather than
+introducing new ones. Its 39-byte record over a 2-byte flat address is
+the same shape as the already-registered IC-7300's, so a radio moved
+onto the wrong factory address answers a length this program cannot
+tell apart from that sibling's.
+
+Evidence: `docs/superpowers/icom-matrices/ic7700-capability-matrix.md`.
+
+### IC-9100 (opt-in)
+
+Reads and writes the memory channels of ONE band (this build defers
+the optional 4th, 1200 MHz, band; its frequency-field encoding is
+unresolved from this document). Its own record additionally carries
+duplex, offset, DTCS code and DTCS polarity — richer than every other
+radio in this wave — but a CHIRP `DTCS`/`Cross` cell is still refused:
+the record names no DCS tone STATE, only the code and polarity bytes,
+which this program does not yet import from a CHIRP file. This
+radio's own document states no CI-V serial-framing fact, so unlike
+its siblings this row opens at the port's own default framing rather
+than a driver-asserted stop-bit count.
+
+Evidence: `docs/superpowers/icom-matrices/ic9100-capability-matrix.md`.
+
+### IC-7200 (opt-in)
+
+Read and write the memory and scan-edge channels. This radio has no
+channel-name field over CI-V at all — NoTag, the wave's only one — so
+no Tag column is shown for it. Its 17-byte record maps no tone field of
+any kind and no scan-skip bit either, a stricter absence than every
+other radio in this wave: a `Tone` or `Scan Skip` value cannot travel
+over this frame at all, set both at the radio. A write that leaves the
+transmit frequency unset mirrors the receive frequency into it, on the
+same SimplexTxEqualsRx footing as the IC-7410. This driver implements
+CI-V serial framing (8-N-1), unlike the IC-9100's own row.
+
+Evidence: `docs/superpowers/icom-matrices/ic7200-capability-matrix.md`.
+
 ## Kenwood
 
 ### TS-590S and TS-590SG (opt-in)
@@ -538,5 +609,11 @@ by revision in the code that transcribes it.
 | IC-7760 | Icom CI-V Reference Guide rev 2 |
 | IC-7100 | Icom Full Manual A7085-2EX-5, section 20 |
 | IC-R8600 | Icom CI-V Reference Guide rev 3a |
+| IC-7800 | Icom Instruction Manual, section 14 (no separate CI-V Reference Guide) |
+| IC-7600 | Icom CI-V Reference Guide |
+| IC-7410 | Icom CI-V Reference Guide |
+| IC-7700 | Icom CI-V Reference Guide |
+| IC-9100 | Icom CI-V Reference Guide |
+| IC-7200 | Icom Advanced Instructions manual (no separate CI-V Reference Guide) |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |

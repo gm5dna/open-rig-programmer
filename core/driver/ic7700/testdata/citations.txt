@@ -1,0 +1,71 @@
+# IC-7700 — the ALLOWED CITATIONS of core/driver/ic7700 and core/civ/ic7700.
+#
+# This list is the POSITIVE half of the provenance pin
+# (TestProvenanceCitesOnlyTheIC7851Authority, provenance_test.go — named
+# after the SHAPE template this wave's brief pointed to, drivertest.IcomCitationPin,
+# not a claim this package cites the IC-7851). Of every document citation
+# these two packages make, can this model's own authority supply it? A
+# citation not written here fails the test; the fix is to check the
+# authority, never to widen the list to fit the prose.
+#
+# The authority: the IC-7700 Instruction Manual, Revision 7 (source
+# filename IC-7700_ENG_IM_7.pdf), 232 PDF pages. There is no standalone
+# CI-V Reference Guide for this model; its CI-V material is Section 14,
+# "CONTROL COMMAND", PDF pages 201-214 (folios 14-1 to 14-14).
+#
+# docs/superpowers/ (the capability matrix itself) is gitignored and is not
+# present in this worktree, so the authority-supply half of the pin is
+# skipped here; this checked-in list is still enforced two-way against what
+# the packages actually cite.
+
+folio 12-17
+folio 12-18
+folio 14-10
+folio 14-11
+folio 14-13
+folio 14-2
+folio 14-3
+folio 14-4
+folio 8-1
+ic7700-1a00-read-request
+ic7700-all-ff-empty
+ic7700-control-lines-inert
+ic7700-default-baud
+ic7700-empty-channel-reply
+ic7700-framing-8n1
+ic7700-id-token
+ic7700-mode-code-completeness
+ic7700-name-pad-byte
+ic7700-no-echo-setting
+ic7700-scan-edge-record-fields
+ic7700-simplex-tx-value
+ic7700-storable-frequency-floor
+ic7700-tagcharset-space
+matrix §0
+matrix §1
+matrix §1b
+matrix §2
+matrix §3.1
+matrix §3.10
+matrix §3.11
+matrix §3.13
+matrix §3.14
+matrix §3.15
+matrix §3.15.1
+matrix §3.16
+matrix §3.2
+matrix §3.3
+matrix §3.4
+matrix §3.8
+matrix §3.9
+matrix §4
+matrix §5
+PDF p.136
+PDF p.179
+PDF p.180
+PDF p.202
+PDF p.203
+PDF p.204
+PDF p.210
+PDF p.211
+PDF p.213

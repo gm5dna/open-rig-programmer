@@ -11,6 +11,30 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Added
+- **IC-7800** joins the supported Icom models (v1.7.0 Icom wave):
+  memory and scan-edge channels, opt-in unverified writes, a
+  HIGH-proximity clone of the IC-7610's record shape at its own
+  address.
+- **IC-7600** joins the supported Icom models (v1.7.0 Icom wave):
+  another HIGH-proximity clone of the IC-7610's record shape, at its
+  own address.
+- **IC-7410** joins the supported Icom models (v1.7.0 Icom wave): not
+  a clone — a 40-byte record with a genuine TX-duplicate block, and a
+  write that leaves the transmit frequency unset mirrors the receive
+  frequency into it rather than refusing.
+- **IC-7700** joins the supported Icom models (v1.7.0 Icom wave): reads
+  and writes the transmit (split) frequency, and shares the
+  already-registered IC-7300's 39-byte record shape.
+- **IC-9100** joins the supported Icom models (v1.7.0 Icom wave): one
+  band, richer than its siblings (duplex, offset, DTCS code and
+  polarity), and opens at the port's own default framing rather than a
+  driver-asserted stop-bit count.
+- **IC-7200** joins the supported Icom models (v1.7.0 Icom wave, the
+  last of six): NoTag — no channel-name field over CI-V at all, so no
+  Tag column is shown for it — and no tone or scan-skip field of any
+  kind, on a 17-byte record.
+
 ## [1.6.0] - 2026-09-12
 
 ### Added

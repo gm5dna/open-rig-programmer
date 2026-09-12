@@ -43,11 +43,17 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7410"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
@@ -615,6 +621,97 @@ const (
 	TS990SModel = "TS-990S"
 )
 
+// IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
+// equal ic7800.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's FIRST REGISTRATION, and a single-row one: one
+// driver package, one civ.Profile, one fake, on IC7610Model's footing. Its
+// own capability review found it a HIGH-proximity clone of the already
+// registered IC-7610 (same 25 B record-only / 2 B address, same TagLen 10),
+// with one independently-derived wire difference from that sibling: the
+// tone_mode/data_mode nibble pair in byte 8 is SWAPPED relative to the
+// IC-7610's own (core/driver/ic7800's own FieldSpan). Its own CI-V address
+// is 6Ah, distinct from every sibling's.
+const IC7800Model = "IC-7800"
+
+// IC7600Model names the IC-7600's realDrivers/fakeDrivers key, which must
+// equal ic7600.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's SECOND REGISTRATION, and a single-row one on
+// IC7800Model's footing: another literal-copy clone of the IC-7610's 25 B
+// / 2 B flat record, with a whole-byte (not nibble-split) SelectByteOffset
+// deviation of its own (matrix S3.15(a)) and no change of shape. Its own
+// CI-V address is 7Ah.
+const IC7600Model = "IC-7600"
+
+// IC7410Model names the IC-7410's realDrivers/fakeDrivers key, which must
+// equal ic7410.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's THIRD REGISTRATION, and a single-row one. UNLIKE
+// its two siblings above, core/driver/ic7410's New takes NO profile
+// argument — the IC-7610's own bare-New shape, with WithSimulatedProfile()
+// as the simulated-arm option — so this row's constructor calls read
+// differently from IC7800Model's and IC7600Model's. Its own record is 40
+// bytes, not 25: this is not a literal IC-7610 clone, and its own capability
+// review found a genuinely different TX-duplicate block. Its own CI-V
+// address is 80h.
+const IC7410Model = "IC-7410"
+
+// IC7700Model names the IC-7700's realDrivers/fakeDrivers key, which must
+// equal ic7700.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's FOURTH REGISTRATION, and a single-row one on
+// IC7800Model's footing: profile is a positional argument. Its own record
+// is 39 bytes — the same record-only length as the already-registered
+// IC-7300 — over the same 2-byte flat address, which is why it joins that
+// pairing in `indistinguishable` below rather than standing apart the way
+// IC7410Model does. Its RX fields match the IC-7610 family exactly; its
+// own capability review found a TX-duplicate block reusing existing field
+// types rather than introducing new ones. Its own CI-V address is 74h.
+const IC7700Model = "IC-7700"
+
+// IC9100Model names the IC-9100's realDrivers/fakeDrivers key, which must
+// equal ic9100.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's FIFTH REGISTRATION, and a single-row one on
+// IC7800Model's footing. Its own record is 57 bytes over a 3-byte
+// AddressFormBankChannel address (band + 2-byte channel) — a length no
+// other family in this tier declares, so no new indistinguishable-pair
+// declaration is needed. ONE STATIC BANK, MEM: this radio's own
+// capability review deferred the optional 4th (1200 MHz) band, whose
+// frequency-field encoding the matrix leaves unresolved.
+//
+// NO driver.SerialFramingReporter, like the IC-7100: this radio's own
+// document states no CI-V framing fact, so it opens at
+// transport.DefaultStopBits rather than carrying an assumed value. Its
+// CI-V address is 7Ch — the matrix's own headline finding, overriding the
+// 88h/E0h the dispatch title and spec.md §1 carried — set directly
+// (`id.CATID = "7C"`, not the address-plus-token reconstruction the
+// IC-7610 family uses), so unlike the IC-7800's and IC-7600's this row
+// needed no case correction.
+const IC9100Model = "IC-9100"
+
+// IC7200Model names the IC-7200's realDrivers/fakeDrivers key, which must
+// equal ic7200.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's SIXTH AND LAST REGISTRATION, on IC7800Model's
+// footing. Its own record is 17 bytes over a FLAT address (the matrix's
+// own correction of spec.md's superseded 9 B figure) — a length no other
+// family in this tier declares. NOTAG (matrix §1 row 6): this radio has
+// no channel-name route over CI-V at all, TagLen 0 by declaration, so no
+// Tag column is shown for it — the wave's only NoTag row. It implements
+// driver.SerialFramingReporter like the tier's other four single-band
+// transceivers (8-N-1), unlike the IC-9100's bare-port default. Its CI-V
+// address is 76h, reconstructed (address+token), not a static literal,
+// so it needed no case correction either.
+const IC7200Model = "IC-7200"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -864,6 +961,53 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites())
 		}
 		return ts990.New(ts990.RealHardware)
+	},
+	// The v1.7.0 Icom wave's first row: profile is a positional argument
+	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'
+	// footing rather than the bare-New ones', so the consent arm names
+	// ic7800.RealHardware explicitly.
+	IC7800Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7800.New(ic7800.RealHardware, ic7800.WithConsentedUnverifiedWrites())
+		}
+		return ic7800.New(ic7800.RealHardware)
+	},
+	// The v1.7.0 Icom wave's second row, on IC7800Model's footing.
+	IC7600Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7600.New(ic7600.RealHardware, ic7600.WithConsentedUnverifiedWrites())
+		}
+		return ic7600.New(ic7600.RealHardware)
+	},
+	// The v1.7.0 Icom wave's third row: bare New, on the IC-7610's own
+	// footing rather than IC7800Model's/IC7600Model's — no profile argument
+	// to pass, since RealHardware is the zero value.
+	IC7410Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7410.New(ic7410.WithConsentedUnverifiedWrites())
+		}
+		return ic7410.New()
+	},
+	// The v1.7.0 Icom wave's fourth row, on IC7800Model's footing.
+	IC7700Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7700.New(ic7700.RealHardware, ic7700.WithConsentedUnverifiedWrites())
+		}
+		return ic7700.New(ic7700.RealHardware)
+	},
+	// The v1.7.0 Icom wave's fifth row, on IC7800Model's footing.
+	IC9100Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic9100.New(ic9100.RealHardware, ic9100.WithConsentedUnverifiedWrites())
+		}
+		return ic9100.New(ic9100.RealHardware)
+	},
+	// The v1.7.0 Icom wave's sixth and last row, on IC7800Model's footing.
+	IC7200Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7200.New(ic7200.RealHardware, ic7200.WithConsentedUnverifiedWrites())
+		}
+		return ic7200.New(ic7200.RealHardware)
 	},
 }
 
