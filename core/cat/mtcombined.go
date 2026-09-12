@@ -45,21 +45,30 @@ const CombinedMTSetKind byte = '0'
 // frames moves: P11Fixed is what they declare.
 const combinedMTP11 byte = '0'
 
-// Positions AFTER the shared memory field block, fixed for every combined
-// dialect. They are package constants, unlike the frame's LENGTH (see
-// mtCombinedLen), because nothing about them varies by receiver: what
-// varies is the width of the tag field that follows, and the length that
-// width determines.
-//
-// They are expressed in terms of memdata.go's own offsets rather than as
-// bare numbers, because that is the actual relationship: the combined
-// record puts P11 exactly where the 28-byte MR/MW frame puts its ';'
-// terminator — the byte immediately after the block — as memdata.go's
-// offset commentary anticipates.
+// Positions AFTER the shared memory field block, for the registered
+// (9-digit) family. KEPT AS PACKAGE CONSTANTS for fixture code that
+// addresses this one canonical shape directly — the same reason
+// memdata.go keeps memTermOffset et al. as constants. They are expressed
+// in terms of memdata.go's own memTermOffset rather than as bare numbers,
+// because that is the actual relationship: the combined record puts P11
+// exactly where the 28-byte MR/MW frame puts its ';' terminator — the byte
+// immediately after the block.
 const (
 	mtCombinedP11Offset = memTermOffset           // position 28, 1 byte, fixed '0'
 	mtCombinedTagOffset = mtCombinedP11Offset + 1 // P12, the fixed-width tag field
 )
+
+// mtCombinedP11Off and mtCombinedTagOff are THIS DIALECT'S OWN offsets for
+// the positions the constants above name for the registered (9-digit)
+// shape. Since the S1 lift, PRODUCTION code consults these instead of the
+// constants: memTermOff (memdata.go) — the byte immediately after the
+// block, which the combined record puts P11 at — is itself dialect data,
+// sliding with memoryFreqDigits the same "pure position slide" every field
+// after P2 gets. Under memoryFreqDigits 9 (every registered combined-form
+// dialect: ftdx10, ftdx101 D/MP) each equals the constant of the same name
+// above, so no registered dialect's bytes moved.
+func (d Dialect) mtCombinedP11Off() int { return d.memTermOff() }
+func (d Dialect) mtCombinedTagOff() int { return d.mtCombinedP11Off() + 1 }
 
 // mtCombinedLen is the exact length of THIS dialect's combined MT
 // Set/Answer record: the 28 fixed positions (the "MT" prefix, the shared
@@ -77,7 +86,7 @@ const (
 // It is meaningful only under MTFormCombined; every caller refuses any other
 // form before consulting it.
 func (d Dialect) mtCombinedLen() int {
-	return mtCombinedTagOffset + d.mt.TagMaxBytes + 1
+	return d.mtCombinedTagOff() + d.mt.TagMaxBytes + 1
 }
 
 // validateCombinedMTFields applies the combined MT Set's write-direction
@@ -211,14 +220,14 @@ func (d Dialect) buildMTSetCombined(m MemoryData, tag string, display bool) (Com
 	// reading in the one place V9 cannot reach.
 	switch d.mt.P11 {
 	case P11Fixed:
-		frame[mtCombinedP11Offset] = combinedMTP11
+		frame[d.mtCombinedP11Off()] = combinedMTP11
 	case P11TagDisplay:
-		frame[mtCombinedP11Offset] = boolDigit(display)
+		frame[d.mtCombinedP11Off()] = boolDigit(display)
 	default:
 		return Command{}, newParseError(nil, "MT: P11 (position 28) policy unset — refusing to guess whether the byte is fixed schema or a live TAG flag")
 	}
 
-	field := frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes]
+	field := frame[d.mtCombinedTagOff() : d.mtCombinedTagOff()+d.mt.TagMaxBytes]
 	n := copy(field, tag)
 	for i := n; i < len(field); i++ {
 		field[i] = d.mt.TagFill
@@ -353,7 +362,7 @@ func (d Dialect) parseMTAnswerCombined(frame []byte) (MemoryData, string, bool, 
 	// documented values are accepted: a third value is an undocumented
 	// frame, and this package does not turn one into data.
 	display := false
-	if !d.p11Valid(frame[mtCombinedP11Offset]) {
+	if !d.p11Valid(frame[d.mtCombinedP11Off()]) {
 		if d.mt.P11 == P11TagDisplay {
 			return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT frame: P11 (position 28) must be '0' or '1' under %v — it is this dialect's TAG ON/OFF flag", d.mt.P11))
 		}
@@ -361,10 +370,10 @@ func (d Dialect) parseMTAnswerCombined(frame []byte) (MemoryData, string, bool, 
 	}
 	if d.mt.P11 == P11TagDisplay {
 		// p11Valid has already confirmed this succeeds.
-		display, _ = parseBoolDigit(frame[mtCombinedP11Offset])
+		display, _ = parseBoolDigit(frame[d.mtCombinedP11Off()])
 	}
 
-	return m, d.decodeCombinedTag(string(frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes])), display, nil
+	return m, d.decodeCombinedTag(string(frame[d.mtCombinedTagOff() : d.mtCombinedTagOff()+d.mt.TagMaxBytes])), display, nil
 }
 
 // decodeCombinedTag turns a combined answer's raw tag field into a tag

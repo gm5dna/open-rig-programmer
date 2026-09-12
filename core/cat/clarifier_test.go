@@ -46,12 +46,15 @@ func clarPeerConfig() DialectConfig {
 			NoneWire:  "000",
 			MCSelects: MCSelectsAll,
 		},
-		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:     ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
-		MemoryP5:      P5TxClar,
-		ToneStates:    ToneStatesCTCSS,
-		MWWriteKind:   KindMemory,
+		EXAddressForm:    EXAddressTriple,
+		MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:        ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
+		MemoryP5:         P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindMemory,
 	}
 }
 
