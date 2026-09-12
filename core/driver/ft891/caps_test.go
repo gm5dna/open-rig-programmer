@@ -140,6 +140,8 @@ var tierFieldsMustBeEmpty = map[string]bool{
 	// range together, so declaring one would make these capabilities
 	// invalid outright.
 	"CTCSSToneRange": true,
+	// the FT-891 supports channel names via the MT tag field; NoTag is false
+	"NoTag": true,
 }
 
 // TestCapabilities_EveryFieldExplicit is the D-caps-explicit decision's
@@ -168,9 +170,9 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // unverified value is to populate it and record why, never to leave a zero
 // that reads as a decision nobody took.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// 28 since additions design D4.2 added the transmit declaration
-	// (matrix §1, §5).
-	const wantFieldCount = 29
+	// 29 since additions design D4.2 added the transmit declaration
+	// (matrix §1, §5); now 30 with NoTag.
+	const wantFieldCount = 30
 
 	for _, tt := range []struct {
 		name string

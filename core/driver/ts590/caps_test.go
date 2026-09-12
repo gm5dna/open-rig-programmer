@@ -234,13 +234,14 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"PreampOptions":          "§1.26 — as AttenuatorDB",
 		"AntennaOptions":         "§1.27 — as AttenuatorDB",
 		"TagCharset":             "§1.28, A2 — the empty string selects the family default",
+		"NoTag":                  "the TS-590 supports channel names via the MT tag field; NoTag is false",
 	}
 	for _, row := range bothRows {
 		caps := CapabilitiesUnverified(row)
 		v := reflect.ValueOf(caps)
 		typ := v.Type()
-		if typ.NumField() != 29 {
-			t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
+		if typ.NumField() != 30 {
+			t.Fatalf("spec.Capabilities has %d fields, want 30 — this test's list is stale", typ.NumField())
 		}
 		for i := 0; i < typ.NumField(); i++ {
 			name := typ.Field(i).Name

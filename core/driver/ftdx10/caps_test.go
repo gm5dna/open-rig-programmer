@@ -128,6 +128,8 @@ var tierFieldsMustBeEmpty = map[string]bool{
 	// have — and spec.Validate refuses a list and a range together, so
 	// declaring one here would make these capabilities invalid outright.
 	"CTCSSToneRange": true,
+	// the FT-DX10 supports channel names via the MT tag field; NoTag is false
+	"NoTag": true,
 }
 
 // TestCapabilities_EveryFieldExplicit is the D-caps-explicit decision's
@@ -167,8 +169,8 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // the mistake, so the rule for those six is inverted here rather than
 // waived, and the test still fails if one is ever filled in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// 28 since additions design D4.2 added the transmit declaration.
-	const wantFieldCount = 29
+	// 29 since additions design D4.2 added the transmit declaration; now 30 with NoTag.
+	const wantFieldCount = 30
 
 	for _, tt := range []struct {
 		name string

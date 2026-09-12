@@ -63,6 +63,7 @@ var tierFieldsMustBeEmpty = map[string]string{
 	"PreampOptions":          "additions design D8 — this record carries no preamp field",
 	"AntennaOptions":         "additions design D8 — this record carries no antenna field",
 	"SimplexTx":              "this row grades FieldDuplex, so ImportCHIRP takes importCHIRPDuplexIcom and never reaches the blank arm that reads SimplexTx",
+	"NoTag":                  "the IC-905 supports channel names via the 1A 00 record's name field; NoTag is false",
 }
 
 // TestCapabilities_EveryFieldExplicit reflects over spec.Capabilities and
@@ -76,9 +77,9 @@ var tierFieldsMustBeEmpty = map[string]string{
 // than waived: they must be EMPTY, and the test fails if one is ever filled
 // in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// Twenty-eight top-level fields plus GroupBase and ChannelBase, which
+	// Twenty-nine top-level fields plus GroupBase and ChannelBase, which
 	// TestBanks_ShapeAndSparseDescriptors audits on the nested sparse bank.
-	const wantFieldCount = 31
+	const wantFieldCount = 32
 
 	for _, tt := range []struct {
 		name string

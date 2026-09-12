@@ -366,6 +366,38 @@ func TestValidate_TagLenNotPositive(t *testing.T) {
 	}
 }
 
+// TestValidate_NoTagAllowsZeroTagLen pins the nameless-capability escape
+// hatch: a model that declares NoTag true (this project's fake/simulated
+// nameless fixture — a radio with no channel-name route over CAT at
+// all, no FieldTag/FieldTagDisplay in any bank) is the one legal way to
+// construct a TagLen==0 Capabilities. Without NoTag, TestValidate_
+// TagLenNotPositive above still refuses TagLen 0.
+func TestValidate_NoTagAllowsZeroTagLen(t *testing.T) {
+	c := validTestCapabilities()
+	c.Model = "FAKE-NN"
+	c.TagLen = 0
+	c.NoTag = true
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want nil for a NoTag model with TagLen 0", err)
+	}
+}
+
+// TestValidate_NoTagRequiresZeroTagLen pins the other half of the NoTag
+// contract: a model cannot declare both "no tag route" and a positive
+// TagLen — that pairing is a contradiction, not a stricter limit.
+func TestValidate_NoTagRequiresZeroTagLen(t *testing.T) {
+	c := validTestCapabilities()
+	c.NoTag = true
+	c.TagLen = 12
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil for NoTag with TagLen 12, want an error")
+	}
+	if !strings.Contains(err.Error(), "NoTag") {
+		t.Errorf("Validate() error = %q, want it to mention \"NoTag\"", err)
+	}
+}
+
 // TestValidate_ShiftOptionZeroValueDirectionRejected is FIX A1's failing-
 // first test: before this fix, ShiftNone was ShiftDirection's zero value,
 // so a ShiftOption whose Direction was simply omitted from a struct
