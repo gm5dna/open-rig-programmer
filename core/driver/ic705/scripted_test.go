@@ -430,21 +430,10 @@ type errBadAddressType struct{}
 
 func (errBadAddressType) Error() string { return "scripted radio: malformed address field" }
 
-// noSettleClock is the engine clock these tests inject: real time
-// everywhere it matters and NO SLEEP for the post-exchange pacing delay.
-//
-// IT REMOVES PACING AND NOTHING ELSE. transport.Engine's only Sleep call is
-// its 20 ms inter-exchange settle; every timeout, idle gap and drain cap
-// still runs on the real clock through Now and After, so the drain,
-// quarantine and timeout behaviour these tests assert is the production
-// behaviour. Without it the inventory walk's 1 000 exchanges would cost 20
-// seconds of pure pacing per test — which is a fact about a real serial
-// link and a waste of a test suite's time.
-type noSettleClock struct{}
-
-func (noSettleClock) Now() time.Time                         { return time.Now() }
-func (noSettleClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
-func (noSettleClock) Sleep(time.Duration)                    {}
+// noSettleClock is now ic705.go's own (promoted 2026-09-12, follow-up
+// (i)): every in-package test already used it through withEngineOptions,
+// and New applies it in production for Simulated too, so one definition
+// serves both.
 
 // bcd2 renders n as two packed-BCD bytes, most significant first — the
 // address field's own encoding, for tests that build a frame by hand.
