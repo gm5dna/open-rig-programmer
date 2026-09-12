@@ -126,6 +126,10 @@ func validToneSemantics(s ToneSemantics) bool {
 //   - Model and CATID must both be non-empty.
 //   - TagLen must be greater than zero, unless NoTag is true, in which
 //     case TagLen must be exactly zero.
+//   - When NoTag is true, no Bank may grade FieldTag or FieldTagDisplay
+//     above Unsupported: a bank that still reaches a tag field
+//     contradicts NoTag's declaration that this radio has no
+//     channel-name route over CAT at all.
 //   - No two Banks may share a BankID.
 //   - No slot (Bank.Slots entry) may be claimed by more than one Bank.
 //   - No slot (Bank.Slots entry) may be blank: a blank slot is not a
@@ -282,6 +286,18 @@ func (c Capabilities) Validate() error {
 			for _, field := range transmitFields {
 				if b.Fields[field] != (FieldSupport{}) {
 					problems = append(problems, fmt.Sprintf("bank %s field %s must have zero FieldSupport on a ReceiveOnly radio", b.ID, field))
+				}
+			}
+		}
+		if c.NoTag {
+			// NoTag declares "this radio has no channel-name route over
+			// CAT at all" (see its doc comment on Capabilities.NoTag) — a
+			// bank that still grades FieldTag or FieldTagDisplay
+			// contradicts that declaration, so the same shape of check as
+			// the ReceiveOnly one above applies here too.
+			for _, field := range []Field{FieldTag, FieldTagDisplay} {
+				if b.Fields[field] != (FieldSupport{}) {
+					problems = append(problems, fmt.Sprintf("bank %s field %s must have zero FieldSupport when NoTag is true", b.ID, field))
 				}
 			}
 		}
