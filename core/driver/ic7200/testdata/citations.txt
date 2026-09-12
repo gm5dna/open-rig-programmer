@@ -1,0 +1,53 @@
+# IC-7200 — the ALLOWED CITATIONS of core/driver/ic7200 and core/civ/ic7200.
+#
+# This list is the POSITIVE half of the provenance pins (see
+# core/driver/ic7851/provenance_test.go for the full rationale). Of every
+# document citation these two packages make, can this model's own
+# authority — docs/superpowers/icom-matrices/ic7200-capability-matrix.md —
+# supply it? A citation not written here fails the test.
+#
+# ic7100-default-baud-auto is FOREIGN-ATTRIBUTED: it is the IC-7100's own
+# register entry, cited as the precedent this model's DefaultBaud CHOICE
+# follows (matrix §1 row 12). It must be listed even though the ic7200
+# authority is not asked to supply it.
+
+folio 10-16
+folio 11-2
+folio 11-3
+folio 11-6
+folio 7-2
+
+ic7100-default-baud-auto
+ic7200-1a00-set-ack
+ic7200-civ-rate-list
+ic7200-default-baud-auto
+ic7200-full-record-mandatory
+ic7200-scan-edge-record-fields
+ic7200-storable-frequency-range
+ic7200-tx-duplicate-block-internal-order
+
+matrix §0
+matrix §1
+matrix §1b
+matrix §2
+matrix §3.1
+matrix §3.10
+matrix §3.11
+matrix §3.12
+matrix §3.13
+matrix §3.14
+matrix §3.15
+matrix §3.16
+matrix §3.2
+matrix §3.4
+matrix §3.7
+matrix §3.8
+matrix §3.9
+matrix §4
+matrix §5
+
+PDF p.113
+PDF p.116
+PDF p.120
+PDF p.84
+PDF pp.117-118

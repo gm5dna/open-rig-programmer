@@ -936,6 +936,87 @@ func unreachableScanSkipCapabilities() []spec.Capabilities {
 	}
 }
 
+// icXXXXLikeCapabilities (ic7800LikeCapabilities, ic7600LikeCapabilities,
+// ic7410LikeCapabilities, ic7700LikeCapabilities, ic9100LikeCapabilities,
+// ic7200LikeCapabilities) return the v1.7.0 Icom wave's own REGISTERED
+// capabilities verbatim, via
+// wiring.StaticCapabilities — unlike every fixture above, which is a
+// hand-written literal shadowing its driver.
+//
+// THAT IS DELIBERATE, not a shortcut this file's own convention argues
+// against: the debt-ledger comment on chirpFixtureExceptions above warns
+// against "writing eleven radios' worth of UNEVIDENCED capability data",
+// and a hand-invented literal here would be exactly that — a second,
+// independently-typed claim about a radio this package has already
+// registered capabilities for. Reading the real, registered value instead
+// is the more evidenced choice, and it cannot drift from the driver the
+// way a hand-copied literal could.
+//
+// NOT IN unreachableScanSkipCapabilities(), deliberately: that function's
+// OTHER two callers (TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord in
+// particular) assume every fixture's ToneModes recognises DTCS/Cross as a
+// tone TYPE even where it cannot write the DCS CODE — true of every
+// hand-written fixture there, but not of these six, whose own narrower
+// tone-type nibble does not admit a DTCS/Cross reading at all (their own
+// capability reviews) — the IC-9100's own record maps DTCS CODE and
+// POLARITY as tier fields (richer than every sibling in this wave) but
+// still declares no DTCS/Cross TONE STATE, so it takes the same branch;
+// the IC-7200 has no tone field of ANY kind at all, a stricter absence
+// still, and takes the identical branch for the plainer reason. ImportCHIRP
+// therefore refuses their DTCS/Cross cells on an earlier, differently-worded
+// branch (chirp.go's "expresses no %s tone mode"), which that test does not
+// expect. These six need only the ONE completeness property
+// chirpFixtures() exists for — see
+// its own call site below — not membership in a bucket whose other tests
+// assume a tone vocabulary they do not have.
+func ic7800LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7800Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7800Model, err))
+	}
+	return caps
+}
+
+func ic7600LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7600Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7600Model, err))
+	}
+	return caps
+}
+
+func ic7410LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7410Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7410Model, err))
+	}
+	return caps
+}
+
+func ic7700LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7700Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7700Model, err))
+	}
+	return caps
+}
+
+func ic9100LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC9100Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC9100Model, err))
+	}
+	return caps
+}
+
+func ic7200LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7200Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7200Model, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2695,11 +2776,21 @@ func maLikeCapabilities(model, catID string, modes []string) spec.Capabilities {
 // TestChirpFixtures_CoverEveryRegisteredModel measures against the registry.
 func chirpFixtures() []spec.Capabilities {
 	out := unreachableScanSkipCapabilities()
-	return append(out,
+	out = append(out,
 		ts590LikeCapabilities("TS-590S", "021"),
 		ts590LikeCapabilities("TS-590SG", "023"),
 		maLikeCapabilities("TS-890S", "024", ts890Modes),
 		maLikeCapabilities("TS-990S", "022", ts990Modes),
+	)
+	// The v1.7.0 Icom wave: registered capabilities, not fixtures of the
+	// bucket above — see icXXXXLikeCapabilities's own doc comment for why.
+	return append(out,
+		ic7800LikeCapabilities(),
+		ic7600LikeCapabilities(),
+		ic7410LikeCapabilities(),
+		ic7700LikeCapabilities(),
+		ic9100LikeCapabilities(),
+		ic7200LikeCapabilities(),
 	)
 }
 

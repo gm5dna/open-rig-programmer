@@ -216,12 +216,18 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7100"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7200"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7410"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7700"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -292,6 +298,39 @@ var tierProfilePopulation = []civ.Profile{
 	// change to accept: RecordLengths is a set here as it is everywhere
 	// else.
 	icr8600.Profile(),
+	// The v1.7.0 Icom wave's first family: a fourth member of spec D5's
+	// 25 B / Flat set (IC-7610, IC-7851/7850, IC-7760), a HIGH-proximity
+	// clone of the IC-7610 per its own capability review — same 25 B
+	// record-only over a 2 B flat address. Its three pairings against that
+	// set are declared in `indistinguishable` below with their own
+	// citations.
+	ic7800.Profile(),
+	// The v1.7.0 Icom wave's second family: a fifth member of the 25 B /
+	// Flat set, another literal-copy clone of the IC-7610 per its own
+	// capability review (no offset differs). Its four pairings against the
+	// set (IC-7610, IC-7851/7850, IC-7760, IC-7800) are declared below.
+	ic7600.Profile(),
+	// The v1.7.0 Icom wave's third family: 40 bytes record-only, a length
+	// no other family in this tier declares — measured disjoint from
+	// every sibling by the pairwise walk below, no declaration needed.
+	ic7410.Profile(),
+	// The v1.7.0 Icom wave's fourth family: 39 bytes record-only over a
+	// 2 B flat address — the SAME shape as the already-registered IC-7300,
+	// so it joins that one pairing in `indistinguishable` below (the
+	// IC-R8600's 39-member set is separated automatically instead, by its
+	// 4 B address width).
+	ic7700.Profile(),
+	// The v1.7.0 Icom wave's fifth family: 57 bytes record-only over a
+	// 3 B AddressFormBankChannel address (band + 2-byte channel) — a
+	// length no other family in this tier declares, measured disjoint by
+	// the pairwise walk below, no declaration needed.
+	ic9100.Profile(),
+	// The v1.7.0 Icom wave's sixth and last family: 17 bytes record-only
+	// over a flat address — a length no other family in this tier
+	// declares, measured disjoint by the pairwise walk below, no
+	// declaration needed. This radio's own capability review found it
+	// NoTag: no channel-name field over CI-V at all.
+	ic7200.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -328,6 +367,18 @@ var tierRegistrationCoverage = map[string]string{
 	// record has a length and an address geometry like any other radio's,
 	// and those are the two properties ruled on here.
 	"IC-R8600": "IC-R8600",
+	// The v1.7.0 Icom wave's first registration: ONE key, ONE family.
+	"IC-7800": "IC-7800",
+	// And its second: ONE key, ONE family.
+	"IC-7600": "IC-7600",
+	// And its third: ONE key, ONE family.
+	"IC-7410": "IC-7410",
+	// And its fourth: ONE key, ONE family.
+	"IC-7700": "IC-7700",
+	// And its fifth: ONE key, ONE family.
+	"IC-9100": "IC-9100",
+	// And its sixth and last: ONE key, ONE family.
+	"IC-7200": "IC-7200",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -388,7 +439,26 @@ func registrationCoverageProblems(registered, population []string, coverage map[
 // declaring NEITHER CTCSSTones nor CTCSSToneRange, which
 // spec.Capabilities.AdmitsTone explicitly tolerates ("fails closed when a
 // radio declares neither") and which would silently vanish from
-// `registered` rather than fail loudly.
+// `registered` rather than fail loudly. THAT FAILURE MODE IS NOW REAL,
+// not just guarded against: the IC-7200 (v1.7.0 Icom wave's sixth and
+// last registration) genuinely declares neither, so it is named in
+// toneAbsentCIVModels below and admitted alongside the CTCSSToneRange
+// proxy rather than silently vanishing.
+//
+// toneAbsentCIVModels names every registered CI-V model whose own record
+// maps NO tone field of any kind — CTCSSTones empty AND CTCSSToneRange
+// nil, both honestly, per its own capability review (matrix §1 rows
+// 9/10) — so icomModels' CTCSSToneRange proxy cannot see it. THE v1.7.0
+// ICOM WAVE's SIXTH AND LAST REGISTRATION, the IC-7200, is the first
+// registered model this is true of; every earlier Icom row maps at
+// least a tone-number field, even where CHIRP cannot reach it. Named
+// here rather than silently widening the proxy, exactly as this file's
+// header calls for: "update this list deliberately if it is a real
+// registration, not a proxy regression".
+var toneAbsentCIVModels = map[string]bool{
+	"IC-7200": true,
+}
+
 func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabilities, error)) []string {
 	t.Helper()
 	var out []string
@@ -397,7 +467,7 @@ func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabi
 		if err != nil {
 			t.Fatalf("capabilities for registered model %q: %v", model, err)
 		}
-		if caps.CTCSSToneRange != nil {
+		if caps.CTCSSToneRange != nil || toneAbsentCIVModels[model] {
 			out = append(out, model)
 		}
 	}
@@ -565,6 +635,36 @@ var indistinguishable = map[string]string{
 	"IC-7610|IC-7760": "additions spec D5 (the same 25 B / Flat row, whose declared set is {IC-7610, IC-7851/7850, IC-7760}) and D1.1's shared-record finding; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-7610's §1/§3 record reading and the IC-7760's §3.11/§1b one, whose 25 B record-only and 2 B address width were derived from that radio's own L/W/B/G legs and its own document, the IC-7760 CI-V Reference Guide revision 2, A7788-8EX-2); core/driver/ic7760/doc.go, which admits no cross-model length table; and core/driver/ic7610/ic7610.go:142-145, which already refuses to mint a driver.WrongRadioError for any same-address collision. The two radios' factory addresses (98h and B2h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 	"IC-7851|IC-7760": "additions spec D5 (the same 25 B / Flat row) and D1.1; the IC-7851's §3.16 record reading and the IC-7760's §3.11/§1b one, derived from two different documents by two different evidence-leg sets — the IC-7850/IC-7851 Instruction Manual section 18, and the IC-7760 CI-V Reference Guide revision 2; core/driver/ic7851/doc.go's Wave-4 hand-off section, which names this set, and core/driver/ic7760/doc.go. NEITHER driver mints a driver.WrongRadioError for a length it cannot attribute, so a same-address collision here fails the open without naming a model. The factory addresses (8Eh and B2h) differ, so the limitation is reachable only on a moved radio — and note that the IC-7851 row's own sibling, the IC-7850, shares 8Eh with it AT FACTORY DEFAULTS, which is a separate and stronger limitation recorded in this file's header.",
 	"IC-9700|IC-7100": "additions spec D5 (docs/superpowers/specs/2026-08-28-icom-additions-design.md, the 111 B row: \"9700 vs 7100: NO — both 3 B with a leading 01–05 index byte — declared indistinguishable\") and D2.1, which derives the IC-7100's 111 B record-only length over a 3 B address and states in as many words that it is \"the SAME record-only length as the IC-705 and IC-9700, at the 9700's address width\"; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-9700's §3.11 record arithmetic, from the IC-9700 CI-V Reference Guide, and the IC-7100's §3.11 one, from section 20 of the IC-7100 full manual revision A7085-2EX-5 — two different documents, two different evidence-leg sets, and the IC-7100's matrix §4 states explicitly that it makes no cross-model claim of its own). NEITHER driver mints a driver.WrongRadioError for a length it cannot attribute: core/driver/ic9700's doc.go says \"No driver.WrongRadioError is ever minted here\", and core/driver/ic7100's doc.go carries the Wave-4 hand-off naming this very pair — \"measuring 111 record bytes proves the radio is not an IC-7610 or an IC-7300, and proves NOTHING about whether it is an IC-7100 or an IC-9700\" — so a same-address collision here fails the open without naming a model. The third member of spec D5's 111 B row, the IC-705, IS separable from both by address width (four bytes against three) and is proven apart by the pairwise walk rather than declared here. The two radios' factory addresses (A2h and 88h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	// The v1.7.0 Icom wave's first family joins the 25 B / Flat set,
+	// bringing it to four members and three new pairings against the
+	// already-declared three (this table's own header explains why the set
+	// as a whole collides: all draw the same 27-byte 1A 00 data area).
+	// Evidence: docs/superpowers/icom-matrices/ic7800-capability-matrix.md
+	// (25 B record-only, 2 B address, no offset difference from the
+	// IC-7610); core/driver/ic7800/doc.go, which mints no
+	// driver.WrongRadioError for a length it cannot attribute. Factory
+	// addresses (98h, 6Ah) differ, so reachable only on a moved radio.
+	"IC-7610|IC-7800": "docs/superpowers/icom-matrices/ic7800-capability-matrix.md (25 B record-only, 2 B flat address, independently re-derived from the IC-7800's own manual with no offset difference from the IC-7610) and core/driver/ic7800/doc.go, which mints no driver.WrongRadioError for a length it cannot attribute — the same rule every 25 B/Flat sibling's driver follows. Factory addresses (98h and 6Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7851|IC-7800": "docs/superpowers/icom-matrices/ic7800-capability-matrix.md and core/driver/ic7851/doc.go's/ic7800's own doc.go, neither of which mints a driver.WrongRadioError for a length it cannot attribute. Factory addresses (8Eh and 6Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7760|IC-7800": "docs/superpowers/icom-matrices/ic7800-capability-matrix.md and core/driver/ic7760's/ic7800's own doc.go files, neither of which mints a driver.WrongRadioError for a length it cannot attribute. Factory addresses (B2h and 6Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	// The v1.7.0 Icom wave's second family, on the first's footing: four
+	// new pairings against the 25 B / Flat set, including against its own
+	// sibling IC-7800. Evidence: docs/superpowers/icom-matrices/
+	// ic7600-capability-matrix.md (25 B record-only, 2 B flat address,
+	// independently re-derived, no offset difference from the IC-7610) and
+	// core/driver/ic7600/doc.go, which mints no driver.WrongRadioError for
+	// a length it cannot attribute.
+	"IC-7610|IC-7600": "docs/superpowers/icom-matrices/ic7600-capability-matrix.md and core/driver/ic7600/doc.go. Factory addresses (98h and 7Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7851|IC-7600": "docs/superpowers/icom-matrices/ic7600-capability-matrix.md and core/driver/ic7851's/ic7600's own doc.go files. Factory addresses (8Eh and 7Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7760|IC-7600": "docs/superpowers/icom-matrices/ic7600-capability-matrix.md and core/driver/ic7760's/ic7600's own doc.go files. Factory addresses (B2h and 7Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7800|IC-7600": "both this wave's own capability matrices (docs/superpowers/icom-matrices/ic7800-capability-matrix.md, ic7600-capability-matrix.md), each independently derived from its own radio's manual, and each driver's own doc.go, neither of which mints a driver.WrongRadioError for a length it cannot attribute. Factory addresses (6Ah and 7Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	// The v1.7.0 Icom wave's fourth family: its own 39 B record-only over
+	// a 2 B flat address is the SAME shape as the already-registered
+	// IC-7300's (core/driver/ic7300/caps.go), so this is a genuine new
+	// collision rather than a restatement — the IC-R8600's own 39-member
+	// set is separated from both automatically, by address width alone (4
+	// bytes against 2), and needs no declaration.
+	"IC-7300|IC-7700": "docs/superpowers/icom-matrices/ic7700-capability-matrix.md (39 B record-only, 2 B flat address, independently re-derived from the IC-7700's own manual) and core/driver/ic7700/doc.go, which mints no driver.WrongRadioError for a length it cannot attribute — core/driver/ic7300/doc.go does the same on its own side. Factory addresses (94h and 74h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 }
 
 // TestTierRecordShapes_DistinctOrDeclared is the tier-close check: every
@@ -711,8 +811,9 @@ func TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix(t *testing.T) {
 func TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames(t *testing.T) {
 	got := icomModels(t, wiring.SupportedModels(), wiring.StaticCapabilities)
 	want := []string{
-		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7610", "IC-7760",
-		"IC-7850", "IC-7851", "IC-905", "IC-9700", "IC-R8600",
+		"IC-705", "IC-7100", "IC-7200", "IC-7300", "IC-7300MK2", "IC-7410",
+		"IC-7600", "IC-7610", "IC-7700", "IC-7760", "IC-7800", "IC-7850",
+		"IC-7851", "IC-905", "IC-9100", "IC-9700", "IC-R8600",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("icomModels(wiring.SupportedModels()) = %v (%d rows),\nwant %v (%d rows) — the registered Yaesu/Icom split has changed; update this list deliberately if it is a real registration, not a proxy regression", got, len(got), want, len(want))
@@ -739,8 +840,8 @@ func TestTierRecordShapes_EveryModelDeclaresExactlyOneToneShape(t *testing.T) {
 		}
 		hasList := len(caps.CTCSSTones) > 0
 		hasRange := caps.CTCSSToneRange != nil
-		if hasList == hasRange {
-			t.Errorf("%s declares CTCSSTones (non-empty: %v) and CTCSSToneRange (non-nil: %v) — want exactly one; a model declaring neither would silently drop out of icomModels' proxy and vanish from the registration-coverage guard", model, hasList, hasRange)
+		if hasList == hasRange && !toneAbsentCIVModels[model] {
+			t.Errorf("%s declares CTCSSTones (non-empty: %v) and CTCSSToneRange (non-nil: %v) — want exactly one (or membership in toneAbsentCIVModels, named above); a model declaring neither would silently drop out of icomModels' proxy and vanish from the registration-coverage guard", model, hasList, hasRange)
 		}
 	}
 }

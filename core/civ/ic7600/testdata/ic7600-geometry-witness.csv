@@ -1,0 +1,10 @@
+diagram_id,field_index,block_label_verbatim,first_byte,first_nibble,last_byte,last_nibble,pdf_page,visual_anchor,notes
+"D1","1,2","-","1","1","2","2","178","Memory content setting diagram (PDF p.178, folio 169); leftmost bracket group.","Data-area byte positions 1-2, whole bytes. Positions are the matrix S3.11 arithmetic restated as a cumulative table, not a fresh independent raster measurement - this package's provenance is single-matrix (doc.go's Provenance section)."
+"D1","3","-","3","1","3","2","178","Memory content setting diagram (PDF p.178); single cell.","Data-area byte position 3, whole byte - undivided enum cell, no nibble split printed (matrix S2 row 9, S3.15(a))."
+"D1","4~8","-","4","1","8","2","178","Memory content setting diagram (PDF p.178); five-cell digit strip.","Data-area byte positions 4-8, whole bytes."
+"D1","9","-","9","1","9","2","178","Memory content setting diagram (PDF p.178); first cell of the (9),(10) bracket.","Data-area byte position 9, whole byte."
+"D1","10","-","10","1","10","2","178","Memory content setting diagram (PDF p.178); second cell of the (9),(10) bracket.","Data-area byte position 10, whole byte."
+"D1","11","-","11","1","11","2","178","Memory content setting diagram (PDF p.178); single cell, two independent nibble leaders.","Data-area byte position 11, whole byte - low nibble tone_mode (mapped), high nibble data_mode (UNMAPPED, E6)."
+"D1","12~14","-","12","1","14","2","178","Memory content setting diagram (PDF p.178); three-cell digit strip.","Data-area byte positions 12-14, whole bytes."
+"D1","15~17","-","15","1","17","2","178","Memory content setting diagram (PDF p.178); three-cell digit strip.","Data-area byte positions 15-17, whole bytes."
+"D1","18~27","-","18","1","27","2","178","Memory content setting diagram (PDF p.178); rightmost group.","Data-area byte positions 18-27, whole bytes."

@@ -336,6 +336,25 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// already return io.ReadWriteCloser, so neither needs an adapter.
 		{"ts890", "Simulated", "fakets890.New", "internal/fakets890", []string{"TS-890S"}},
 		{"ts990", "Simulated", "fakets990.New", "internal/fakets990", []string{"TS-990S"}},
+		// The IC-7800 (v1.7.0 Icom wave's first registration): one row, one
+		// driver package, one fake, on the IC-7610's footing.
+		{"ic7800", "Simulated", "fakeic7800.New", "internal/fakeic7800", []string{"IC-7800"}},
+		// The IC-7600 (v1.7.0 Icom wave's second registration), on the same
+		// footing.
+		{"ic7600", "Simulated", "fakeic7600.New", "internal/fakeic7600", []string{"IC-7600"}},
+		// The IC-7410 (v1.7.0 Icom wave's third registration): the token is
+		// an OPTION, WithSimulatedProfile, the IC-7610's own bare-New shape
+		// rather than a Profile constant.
+		{"ic7410", "WithSimulatedProfile", "fakeic7410.New", "internal/fakeic7410", []string{"IC-7410"}},
+		// The IC-7700 (v1.7.0 Icom wave's fourth registration), on
+		// IC7800Model's footing.
+		{"ic7700", "Simulated", "fakeic7700.New", "internal/fakeic7700", []string{"IC-7700"}},
+		// The IC-9100 (v1.7.0 Icom wave's fifth registration), on
+		// IC7800Model's footing.
+		{"ic9100", "Simulated", "fakeic9100.New", "internal/fakeic9100", []string{"IC-9100"}},
+		// The IC-7200 (v1.7.0 Icom wave's sixth and last registration), on
+		// IC7800Model's footing.
+		{"ic7200", "Simulated", "fakeic7200.New", "internal/fakeic7200", []string{"IC-7200"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

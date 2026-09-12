@@ -1987,6 +1987,142 @@ var ts480Text = Text{
 // back would be a cycle), and it holds no model constants of its own to
 // share. The two spellings are kept in agreement by that test, which walks
 // every registered model and fails on a missing entry.
+
+// ic7800Text is the IC-7800's entry — the v1.7.0 Icom wave's first
+// registration — landed with that model's wiring registration for the
+// same reason every Icom entry above was: internal/wiring's
+// TestEverySupportedModelHasRadiotext fails a registration whose prose is
+// missing.
+//
+// A SINGLE-MODEL ENTRY: core/driver/ic7800 has one member, so there is one
+// entry here, no sibling to keep in step.
+//
+// WRITTEN FROM THIS RADIO'S OWN DOCUMENT. The resemblance to the IC-7610's
+// prose is a consequence of the two radios drawing the same 25-byte
+// record over a 2-byte flat address (this radio's own capability review),
+// not of any borrowing: TestRadiotext_IC7800Verbatim's non-borrowing legs
+// refuse a field byte-identical to any other entry's and refuse another
+// radio's address hex or bare name anywhere in this one's text.
+//
+// EVERY FACT RESTATED HERE IS TRUE TODAY. writeTrialsComplete is FALSE
+// (core/driver/ic7800/caps.go); the CI-V address is 6Ah, fixed, with no
+// --civ-address option; TagLen is 10; the default baud is 19200,
+// unverified against real hardware, on the tier's usual footing.
+var ic7800Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7800: no builder for one exists, and no IC-7800 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the IC-7800 over CI-V by this build, but unverified against real hardware — no IC-7800 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+	// Deliberately empty: writeTrialsComplete is false, so there is no
+	// hardware-preservation verification of any kind to report.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7800 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7800's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7800: this build knows of none to require. This driver talks only to CI-V address 6Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic7600Text is the IC-7600's entry — the v1.7.0 Icom wave's second
+// registration. A SINGLE-MODEL ENTRY, written from this radio's own
+// document; the resemblance to the IC-7610's and the IC-7800's prose is a
+// consequence of the shared 25-byte / 2-byte-address record, not of any
+// borrowing (TestRadiotext_IC7600Verbatim's non-borrowing legs).
+//
+// writeTrialsComplete is FALSE (core/driver/ic7600/caps.go); CI-V address
+// 7Ah, fixed, no --civ-address option; TagLen 10; default baud 19200,
+// unverified.
+var ic7600Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7600: no builder for one exists, and no IC-7600 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the IC-7600 over CI-V by this build, but unverified against real hardware — no IC-7600 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7600 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7600's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7600: this build knows of none to require. This driver talks only to CI-V address 7Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic7410Text is the IC-7410's entry — the v1.7.0 Icom wave's third
+// registration, and the first this wave that is NOT a literal-shape clone
+// of the IC-7610: its own record is 40 bytes with a genuine TX-duplicate
+// block. Written from this radio's own document.
+//
+// writeTrialsComplete is FALSE (core/driver/ic7410/caps.go); CI-V address
+// 80h, fixed, no --civ-address option; TagLen 9; default baud 19200,
+// unverified. THE WRITE PATH MIRRORS RX FREQUENCY into the TX-duplicate
+// block's frequency span when the caller has not set a transmit
+// frequency, rather than refusing — this radio's own document's
+// instruction (core/driver/ic7410/write.go), and worth telling a user
+// because it differs from every sibling in this wave.
+var ic7410Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7410: no builder for one exists, and no IC-7410 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the IC-7410 over CI-V by this build, but unverified against real hardware — no IC-7410 has ever answered a frame. A write that leaves the transmit frequency unset mirrors the receive frequency into it rather than refusing, per this radio's own document.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7410 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7410's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7410: this build knows of none to require. This driver talks only to CI-V address 80h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic7700Text is the IC-7700's entry — the v1.7.0 Icom wave's fourth
+// registration. RX fields match the IC-7610 family exactly; its own
+// TX-duplicate block reuses existing field types rather than introducing
+// new ones (this radio's own capability review), and its split frequency
+// is mapped where the IC-7800's and IC-7600's are not — the one shape
+// difference from those two siblings worth naming.
+//
+// writeTrialsComplete is FALSE (core/driver/ic7700/caps.go); CI-V address
+// 74h, fixed, no --civ-address option; TagLen 10; default baud 19200,
+// unverified.
+var ic7700Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7700: no builder for one exists, and no IC-7700 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone and the transmit (split) frequency are read and written for the IC-7700 over CI-V by this build, but unverified against real hardware — no IC-7700 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7700 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7700's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7700: this build knows of none to require. This driver talks only to CI-V address 74h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic9100Text is the IC-9100's entry — the v1.7.0 Icom wave's fifth
+// registration. ONE bank (MEM): this radio's own capability review
+// deferred the optional 4th (1200 MHz) band. Its record maps duplex,
+// offset, DTCS code and DTCS polarity as well as tone and data mode —
+// richer than every sibling in this wave — but declares no DTCS TONE
+// STATE, so a CHIRP DTCS/Cross cell is still refused on the same
+// unreachable-tone-mode footing as its siblings.
+//
+// writeTrialsComplete is FALSE (core/driver/ic9100/caps.go); CI-V address
+// 7Ch, fixed, no --civ-address option; TagLen 9; default baud 19200,
+// unverified.
+var ic9100Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-9100: no builder for one exists, and no IC-9100 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the IC-9100 over CI-V by this build, but unverified against real hardware — no IC-9100 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-9100 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-9100's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-9100: this build knows of none to require. This driver talks only to CI-V address 7Ch, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic7200Text is the IC-7200's entry — the v1.7.0 Icom wave's sixth and
+// last registration, and its only NoTag radio: this radio has no
+// channel-name field over CI-V at all (matrix §1 row 6), so no Tag
+// column is shown for it. Its 17-byte record maps no tone field of any
+// kind and no scan-skip bit either — a stricter absence than every other
+// sibling in this wave, which map Tone even where they cannot map
+// Scan Skip.
+//
+// writeTrialsComplete is FALSE (core/driver/ic7200/caps.go); CI-V address
+// 76h, fixed, no --civ-address option; TagLen 0 (NoTag); default baud
+// 19200, unverified.
+var ic7200Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7200: no builder for one exists, and no IC-7200 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone and Scan Skip are not read or written for the IC-7200 over CI-V by this build: its 17-byte record maps no tone field of any kind and no scan-skip bit — this radio's own document maps no wire bit to either. This radio also has no channel-name field over CI-V at all, so this build shows no Tag column for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "not read or written over CI-V by this build — the IC-7200's document maps no wire bit to it",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7200's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7200: this build knows of none to require. This driver talks only to CI-V address 76h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2021,6 +2157,18 @@ var texts = map[string]Text{
 	// registration commit — and so that edit 4 of that commit's ten-edit
 	// list is already a no-op when it comes.
 	"TS-480": ts480Text,
+	// The v1.7.0 Icom wave's first registration.
+	"IC-7800": ic7800Text,
+	// The v1.7.0 Icom wave's second registration.
+	"IC-7600": ic7600Text,
+	// The v1.7.0 Icom wave's third registration.
+	"IC-7410": ic7410Text,
+	// The v1.7.0 Icom wave's fourth registration.
+	"IC-7700": ic7700Text,
+	// The v1.7.0 Icom wave's fifth registration.
+	"IC-9100": ic9100Text,
+	// The v1.7.0 Icom wave's sixth and last registration.
+	"IC-7200": ic7200Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

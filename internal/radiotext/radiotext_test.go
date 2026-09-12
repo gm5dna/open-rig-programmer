@@ -330,6 +330,14 @@ var ownParticulars = map[string][]string{
 	// definition of a borrowed particular.
 	"TS-890S": {"TS-890S"},
 	"TS-990S": {"TS-990S"},
+	// The v1.7.0 Icom wave. Own name and own CI-V address hex, on the
+	// registered Icom rows' footing above.
+	"IC-7800": {"IC-7800", "6Ah"},
+	"IC-7600": {"IC-7600", "7Ah"},
+	"IC-7410": {"IC-7410", "80h"},
+	"IC-7700": {"IC-7700", "74h"},
+	"IC-9100": {"IC-9100", "7Ch"},
+	"IC-7200": {"IC-7200", "76h"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2253,4 +2261,151 @@ func TestRadiotext_TS890SAnd990SDifferInMoreThanTheModelName(t *testing.T) {
 	if strings.Contains(aJoined, dual) {
 		t.Errorf("the TS-890S's prose says %q, and this radio's record carries no dual-reception flag for it to be about", dual)
 	}
+}
+
+// TestRadiotext_IC7800Verbatim pins the v1.7.0 Icom wave's first
+// registration's prose byte-for-byte, and runs the standard non-borrowing
+// checks against every other registered model — including the IC-7610,
+// this radio's closest sibling by record shape (25 B / 2 B flat address),
+// which is exactly the borrowing risk this registration carries.
+func TestRadiotext_IC7800Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7800: no builder for one exists, and no IC-7800 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the IC-7800 over CI-V by this build, but unverified against real hardware — no IC-7800 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7800 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7800's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7800: this build knows of none to require. This driver talks only to CI-V address 6Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7800")
+	if !ok {
+		t.Fatal(`For("IC-7800") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7800\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7800", got)
+}
+
+// TestRadiotext_IC7600Verbatim is TestRadiotext_IC7800Verbatim's sibling
+// for the v1.7.0 Icom wave's second registration.
+func TestRadiotext_IC7600Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7600: no builder for one exists, and no IC-7600 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the IC-7600 over CI-V by this build, but unverified against real hardware — no IC-7600 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7600 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7600's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7600: this build knows of none to require. This driver talks only to CI-V address 7Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7600")
+	if !ok {
+		t.Fatal(`For("IC-7600") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7600\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7600", got)
+}
+
+// TestRadiotext_IC7410Verbatim pins the v1.7.0 Icom wave's third
+// registration's prose byte-for-byte.
+func TestRadiotext_IC7410Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7410: no builder for one exists, and no IC-7410 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the IC-7410 over CI-V by this build, but unverified against real hardware — no IC-7410 has ever answered a frame. A write that leaves the transmit frequency unset mirrors the receive frequency into it rather than refusing, per this radio's own document.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7410 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7410's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7410: this build knows of none to require. This driver talks only to CI-V address 80h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7410")
+	if !ok {
+		t.Fatal(`For("IC-7410") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7410\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7410", got)
+}
+
+// TestRadiotext_IC7700Verbatim pins the v1.7.0 Icom wave's fourth
+// registration's prose byte-for-byte.
+func TestRadiotext_IC7700Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7700: no builder for one exists, and no IC-7700 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone and the transmit (split) frequency are read and written for the IC-7700 over CI-V by this build, but unverified against real hardware — no IC-7700 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7700 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7700's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7700: this build knows of none to require. This driver talks only to CI-V address 74h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7700")
+	if !ok {
+		t.Fatal(`For("IC-7700") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7700\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7700", got)
+}
+
+// TestRadiotext_IC9100Verbatim pins the v1.7.0 Icom wave's fifth
+// registration's prose byte-for-byte.
+func TestRadiotext_IC9100Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-9100: no builder for one exists, and no IC-9100 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the IC-9100 over CI-V by this build, but unverified against real hardware — no IC-9100 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-9100 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-9100's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-9100: this build knows of none to require. This driver talks only to CI-V address 7Ch, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-9100")
+	if !ok {
+		t.Fatal(`For("IC-9100") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-9100\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-9100", got)
+}
+
+// TestRadiotext_IC7200Verbatim pins the v1.7.0 Icom wave's sixth and
+// last registration's prose byte-for-byte.
+func TestRadiotext_IC7200Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7200: no builder for one exists, and no IC-7200 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone and Scan Skip are not read or written for the IC-7200 over CI-V by this build: its 17-byte record maps no tone field of any kind and no scan-skip bit — this radio's own document maps no wire bit to either. This radio also has no channel-name field over CI-V at all, so this build shows no Tag column for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "not read or written over CI-V by this build — the IC-7200's document maps no wire bit to it",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7200's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7200: this build knows of none to require. This driver talks only to CI-V address 76h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7200")
+	if !ok {
+		t.Fatal(`For("IC-7200") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7200\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7200", got)
 }
