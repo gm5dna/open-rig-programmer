@@ -77,17 +77,24 @@ var chirpCoreColumns = []string{"Location", "Frequency", "Mode"}
 // no radio field for. Per row, an empty cell in one of these is
 // silently ignored (it is that column's default/absent state); a
 // non-empty cell is a non-blocking ActionDropped LossEntry. DtcsCode and
-// DtcsPolarity get a second "default" value each (CHIRP's own
-// no-DCS-configured defaults "023"/"NN") so that the overwhelming
-// majority of real CHIRP exports — which populate these two on every
-// row regardless of whether DTCS is in use — do not generate loss-report
-// noise on every single channel.
+// DtcsPolarity get a second "default" value each — see
+// chirpToneFillValues — so that the overwhelming majority of real CHIRP
+// exports, which populate these two on every row regardless of whether
+// DTCS is in use, do not generate loss-report noise on every channel.
 var chirpExtraColumns = []string{"TStep", "DtcsCode", "DtcsPolarity", "Comment"}
 
-// chirpExtraColumnDefaults gives the non-empty "this is not really data"
-// value for the two chirpExtraColumns entries that have one (see its doc
-// comment). A column absent from this map has only "" as its default.
-var chirpExtraColumnDefaults = map[string]string{
+// chirpToneFillValues is CHIRP's own stated default for each of the four
+// tone-family columns (rToneFreq, cToneFreq, DtcsCode, DtcsPolarity):
+// what a real CHIRP export writes on a row whose Tone mode does not use
+// that column. It is not "not really data" — design 2026-09-12-chirp-b1
+// (symmetric B1) carries every one of these into the radio's own field
+// where the radio has one (importCHIRPToneIcom's rule 2) — but a column
+// this radio has NO field for at all still treats its own fill value as
+// silence rather than loss (rule 3, and the chirpExtraColumns loop
+// below, for the two DTCS columns on a radio with neither field).
+var chirpToneFillValues = map[string]string{
+	"rToneFreq":    "88.5",
+	"cToneFreq":    "88.5",
 	"DtcsCode":     "023",
 	"DtcsPolarity": "NN",
 }
@@ -617,7 +624,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 			continue
 		}
 		v := cell(col)
-		if v == "" || v == chirpExtraColumnDefaults[col] {
+		if v == "" || v == chirpToneFillValues[col] {
 			continue
 		}
 		entries = append(entries, LossEntry{
@@ -1227,6 +1234,30 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unavailable}
 	}
 
+	// Rule 3 (design 2026-09-12-chirp-b1, symmetric B1): a tone field this
+	// radio's bank does NOT reach at all is structural, not row-mode
+	// dependent — CHIRP's own fill value is silently ignored on it (the
+	// same treatment DtcsCode/DtcsPolarity already get below, via
+	// chirpExtraColumns, when THEY are unreached), and any other value is
+	// a non-blocking dropped entry. This runs unconditionally, including
+	// on a row whose mode is refused: the radio still has no such field
+	// either way.
+	reportUnreachedTone := func(column, raw string) {
+		if raw == "" || raw == chirpToneFillValues[column] {
+			return
+		}
+		entries = append(entries, LossEntry{
+			Line: line, Column: column, Value: raw, Action: ActionDropped, Blocking: false,
+			Detail: fmt.Sprintf("%s has no equivalent field for CHIRP %s; value discarded", caps.Model, column),
+		})
+	}
+	if !hasTxTone {
+		reportUnreachedTone("rToneFreq", cell("rToneFreq"))
+	}
+	if !hasRxTone {
+		reportUnreachedTone("cToneFreq", cell("cToneFreq"))
+	}
+
 	toneRaw := cell("Tone")
 	setMode := func(sem spec.ToneModeSemantics, label string) bool {
 		v, ok := caps.CanonicalToneMode(sem)
@@ -1242,7 +1273,9 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 	}
 	// setTone parses one CHIRP tone cell into the named field, reporting
 	// a blocking entry when the value is not in this radio's chart —
-	// the same rule and the same wording the CTCSS branch uses.
+	// the same rule and the same wording the CTCSS branch uses. It is
+	// the ACTIVE column's parser: the mode arm called it, so a value this
+	// radio does not admit refuses the whole row.
 	setTone := func(column, raw string, into *codeplug.ToneField) {
 		if tone, ok := parseCHIRPTone(raw, caps); ok {
 			*into = codeplug.ToneField{State: codeplug.Known, Value: tone}
@@ -1253,10 +1286,84 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 			Detail: fmt.Sprintf("tone frequency is not in the %s's CTCSS chart", caps.Model),
 		})
 	}
+	// fillInactiveTone is rule 2's tone half: once the mode arm below has
+	// succeeded, a reachable tone field it did NOT itself assign still
+	// takes its own column's value — the SAME parse as setTone, but an
+	// inadmissible value here is a non-blocking ActionDropped (the field
+	// stays Unknown) rather than a row-wide refusal: this column is not
+	// what the row's mode is asking of the radio.
+	fillInactiveTone := func(column string, into *codeplug.ToneField) {
+		raw := strings.TrimSpace(cell(column))
+		if raw == "" {
+			return
+		}
+		if tone, ok := parseCHIRPTone(raw, caps); ok {
+			*into = codeplug.ToneField{State: codeplug.Known, Value: tone}
+			return
+		}
+		entries = append(entries, LossEntry{
+			Line: line, Column: column, Value: raw, Action: ActionDropped, Blocking: false,
+			Detail: fmt.Sprintf("tone frequency is not in the %s's CTCSS chart; kept as this channel's mode does not use it", caps.Model),
+		})
+	}
+	// fillInactiveDTCSCode/fillInactiveDTCSPolarity are rule 2's DTCS
+	// half, same shape as fillInactiveTone: same parse/admissibility as
+	// the active DTCS arm below, non-blocking when inadmissible.
+	fillInactiveDTCSCode := func() {
+		raw := strings.TrimSpace(cell("DtcsCode"))
+		if raw == "" {
+			return
+		}
+		code, err := strconv.Atoi(raw)
+		if err == nil && capsHasDTCSCode(caps, code) {
+			data.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: code}
+			return
+		}
+		entries = append(entries, LossEntry{
+			Line: line, Column: "DtcsCode", Value: raw, Action: ActionDropped, Blocking: false,
+			Detail: fmt.Sprintf("DTCS code %q is not in the %s's code table; kept as this channel's mode does not use it", raw, caps.Model),
+		})
+	}
+	fillInactiveDTCSPolarity := func() {
+		raw := strings.TrimSpace(cell("DtcsPolarity"))
+		if raw == "" {
+			return
+		}
+		if capsHasDTCSPolarity(caps, raw) {
+			data.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: raw}
+			return
+		}
+		entries = append(entries, LossEntry{
+			Line: line, Column: "DtcsPolarity", Value: raw, Action: ActionDropped, Blocking: false,
+			Detail: fmt.Sprintf("DTCS polarity %q is not one the %s expresses; kept as this channel's mode does not use it", raw, caps.Model),
+		})
+	}
+	// fillInactive runs rule 2 for every reachable field the just-run mode
+	// arm left untouched. Callers pass which of the four the arm ALREADY
+	// assigned; never called when the arm refused (break skips it).
+	fillInactive := func(skipToneTx, skipToneRx, skipDTCS bool) {
+		if hasTxTone && !skipToneTx {
+			fillInactiveTone("rToneFreq", &data.ToneTx)
+		}
+		if hasRxTone && !skipToneRx {
+			fillInactiveTone("cToneFreq", &data.ToneRx)
+		}
+		if !skipDTCS {
+			if hasDTCSCode {
+				fillInactiveDTCSCode()
+			}
+			if hasDTCSPol {
+				fillInactiveDTCSPolarity()
+			}
+		}
+	}
 
 	switch toneRaw {
 	case "":
-		setMode(spec.ToneModeOff, "off")
+		if !setMode(spec.ToneModeOff, "off") {
+			break
+		}
+		fillInactive(false, false, false)
 	case "Tone":
 		if !setMode(spec.ToneModeCTCSS, "encode-only") {
 			break
@@ -1264,6 +1371,7 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 		if hasTxTone {
 			setTone("rToneFreq", cell("rToneFreq"), &data.ToneTx)
 		}
+		fillInactive(true, false, false)
 	case "TSQL":
 		semantics, label := spec.ToneModeCTCSSSquelch, "encode+decode"
 		if caps.Transmit == spec.ReceiveOnly {
@@ -1284,6 +1392,10 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 			// comment for why that is CHIRP's own semantics, not a guess.
 			setTone("cToneFreq", cTone, &data.ToneTx)
 		}
+		// Both tone fields are already assigned above (from cToneFreq, not
+		// rToneFreq — a TSQL row never reads that column, unchanged from
+		// before this design). Only the DTCS half can still be inactive.
+		fillInactive(true, true, false)
 	case "DTCS":
 		if !setMode(spec.ToneModeDTCS, "DTCS") {
 			break
@@ -1317,10 +1429,17 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 				})
 			}
 		}
+		// The DTCS arm never touches either tone index, so both are
+		// still inactive.
+		fillInactive(false, false, true)
 	case "Cross":
 		if !setMode(spec.ToneModeCross, "cross") {
 			break
 		}
+		// Cross assigns nothing beyond the mode itself (this tier models
+		// the cross MODE, not the combination behind it — see this
+		// function's doc comment), so every reachable field is inactive.
+		fillInactive(false, false, false)
 	default:
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
