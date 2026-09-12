@@ -92,22 +92,24 @@ const clarFieldMaxHz = 9999
 // check before.
 func validateDialectConfig(cfg DialectConfig) error {
 	for _, rule := range []func(DialectConfig) error{
-		validateCATID,         // V1
-		validateModeNames,     // V2
-		validatePMSPairs,      // V3
-		validatePMSForm,       // V15 — see its own comment for why it runs HERE
-		validateSpecialWires,  // V4
-		validateMemoryRange,   // V5
-		validateSixtyRange,    // V6
-		validateShadowing,     // V7
-		validateEXItems,       // V8
-		validateMTPolicy,      // V9
-		validateClarifier,     // V10
-		validateMWWriteKind,   // V11
-		validateEXAddressForm, // V12
-		validateMCSelects,     // V13
-		validateMemoryP5,      // V14
-		validateToneStates,    // V16
+		validateCATID,            // V1
+		validateModeNames,        // V2
+		validatePMSPairs,         // V3
+		validatePMSForm,          // V15 — see its own comment for why it runs HERE
+		validateSpecialWires,     // V4
+		validateMemoryRange,      // V5
+		validateSixtyRange,       // V6
+		validateShadowing,        // V7
+		validateEXItems,          // V8
+		validateMTPolicy,         // V9
+		validateClarifier,        // V10
+		validateMWWriteKind,      // V11
+		validateEXAddressForm,    // V12
+		validateMCSelects,        // V13
+		validateMemoryP5,         // V14
+		validateToneStates,       // V16
+		validateMemoryFrameShape, // V17
+		validateMemoryP9,         // V18
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -771,5 +773,51 @@ func validateToneStates(cfg DialectConfig) error {
 		return nil
 	default:
 		return fmt.Errorf("cat: ToneStates is %v, which is not a domain — declare ToneStatesCTCSS or ToneStatesCTCSSAndDCS explicitly (P8 prints three states on some radios and five on others, and a state this dialect cannot express must be refused rather than encoded)", cfg.ToneStates)
+	}
+}
+
+// validateMemoryFrameShape is V17: the MR-answer/MW-set frame's own length
+// and its P2 frequency-digit width must both be declared, never left at
+// their zero value.
+//
+// A zero axis fails closed, spec §2's own framing: it has no default,
+// because either omission is unsafe rather than merely inconvenient.
+// Defaulting MemoryFrameLen/MemoryFreqDigits to the registered 28/9 shape
+// would size a constructed dialect's own MR/MW frames off the FT-710's
+// shape rather than its own, and both reach the OUTBOUND WRITE GATE through
+// mr.go's parseMemoryFrame and mw.go's BuildMWSet.
+//
+// It runs appended, after V16, for V16's reason: nothing else in this
+// list consults these two fields, so its position carries no diagnostic
+// weight and appending keeps the existing rules' order untouched.
+func validateMemoryFrameShape(cfg DialectConfig) error {
+	if cfg.MemoryFrameLen == 0 {
+		return fmt.Errorf("cat: MemoryFrameLen is 0 — declare the MR-answer/MW-set frame's fixed length explicitly (28 bytes for the registered 9-digit-frequency family, 27 for the 8-digit one)")
+	}
+	if cfg.MemoryFreqDigits == 0 {
+		return fmt.Errorf("cat: MemoryFreqDigits is 0 — declare the P2 frequency field's digit width explicitly (9 for the registered family, 8 for the 27-byte one)")
+	}
+	return nil
+}
+
+// validateMemoryP9 is V18: the two-byte P9 field of the shared memory field
+// block must be declared, never inferred — MemoryP5Policy's rule (V14),
+// copied verbatim for its P9 sibling.
+//
+// An omitted config semantic is REFUSED, not defaulted. Defaulting to
+// P9Fixed00 would silently drop a real tone-table index on the floor;
+// defaulting to P9ToneIndex would authorise this codec to emit a live P9
+// byte pair into an MW or combined-MT frame for the four registered
+// dialects, whose manuals print a fixed "00" — built AND admitted by their
+// own gates, since this field reaches AllowedCommand through
+// validateMWFields and validateCombinedMTFields as well as through
+// parseMemoryFields. Neither default is safe, which is exactly when a
+// field must be declared.
+func validateMemoryP9(cfg DialectConfig) error {
+	switch cfg.MemoryP9 {
+	case P9Fixed00, P9ToneIndex:
+		return nil
+	default:
+		return fmt.Errorf("cat: MemoryP9 is %v, which is not a policy — declare P9Fixed00 or P9ToneIndex explicitly (the P9 field is a printed-fixed \"00\" on some radios and a live CTCSS tone-table index on others)", cfg.MemoryP9)
 	}
 }

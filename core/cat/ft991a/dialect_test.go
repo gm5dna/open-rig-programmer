@@ -970,10 +970,13 @@ func ft991aConfig(mc cat.MCSlotPolicy, mtRead cat.MTReadSlotPolicy) cat.DialectC
 			TagFill:      ' ',
 			P11:          cat.P11Fixed,
 		},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:    cat.P5TxClar,
-		ToneStates:  cat.ToneStatesCTCSSAndDCS,
-		MWWriteKind: cat.CombinedMTSetKind,
+		Clarifier:        cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         cat.P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
+		ToneStates:       cat.ToneStatesCTCSSAndDCS,
+		MWWriteKind:      cat.CombinedMTSetKind,
 	}
 }
 

@@ -47,10 +47,13 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 			Form: MTFormShort, ReadSlots: MTReadsMemoryPMS,
 			TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
 		},
-		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:    P5Fixed,
-		ToneStates:  ToneStatesCTCSS,
-		MWWriteKind: KindMemory,
+		Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         P5Fixed,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindMemory,
 	})
 
 	for _, c := range []byte{'A', 'E', 'F'} {
@@ -81,10 +84,13 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 			Form: MTFormShort, ReadSlots: MTReadsReadable,
 			TagMaxBytes: 4, ClearTagByte: ' ',
 		},
-		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:    P5TxClar,
-		ToneStates:  ToneStatesCTCSS,
-		MWWriteKind: KindMemory,
+		Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindMemory,
 	})
 	if got, want := single.modeDomainText(), "'2'"; got != want {
 		t.Errorf("modeDomainText() on a one-mode dialect = %q, want %q", got, want)

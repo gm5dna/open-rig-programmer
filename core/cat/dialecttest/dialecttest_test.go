@@ -70,12 +70,15 @@ func combinedRadioConfig() cat.DialectConfig {
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 3},
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 2}, P1Label: "RADIO", P2Label: "GROUP", Name: "TEXT ITEM", Digits: 16, Text: true},
 		},
-		EXAddressForm: cat.EXAddressTriple,
-		MT:            cat.MTPolicy{Form: cat.MTFormCombined, P11: cat.P11Fixed, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
-		Clarifier:     cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
-		MemoryP5:      cat.P5TxClar,
-		ToneStates:    cat.ToneStatesCTCSS,
-		MWWriteKind:   cat.KindMemTune,
+		EXAddressForm:    cat.EXAddressTriple,
+		MT:               cat.MTPolicy{Form: cat.MTFormCombined, P11: cat.P11Fixed, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
+		Clarifier:        cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
+		MemoryP5:         cat.P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
+		ToneStates:       cat.ToneStatesCTCSS,
+		MWWriteKind:      cat.KindMemTune,
 	}
 }
 
@@ -139,12 +142,15 @@ func shortPeerRadioConfig() cat.DialectConfig {
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 2, P2: 3, P3: 4}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 2},
 		},
-		EXAddressForm: cat.EXAddressTriple,
-		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:     cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
-		MemoryP5:      cat.P5TxClar,
-		ToneStates:    cat.ToneStatesCTCSS,
-		MWWriteKind:   cat.KindMemory,
+		EXAddressForm:    cat.EXAddressTriple,
+		MT:               cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:        cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
+		MemoryP5:         cat.P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
+		ToneStates:       cat.ToneStatesCTCSS,
+		MWWriteKind:      cat.KindMemory,
 	}
 }
 
@@ -213,12 +219,15 @@ func pairAddressRadioConfig() cat.DialectConfig {
 			{Addr: cat.EXAddress{P1: 8, P2: 1, P3: 0}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 2},
 			{Addr: cat.EXAddress{P1: 8, P2: 3, P3: 0}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM TWO", Digits: 5},
 		},
-		EXAddressForm: cat.EXAddressPair,
-		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:     cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:      cat.P5TxClar,
-		ToneStates:    cat.ToneStatesCTCSS,
-		MWWriteKind:   cat.KindMemory,
+		EXAddressForm:    cat.EXAddressPair,
+		MT:               cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:        cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         cat.P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
+		ToneStates:       cat.ToneStatesCTCSS,
+		MWWriteKind:      cat.KindMemory,
 	}
 }
 
@@ -279,10 +288,13 @@ func p5FixedRadioConfig() cat.DialectConfig {
 			Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable,
 			TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' ',
 		},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 20, MaxAbsHz: 9980},
-		MemoryP5:    cat.P5Fixed,
-		ToneStates:  cat.ToneStatesCTCSS,
-		MWWriteKind: cat.KindMemory,
+		Clarifier:        cat.ClarifierPolicy{StepHz: 20, MaxAbsHz: 9980},
+		MemoryP5:         cat.P5Fixed,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
+		ToneStates:       cat.ToneStatesCTCSS,
+		MWWriteKind:      cat.KindMemory,
 	}
 }
 
@@ -359,10 +371,13 @@ func tagDisplayRadioConfig() cat.DialectConfig {
 			TagMaxBytes: 9,
 			TagFill:     '.',
 		},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:    cat.P5Fixed,
-		ToneStates:  cat.ToneStatesCTCSS,
-		MWWriteKind: cat.KindMemory,
+		Clarifier:        cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         cat.P5Fixed,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
+		ToneStates:       cat.ToneStatesCTCSS,
+		MWWriteKind:      cat.KindMemory,
 	}
 }
 
@@ -447,8 +462,11 @@ func numericPMSRadioConfig() cat.DialectConfig {
 			TagMaxBytes: 12,
 			TagFill:     ' ',
 		},
-		Clarifier: cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:  cat.P5TxClar,
+		Clarifier:        cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         cat.P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
 		// The FT-991A's five-state P8 domain, declared here as well as its
 		// numeric PMS form: this fixture carries BOTH of the slot lane's
 		// axes at once, exactly as tagDisplayRadioConfig above carries all

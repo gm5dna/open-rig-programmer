@@ -24,12 +24,12 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 	// same offsets 2-26 the combined MT record writes, extracted from this
 	// body in M9c-3 task 3 with the golden vectors G5/G7 as the proof that
 	// not a byte moved.
-	frame := make([]byte, memoryFrameLen)
+	frame := make([]byte, int(d.memoryFrameLen))
 	frame[0], frame[1] = 'M', 'W'
 	if err := d.encodeMemoryFields(frame, m); err != nil {
 		return Command{}, err
 	}
-	frame[memTermOffset] = ';'
+	frame[d.memTermOff()] = ';'
 
 	return newCommand(frame), nil
 }
@@ -206,6 +206,22 @@ func (d Dialect) validateSetFields(m MemoryData, prefix string, slotOK func(Slot
 	case P5TxClar:
 	default:
 		return newParseError(nil, prefix+": P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
+	}
+
+	// P9, BY THIS DIALECT'S OWN READING, copied verbatim from P5's shape
+	// above: NewDialect's V18 already keeps every registered dialect from
+	// reaching the default case.
+	switch d.memoryP9 {
+	case P9Fixed00:
+		if m.ToneIndex != 0 {
+			return newParseError([]byte(fmt.Sprintf("%d", m.ToneIndex)), fmt.Sprintf("%s: ToneIndex must be 0 under %v — this dialect's manual prints P9 (positions 25-26) fixed \"00\", so there is no tone-table index to set", prefix, d.memoryP9))
+		}
+	case P9ToneIndex:
+		if m.ToneIndex > 49 {
+			return newParseError([]byte(fmt.Sprintf("%d", m.ToneIndex)), fmt.Sprintf("%s: ToneIndex must be 0-49 (the standard 50-entry CTCSS tone chart)", prefix))
+		}
+	default:
+		return newParseError(nil, prefix+": P9 (positions 25-26) policy unset — refusing to guess whether the field is fixed schema or a tone-table index")
 	}
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: never trust

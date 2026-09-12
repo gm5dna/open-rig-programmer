@@ -169,6 +169,24 @@ type Dialect struct {
 	// wrong value here can authorise a P8 byte a radio's manual does not
 	// print.
 	toneStates ToneStateDomain
+
+	// memoryFrameLen and memoryFreqDigits are the MR-answer/MW-set frame's
+	// own length and P2 digit width (MemoryFrameLen/MemoryFreqDigits,
+	// dialectconfig.go): 28/9 for every registered dialect, 27/8 for the
+	// ft2000 family. Dialect data for memoryP5's reason: mr.go's
+	// parseMemoryFrame and mw.go's BuildMWSet both reach the OUTBOUND
+	// WRITE GATE, so a hardwired 28/9 here would size every frame this
+	// codec builds or parses off the FT-710's own shape rather than this
+	// dialect's.
+	memoryFrameLen   uint8
+	memoryFreqDigits uint8
+
+	// memoryP9 says what the two-byte P9 field of the shared memory field
+	// block means on this family (MemoryP9Policy, dialectconfig.go), copied
+	// verbatim from memoryP5's shape and reason: it reaches the OUTBOUND
+	// WRITE GATE through the same validateMWFields/validateCombinedMTFields
+	// the builders use.
+	memoryP9 MemoryP9Policy
 }
 
 // ModeByName resolves a display name to this dialect's own mode nibble.
@@ -257,6 +275,19 @@ var FT710 = Dialect{
 	toneStates: ToneStatesCTCSS,
 
 	mwWriteKind: KindMemory,
+
+	// The FT-710's MR/MW frame is 28 bytes with a 9-digit P2, the shape
+	// every offset in memdata.go was originally hardwired to. Pinned
+	// explicitly here (M9c-3/S1 lift) so this literal — which bypasses
+	// NewDialect's V17 — stays byte-identical by construction rather than
+	// by coincidence of a leftover zero value.
+	memoryFrameLen:   28,
+	memoryFreqDigits: 9,
+
+	// The FT-710's CAT manual prints P9 fixed "00" on every memory-bearing
+	// block. Pinned for the same reason as the two frame-shape fields
+	// above.
+	memoryP9: P9Fixed00,
 }
 
 // buildModeByName inverts a mode table. On a duplicate name the LAST

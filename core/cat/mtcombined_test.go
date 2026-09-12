@@ -43,12 +43,15 @@ func mustCombinedDialect(t *testing.T, tagMax int, fill byte, mwKind byte) Diale
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 1}, Name: "ITEM ONE", Digits: 2},
 		},
-		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: tagMax, TagFill: fill},
-		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:      P5TxClar,
-		ToneStates:    ToneStatesCTCSS,
-		MWWriteKind:   mwKind,
+		EXAddressForm:    EXAddressTriple,
+		MT:               MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: tagMax, TagFill: fill},
+		Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      mwKind,
 	})
 }
 
