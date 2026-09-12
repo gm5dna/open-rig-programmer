@@ -11,6 +11,8 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-12
+
 ### Added
 - **A CHIRP row is now a complete statement of a channel's tone state.**
   Every registered radio that expresses tones as a mode plus independent
@@ -350,7 +352,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.4.0...v1.4.1
