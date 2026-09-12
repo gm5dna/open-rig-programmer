@@ -49,13 +49,14 @@ var deliberatelyZeroCapabilityFields = map[string]string{
 	"PreampOptions":          "matrix §1b D8",
 	"AntennaOptions":         "matrix §1b D8",
 	"SimplexTx":              "this row grades FieldDuplex, so ImportCHIRP takes importCHIRPDuplexIcom and never reaches the blank arm that reads SimplexTx",
+	"NoTag":                  "the IC-7100 supports channel names via the memory name field; NoTag is false",
 }
 
 func TestCapabilitiesEveryStructFieldIsExplicitlyNonZeroOrAudited(t *testing.T) {
 	value := reflect.ValueOf(CapabilitiesUnverified())
 	typeOf := value.Type()
-	if typeOf.NumField() != 29 {
-		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 29", typeOf.NumField())
+	if typeOf.NumField() != 30 {
+		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 30", typeOf.NumField())
 	}
 	for i := 0; i < typeOf.NumField(); i++ {
 		name := typeOf.Field(i).Name

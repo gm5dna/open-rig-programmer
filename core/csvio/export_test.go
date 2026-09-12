@@ -190,6 +190,34 @@ func TestExport_PopulatedSlot(t *testing.T) {
 	}
 }
 
+// TestExport_NoTagWritesEmptyTagColumn pins design
+// 2026-09-12-nameless-capability §1/§2's "already correct" claim: Export
+// takes no spec.Capabilities at all, so a NoTag model — which never sets
+// ChannelData.Tag because it has no channel-name route to read one
+// from — writes the tag column empty for free, exactly like any other
+// channel whose Tag happens to be "".
+func TestExport_NoTagWritesEmptyTagColumn(t *testing.T) {
+	var buf bytes.Buffer
+	d := codeplug.ChannelData{
+		FreqHz: 14250000,
+		Mode:   "USB",
+		Shift:  "SIMPLEX",
+		// Tag deliberately left "": a NoTag driver never populates it.
+	}
+	markTierFieldsUnavailable(&d)
+	channels := []codeplug.Channel{{Slot: "001", Data: &d}}
+	if err := Export(&buf, channels); err != nil {
+		t.Fatalf("Export() error = %v", err)
+	}
+	rows := readCSV(t, buf.Bytes())
+	if len(rows) != 2 {
+		t.Fatalf("Export() = %d rows, want 2", len(rows))
+	}
+	if got := rows[1][10]; got != "" {
+		t.Errorf("tag column = %q, want \"\" for a NoTag model's channel", got)
+	}
+}
+
 // TestExport_TagDisplayFourStates pins M9c-5 E1d's headline export
 // change: tag_display is written with the BoolField spelling
 // (exportBoolField), exactly as scan_skip already was — "yes"/"no" when

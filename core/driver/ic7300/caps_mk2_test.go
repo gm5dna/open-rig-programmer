@@ -196,6 +196,7 @@ func TestCapabilities_EveryFieldExplicit_MK2(t *testing.T) {
 		"RequiredSlots":          "NoBlank is the whole-bank form and the SCAN bank is exactly P1 and P2, so saying it twice would create two places to keep in step (plan decision D8)",
 		"CTCSSTones":             "the tone domain is CTCSSToneRange {1, 2999, 1} deciHz, not a list — matrix §1 #8 grades this model's list empty in terms, so no deviation arises here (D16)",
 		"MinFreqHz":              "no tuning floor is printed in this document; a zero DISABLES the lower-bound check rather than asserting a 0 Hz floor (core/spec/capabilities.go) — entry ic7300mk2-min-frequency, lift MK2-R15",
+		"NoTag":                  "the IC-7300MK2 supports channel names via the 1A 00 record's name field; NoTag is false",
 	}
 	caps := NewMK2(RealHardware).Capabilities()
 	v := reflect.ValueOf(caps)
@@ -208,8 +209,8 @@ func TestCapabilities_EveryFieldExplicit_MK2(t *testing.T) {
 	// a NEW capability field arriving with a plausible zero value and no
 	// entry would be caught — but a field REMOVED, or the struct reshaped,
 	// would not, so the exact shape remains pinned alongside the table.
-	if ty.NumField() != 29 {
-		t.Errorf("spec.Capabilities has %d fields, want 29 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
+	if ty.NumField() != 30 {
+		t.Errorf("spec.Capabilities has %d fields, want 30 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name

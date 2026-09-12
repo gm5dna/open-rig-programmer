@@ -216,12 +216,13 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"AntennaOptions":         "§1.27",
 		"TagCharset":             "§1.28",
 		"SimplexTx":              "this row does not grade FieldTxFrequency, so the blank arm leaves nothing to state. THE TS-480 IS UNREGISTERED, and the 09/09/2026 design declared only the six registered rows",
+		"NoTag":                  "the TS-480 supports channel names via the MT tag field; NoTag is false",
 	}
 	caps := CapabilitiesSimulated()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 29 {
-		t.Fatalf("spec.Capabilities has %d fields, this test knows 29", typ.NumField())
+	if typ.NumField() != 30 {
+		t.Fatalf("spec.Capabilities has %d fields, this test knows 30", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name

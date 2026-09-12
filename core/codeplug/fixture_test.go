@@ -97,6 +97,26 @@ func yaesuProfileShapedCapabilities() spec.Capabilities {
 	return caps
 }
 
+// noTagCapabilities is testCapabilities() reshaped for a nameless model
+// (spec.md's fake "FAKE-NN" fixture): TagLen 0, NoTag true, and MEM's
+// FieldTag/FieldTagDisplay zeroed to the FT-891 "field doesn't exist"
+// idiom (spec.md §1) — a driver author would never populate d.Tag on
+// read or send it on write for a model shaped like this.
+func noTagCapabilities() spec.Capabilities {
+	caps := testCapabilities()
+	caps.Model = "FAKE-NN"
+	caps.TagLen = 0
+	caps.NoTag = true
+	fields := make(map[spec.Field]spec.FieldSupport, len(caps.Banks[0].Fields))
+	for f, fs := range caps.Banks[0].Fields {
+		fields[f] = fs
+	}
+	fields[spec.FieldTag] = spec.FieldSupport{}
+	fields[spec.FieldTagDisplay] = spec.FieldSupport{}
+	caps.Banks[0].Fields = fields
+	return caps
+}
+
 // testBaselineCodeplug builds a fresh, valid *Codeplug matching
 // testCapabilities(): "001" (required) and "002" are populated MEM
 // channels, "003" is an empty MEM channel, both PMS slots (NoBlank) are
