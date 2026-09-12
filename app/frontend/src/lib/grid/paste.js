@@ -132,7 +132,7 @@ export function mapPasteToChannels(rows, { startRow, startCol, bank, channelBySl
 	// a paste is addressed by column index, so it has to agree with what
 	// the user is looking at. For every model registered today this is
 	// exactly COLUMNS, as it always was.
-	const columns = columnsFor(bank)
+	const columns = columnsFor(bank, uiSpec)
 	/** @type {Channel[]} */
 	const channels = []
 

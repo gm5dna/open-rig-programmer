@@ -96,6 +96,18 @@ describe('columnsFor', () => {
 		expect(columnsFor(undefined)).toEqual(COLUMNS)
 	})
 
+	it('hides the tag column for a NoTag model (TagMaxBytes 0), leaving the other nine', () => {
+		const noTagUiSpec = { ...uiSpec, TagMaxBytes: 0 }
+		const ids = columnsFor(ft710MemBank, noTagUiSpec).map((c) => c.id)
+		expect(ids).not.toContain('tag')
+		expect(ids).toEqual(COLUMNS.filter((c) => c.id !== 'tag').map((c) => c.id))
+	})
+
+	it('keeps the tag column when uiSpec is omitted or TagMaxBytes is positive', () => {
+		expect(columnsFor(ft710MemBank).map((c) => c.id)).toContain('tag')
+		expect(columnsFor(ft710MemBank, { ...uiSpec, TagMaxBytes: 12 }).map((c) => c.id)).toContain('tag')
+	})
+
 	it('appends only the tier columns the bank actually reaches, in TIER_COLUMNS order', () => {
 		const ids = columnsFor(ic7610MemBank).map((c) => c.id)
 		expect(ids.slice(0, COLUMNS.length)).toEqual(COLUMNS.map((c) => c.id))

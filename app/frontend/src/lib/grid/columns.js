@@ -125,14 +125,27 @@ export function tierColumnFor(column) {
  * one does: no tier columns. Refusing to invent a column for a radio
  * that has not said it has the field is the same posture as the rest of
  * this module.
+ *
+ * The one exception to "the ten pre-tier columns stay UNCONDITIONAL"
+ * above: Tag. A NoTag model (nameless-capability milestone) has no
+ * channel-name route over CAT at all, and GetUISpec already serves
+ * TagMaxBytes: 0 for one (uispec.go sets it straight from
+ * caps.TagLen, which spec.Validate only allows to be zero when NoTag is
+ * set) — no new capability field needed on the wire. `uiSpec` is
+ * optional so every existing caller/test that omits it keeps the
+ * unchanged ten; a caller that passes a UISpec with TagMaxBytes <= 0
+ * gets Tag hidden, not merely read-only (Stuart's decision, spec.md §7
+ * Q1).
  * @param {BankView | null | undefined} bank
+ * @param {UISpecView | null | undefined} [uiSpec]
  * @returns {Column[]}
  */
-export function columnsFor(bank) {
+export function columnsFor(bank, uiSpec) {
+	const base = uiSpec != null && (uiSpec.TagMaxBytes ?? 0) <= 0 ? COLUMNS.filter((c) => c.id !== 'tag') : COLUMNS
 	const fields = bank?.Fields
-	if (!fields || fields.length === 0) return COLUMNS
+	if (!fields || fields.length === 0) return base
 	const present = new Set(fields)
-	return [...COLUMNS, ...TIER_COLUMNS.filter((c) => present.has(c.field))]
+	return [...base, ...TIER_COLUMNS.filter((c) => present.has(c.field))]
 }
 
 /**
