@@ -463,11 +463,13 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// core/csvio/chirp.go's importCHIRPDuplexShift reads this row's own
 	// spec.SimplexTx on a BLANK Duplex cell (chirp.go:688-694) and states
 	// what 890:3217-3218 prints — Known 0 — so an imported channel passes
-	// this rung. It stops at the TONE rungs below instead, which name
-	// tone_tx and then tone_rx: a blank-Tone CHIRP row carries a Known tone
-	// MODE and neither index, and decision B is ruled B2, so the file's
-	// rToneFreq/cToneFreq columns are not read for them. An "off" Duplex row
-	// still blocks in the importer and never reaches any rung here.
+	// this rung. Since design 2026-09-12-chirp-b1 (symmetric B1, which
+	// SUPERSEDES the ruling B2 this comment used to record) it passes the
+	// TONE rungs below too: a blank-Tone CHIRP row's rToneFreq/cToneFreq
+	// columns are a complete statement of the channel, so
+	// importCHIRPToneIcom carries both tone indices even though the mode
+	// is off, and P6/P7 below are Known. An "off" Duplex row still blocks
+	// in the importer and never reaches any rung here.
 
 	// RUNGS 7-9 and the live-byte refusals, then the record the Set would
 	// emit. Still locally decidable: nothing has reached the wire.

@@ -327,6 +327,7 @@ func icomCHIRPCapabilities() spec.Capabilities {
 			{Value: "TONE", Semantics: spec.ToneModeCTCSS},
 			{Value: "TSQL", Semantics: spec.ToneModeCTCSSSquelch},
 			{Value: "DTCS", Semantics: spec.ToneModeDTCS},
+			{Value: "CROSS", Semantics: spec.ToneModeCross},
 		},
 		DTCSPolarities: []string{"NN", "NR", "RN", "RR"},
 		DTCSCodes:      []int{23, 25, 754},
@@ -491,6 +492,15 @@ func TestImportCHIRP_CapabilityAwareDuplexAndTone(t *testing.T) {
 		if d.DTCSPolarity != (codeplug.StringField{State: codeplug.Known, Value: "RN"}) {
 			t.Errorf("DTCSPolarity = %+v, want Known RN", d.DTCSPolarity)
 		}
+		// The DTCS arm does not touch either tone index, so B1's rule 2
+		// carries them from their own columns anyway: the row's
+		// rToneFreq/cToneFreq are both 88.5.
+		if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+			t.Errorf("ToneTx = %+v, want Known 88.5 — rule 2 carries rToneFreq even though DTCS is the active mode", d.ToneTx)
+		}
+		if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+			t.Errorf("ToneRx = %+v, want Known 88.5 — rule 2 carries cToneFreq even though DTCS is the active mode", d.ToneRx)
+		}
 		// And the DTCS columns must NOT also be reported as dropped.
 		for _, e := range report.Entries {
 			if e.Column == "DtcsCode" || e.Column == "DtcsPolarity" {
@@ -507,6 +517,122 @@ func TestImportCHIRP_CapabilityAwareDuplexAndTone(t *testing.T) {
 		}
 		if !report.HasBlocking() {
 			t.Fatalf("report = %+v, want a blocking entry for a code outside the table", report.Entries)
+		}
+	})
+
+	// The rest of this func is design 2026-09-12-chirp-b1 (symmetric B1):
+	// a CHIRP row is a complete statement of the channel, so every
+	// reachable tone field the active mode did not set still takes its
+	// own column's value.
+
+	t.Run("a blank Tone row carries all four columns from CHIRP's own fill values", func(t *testing.T) {
+		body := head + "1,SIMPLEX,145.700000,,0.000000,,88.5,88.5,023,NN,FM,\n"
+		channels, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		d := channels[0].Data
+		if d.ToneMode != (codeplug.StringField{State: codeplug.Known, Value: "OFF"}) {
+			t.Errorf("ToneMode = %+v, want Known OFF", d.ToneMode)
+		}
+		if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+			t.Errorf("ToneTx = %+v, want Known 88.5 — the radio's own memory holds this even though the mode is off", d.ToneTx)
+		}
+		if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+			t.Errorf("ToneRx = %+v, want Known 88.5", d.ToneRx)
+		}
+		if d.DTCSCode != (codeplug.IntField{State: codeplug.Known, Value: 23}) {
+			t.Errorf("DTCSCode = %+v, want Known 23", d.DTCSCode)
+		}
+		if d.DTCSPolarity != (codeplug.StringField{State: codeplug.Known, Value: "NN"}) {
+			t.Errorf("DTCSPolarity = %+v, want Known NN", d.DTCSPolarity)
+		}
+	})
+
+	t.Run("a Cross row assigns nothing active, so all four columns are carried", func(t *testing.T) {
+		body := head + "1,XCH,145.700000,,0.000000,Cross,100.0,67.0,25,RN,FM,\n"
+		channels, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		d := channels[0].Data
+		if d.ToneMode != (codeplug.StringField{State: codeplug.Known, Value: "CROSS"}) {
+			t.Errorf("ToneMode = %+v, want Known CROSS", d.ToneMode)
+		}
+		if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: 1000}) {
+			t.Errorf("ToneTx = %+v, want Known 100.0 from rToneFreq", d.ToneTx)
+		}
+		if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 670}) {
+			t.Errorf("ToneRx = %+v, want Known 67.0 from cToneFreq", d.ToneRx)
+		}
+		if d.DTCSCode != (codeplug.IntField{State: codeplug.Known, Value: 25}) {
+			t.Errorf("DTCSCode = %+v, want Known 25", d.DTCSCode)
+		}
+		if d.DTCSPolarity != (codeplug.StringField{State: codeplug.Known, Value: "RN"}) {
+			t.Errorf("DTCSPolarity = %+v, want Known RN", d.DTCSPolarity)
+		}
+	})
+
+	t.Run("an unreachable rToneFreq with a non-fill value is dropped, not blocking", func(t *testing.T) {
+		rxCaps := receiverCHIRPCapabilities()
+		rxHead := "Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,Skip\n"
+		body := rxHead + "1,RX,145.700000,,0.000000,,100.0,88.5,023,NN,FM,\n"
+		channels, report, err := ImportCHIRP(strings.NewReader(body), rxCaps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v — an unreachable field's non-fill value must not block", report.Entries)
+		}
+		found := false
+		for _, e := range report.Entries {
+			if e.Column == "rToneFreq" {
+				found = true
+				if e.Action != ActionDropped || e.Blocking {
+					t.Errorf("rToneFreq entry = %+v, want non-blocking ActionDropped", e)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("report = %+v, want a dropped entry for rToneFreq — this receiver has no ToneTx field at all", report.Entries)
+		}
+		if channels[0].Data.ToneTx.State != codeplug.Unavailable {
+			t.Errorf("ToneTx = %+v, want Unavailable — this radio has no such field, not merely an unanswered one", channels[0].Data.ToneTx)
+		}
+	})
+
+	t.Run("an inactive DTCS polarity outside the radio's vocabulary is dropped, not blocking", func(t *testing.T) {
+		oddCaps := icomCHIRPCapabilities()
+		oddCaps.Model = "TEST-ODD-POLARITY"
+		oddCaps.DTCSPolarities = []string{"Normal", "Reverse"} // the IC-R8600 shape (F1)
+		body := head + "1,SIMPLEX,145.700000,,0.000000,,88.5,88.5,023,NN,FM,\n"
+		channels, report, err := ImportCHIRP(strings.NewReader(body), oddCaps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v — CHIRP's own NN fill must not block a radio whose vocabulary is Normal/Reverse", report.Entries)
+		}
+		found := false
+		for _, e := range report.Entries {
+			if e.Column == "DtcsPolarity" {
+				found = true
+				if e.Action != ActionDropped || e.Blocking {
+					t.Errorf("DtcsPolarity entry = %+v, want non-blocking ActionDropped", e)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("report = %+v, want a dropped entry for DtcsPolarity", report.Entries)
+		}
+		if channels[0].Data.DTCSPolarity.State != codeplug.Unknown {
+			t.Errorf("DTCSPolarity = %+v, want Unknown — the field is reachable but this row's value was refused, not written", channels[0].Data.DTCSPolarity)
 		}
 	})
 }
