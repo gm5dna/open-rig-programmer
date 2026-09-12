@@ -335,6 +335,7 @@ var ownParticulars = map[string][]string{
 	"IC-7800": {"IC-7800", "6Ah"},
 	"IC-7600": {"IC-7600", "7Ah"},
 	"IC-7410": {"IC-7410", "80h"},
+	"IC-7700": {"IC-7700", "74h"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2333,4 +2334,28 @@ func TestRadiotext_IC7410Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "IC-7410", got)
+}
+
+// TestRadiotext_IC7700Verbatim pins the v1.7.0 Icom wave's fourth
+// registration's prose byte-for-byte.
+func TestRadiotext_IC7700Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7700: no builder for one exists, and no IC-7700 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone and the transmit (split) frequency are read and written for the IC-7700 over CI-V by this build, but unverified against real hardware — no IC-7700 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7700 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7700's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7700: this build knows of none to require. This driver talks only to CI-V address 74h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7700")
+	if !ok {
+		t.Fatal(`For("IC-7700") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7700\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7700", got)
 }

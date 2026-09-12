@@ -23,6 +23,9 @@ tag. The full release notes for each version are on the
   a clone — a 40-byte record with a genuine TX-duplicate block, and a
   write that leaves the transmit frequency unset mirrors the receive
   frequency into it rather than refusing.
+- **IC-7700** joins the supported Icom models (v1.7.0 Icom wave): reads
+  and writes the transmit (split) frequency, and shares the
+  already-registered IC-7300's 39-byte record shape.
 
 ## [1.6.0] - 2026-09-12
 

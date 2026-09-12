@@ -937,9 +937,10 @@ func unreachableScanSkipCapabilities() []spec.Capabilities {
 }
 
 // icXXXXLikeCapabilities (ic7800LikeCapabilities, ic7600LikeCapabilities,
-// ic7410LikeCapabilities) return the v1.7.0 Icom wave's own REGISTERED
-// capabilities verbatim, via wiring.StaticCapabilities — unlike every
-// fixture above, which is a hand-written literal shadowing its driver.
+// ic7410LikeCapabilities, ic7700LikeCapabilities) return the v1.7.0 Icom
+// wave's own REGISTERED capabilities verbatim, via wiring.StaticCapabilities
+// — unlike every fixture above, which is a hand-written literal shadowing
+// its driver.
 //
 // THAT IS DELIBERATE, not a shortcut this file's own convention argues
 // against: the debt-ledger comment on chirpFixtureExceptions above warns
@@ -954,11 +955,11 @@ func unreachableScanSkipCapabilities() []spec.Capabilities {
 // OTHER two callers (TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord in
 // particular) assume every fixture's ToneModes recognises DTCS/Cross as a
 // tone TYPE even where it cannot write the DCS CODE — true of every
-// hand-written fixture there, but not of these three, whose own narrower
+// hand-written fixture there, but not of these four, whose own narrower
 // tone-type nibble does not admit a DTCS/Cross reading at all (their own
 // capability reviews). ImportCHIRP therefore refuses their DTCS/Cross
 // cells on an earlier, differently-worded branch (chirp.go's "expresses
-// no %s tone mode"), which that test does not expect. These three need
+// no %s tone mode"), which that test does not expect. These four need
 // only the ONE completeness property chirpFixtures() exists for — see
 // its own call site below — not membership in a bucket whose other tests
 // assume a tone vocabulary they do not have.
@@ -982,6 +983,14 @@ func ic7410LikeCapabilities() spec.Capabilities {
 	caps, err := wiring.StaticCapabilities(wiring.IC7410Model)
 	if err != nil {
 		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7410Model, err))
+	}
+	return caps
+}
+
+func ic7700LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7700Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7700Model, err))
 	}
 	return caps
 }
@@ -2757,6 +2766,7 @@ func chirpFixtures() []spec.Capabilities {
 		ic7800LikeCapabilities(),
 		ic7600LikeCapabilities(),
 		ic7410LikeCapabilities(),
+		ic7700LikeCapabilities(),
 	)
 }
 

@@ -296,6 +296,18 @@ rather than refusing.
 
 Evidence: `docs/superpowers/icom-matrices/ic7410-capability-matrix.md`.
 
+### IC-7700 (opt-in)
+
+Read and write the memory and scan-edge channels, and the transmit
+(split) frequency. Its RX fields match the IC-7610 family exactly;
+its own TX-duplicate block reuses existing field types rather than
+introducing new ones. Its 39-byte record over a 2-byte flat address is
+the same shape as the already-registered IC-7300's, so a radio moved
+onto the wrong factory address answers a length this program cannot
+tell apart from that sibling's.
+
+Evidence: `docs/superpowers/icom-matrices/ic7700-capability-matrix.md`.
+
 ## Kenwood
 
 ### TS-590S and TS-590SG (opt-in)
@@ -571,5 +583,6 @@ by revision in the code that transcribes it.
 | IC-7800 | Icom Instruction Manual, section 14 (no separate CI-V Reference Guide) |
 | IC-7600 | Icom CI-V Reference Guide |
 | IC-7410 | Icom CI-V Reference Guide |
+| IC-7700 | Icom CI-V Reference Guide |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |

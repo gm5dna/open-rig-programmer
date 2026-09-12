@@ -821,6 +821,12 @@ var ic7410CoreThree = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
 }
 
+// ic7700CoreThree is the core set every IC-7700 bank derives, on every
+// profile — MEM and SCAN alike (core/driver/ic7700/caps.go's bankFields).
+var ic7700CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1294,6 +1300,8 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		"IC-7600": ic7600CoreThree,
 		// The IC-7410 (v1.7.0 Icom wave's third registration).
 		"IC-7410": ic7410CoreThree,
+		// The IC-7700 (v1.7.0 Icom wave's fourth registration).
+		"IC-7700": ic7700CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
