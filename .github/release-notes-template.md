@@ -29,36 +29,40 @@ describes under *Switching on writes for an unverified radio*.
 
 ## What changed in this version
 
-A patch release: no radio is added and nothing becomes writable that was
-not writable before.
+A minor release: the TS-890S and TS-990S become writable from a CHIRP
+file, measured on the fake and still behind each radio's own
+unverified-writes switch; nothing else becomes writable.
 
-- **A CHIRP file's blank `Duplex` column now states a transmit
-  disposition** on the six radios whose memory record grades a transmit
-  frequency but has no duplex selector: the TS-590S, TS-590SG, TS-890S,
-  TS-990S, IC-7300 and IC-7300MK2. A blank column is CHIRP's ordinary
-  simplex row, and the import used to leave the transmit frequency
-  *unknown*, which said the file had been silent when it had not; that
-  unknown then travelled into the CSV export, into `rigprog diff` and
-  into the loss report. Each radio's own record now supplies the value:
-  zero on the TS-890S and TS-990S, whose books print that a simplex
-  channel's split parameters all read zero, and the channel's own receive
-  frequency on the other four, whose records have no split flag at all.
-  A `Duplex` column reading `off` is unchanged and still refused.
-- **The published recovery for an imported CHIRP channel was overstated
-  on five radios and is now measured.** The TS-890S and TS-990S ask for
-  two values, the transmit tone and the receive tone, not four. The
-  TS-590S asks for the data mode and both tone numbers, the TS-590SG for
-  those plus the filter, and the IC-7300 and IC-7300MK2 for the filter,
-  the data mode and a slot the radio already holds. CHIRP has no column
-  for a data mode or a filter, so on those four rows a CHIRP file alone
-  can never complete a write; the program's own CSV carries them.
-- `rigprog diff` and the write plan now name only the fields that
-  actually changed on a modified channel, instead of restating unchanged
-  ones as `X→X`.
-- **Fixed:** the desktop app no longer shows a pair of document
-  scrollbars after the window is resized, and the *Unverified writes*
-  panel no longer squashes its radio list to a single clipped row (both
-  seen on macOS in v1.4.1).
+- **A CHIRP row is now a complete statement of a channel's tone
+  state.** Every registered radio that expresses tones as a mode plus
+  independent transmit/receive indices — the TS-590 pair, TS-890S,
+  TS-990S and the Icom tier — now carries CHIRP's
+  `rToneFreq`/`cToneFreq`/`DtcsCode`/`DtcsPolarity` columns even on a
+  row whose own `Tone` column does not select that field, so an
+  ordinary CHIRP export's `88.5`/`023`/`NN` fill values populate the
+  radio's own idle-tone state instead of being left unread. The
+  TS-890S and TS-990S are the headline case: a blank-`Tone` CHIRP row
+  previously imported with both tone indices Unknown and could never
+  pass the write's tone rung; measured on the fake, an imported channel
+  now writes and verifies on a consented session (`rigprog settings
+  unverified-writes TS-890S on`), same for the TS-990S. A value the
+  radio does not admit in one of these newly-read columns is a
+  non-blocking loss-report entry rather than a refusal.
+- The Icom tier's CHIRP loss-report wording for the tone-family columns
+  now describes the new non-blocking "kept, but this channel's mode
+  does not use it" and "no such field" cases;
+  `DtcsCode`/`DtcsPolarity`'s existing "not really data" fill values
+  are now shared with `rToneFreq`/`cToneFreq` under one table.
+- **The send dialogue no longer asks for a firmware version.** The
+  FT-710's memory CAT arrived in firmware V01-10 and the radio has no
+  version query, so every send used to open with a box to type the
+  version read off the front panel. But the send flow always reads
+  every memory over that same CAT first, so a radio that reaches the
+  dialogue has already proved its firmware by answering. The box, the
+  `rigprog write --firmware` flag and its interactive prompt are gone;
+  the first write on a session needs nothing beyond the ordinary
+  confirmation. Codeplug files that carry a `firmware_confirmed` value
+  still load; the value is no longer written.
 
 ## Downloads
 
