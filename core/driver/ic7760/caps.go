@@ -124,6 +124,7 @@ var deliberatelyZero = map[string]string{
 	"DTCSPolarities":         "DTCS is printed nowhere in the 28-page revision 2 guide — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
 	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document",
 	"MinFreqHz":              "zero IS this radio's declared floor rather than an omission: the record's frequency span is unsigned BCD and its smallest encodable value is 0 Hz. The STORABLE floor is not established by this document (register entry ic7760-freq-range), and declaring a non-zero guess would be a radio claim",
+	"NoTag":                  "the IC-7760 supports channel names via the (18)~(27) ten-byte tag field; NoTag is false",
 }
 
 // memSlots is the MEM bank's inventory: "001".."099".

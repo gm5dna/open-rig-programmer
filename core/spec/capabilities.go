@@ -99,6 +99,13 @@ type Capabilities struct {
 	Modes []string
 	// TagLen is the maximum tag/name length in characters, e.g. 12.
 	TagLen int
+	// NoTag states that this radio has no channel-name route over CAT
+	// at all: TagLen==0 is normally refused by Validate (see its
+	// comment), but a model that sets NoTag true declares the absence
+	// of a tag field as a stated fact, not an omission. A NoTag model
+	// must set TagLen to exactly 0, and its banks must carry no
+	// FieldTag/FieldTagDisplay entries.
+	NoTag bool
 	// ClarMaxHz is the maximum clarifier offset in hertz, e.g. 9990.
 	ClarMaxHz int
 	// ClarStepHz is the clarifier step size in hertz, e.g. 10.

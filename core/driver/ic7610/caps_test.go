@@ -550,7 +550,7 @@ func TestSimulated_IsAClaimAboutTheFakeOnly(t *testing.T) {
 // inherit a zero without this driver deciding about it.
 func TestDeliberatelyZeroAudit(t *testing.T) {
 	// 28 since additions design D4.2 added the transmit declaration.
-	const wantFieldCount = 29
+	const wantFieldCount = 30
 
 	for name, caps := range bothProfiles() {
 		t.Run(name, func(t *testing.T) {

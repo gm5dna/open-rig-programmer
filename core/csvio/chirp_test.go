@@ -145,6 +145,29 @@ func deviantCapabilities() spec.Capabilities {
 	}
 }
 
+// noTagCapabilities is a NoTag model: no channel-name route over CAT at
+// all (TagLen 0, NoTag true, no FieldTag/FieldTagDisplay in the memory
+// bank's Fields map) — the design 2026-09-12-nameless-capability fixture
+// shape, hand-built here for the same reason ft710LikeCapabilities is:
+// core/csvio sits below core/driver and must not depend on it, even in
+// tests.
+func noTagCapabilities() spec.Capabilities {
+	tones := spec.StandardCTCSSTones()
+	return spec.Capabilities{
+		Model: "FAKE-NN",
+		CATID: "0000",
+		NoTag: true,
+		Banks: []spec.Bank{
+			{ID: spec.BankMemory, Label: "Memories", Slots: []string{"001", "002", "003"}},
+		},
+		Modes:        []string{"USB"},
+		TagLen:       0,
+		CTCSSTones:   tones[:],
+		ShiftOptions: spec.StandardShiftOptions(),
+		CTCSSStates:  spec.StandardCTCSSStates(),
+	}
+}
+
 func TestImportCHIRP_ShiftVocabFromCaps(t *testing.T) {
 	csv := "Location,Frequency,Mode,Duplex\n1,145.500000,USB,+\n2,145.500000,USB,-\n3,145.500000,USB,\n"
 
@@ -364,6 +387,60 @@ func TestImportCHIRP_TagLenFromCaps(t *testing.T) {
 	}
 	if got := channels[0].Data.Tag; got != "ABCDEF" {
 		t.Errorf("Tag = %q, want %q (truncated to the deviant radio's TagLen 6, not the FT-710's 12)", got, "ABCDEF")
+	}
+}
+
+// TestImportCHIRP_NoTagDropsNamesWithOneWarning pins the
+// nameless-capability CHIRP-import behaviour (design
+// 2026-09-12-nameless-capability §2.2, §7 Q2): a NoTag model has no
+// channel-name route at all, so a CHIRP file carrying Name values imports
+// every row (tag stays empty, never a per-row truncation/sanitize entry)
+// and the whole import produces exactly ONE non-blocking file-level
+// warning that names were dropped — never a refusal, and never one
+// warning per row.
+func TestImportCHIRP_NoTagDropsNamesWithOneWarning(t *testing.T) {
+	csv := "Location,Name,Frequency,Mode\n" +
+		"1,Alpha,145.500000,USB\n" +
+		"2,Bravo,146.500000,USB\n" +
+		"3,,147.500000,USB\n"
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), noTagCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if len(channels) != 3 {
+		t.Fatalf("len(channels) = %d, want 3 (a NoTag model never refuses a named row)", len(channels))
+	}
+	for _, ch := range channels {
+		if ch.Data.Tag != "" {
+			t.Errorf("slot %s: Tag = %q, want \"\" (a NoTag model has no field to hold it)", ch.Slot, ch.Data.Tag)
+		}
+	}
+	if report.HasBlocking() {
+		t.Fatalf("report.HasBlocking() = true, want false: %+v", report.Entries)
+	}
+	nameEntries := 0
+	for _, e := range report.Entries {
+		if e.Column == "Name" {
+			nameEntries++
+		}
+	}
+	if nameEntries != 1 {
+		t.Fatalf("Name-column entries = %d, want exactly 1 (one warning per file, not per row)", nameEntries)
+	}
+
+	// A file with no Name values at all gets no warning: the whole point
+	// is to flag names that were actually dropped, not to nag on every
+	// NoTag import regardless of content.
+	csvNoNames := "Location,Frequency,Mode\n1,145.500000,USB\n"
+	_, report2, err := ImportCHIRP(strings.NewReader(csvNoNames), noTagCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	for _, e := range report2.Entries {
+		if e.Column == "Name" {
+			t.Errorf("unexpected Name-column entry with no Name column present: %+v", e)
+		}
 	}
 }
 

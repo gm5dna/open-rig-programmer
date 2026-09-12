@@ -191,6 +191,7 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"DTCSPolarities":         "the record carries no DTCS field at all; MANUAL-EVIDENCED absence (matrix §1b, dtcs_polarity)",
 		"RequiredSlots":          "nothing in this document is declared never-empty (matrix §1 row 13; plan decision D8)",
 		"CTCSSTones":             "the tone domain is CTCSSToneRange {1, 2999, 1} deciHz, not a list; E3 forbids declaring both (D16; matrix §1 row 8, deviation + erratum 3)",
+		"NoTag":                  "the IC-7300 supports channel names via the memory name field; NoTag is false",
 	}
 	caps := New(RealHardware).Capabilities()
 	v := reflect.ValueOf(caps)
@@ -203,8 +204,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// a NEW capability field arriving with a plausible zero value and no
 	// entry would be caught — but a field REMOVED, or the struct reshaped,
 	// would not, so the exact shape remains pinned alongside the table.
-	if ty.NumField() != 29 {
-		t.Errorf("spec.Capabilities has %d fields, want 29 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
+	if ty.NumField() != 30 {
+		t.Errorf("spec.Capabilities has %d fields, want 30 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name
