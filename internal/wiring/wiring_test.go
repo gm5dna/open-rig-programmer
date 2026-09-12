@@ -26,6 +26,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7410"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7600"
@@ -265,6 +266,9 @@ var fakePackageForModel = map[string]string{
 	IC7700Model: "internal/fakeic7700",
 	// The v1.7.0 Icom wave's fifth registration, on the same footing.
 	IC9100Model: "internal/fakeic9100",
+	// The v1.7.0 Icom wave's sixth and last registration, on the same
+	// footing.
+	IC7200Model: "internal/fakeic7200",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -324,6 +328,8 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			case ic7700FakeAdapter:
 				concrete = reflect.ValueOf(a.Radio)
 			case ic9100FakeAdapter:
+				concrete = reflect.ValueOf(a.Radio)
+			case ic7200FakeAdapter:
 				concrete = reflect.ValueOf(a.Radio)
 			}
 			if concrete.Kind() == reflect.Ptr {
@@ -1535,7 +1541,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1694,6 +1700,10 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// The v1.7.0 Icom wave's fifth registration.
 	if IC9100Model != "IC-9100" {
 		t.Errorf("IC9100Model = %q, want \"IC-9100\"", IC9100Model)
+	}
+	// The v1.7.0 Icom wave's sixth and last registration.
+	if IC7200Model != "IC-7200" {
+		t.Errorf("IC7200Model = %q, want \"IC-7200\"", IC7200Model)
 	}
 }
 
@@ -2279,7 +2289,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2544,6 +2554,9 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: IC9100Model, want: func() driver.Driver { return ic9100.New(ic9100.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic9100.New(ic9100.RealHardware, ic9100.WithConsentedUnverifiedWrites())
 		}},
+		{model: IC7200Model, want: func() driver.Driver { return ic7200.New(ic7200.RealHardware) }, wantConsent: func() driver.Driver {
+			return ic7200.New(ic7200.RealHardware, ic7200.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -2777,6 +2790,8 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		IC7700Model: true,
 		// The IC-9100 (v1.7.0 Icom wave), on the same footing.
 		IC9100Model: true,
+		// The IC-7200 (v1.7.0 Icom wave), on the same footing.
+		IC7200Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -3158,7 +3173,7 @@ var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPMo
 // SupportedModels() by MAKER, and Icom made it. It reports one stop bit
 // like the other nine, so its framing coverage is the ordinary
 // TestOpenRealSessionFor_ICR8600OpensAtEightNOne below.
-var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model}
+var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model}
 
 // kenwoodModels names every registered Kenwood model, on the same by-name
 // footing as yaesuModels and icomModels — TWO rows, Tier 6's TS-590S and
@@ -4030,6 +4045,34 @@ func TestOpenRealSessionFor_IC9100OpensAtEightNTwo(t *testing.T) {
 	}
 	if got.StopBits != transport.DefaultStopBits {
 		t.Errorf("SerialConfig.StopBits = %d, want %d (transport.DefaultStopBits) — with no framing report there is nothing for stopBitsFor to carry", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_IC7200OpensAtEightNOne is
+// TestOpenRealSessionFor_IC7700OpensAtEightNOne's sibling for the v1.7.0
+// Icom wave's sixth and last registration: unlike the IC-9100, this
+// radio DOES implement driver.SerialFramingReporter (8-N-1), on the same
+// footing as its other four transceiver siblings in this wave.
+func TestOpenRealSessionFor_IC7200OpensAtEightNOne(t *testing.T) {
+	d, err := realDriverFor(IC7200Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", IC7200Model, err)
+	}
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", IC7200Model)
+	}
+	if got := r.StopBits(); got != 1 {
+		t.Fatalf("%s.StopBits() = %d, want 1", IC7200Model, got)
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), IC7200Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7200Model, err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-7200's own StopBits() report must reach the port", got.StopBits)
 	}
 }
 

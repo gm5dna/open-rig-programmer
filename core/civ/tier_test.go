@@ -216,6 +216,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7100"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7200"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7410"
@@ -324,6 +325,12 @@ var tierProfilePopulation = []civ.Profile{
 	// length no other family in this tier declares, measured disjoint by
 	// the pairwise walk below, no declaration needed.
 	ic9100.Profile(),
+	// The v1.7.0 Icom wave's sixth and last family: 17 bytes record-only
+	// over a flat address — a length no other family in this tier
+	// declares, measured disjoint by the pairwise walk below, no
+	// declaration needed. This radio's own capability review found it
+	// NoTag: no channel-name field over CI-V at all.
+	ic7200.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -370,6 +377,8 @@ var tierRegistrationCoverage = map[string]string{
 	"IC-7700": "IC-7700",
 	// And its fifth: ONE key, ONE family.
 	"IC-9100": "IC-9100",
+	// And its sixth and last: ONE key, ONE family.
+	"IC-7200": "IC-7200",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -430,7 +439,26 @@ func registrationCoverageProblems(registered, population []string, coverage map[
 // declaring NEITHER CTCSSTones nor CTCSSToneRange, which
 // spec.Capabilities.AdmitsTone explicitly tolerates ("fails closed when a
 // radio declares neither") and which would silently vanish from
-// `registered` rather than fail loudly.
+// `registered` rather than fail loudly. THAT FAILURE MODE IS NOW REAL,
+// not just guarded against: the IC-7200 (v1.7.0 Icom wave's sixth and
+// last registration) genuinely declares neither, so it is named in
+// toneAbsentCIVModels below and admitted alongside the CTCSSToneRange
+// proxy rather than silently vanishing.
+//
+// toneAbsentCIVModels names every registered CI-V model whose own record
+// maps NO tone field of any kind — CTCSSTones empty AND CTCSSToneRange
+// nil, both honestly, per its own capability review (matrix §1 rows
+// 9/10) — so icomModels' CTCSSToneRange proxy cannot see it. THE v1.7.0
+// ICOM WAVE's SIXTH AND LAST REGISTRATION, the IC-7200, is the first
+// registered model this is true of; every earlier Icom row maps at
+// least a tone-number field, even where CHIRP cannot reach it. Named
+// here rather than silently widening the proxy, exactly as this file's
+// header calls for: "update this list deliberately if it is a real
+// registration, not a proxy regression".
+var toneAbsentCIVModels = map[string]bool{
+	"IC-7200": true,
+}
+
 func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabilities, error)) []string {
 	t.Helper()
 	var out []string
@@ -439,7 +467,7 @@ func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabi
 		if err != nil {
 			t.Fatalf("capabilities for registered model %q: %v", model, err)
 		}
-		if caps.CTCSSToneRange != nil {
+		if caps.CTCSSToneRange != nil || toneAbsentCIVModels[model] {
 			out = append(out, model)
 		}
 	}
@@ -783,9 +811,9 @@ func TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix(t *testing.T) {
 func TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames(t *testing.T) {
 	got := icomModels(t, wiring.SupportedModels(), wiring.StaticCapabilities)
 	want := []string{
-		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7410", "IC-7600",
-		"IC-7610", "IC-7700", "IC-7760", "IC-7800", "IC-7850", "IC-7851",
-		"IC-905", "IC-9100", "IC-9700", "IC-R8600",
+		"IC-705", "IC-7100", "IC-7200", "IC-7300", "IC-7300MK2", "IC-7410",
+		"IC-7600", "IC-7610", "IC-7700", "IC-7760", "IC-7800", "IC-7850",
+		"IC-7851", "IC-905", "IC-9100", "IC-9700", "IC-R8600",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("icomModels(wiring.SupportedModels()) = %v (%d rows),\nwant %v (%d rows) — the registered Yaesu/Icom split has changed; update this list deliberately if it is a real registration, not a proxy regression", got, len(got), want, len(want))
@@ -812,8 +840,8 @@ func TestTierRecordShapes_EveryModelDeclaresExactlyOneToneShape(t *testing.T) {
 		}
 		hasList := len(caps.CTCSSTones) > 0
 		hasRange := caps.CTCSSToneRange != nil
-		if hasList == hasRange {
-			t.Errorf("%s declares CTCSSTones (non-empty: %v) and CTCSSToneRange (non-nil: %v) — want exactly one; a model declaring neither would silently drop out of icomModels' proxy and vanish from the registration-coverage guard", model, hasList, hasRange)
+		if hasList == hasRange && !toneAbsentCIVModels[model] {
+			t.Errorf("%s declares CTCSSTones (non-empty: %v) and CTCSSToneRange (non-nil: %v) — want exactly one (or membership in toneAbsentCIVModels, named above); a model declaring neither would silently drop out of icomModels' proxy and vanish from the registration-coverage guard", model, hasList, hasRange)
 		}
 	}
 }

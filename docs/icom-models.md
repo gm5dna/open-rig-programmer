@@ -5,12 +5,12 @@ The evidence behind the Icom entries in `docs/radio-notes.md`. Every claim below
 
 IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851,
 IC-7850, IC-7760, IC-7100, IC-R8600, IC-7800, IC-7600, IC-7410,
-IC-7700 and IC-9100 talk a different wire protocol from the Yaesu
-models (Icom's CI-V, rather than Yaesu's CAT), and each carries its
-own honesty rows beyond the README's shared "no radio has ever been
-connected" small print.
+IC-7700, IC-9100 and IC-7200 talk a different wire protocol from the
+Yaesu models (Icom's CI-V, rather than Yaesu's CAT), and each carries
+its own honesty rows beyond the README's shared "no radio has ever
+been connected" small print.
 
-Sixteen models, FIFTEEN memory formats: the IC-7851 and the IC-7850
+Seventeen models, SIXTEEN memory formats: the IC-7851 and the IC-7850
 are two entries in the model list over one manual, one address and one
 record format, because this program cannot tell them apart (see the
 sections below). The IC-7800 and IC-7600, registered in the v1.7.0
@@ -21,8 +21,10 @@ is 40 bytes with a genuine TX-duplicate block; the IC-7700, also
 registered that wave, shares the already-registered IC-7300's 39-byte
 record shape (see `indistinguishable` in `core/civ/tier_test.go`); the
 IC-9100, also registered that wave, has its own 57-byte record over a
-3-byte band+channel address, ONE static bank only — see
-`docs/radio-notes.md`.
+3-byte band+channel address, ONE static bank only; the IC-7200,
+registered that wave's sixth and last, has its own 17-byte record over
+a flat address and is the wave's only NoTag model — no channel-name
+field over CI-V at all — see `docs/radio-notes.md`.
 
 TEN TRANSCEIVERS AND ONE RECEIVER. The IC-R8600 is a communications
 receiver, and this program says so rather than treating its missing
@@ -35,7 +37,7 @@ invariant, pinned by `internal/wiring`'s
 `TestEveryRegisteredModelDeclaresItsTransmitAnatomy`, which also refuses
 a future row that forgot to say either way).
 
-Three costs are shared by all sixteen:
+Three costs are shared by all seventeen:
 
 - **No `--civ-address` option.** Each driver talks only to its one
   factory CI-V address (98h IC-7610, 94h IC-7300, B6h IC-7300MK2, A4h
@@ -43,7 +45,7 @@ Three costs are shared by all sixteen:
   IC-R8600, 8Eh IC-7851 AND IC-7850 — that last address is printed in the
   manual as the default for both radios — 6Ah IC-7800, 7Ah IC-7600, 7Ch
   IC-9100, 80h
-  IC-7410, 74h IC-7700) and
+  IC-7410, 74h IC-7700, 76h IC-7200) and
   there is no setting to change it. Two different things can happen when this driver meets a radio
   it did not expect. A different Icom model at ITS OWN factory address
   simply does not answer — nothing was heard from, so nothing can be

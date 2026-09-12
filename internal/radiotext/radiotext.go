@@ -2102,6 +2102,27 @@ var ic9100Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-9100: this build knows of none to require. This driver talks only to CI-V address 7Ch, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// ic7200Text is the IC-7200's entry — the v1.7.0 Icom wave's sixth and
+// last registration, and its only NoTag radio: this radio has no
+// channel-name field over CI-V at all (matrix §1 row 6), so no Tag
+// column is shown for it. Its 17-byte record maps no tone field of any
+// kind and no scan-skip bit either — a stricter absence than every other
+// sibling in this wave, which map Tone even where they cannot map
+// Scan Skip.
+//
+// writeTrialsComplete is FALSE (core/driver/ic7200/caps.go); CI-V address
+// 76h, fixed, no --civ-address option; TagLen 0 (NoTag); default baud
+// 19200, unverified.
+var ic7200Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7200: no builder for one exists, and no IC-7200 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone and Scan Skip are not read or written for the IC-7200 over CI-V by this build: its 17-byte record maps no tone field of any kind and no scan-skip bit — this radio's own document maps no wire bit to either. This radio also has no channel-name field over CI-V at all, so this build shows no Tag column for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "not read or written over CI-V by this build — the IC-7200's document maps no wire bit to it",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7200's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7200: this build knows of none to require. This driver talks only to CI-V address 76h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2146,6 +2167,8 @@ var texts = map[string]Text{
 	"IC-7700": ic7700Text,
 	// The v1.7.0 Icom wave's fifth registration.
 	"IC-9100": ic9100Text,
+	// The v1.7.0 Icom wave's sixth and last registration.
+	"IC-7200": ic7200Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

@@ -30,6 +30,10 @@ tag. The full release notes for each version are on the
   band, richer than its siblings (duplex, offset, DTCS code and
   polarity), and opens at the port's own default framing rather than a
   driver-asserted stop-bit count.
+- **IC-7200** joins the supported Icom models (v1.7.0 Icom wave, the
+  last of six): NoTag — no channel-name field over CI-V at all, so no
+  Tag column is shown for it — and no tone or scan-skip field of any
+  kind, on a 17-byte record.
 
 ## [1.6.0] - 2026-09-12
 

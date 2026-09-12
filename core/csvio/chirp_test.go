@@ -937,8 +937,9 @@ func unreachableScanSkipCapabilities() []spec.Capabilities {
 }
 
 // icXXXXLikeCapabilities (ic7800LikeCapabilities, ic7600LikeCapabilities,
-// ic7410LikeCapabilities, ic7700LikeCapabilities, ic9100LikeCapabilities)
-// return the v1.7.0 Icom wave's own REGISTERED capabilities verbatim, via
+// ic7410LikeCapabilities, ic7700LikeCapabilities, ic9100LikeCapabilities,
+// ic7200LikeCapabilities) return the v1.7.0 Icom wave's own REGISTERED
+// capabilities verbatim, via
 // wiring.StaticCapabilities — unlike every fixture above, which is a
 // hand-written literal shadowing its driver.
 //
@@ -955,15 +956,17 @@ func unreachableScanSkipCapabilities() []spec.Capabilities {
 // OTHER two callers (TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord in
 // particular) assume every fixture's ToneModes recognises DTCS/Cross as a
 // tone TYPE even where it cannot write the DCS CODE — true of every
-// hand-written fixture there, but not of these five, whose own narrower
+// hand-written fixture there, but not of these six, whose own narrower
 // tone-type nibble does not admit a DTCS/Cross reading at all (their own
 // capability reviews) — the IC-9100's own record maps DTCS CODE and
 // POLARITY as tier fields (richer than every sibling in this wave) but
-// still declares no DTCS/Cross TONE STATE, so it takes the same branch.
-// ImportCHIRP therefore refuses their DTCS/Cross cells on an earlier,
-// differently-worded branch (chirp.go's "expresses no %s tone mode"),
-// which that test does not expect. These five need only the ONE
-// completeness property chirpFixtures() exists for — see
+// still declares no DTCS/Cross TONE STATE, so it takes the same branch;
+// the IC-7200 has no tone field of ANY kind at all, a stricter absence
+// still, and takes the identical branch for the plainer reason. ImportCHIRP
+// therefore refuses their DTCS/Cross cells on an earlier, differently-worded
+// branch (chirp.go's "expresses no %s tone mode"), which that test does not
+// expect. These six need only the ONE completeness property
+// chirpFixtures() exists for — see
 // its own call site below — not membership in a bucket whose other tests
 // assume a tone vocabulary they do not have.
 func ic7800LikeCapabilities() spec.Capabilities {
@@ -1002,6 +1005,14 @@ func ic9100LikeCapabilities() spec.Capabilities {
 	caps, err := wiring.StaticCapabilities(wiring.IC9100Model)
 	if err != nil {
 		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC9100Model, err))
+	}
+	return caps
+}
+
+func ic7200LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7200Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7200Model, err))
 	}
 	return caps
 }
@@ -2779,6 +2790,7 @@ func chirpFixtures() []spec.Capabilities {
 		ic7410LikeCapabilities(),
 		ic7700LikeCapabilities(),
 		ic9100LikeCapabilities(),
+		ic7200LikeCapabilities(),
 	)
 }
 
