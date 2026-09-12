@@ -88,7 +88,7 @@
 	// radio actually has (columnsFor / BankView.Fields). For every model
 	// registered today, D8's seven remain hidden because their bank field
 	// lists do not name them.
-	const columns = $derived(columnsFor(activeBank))
+	const columns = $derived(columnsFor(activeBank, appState.uiSpec))
 
 	/** @type {Map<string, Channel>} */
 	const channelBySlot = $derived(

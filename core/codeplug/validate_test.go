@@ -392,6 +392,43 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+// TestValidate_NoTagModelEmptyTagsAreValid proves spec.md §1's claim that
+// the shared tag gate already behaves correctly at TagLen==0: a NoTag
+// model's channels — which a real driver never populates d.Tag for on
+// read — raise no FieldTag issue at all.
+func TestValidate_NoTagModelEmptyTagsAreValid(t *testing.T) {
+	cp := testBaselineCodeplug()
+	for _, ch := range cp.Channels {
+		if ch.Data != nil {
+			ch.Data.Tag = ""
+		}
+	}
+
+	issues := Validate(cp, noTagCapabilities())
+
+	for _, is := range issues {
+		if is.Field == spec.FieldTag {
+			t.Errorf("Validate() = %+v, want no FieldTag issue for a NoTag model with empty tags", issues)
+		}
+	}
+}
+
+// TestValidate_NoTagModelRejectsNonEmptyTag proves the other half: a
+// nameless model's write path (a driver would never send d.Tag, but this
+// is the shared gate every driver routes through before that point) still
+// refuses a non-empty tag, with the existing "exceeds maximum" error —
+// no NoTag-specific message needed.
+func TestValidate_NoTagModelRejectsNonEmptyTag(t *testing.T) {
+	cp := testBaselineCodeplug()
+	cp.Channels[0].Data.Tag = "X"
+
+	issues := Validate(cp, noTagCapabilities())
+
+	if !hasIssue(issues, SeverityError, spec.FieldTag, "001", "exceeds this radio's maximum of 0") {
+		t.Errorf("Validate() = %+v, want a FieldTag error mentioning \"maximum of 0\"", issues)
+	}
+}
+
 // TestValidateDeterministic runs Validate twice over the same inputs (with
 // several rules broken at once, so ordering is meaningful) and requires
 // byte-for-byte identical results.
