@@ -220,6 +220,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
@@ -292,6 +293,13 @@ var tierProfilePopulation = []civ.Profile{
 	// change to accept: RecordLengths is a set here as it is everywhere
 	// else.
 	icr8600.Profile(),
+	// The v1.7.0 Icom wave's first family: a fourth member of spec D5's
+	// 25 B / Flat set (IC-7610, IC-7851/7850, IC-7760), a HIGH-proximity
+	// clone of the IC-7610 per its own capability review — same 25 B
+	// record-only over a 2 B flat address. Its three pairings against that
+	// set are declared in `indistinguishable` below with their own
+	// citations.
+	ic7800.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -328,6 +336,8 @@ var tierRegistrationCoverage = map[string]string{
 	// record has a length and an address geometry like any other radio's,
 	// and those are the two properties ruled on here.
 	"IC-R8600": "IC-R8600",
+	// The v1.7.0 Icom wave's first registration: ONE key, ONE family.
+	"IC-7800": "IC-7800",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -565,6 +575,18 @@ var indistinguishable = map[string]string{
 	"IC-7610|IC-7760": "additions spec D5 (the same 25 B / Flat row, whose declared set is {IC-7610, IC-7851/7850, IC-7760}) and D1.1's shared-record finding; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-7610's §1/§3 record reading and the IC-7760's §3.11/§1b one, whose 25 B record-only and 2 B address width were derived from that radio's own L/W/B/G legs and its own document, the IC-7760 CI-V Reference Guide revision 2, A7788-8EX-2); core/driver/ic7760/doc.go, which admits no cross-model length table; and core/driver/ic7610/ic7610.go:142-145, which already refuses to mint a driver.WrongRadioError for any same-address collision. The two radios' factory addresses (98h and B2h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 	"IC-7851|IC-7760": "additions spec D5 (the same 25 B / Flat row) and D1.1; the IC-7851's §3.16 record reading and the IC-7760's §3.11/§1b one, derived from two different documents by two different evidence-leg sets — the IC-7850/IC-7851 Instruction Manual section 18, and the IC-7760 CI-V Reference Guide revision 2; core/driver/ic7851/doc.go's Wave-4 hand-off section, which names this set, and core/driver/ic7760/doc.go. NEITHER driver mints a driver.WrongRadioError for a length it cannot attribute, so a same-address collision here fails the open without naming a model. The factory addresses (8Eh and B2h) differ, so the limitation is reachable only on a moved radio — and note that the IC-7851 row's own sibling, the IC-7850, shares 8Eh with it AT FACTORY DEFAULTS, which is a separate and stronger limitation recorded in this file's header.",
 	"IC-9700|IC-7100": "additions spec D5 (docs/superpowers/specs/2026-08-28-icom-additions-design.md, the 111 B row: \"9700 vs 7100: NO — both 3 B with a leading 01–05 index byte — declared indistinguishable\") and D2.1, which derives the IC-7100's 111 B record-only length over a 3 B address and states in as many words that it is \"the SAME record-only length as the IC-705 and IC-9700, at the 9700's address width\"; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-9700's §3.11 record arithmetic, from the IC-9700 CI-V Reference Guide, and the IC-7100's §3.11 one, from section 20 of the IC-7100 full manual revision A7085-2EX-5 — two different documents, two different evidence-leg sets, and the IC-7100's matrix §4 states explicitly that it makes no cross-model claim of its own). NEITHER driver mints a driver.WrongRadioError for a length it cannot attribute: core/driver/ic9700's doc.go says \"No driver.WrongRadioError is ever minted here\", and core/driver/ic7100's doc.go carries the Wave-4 hand-off naming this very pair — \"measuring 111 record bytes proves the radio is not an IC-7610 or an IC-7300, and proves NOTHING about whether it is an IC-7100 or an IC-9700\" — so a same-address collision here fails the open without naming a model. The third member of spec D5's 111 B row, the IC-705, IS separable from both by address width (four bytes against three) and is proven apart by the pairwise walk rather than declared here. The two radios' factory addresses (A2h and 88h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	// The v1.7.0 Icom wave's first family joins the 25 B / Flat set,
+	// bringing it to four members and three new pairings against the
+	// already-declared three (this table's own header explains why the set
+	// as a whole collides: all draw the same 27-byte 1A 00 data area).
+	// Evidence: docs/superpowers/icom-matrices/ic7800-capability-matrix.md
+	// (25 B record-only, 2 B address, no offset difference from the
+	// IC-7610); core/driver/ic7800/doc.go, which mints no
+	// driver.WrongRadioError for a length it cannot attribute. Factory
+	// addresses (98h, 6Ah) differ, so reachable only on a moved radio.
+	"IC-7610|IC-7800": "docs/superpowers/icom-matrices/ic7800-capability-matrix.md (25 B record-only, 2 B flat address, independently re-derived from the IC-7800's own manual with no offset difference from the IC-7610) and core/driver/ic7800/doc.go, which mints no driver.WrongRadioError for a length it cannot attribute — the same rule every 25 B/Flat sibling's driver follows. Factory addresses (98h and 6Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7851|IC-7800": "docs/superpowers/icom-matrices/ic7800-capability-matrix.md and core/driver/ic7851/doc.go's/ic7800's own doc.go, neither of which mints a driver.WrongRadioError for a length it cannot attribute. Factory addresses (8Eh and 6Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7760|IC-7800": "docs/superpowers/icom-matrices/ic7800-capability-matrix.md and core/driver/ic7760's/ic7800's own doc.go files, neither of which mints a driver.WrongRadioError for a length it cannot attribute. Factory addresses (B2h and 6Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 }
 
 // TestTierRecordShapes_DistinctOrDeclared is the tier-close check: every
@@ -711,8 +733,9 @@ func TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix(t *testing.T) {
 func TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames(t *testing.T) {
 	got := icomModels(t, wiring.SupportedModels(), wiring.StaticCapabilities)
 	want := []string{
-		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7610", "IC-7760",
-		"IC-7850", "IC-7851", "IC-905", "IC-9700", "IC-R8600",
+		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2",
+		"IC-7610", "IC-7760", "IC-7800", "IC-7850", "IC-7851", "IC-905",
+		"IC-9700", "IC-R8600",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("icomModels(wiring.SupportedModels()) = %v (%d rows),\nwant %v (%d rows) — the registered Yaesu/Icom split has changed; update this list deliberately if it is a real registration, not a proxy regression", got, len(got), want, len(want))

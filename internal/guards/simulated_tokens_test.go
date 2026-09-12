@@ -336,6 +336,9 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// already return io.ReadWriteCloser, so neither needs an adapter.
 		{"ts890", "Simulated", "fakets890.New", "internal/fakets890", []string{"TS-890S"}},
 		{"ts990", "Simulated", "fakets990.New", "internal/fakets990", []string{"TS-990S"}},
+		// The IC-7800 (v1.7.0 Icom wave's first registration): one row, one
+		// driver package, one fake, on the IC-7610's footing.
+		{"ic7800", "Simulated", "fakeic7800.New", "internal/fakeic7800", []string{"IC-7800"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

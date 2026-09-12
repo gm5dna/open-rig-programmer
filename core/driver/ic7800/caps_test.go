@@ -98,8 +98,8 @@ func TestBaseline_Shape(t *testing.T) {
 	// driver records it without ever matching it (D5 entry 7, lift R7),
 	// so it cannot appear in a value the composition root reads before any
 	// port exists.
-	if caps.CATID != "6A" {
-		t.Errorf("CATID = %q, want %q - the address alone; the 19 00 token is a per-session observation", caps.CATID, "6A")
+	if caps.CATID != "6a" {
+		t.Errorf("CATID = %q, want %q - the address alone, lower case to match this driver's own Identity construction; the 19 00 token is a per-session observation", caps.CATID, "6a")
 	}
 	// S1 row 7 - the name span (18)~(27) is ten bytes wide, so a tag is
 	// ten characters. Pinned against the codec's own NameLength so the

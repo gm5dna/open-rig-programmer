@@ -330,6 +330,9 @@ var ownParticulars = map[string][]string{
 	// definition of a borrowed particular.
 	"TS-890S": {"TS-890S"},
 	"TS-990S": {"TS-990S"},
+	// The v1.7.0 Icom wave. Own name and own CI-V address hex, on the
+	// registered Icom rows' footing above.
+	"IC-7800": {"IC-7800", "6Ah"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2253,4 +2256,31 @@ func TestRadiotext_TS890SAnd990SDifferInMoreThanTheModelName(t *testing.T) {
 	if strings.Contains(aJoined, dual) {
 		t.Errorf("the TS-890S's prose says %q, and this radio's record carries no dual-reception flag for it to be about", dual)
 	}
+}
+
+// TestRadiotext_IC7800Verbatim pins the v1.7.0 Icom wave's first
+// registration's prose byte-for-byte, and runs the standard non-borrowing
+// checks against every other registered model — including the IC-7610,
+// this radio's closest sibling by record shape (25 B / 2 B flat address),
+// which is exactly the borrowing risk this registration carries.
+func TestRadiotext_IC7800Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7800: no builder for one exists, and no IC-7800 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the IC-7800 over CI-V by this build, but unverified against real hardware — no IC-7800 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7800 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7800's document maps no wire bit to it",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7800: this build knows of none to require. This driver talks only to CI-V address 6Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7800")
+	if !ok {
+		t.Fatal(`For("IC-7800") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7800\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7800", got)
 }

@@ -246,8 +246,10 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// has no CAT-ID equivalent readable before a port opens: the 19 00
 		// token is a per-session observation, and this driver RECORDS it
 		// and NEVER MATCHES it (D5 entry 7, matrix lift R7). Session
-		// Identity carries "6A" followed by the observed token; this
-		// pre-probe field carries the half that is known statically.
+		// Identity carries "6a" followed by the observed token, in the
+		// IC-7610 family's lower-case rendering (driver.go's Identity.CATID
+		// casing note) — this pre-probe field carries the half that is
+		// known statically, in the same case.
 		//
 		// The "4-character CAT ID" comments in core/spec/capabilities.go,
 		// core/driver/driver.go and core/codeplug/radioinfo.go, which
@@ -255,7 +257,7 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// close (doc.go recorded them for that pass); driver.go's own
 		// Identity.CATID comment now also carries the tier's observed
 		// casing convention.
-		CATID:    "6A",
+		CATID:    "6a",
 		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{

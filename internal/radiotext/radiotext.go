@@ -1987,6 +1987,39 @@ var ts480Text = Text{
 // back would be a cycle), and it holds no model constants of its own to
 // share. The two spellings are kept in agreement by that test, which walks
 // every registered model and fails on a missing entry.
+
+// ic7800Text is the IC-7800's entry — the v1.7.0 Icom wave's first
+// registration — landed with that model's wiring registration for the
+// same reason every Icom entry above was: internal/wiring's
+// TestEverySupportedModelHasRadiotext fails a registration whose prose is
+// missing.
+//
+// A SINGLE-MODEL ENTRY: core/driver/ic7800 has one member, so there is one
+// entry here, no sibling to keep in step.
+//
+// WRITTEN FROM THIS RADIO'S OWN DOCUMENT. The resemblance to the IC-7610's
+// prose is a consequence of the two radios drawing the same 25-byte
+// record over a 2-byte flat address (this radio's own capability review),
+// not of any borrowing: TestRadiotext_IC7800Verbatim's non-borrowing legs
+// refuse a field byte-identical to any other entry's and refuse another
+// radio's address hex or bare name anywhere in this one's text.
+//
+// EVERY FACT RESTATED HERE IS TRUE TODAY. writeTrialsComplete is FALSE
+// (core/driver/ic7800/caps.go); the CI-V address is 6Ah, fixed, with no
+// --civ-address option; TagLen is 10; the default baud is 19200,
+// unverified against real hardware, on the tier's usual footing.
+var ic7800Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7800: no builder for one exists, and no IC-7800 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the IC-7800 over CI-V by this build, but unverified against real hardware — no IC-7800 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+	// Deliberately empty: writeTrialsComplete is false, so there is no
+	// hardware-preservation verification of any kind to report.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7800 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7800's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7800: this build knows of none to require. This driver talks only to CI-V address 6Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2021,6 +2054,8 @@ var texts = map[string]Text{
 	// registration commit — and so that edit 4 of that commit's ten-edit
 	// list is already a no-op when it comes.
 	"TS-480": ts480Text,
+	// The v1.7.0 Icom wave's first registration.
+	"IC-7800": ic7800Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

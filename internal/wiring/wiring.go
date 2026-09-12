@@ -46,6 +46,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
@@ -615,6 +616,20 @@ const (
 	TS990SModel = "TS-990S"
 )
 
+// IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
+// equal ic7800.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's FIRST REGISTRATION, and a single-row one: one
+// driver package, one civ.Profile, one fake, on IC7610Model's footing. Its
+// own capability review found it a HIGH-proximity clone of the already
+// registered IC-7610 (same 25 B record-only / 2 B address, same TagLen 10),
+// with one independently-derived wire difference from that sibling: the
+// tone_mode/data_mode nibble pair in byte 8 is SWAPPED relative to the
+// IC-7610's own (core/driver/ic7800's own FieldSpan). Its own CI-V address
+// is 6Ah, distinct from every sibling's.
+const IC7800Model = "IC-7800"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -864,6 +879,16 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites())
 		}
 		return ts990.New(ts990.RealHardware)
+	},
+	// The v1.7.0 Icom wave's first row: profile is a positional argument
+	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'
+	// footing rather than the bare-New ones', so the consent arm names
+	// ic7800.RealHardware explicitly.
+	IC7800Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7800.New(ic7800.RealHardware, ic7800.WithConsentedUnverifiedWrites())
+		}
+		return ic7800.New(ic7800.RealHardware)
 	},
 }
 
