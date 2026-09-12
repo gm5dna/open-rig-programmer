@@ -257,6 +257,21 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		}
 	}
 
+	// core/driver.CheckFieldStates is THE FLEET'S shared walk rather than
+	// a table of this package's own: every field of ChannelData that
+	// carries a FieldState, judged against this session's own
+	// vocabularies. s.validateWriteFields above already calls each
+	// field's own Valid() unconditionally, which already refuses Absent
+	// outright (Valid's default case), so this rung is additive here
+	// rather than closing a gap of its own — it is wired in anyway
+	// because it is the fleet's single source of truth for the rule
+	// (the FT-891 closing review's C-M1, sharpened by MEDIUM-1 to
+	// codeplug.Absent), and future fields land in it once rather than in
+	// a second hand-maintained table.
+	if field, err := driver.CheckFieldStates(s.caps, data); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
+	}
+
 	var unwritable []spec.Field
 	for _, field := range requestedFields(data) {
 		support := s.caps.FieldSupport(bank, field)
