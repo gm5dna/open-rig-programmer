@@ -2020,6 +2020,25 @@ var ic7800Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7800: this build knows of none to require. This driver talks only to CI-V address 6Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// ic7600Text is the IC-7600's entry — the v1.7.0 Icom wave's second
+// registration. A SINGLE-MODEL ENTRY, written from this radio's own
+// document; the resemblance to the IC-7610's and the IC-7800's prose is a
+// consequence of the shared 25-byte / 2-byte-address record, not of any
+// borrowing (TestRadiotext_IC7600Verbatim's non-borrowing legs).
+//
+// writeTrialsComplete is FALSE (core/driver/ic7600/caps.go); CI-V address
+// 7Ah, fixed, no --civ-address option; TagLen 10; default baud 19200,
+// unverified.
+var ic7600Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-7600: no builder for one exists, and no IC-7600 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the IC-7600 over CI-V by this build, but unverified against real hardware — no IC-7600 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7600 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7600's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7600: this build knows of none to require. This driver talks only to CI-V address 7Ah, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2056,6 +2075,8 @@ var texts = map[string]Text{
 	"TS-480": ts480Text,
 	// The v1.7.0 Icom wave's first registration.
 	"IC-7800": ic7800Text,
+	// The v1.7.0 Icom wave's second registration.
+	"IC-7600": ic7600Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

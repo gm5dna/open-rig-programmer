@@ -44,6 +44,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
@@ -630,6 +631,17 @@ const (
 // is 6Ah, distinct from every sibling's.
 const IC7800Model = "IC-7800"
 
+// IC7600Model names the IC-7600's realDrivers/fakeDrivers key, which must
+// equal ic7600.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's SECOND REGISTRATION, and a single-row one on
+// IC7800Model's footing: another literal-copy clone of the IC-7610's 25 B
+// / 2 B flat record, with a whole-byte (not nibble-split) SelectByteOffset
+// deviation of its own (matrix S3.15(a)) and no change of shape. Its own
+// CI-V address is 7Ah.
+const IC7600Model = "IC-7600"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -889,6 +901,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7800.New(ic7800.RealHardware, ic7800.WithConsentedUnverifiedWrites())
 		}
 		return ic7800.New(ic7800.RealHardware)
+	},
+	// The v1.7.0 Icom wave's second row, on IC7800Model's footing.
+	IC7600Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7600.New(ic7600.RealHardware, ic7600.WithConsentedUnverifiedWrites())
+		}
+		return ic7600.New(ic7600.RealHardware)
 	},
 }
 

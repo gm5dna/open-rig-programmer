@@ -16,6 +16,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
@@ -34,6 +35,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7100"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7600"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7610"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7760"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7800"
@@ -457,6 +459,12 @@ var (
 // only because no test using it calls t.Parallel().
 var IC7800FakeSessionOpts []fakeic7800.Option
 
+// IC7600FakeSessionOpts is the IC-7600's own option source, on the same
+// terms as IC7800FakeSessionOpts above. Left at its nil zero value the
+// demo radio is empty, the same footing as every other single-row Icom
+// fake here.
+var IC7600FakeSessionOpts []fakeic7600.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -599,6 +607,9 @@ var (
 	// IC-7610's and unlike the four directly-satisfying Icom simulators:
 	// internal/fakeic7800's Port() returns net.Conn.
 	_ fakeRadio = ic7800FakeAdapter{}
+	// The IC-7600's, on the same footing — internal/fakeic7600's Port()
+	// also returns net.Conn.
+	_ fakeRadio = ic7600FakeAdapter{}
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -672,6 +683,13 @@ type ic7800FakeAdapter struct{ *fakeic7800.Radio }
 
 // Port implements fakeRadio. See ic7800FakeAdapter's own doc comment.
 func (a ic7800FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
+
+// ic7600FakeAdapter narrows *fakeic7600.Radio's Port() — net.Conn — to
+// io.ReadWriteCloser. See ic7800FakeAdapter's own doc comment.
+type ic7600FakeAdapter struct{ *fakeic7600.Radio }
+
+// Port implements fakeRadio. See ic7600FakeAdapter's own doc comment.
+func (a ic7600FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
 
 // fakeDriverEntry pairs one model's simulated-profile driver constructor
 // with the fake-rig constructor OpenFakeSessionFor uses to build a live
@@ -1064,6 +1082,12 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	IC7800Model: {
 		newDriver: func() driver.Driver { return ic7800.New(ic7800.Simulated) },
 		newRadio:  func() fakeRadio { return ic7800FakeAdapter{fakeic7800.New(IC7800FakeSessionOpts...)} },
+	},
+	// The IC-7600 (v1.7.0 Icom wave's second registration), on IC7800Model's
+	// footing.
+	IC7600Model: {
+		newDriver: func() driver.Driver { return ic7600.New(ic7600.Simulated) },
+		newRadio:  func() fakeRadio { return ic7600FakeAdapter{fakeic7600.New(IC7600FakeSessionOpts...)} },
 	},
 }
 
