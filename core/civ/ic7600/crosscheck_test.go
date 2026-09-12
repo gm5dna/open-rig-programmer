@@ -110,7 +110,7 @@ func readEvidenceCSV(t *testing.T, name, wantHeader string, fields int) [][]stri
 
 type ledgerRow struct {
 	diagram, indexRaw, label, page, anchor, notes string
-	key                                            indexKey
+	key                                           indexKey
 }
 
 type transcriptionRow struct {
