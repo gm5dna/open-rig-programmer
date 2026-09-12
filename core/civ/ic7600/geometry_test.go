@@ -24,19 +24,19 @@ func goldenRecord() civ.MemoryRecord {
 	return civ.MemoryRecord{
 		Address:      civ.ChannelAddress{Channel: 1},    // frame bytes 7-8: 00 01
 		RXFreqHz:     civ.Available[uint64](14_250_000), // frame bytes 10-14: 00 00 25 14 00
-		Mode:         civ.Available("USB"),               // frame byte 15: 01
-		Filter:       civ.Available("FIL1"),               // frame byte 16: 01
-		ToneMode:     civ.Available("TONE"),               // frame byte 17 low nibble: 1
-		ToneTXDeciHz: civ.Available[uint64](885),          // frame bytes 18-20: 00 08 85
-		ToneRXDeciHz: civ.Available[uint64](1000),         // frame bytes 21-23: 00 10 00
-		Name:         civ.Available("HOME QTH01"),         // frame bytes 24-33
+		Mode:         civ.Available("USB"),              // frame byte 15: 01
+		Filter:       civ.Available("FIL1"),             // frame byte 16: 01
+		ToneMode:     civ.Available("TONE"),             // frame byte 17 low nibble: 1
+		ToneTXDeciHz: civ.Available[uint64](885),        // frame bytes 18-20: 00 08 85
+		ToneRXDeciHz: civ.Available[uint64](1000),       // frame bytes 21-23: 00 10 00
+		Name:         civ.Available("HOME QTH01"),       // frame bytes 24-33
 	}
 }
 
 // witnessRow is one row of the geometry witness.
 type witnessRow struct {
-	indexRaw, blockLabel, page, anchor, notes string
-	key                                       indexKey
+	indexRaw, blockLabel, page, anchor, notes    string
+	key                                          indexKey
 	firstByte, firstNibble, lastByte, lastNibble int
 	recordOffset, recordWidth                    int
 	isAddress                                    bool
