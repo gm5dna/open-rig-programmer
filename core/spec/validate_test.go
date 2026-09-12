@@ -398,6 +398,25 @@ func TestValidate_NoTagRequiresZeroTagLen(t *testing.T) {
 	}
 }
 
+// TestValidate_NoTagRejectsBankWithTagField is the Codex-review P2 fix:
+// a model declaring NoTag true (no channel-name route over CAT at all)
+// but whose bank still grades FieldTag contradicts its own declaration.
+// Before this check, Validate returned nil for it.
+func TestValidate_NoTagRejectsBankWithTagField(t *testing.T) {
+	c := validTestCapabilities()
+	c.Model = "FAKE-NN"
+	c.TagLen = 0
+	c.NoTag = true
+	c.Banks[0].Fields[FieldTag] = FieldSupport{Read: Supported, Write: Supported}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil for NoTag model with a bank grading FieldTag, want an error")
+	}
+	if !strings.Contains(err.Error(), "FieldTag") && !strings.Contains(err.Error(), "tag") {
+		t.Errorf("Validate() error = %q, want it to mention the tag field", err)
+	}
+}
+
 // TestValidate_ShiftOptionZeroValueDirectionRejected is FIX A1's failing-
 // first test: before this fix, ShiftNone was ShiftDirection's zero value,
 // so a ShiftOption whose Direction was simply omitted from a struct
