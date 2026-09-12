@@ -79,12 +79,17 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		// assumed.
 		EmergencyWire: "",
 		NoneWire:      "000",
-		// Inert on this radio either way: MCSelectsAll and
-		// MCSelectsMemoryPMS differ only over the 60m/EMG banks, and this
-		// radio has neither. MCSelectsMemoryPMS is chosen as the more
-		// conservative reading — the matrix cites no MC legend claiming a
-		// wider domain.
-		MCSelects: cat.MCSelectsMemoryPMS,
+		// matrix §1.4: the MC legend (lines 949-957) decomposes only
+		// memory (001-099) and PMS (100-117) — its own whole span, since
+		// this radio has no 60m/EMG bank to print a wider one. MCSelectsAll
+		// and MCSelectsMemoryPMS are therefore INERT here (same reasoning
+		// as FT-991A's identical no-60m/no-EMG case): MCSelectsAll is the
+		// one dialecttest's own non-vacuity counter can actually prove
+		// (checkMCSendDomain requires an observed 60m/EMG refusal under
+		// MCSelectsMemoryPMS, which no dialect lacking those banks can ever
+		// produce) — MCSelectsMemoryPMS would be an unfalsifiable claim on
+		// this radio, not merely an untested one.
+		MCSelects: cat.MCSelectsAll,
 	},
 	// EX/menu inventory is OUT of scope for this package (brief, spec.md
 	// §3): no EXItems, and EXAddressForm is DialectConfig's own structural

@@ -28,23 +28,15 @@ func TestConformance_ZeroValue(t *testing.T) {
 }
 
 // TestGate_RealP8OffsetRefusesDCSState is this package's OWN regression
-// test for a conformance-suite gap TestConformance above surfaces:
-// dialecttest's checkToneStateDomain forges its P8 probe at
-// ctcssOffsetInMemoryFrame, a HARDCODED 23 — P8's byte offset in the
-// REGISTERED 28-byte/9-digit frame every dialect before this wave shares.
-// This dialect's frame is 27 bytes/8-digit (Lift Y, matrix §2): every field
-// from P3 onward sits ONE BYTE TO THE LEFT of the registered layout, so
-// P8's real offset here is 22, not 23. Byte 23 of THIS frame is P9's first
-// tone-index digit (Lift Y's own new field), so dialecttest's splice edits
-// an accidentally-still-valid tone index instead of P8 — the gate
-// "admitting" it is correct behaviour on a well-formed frame, not the
-// write-gate defect the upstream check is designed to catch.
-//
-// This test proves the actual gate is sound at the REAL offset, so
-// TestConformance's failure is filed as a dialecttest bug (that suite's
-// ctcssOffsetInMemoryFrame needs to derive from the dialect's own
-// MemoryFrameLen/MemoryFreqDigits rather than a shared literal), not a
-// defect in this package — see the driver report.
+// test, kept after core/cat commit 1ca7aac fixed the conformance-suite gap
+// it was originally written to document: dialecttest's checkToneStateDomain
+// used to forge its P8 probe at a hardcoded offset correct only for the
+// registered 28-byte/9-digit frame, one byte off this dialect's 27-byte/
+// 8-digit frame (Lift Y, matrix §2). 1ca7aac made that offset derive from
+// the dialect's own built frame length instead, and TestConformance now
+// passes outright. This test stays as a direct, offset-explicit pin of the
+// same property (a DCS state is refused at the real P8 byte, 22) rather
+// than being deleted now that the suite covers it too.
 func TestGate_RealP8OffsetRefusesDCSState(t *testing.T) {
 	d := Dialect()
 	sl, err := d.MemorySlot(1)
