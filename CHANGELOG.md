@@ -11,6 +11,12 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Added
+- **IC-7800** joins the supported Icom models (v1.7.0 Icom wave):
+  memory and scan-edge channels, opt-in unverified writes, a
+  HIGH-proximity clone of the IC-7610's record shape at its own
+  address.
+
 ## [1.6.0] - 2026-09-12
 
 ### Added

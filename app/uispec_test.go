@@ -795,6 +795,18 @@ var (
 	}
 )
 
+// ic7800CoreThree is the core set every IC-7800 bank derives, on every
+// profile — MEM and SCAN alike (core/driver/ic7800/caps.go's bankFields).
+//
+// SAME MEMBERS AS ic7610CoreThree and every other Icom entry's, and that
+// is a COINCIDENCE OF INDEPENDENT EVIDENCE: core/driver/ic7800's bankFields
+// was derived from this radio's own manual, which grades FieldClarifier,
+// FieldShift, FieldCTCSSState, FieldCTCSSTone, FieldScanSkip and
+// FieldTagDisplay all Unsupported.
+var ic7800CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1260,6 +1272,10 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// TestBankTierFields_RegisteredTS890And990_OneBankEach.
 		"TS-890S": ts890sCoreFour,
 		"TS-990S": ts990sCoreFour,
+		// The IC-7800 (v1.7.0 Icom wave's first registration): the same
+		// three candidate fields as the IC-7610's, independently derived —
+		// see ic7800CoreThree's own doc comment.
+		"IC-7800": ic7800CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

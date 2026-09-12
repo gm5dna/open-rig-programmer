@@ -936,6 +936,39 @@ func unreachableScanSkipCapabilities() []spec.Capabilities {
 	}
 }
 
+// ic7800LikeCapabilities returns the v1.7.0 Icom wave's own REGISTERED
+// capabilities verbatim, via wiring.StaticCapabilities — unlike every
+// fixture above, which is a hand-written literal shadowing its driver.
+//
+// THAT IS DELIBERATE, not a shortcut this file's own convention argues
+// against: the debt-ledger comment on chirpFixtureExceptions above warns
+// against "writing eleven radios' worth of UNEVIDENCED capability data",
+// and a hand-invented literal here would be exactly that — a second,
+// independently-typed claim about a radio this package has already
+// registered capabilities for. Reading the real, registered value instead
+// is the more evidenced choice, and it cannot drift from the driver the
+// way a hand-copied literal could.
+//
+// NOT IN unreachableScanSkipCapabilities(), deliberately: that function's
+// OTHER two callers (TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord in
+// particular) assume every fixture's ToneModes recognises DTCS/Cross as a
+// tone TYPE even where it cannot write the DCS CODE — true of every
+// hand-written fixture there, but not of this one, whose own narrower
+// tone-type nibble does not admit a DTCS/Cross reading at all (its own
+// capability review). ImportCHIRP therefore refuses its DTCS/Cross cells
+// on an earlier, differently-worded branch (chirp.go's "expresses no %s
+// tone mode"), which that test does not expect. This row needs only the
+// ONE completeness property chirpFixtures() exists for — see its own
+// call site below — not membership in a bucket whose other tests assume
+// a tone vocabulary it does not have.
+func ic7800LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7800Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7800Model, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2695,12 +2728,16 @@ func maLikeCapabilities(model, catID string, modes []string) spec.Capabilities {
 // TestChirpFixtures_CoverEveryRegisteredModel measures against the registry.
 func chirpFixtures() []spec.Capabilities {
 	out := unreachableScanSkipCapabilities()
-	return append(out,
+	out = append(out,
 		ts590LikeCapabilities("TS-590S", "021"),
 		ts590LikeCapabilities("TS-590SG", "023"),
 		maLikeCapabilities("TS-890S", "024", ts890Modes),
 		maLikeCapabilities("TS-990S", "022", ts990Modes),
 	)
+	// The v1.7.0 Icom wave's first registration: registered capabilities,
+	// not a fixture of the bucket above — see ic7800LikeCapabilities's own
+	// doc comment for why.
+	return append(out, ic7800LikeCapabilities())
 }
 
 // chirpFixtureExceptions names every registered model that has NO CHIRP

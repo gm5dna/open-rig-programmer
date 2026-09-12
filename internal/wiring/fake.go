@@ -18,6 +18,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
@@ -35,6 +36,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7610"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7760"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7800"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic905"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic9700"
@@ -436,6 +438,25 @@ var (
 	TS990SFakeSessionOpts []fakets990.Option
 )
 
+// IC7800FakeSessionOpts is the IC-7800's own option source, on the same
+// terms as every other model's own variable above: internal/fakeic7800
+// simulates the IC-7800 specifically, its Option is a
+// func(*fakeic7800.Radio), read at CALL time inside the IC7800Model entry's
+// own newRadio closure below, and never captured at package init.
+//
+// LEFT AT ITS NIL ZERO VALUE THE DEMO RADIO IS EMPTY: internal/fakeic7800's
+// own default seeds no channel (its slots map starts empty), the same
+// footing as the IC-7610's and every other single-row Icom fake here.
+//
+// No production flag or GUI control populates this — it adds no second
+// ic7800.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ic7800 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var IC7800FakeSessionOpts []fakeic7800.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -574,6 +595,10 @@ var (
 	// fakeRadio as written and neither needs an adapter.
 	_ fakeRadio = (*fakets890.Radio)(nil)
 	_ fakeRadio = (*fakets990.Radio)(nil)
+	// The IC-7800's (v1.7.0 Icom wave) — via ic7800FakeAdapter, like the
+	// IC-7610's and unlike the four directly-satisfying Icom simulators:
+	// internal/fakeic7800's Port() returns net.Conn.
+	_ fakeRadio = ic7800FakeAdapter{}
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -638,6 +663,15 @@ type ic7760FakeAdapter struct{ *fakeic7760.Radio }
 // Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
 // io.ReadWriteCloser. See ic7760FakeAdapter's own doc comment.
 func (a ic7760FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
+
+// ic7800FakeAdapter narrows *fakeic7800.Radio's Port() — which returns
+// net.Conn — to the io.ReadWriteCloser fakeRadio requires. See
+// ic7610FakeAdapter's own doc comment for the type-identity gap this
+// closes; nothing about the radio's behaviour changes.
+type ic7800FakeAdapter struct{ *fakeic7800.Radio }
+
+// Port implements fakeRadio. See ic7800FakeAdapter's own doc comment.
+func (a ic7800FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
 
 // fakeDriverEntry pairs one model's simulated-profile driver constructor
 // with the fake-rig constructor OpenFakeSessionFor uses to build a live
@@ -1020,6 +1054,16 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	TS990SModel: {
 		newDriver: func() driver.Driver { return ts990.New(ts990.Simulated) },
 		newRadio:  func() fakeRadio { return fakets990.New(TS990SFakeSessionOpts...) },
+	},
+	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
+	// driver package, ONE simulator, on the IC-7610's footing.
+	// writeTrialsComplete is false (core/driver/ic7800/caps.go), so this
+	// radio has no hardware-evidenced write path and the Supported writes
+	// ic7800.Simulated reaches here are a claim about internal/fakeic7800
+	// alone.
+	IC7800Model: {
+		newDriver: func() driver.Driver { return ic7800.New(ic7800.Simulated) },
+		newRadio:  func() fakeRadio { return ic7800FakeAdapter{fakeic7800.New(IC7800FakeSessionOpts...)} },
 	},
 }
 
