@@ -23,11 +23,12 @@ var receiverCapabilitiesDeliberatelyZero = map[string]string{
 	"AttenuatorDB":           "additions design D8 — the IC-9700 record carries no attenuator field",
 	"PreampOptions":          "additions design D8 — the IC-9700 record carries no preamp field",
 	"AntennaOptions":         "additions design D8 — the IC-9700 record carries no antenna field",
+	"NoTag":                  "the IC-9700 supports channel names via the memory name field; NoTag is false",
 }
 
 func TestDeliberatelyZeroAudit_ReceiverCapabilities(t *testing.T) {
-	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 29 {
-		t.Fatalf("spec.Capabilities has %d fields, this audit knows 29", got)
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 30 {
+		t.Fatalf("spec.Capabilities has %d fields, this audit knows 30", got)
 	}
 	for _, caps := range []spec.Capabilities{CapabilitiesUnverified(), CapabilitiesSimulated()} {
 		value := reflect.ValueOf(caps)

@@ -183,12 +183,13 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"PreampOptions":          "§1.26, M-E5 — as AttenuatorDB, for PA",
 		"AntennaOptions":         "§1.27, M-E5 — as AttenuatorDB, for AN0/AN1",
 		"TagCharset":             "§1.28, A2 — the empty string selects the family default",
+		"NoTag":                  "the TS-990S supports channel names via the MT tag field; NoTag is false",
 	}
 	caps := CapabilitiesUnverified()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 29 {
-		t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
+	if typ.NumField() != 30 {
+		t.Fatalf("spec.Capabilities has %d fields, want 30 — this test's list is stale", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name

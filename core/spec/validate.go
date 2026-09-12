@@ -124,7 +124,8 @@ func validToneSemantics(s ToneSemantics) bool {
 // just the first):
 //
 //   - Model and CATID must both be non-empty.
-//   - TagLen must be greater than zero.
+//   - TagLen must be greater than zero, unless NoTag is true, in which
+//     case TagLen must be exactly zero.
 //   - No two Banks may share a BankID.
 //   - No slot (Bank.Slots entry) may be claimed by more than one Bank.
 //   - No slot (Bank.Slots entry) may be blank: a blank slot is not a
@@ -245,8 +246,11 @@ func (c Capabilities) Validate() error {
 	// project's standing posture is refuse, never corrupt: a driver that
 	// forgets to set TagLen must fail construction here, not reach a
 	// radio having erased every tag.
-	if c.TagLen <= 0 {
-		problems = append(problems, fmt.Sprintf("TagLen %d must be greater than zero", c.TagLen))
+	if c.TagLen <= 0 && !c.NoTag {
+		problems = append(problems, fmt.Sprintf("TagLen %d must be greater than zero (or set NoTag)", c.TagLen))
+	}
+	if c.NoTag && c.TagLen != 0 {
+		problems = append(problems, fmt.Sprintf("NoTag models must set TagLen to 0, not %d", c.TagLen))
 	}
 
 	seenBank := make(map[BankID]bool, len(c.Banks))
