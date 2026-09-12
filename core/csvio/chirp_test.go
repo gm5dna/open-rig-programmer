@@ -3315,11 +3315,15 @@ func TestImportCHIRP_TS890And990TakeTheToneModeBranch(t *testing.T) {
 				if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "OFF" {
 					t.Errorf("ToneMode = %+v, want Known %q — importCHIRPToneIcom's blank arm asks caps.CanonicalToneMode(spec.ToneModeOff), and this row's P5 legend prints OFF (890:3180-3185, 990:2915-2919)", d.ToneMode, "OFF")
 				}
-				if d.ToneTx.State != codeplug.Unknown {
-					t.Errorf("ToneTx = %+v, want Unknown — a blank Tone cell says nothing about the transmit index, and no importer may invent one", d.ToneTx)
+				// Symmetric B1 (2026-09-12): the row's rToneFreq/cToneFreq
+				// columns are a complete statement of the channel even
+				// though Tone mode is off, so both indices are carried —
+				// this SUPERSEDES ruling B2, which left them Unknown.
+				if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+					t.Errorf("ToneTx = %+v, want Known 88.5 from rToneFreq (B1 rule 2, not B2)", d.ToneTx)
 				}
-				if d.ToneRx.State != codeplug.Unknown {
-					t.Errorf("ToneRx = %+v, want Unknown — a blank Tone cell says nothing about the receive index either", d.ToneRx)
+				if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+					t.Errorf("ToneRx = %+v, want Known 88.5 from cToneFreq (B1 rule 2, not B2)", d.ToneRx)
 				}
 				// The Yaesu half of the vocabulary pair is UNAVAILABLE, not
 				// Unknown: neither record has such a field for the imported
@@ -3366,8 +3370,10 @@ func TestImportCHIRP_TS890And990TakeTheToneModeBranch(t *testing.T) {
 					if d.ToneTx.State != codeplug.Known || d.ToneTx.Value != wantTx {
 						t.Errorf("channels[%d].ToneTx = %+v, want Known %v from rToneFreq", i, d.ToneTx, wantTx)
 					}
-					if d.ToneRx.State != codeplug.Unknown {
-						t.Errorf("channels[%d].ToneRx = %+v, want Unknown — CHIRP's encode-only row says nothing about the receive index, and the cToneFreq cell beside it is not this row's answer", i, d.ToneRx)
+					// B1 rule 2: cToneFreq is a reachable field the Tone
+					// arm did not assign, so it is still carried (88.5).
+					if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+						t.Errorf("channels[%d].ToneRx = %+v, want Known 88.5 from cToneFreq (B1 rule 2)", i, d.ToneRx)
 					}
 				}
 			})
@@ -3421,6 +3427,67 @@ func TestImportCHIRP_TS890And990TakeTheToneModeBranch(t *testing.T) {
 				if d.ToneTx.State != codeplug.Unknown || d.ToneRx.State != codeplug.Unknown {
 					t.Errorf("ToneTx = %+v, ToneRx = %+v, want both Unknown — the refusal happens before either index is read", d.ToneTx, d.ToneRx)
 				}
+			})
+
+			// Cross assigns nothing active (only the mode itself), so B1
+			// rule 2 carries both indices from their own columns — the
+			// pair's own P5/P6/P7 legends have no DTCS field to grade.
+			t.Run("a Cross row carries both tone indices from their own columns", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n" +
+					"1,XCH,145.500000,FM,Cross,100.0,67.0\n"
+				d := importOneChannel(t, csv, caps)
+				if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "CROSS" {
+					t.Errorf("ToneMode = %+v, want Known CROSS", d.ToneMode)
+				}
+				if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: 1000}) {
+					t.Errorf("ToneTx = %+v, want Known 100.0 from rToneFreq", d.ToneTx)
+				}
+				if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 670}) {
+					t.Errorf("ToneRx = %+v, want Known 67.0 from cToneFreq", d.ToneRx)
+				}
+			})
+
+			// This pair has no DTCS field at all (K-D1's chart is
+			// tone-frequency only), so a non-default DtcsCode still gets
+			// the pre-existing dropped treatment via chirpExtraColumns —
+			// B1 changes nothing here, and CHIRP's own fill values stay
+			// silent.
+			t.Run("DtcsCode has no field on this pair: fill silent, other values dropped", func(t *testing.T) {
+				const head = "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity\n"
+				t.Run("023/NN fill values are silent", func(t *testing.T) {
+					csv := head + "1,SIMPLEX,145.500000,FM,,88.5,88.5,023,NN\n"
+					_, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+					if err != nil {
+						t.Fatalf("ImportCHIRP: %v", err)
+					}
+					for _, e := range report.Entries {
+						if e.Column == "DtcsCode" || e.Column == "DtcsPolarity" {
+							t.Errorf("report = %+v, want no entry for the fill values", report.Entries)
+						}
+					}
+				})
+				t.Run("a real code is dropped, non-blocking", func(t *testing.T) {
+					csv := head + "1,SIMPLEX,145.500000,FM,,88.5,88.5,025,NN\n"
+					_, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+					if err != nil {
+						t.Fatalf("ImportCHIRP: %v", err)
+					}
+					if report.HasBlocking() {
+						t.Fatalf("report has blocking entries: %+v", report.Entries)
+					}
+					found := false
+					for _, e := range report.Entries {
+						if e.Column == "DtcsCode" {
+							found = true
+							if e.Action != ActionDropped || e.Blocking {
+								t.Errorf("DtcsCode entry = %+v, want non-blocking ActionDropped", e)
+							}
+						}
+					}
+					if !found {
+						t.Errorf("report = %+v, want a dropped entry for DtcsCode — this pair has no such field", report.Entries)
+					}
+				})
 			})
 		})
 	}
@@ -3536,10 +3603,12 @@ func importOneChannel(t *testing.T, csv string, caps spec.Capabilities) *codeplu
 // is refused rather than substituted. That refusal is follow-up (k)'s
 // question answered: the 590 pair does what pair 2 does, in the same words.
 //
-// BOTH INDICES STAY UNKNOWN ON A BLANK-Tone ROW, which is ruling B2: the
-// file's rToneFreq/cToneFreq columns are CHIRP's per-row "this is not really
-// data" defaults (chirpExtraColumnDefaults, above), so nothing is carried
-// from them and the write stays refused naming both.
+// A BLANK-Tone ROW CARRIES BOTH INDICES (design 2026-09-12-chirp-b1,
+// symmetric B1): the file's rToneFreq/cToneFreq columns are a complete
+// statement of the channel even though this row's Tone mode does not use
+// them, so both are Known 88.5. This SUPERSEDES ruling B2, which held
+// (09/09/2026) that the two columns were CHIRP's own defaults and not
+// really data — B1 reopened that call.
 func TestImportCHIRP_TS590PairTakesTheToneModeBranch(t *testing.T) {
 	for _, caps := range []spec.Capabilities{
 		ts590LikeCapabilities("TS-590S", "021"),
@@ -3552,17 +3621,23 @@ func TestImportCHIRP_TS590PairTakesTheToneModeBranch(t *testing.T) {
 				}
 			}
 
-			t.Run("a blank Tone row leaves both indices Unknown and the mode Known OFF", func(t *testing.T) {
+			t.Run("a blank Tone row carries both indices from CHIRP's own fill values, mode Known OFF", func(t *testing.T) {
 				d := importOneChannel(t, "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n1,SIMPLEX,145.500000,FM,,88.5,88.5\n", caps)
 				if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "OFF" {
 					t.Errorf("ToneMode = %+v, want Known %q", d.ToneMode, "OFF")
 				}
-				if d.ToneTx.State != codeplug.Unknown || d.ToneRx.State != codeplug.Unknown {
-					t.Errorf("ToneTx = %+v, ToneRx = %+v, want both Unknown — the two populated columns beside a blank Tone cell are CHIRP's per-row defaults, not this row's answer (ruling B2)", d.ToneTx, d.ToneRx)
+				// Symmetric B1 (2026-09-12) SUPERSEDES ruling B2: the row's
+				// rToneFreq/cToneFreq are a complete statement of the
+				// channel even with Tone mode off, so both are carried.
+				if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+					t.Errorf("ToneTx = %+v, want Known 88.5 from rToneFreq (B1 rule 2, not B2)", d.ToneTx)
+				}
+				if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+					t.Errorf("ToneRx = %+v, want Known 88.5 from cToneFreq (B1 rule 2, not B2)", d.ToneRx)
 				}
 			})
 
-			t.Run("a Tone row sets the transmit index and leaves the receive index Unknown", func(t *testing.T) {
+			t.Run("a Tone row sets the transmit index and carries the receive index from cToneFreq", func(t *testing.T) {
 				d := importOneChannel(t, "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n1,REPEATER,145.500000,FM,Tone,100.0,88.5\n", caps)
 				if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "TONE" {
 					t.Errorf("ToneMode = %+v, want Known %q", d.ToneMode, "TONE")
@@ -3570,8 +3645,10 @@ func TestImportCHIRP_TS590PairTakesTheToneModeBranch(t *testing.T) {
 				if d.ToneTx.State != codeplug.Known || d.ToneTx.Value != spec.Tone(1000) {
 					t.Errorf("ToneTx = %+v, want Known 1000 from rToneFreq", d.ToneTx)
 				}
-				if d.ToneRx.State != codeplug.Unknown {
-					t.Errorf("ToneRx = %+v, want Unknown — CHIRP's encode-only row says nothing about the receive index", d.ToneRx)
+				// B1 rule 2: cToneFreq is a reachable field the Tone arm
+				// did not assign, so it is still carried (88.5).
+				if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+					t.Errorf("ToneRx = %+v, want Known 88.5 from cToneFreq (B1 rule 2)", d.ToneRx)
 				}
 			})
 
@@ -3599,6 +3676,19 @@ func TestImportCHIRP_TS590PairTakesTheToneModeBranch(t *testing.T) {
 				d := channels[0].Data
 				if d.ToneMode.State != codeplug.Unknown || d.ToneTx.State != codeplug.Unknown || d.ToneRx.State != codeplug.Unknown {
 					t.Errorf("ToneMode = %+v, ToneTx = %+v, ToneRx = %+v, want all Unknown", d.ToneMode, d.ToneTx, d.ToneRx)
+				}
+			})
+
+			t.Run("a Cross row carries both tone indices from their own columns", func(t *testing.T) {
+				d := importOneChannel(t, "Location,Name,Frequency,Mode,Tone,rToneFreq,cToneFreq\n1,XCH,145.500000,FM,Cross,100.0,67.0\n", caps)
+				if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "CROSS" {
+					t.Errorf("ToneMode = %+v, want Known CROSS", d.ToneMode)
+				}
+				if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: 1000}) {
+					t.Errorf("ToneTx = %+v, want Known 100.0 from rToneFreq", d.ToneTx)
+				}
+				if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 670}) {
+					t.Errorf("ToneRx = %+v, want Known 67.0 from cToneFreq", d.ToneRx)
 				}
 			})
 		})
