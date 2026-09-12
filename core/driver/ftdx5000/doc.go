@@ -138,12 +138,20 @@
 //     observation of a real FTdx5000's channel 001 (whether the radio
 //     ships with it populated, and whether the front panel will erase it).
 //
-//  5. MCSelects MCSelectsMemoryPMS (dialect.go). The MC command's own
-//     legend (layout:890-897) enumerates 001-117 only — memory and PMS —
-//     with no 60 m/EMG class printed, because this radio has neither bank
-//     at all (matrix: no "5xx"/"5MHz"/"EMG" hit anywhere in the whole
-//     extraction). This is a direct transcription of what the legend
-//     prints, not an assumption about behaviour this radio might have.
+//  5. MCSelects MCSelectsAll, and MT.ReadSlots MTReadsReadable (dialect.go).
+//     The MC command's own legend (layout:890-897) enumerates 001-117 —
+//     this radio's WHOLE slot space, there being no 60 m/EMG bank to
+//     enumerate alongside it (matrix: no "5xx"/"5MHz"/"EMG" hit anywhere
+//     in the whole extraction). MCSelectsAll and MCSelectsMemoryPMS are
+//     BEHAVIOURALLY IDENTICAL on a radio with neither bank — the same
+//     degenerate case core/cat/ft991a's own dialect documents — and All
+//     is the correct member of the pair: the legend prints the radio's
+//     full span, and MemoryPMS would assert a narrowing this manual does
+//     not state. core/cat/dialecttest's own non-vacuity check (commit
+//     1ca7aac's sibling addition) refuses to let an unevidenced narrowing
+//     stand for a dialect with nothing 60m/EMG-shaped to narrow away.
+//     MT.ReadSlots is inert regardless (no MT command exists at all) and
+//     follows the same reasoning.
 //
 // SlotSpace.NoneWire is left ABSENT ("") rather than the family's usual
 // ASSUMED "000": no MR, MW or MC legend in this manual prints a "000"/VFO

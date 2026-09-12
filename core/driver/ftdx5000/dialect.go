@@ -73,11 +73,21 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		// prints one) — left absent rather than assumed; see doc.go.
 		EmergencyWire: "",
 		NoneWire:      "",
-		// MC's own legend enumerates 001-117 only — memory and PMS, no
-		// 60m/EMG class printed (there being none to print) — layout:
-		// 890-897. Direct transcription; see doc.go's ASSUMED register
+		// MC's own legend enumerates 001-117 — this radio's WHOLE slot
+		// space, there being no 60m/EMG class to enumerate alongside it
+		// (layout:890-897). MCSelectsAll, not MCSelectsMemoryPMS: the two
+		// differ only over 60m/EMG banks this radio has neither of, so
+		// they are behaviourally IDENTICAL here — the same degenerate
+		// case core/cat/ft991a/dialect.go's own MCSelects comment
+		// documents ("the two give identical verdicts on every wire form
+		// there is... inert"). All is the correct member of the pair: MC's
+		// legend prints the FULL span this radio has, and MemoryPMS would
+		// falsely claim a narrowing this radio's own manual does not
+		// state — a claim core/cat/dialecttest's own non-vacuity check
+		// refuses to let stand unevidenced for a dialect with nothing
+		// 60m/EMG-shaped to narrow away. See doc.go's ASSUMED register
 		// entry 5.
-		MCSelects: cat.MCSelectsMemoryPMS,
+		MCSelects: cat.MCSelectsAll,
 	},
 	// No EX (menu) inventory is modelled this wave (brief: "EX/menu
 	// inventory is OUT for all seven packages... EXItems empty, MaxEXAddress
@@ -99,8 +109,13 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	// 1, which V9 permits"). No method on this dialect's driver ever
 	// calls BuildMTRead, BuildMTSet or ParseMTAnswer*.
 	MT: cat.MTPolicy{
-		Form:         cat.MTFormShort,
-		ReadSlots:    cat.MTReadsMemoryPMS,
+		Form: cat.MTFormShort,
+		// MTReadsReadable, not MTReadsMemoryPMS: this axis is entirely
+		// inert (there is no MT command to read slots with at all — see
+		// above), and this radio has no 60m/EMG slot for the narrow
+		// reading to narrow away either, so MemoryPMS would claim an
+		// unevidenced restriction. Same reasoning as MCSelects above.
+		ReadSlots:    cat.MTReadsReadable,
 		TagMaxBytes:  1,
 		ClearTagByte: ' ',
 	},
