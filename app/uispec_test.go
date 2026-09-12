@@ -827,6 +827,15 @@ var ic7700CoreThree = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
 }
 
+// ic9100CoreThree is the core set the IC-9100's ONE bank derives, on
+// every profile (core/driver/ic9100/caps.go's bankFields) — there is
+// only the dense MEM space to derive it from, this build addressing no
+// other bank on this radio (the optional 4th band's own frequency-field
+// encoding left unresolved, per its own capability review).
+var ic9100CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1302,6 +1311,8 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		"IC-7410": ic7410CoreThree,
 		// The IC-7700 (v1.7.0 Icom wave's fourth registration).
 		"IC-7700": ic7700CoreThree,
+		// The IC-9100 (v1.7.0 Icom wave's fifth registration).
+		"IC-9100": ic9100CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

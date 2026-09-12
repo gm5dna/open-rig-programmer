@@ -2081,6 +2081,27 @@ var ic7700Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7700: this build knows of none to require. This driver talks only to CI-V address 74h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// ic9100Text is the IC-9100's entry — the v1.7.0 Icom wave's fifth
+// registration. ONE bank (MEM): this radio's own capability review
+// deferred the optional 4th (1200 MHz) band. Its record maps duplex,
+// offset, DTCS code and DTCS polarity as well as tone and data mode —
+// richer than every sibling in this wave — but declares no DTCS TONE
+// STATE, so a CHIRP DTCS/Cross cell is still refused on the same
+// unreachable-tone-mode footing as its siblings.
+//
+// writeTrialsComplete is FALSE (core/driver/ic9100/caps.go); CI-V address
+// 7Ch, fixed, no --civ-address option; TagLen 9; default baud 19200,
+// unverified.
+var ic9100Text = Text{
+	EraseProcedure: "This program sends no CI-V memory-clear frame for the IC-9100: no builder for one exists, and no IC-9100 has ever confirmed what a clear command does, so sending one risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the IC-9100 over CI-V by this build, but unverified against real hardware — no IC-9100 has ever answered a frame. Scan Skip is not read or written: this radio's document maps no wire bit to it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-9100 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-9100's document maps no wire bit to it",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-9100: this build knows of none to require. This driver talks only to CI-V address 7Ch, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2123,6 +2144,8 @@ var texts = map[string]Text{
 	"IC-7410": ic7410Text,
 	// The v1.7.0 Icom wave's fourth registration.
 	"IC-7700": ic7700Text,
+	// The v1.7.0 Icom wave's fifth registration.
+	"IC-9100": ic9100Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
