@@ -25,7 +25,7 @@ radio, and every write is previewed, snapshotted and read back.
 | --- | --- | --- |
 | **FT-710** | ✅ | ✅ verified on a real radio |
 | **FTdx10**, **FTdx101D**, **FTdx101MP**, **FT-891**, **FT-991A** | ✅ | ⚠️ opt-in |
-| **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760**, **IC-7100**, **IC-7800**, **IC-7600**, **IC-7410** | ✅ | ⚠️ opt-in |
+| **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760**, **IC-7100**, **IC-7800**, **IC-7600**, **IC-7410**, **IC-7700** | ✅ | ⚠️ opt-in |
 | **IC-R8600** (a receiver) | ✅ | ⚠️ opt-in |
 | **TS-590S**, **TS-590SG** | ✅ | ⚠️ opt-in |
 | **TS-890S**, **TS-990S** | ✅ | ⚠️ opt-in, existing channels only |

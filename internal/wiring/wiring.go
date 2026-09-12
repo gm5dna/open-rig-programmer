@@ -47,6 +47,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7410"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
@@ -657,6 +658,20 @@ const IC7600Model = "IC-7600"
 // address is 80h.
 const IC7410Model = "IC-7410"
 
+// IC7700Model names the IC-7700's realDrivers/fakeDrivers key, which must
+// equal ic7700.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's FOURTH REGISTRATION, and a single-row one on
+// IC7800Model's footing: profile is a positional argument. Its own record
+// is 39 bytes — the same record-only length as the already-registered
+// IC-7300 — over the same 2-byte flat address, which is why it joins that
+// pairing in `indistinguishable` below rather than standing apart the way
+// IC7410Model does. Its RX fields match the IC-7610 family exactly; its
+// own capability review found a TX-duplicate block reusing existing field
+// types rather than introducing new ones. Its own CI-V address is 74h.
+const IC7700Model = "IC-7700"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -932,6 +947,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7410.New(ic7410.WithConsentedUnverifiedWrites())
 		}
 		return ic7410.New()
+	},
+	// The v1.7.0 Icom wave's fourth row, on IC7800Model's footing.
+	IC7700Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7700.New(ic7700.RealHardware, ic7700.WithConsentedUnverifiedWrites())
+		}
+		return ic7700.New(ic7700.RealHardware)
 	},
 }
 

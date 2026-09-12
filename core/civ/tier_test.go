@@ -221,6 +221,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7410"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7700"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
@@ -311,6 +312,12 @@ var tierProfilePopulation = []civ.Profile{
 	// no other family in this tier declares — measured disjoint from
 	// every sibling by the pairwise walk below, no declaration needed.
 	ic7410.Profile(),
+	// The v1.7.0 Icom wave's fourth family: 39 bytes record-only over a
+	// 2 B flat address — the SAME shape as the already-registered IC-7300,
+	// so it joins that one pairing in `indistinguishable` below (the
+	// IC-R8600's 39-member set is separated automatically instead, by its
+	// 4 B address width).
+	ic7700.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -353,6 +360,8 @@ var tierRegistrationCoverage = map[string]string{
 	"IC-7600": "IC-7600",
 	// And its third: ONE key, ONE family.
 	"IC-7410": "IC-7410",
+	// And its fourth: ONE key, ONE family.
+	"IC-7700": "IC-7700",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -613,6 +622,13 @@ var indistinguishable = map[string]string{
 	"IC-7851|IC-7600": "docs/superpowers/icom-matrices/ic7600-capability-matrix.md and core/driver/ic7851's/ic7600's own doc.go files. Factory addresses (8Eh and 7Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 	"IC-7760|IC-7600": "docs/superpowers/icom-matrices/ic7600-capability-matrix.md and core/driver/ic7760's/ic7600's own doc.go files. Factory addresses (B2h and 7Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 	"IC-7800|IC-7600": "both this wave's own capability matrices (docs/superpowers/icom-matrices/ic7800-capability-matrix.md, ic7600-capability-matrix.md), each independently derived from its own radio's manual, and each driver's own doc.go, neither of which mints a driver.WrongRadioError for a length it cannot attribute. Factory addresses (6Ah and 7Ah) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	// The v1.7.0 Icom wave's fourth family: its own 39 B record-only over
+	// a 2 B flat address is the SAME shape as the already-registered
+	// IC-7300's (core/driver/ic7300/caps.go), so this is a genuine new
+	// collision rather than a restatement — the IC-R8600's own 39-member
+	// set is separated from both automatically, by address width alone (4
+	// bytes against 2), and needs no declaration.
+	"IC-7300|IC-7700": "docs/superpowers/icom-matrices/ic7700-capability-matrix.md (39 B record-only, 2 B flat address, independently re-derived from the IC-7700's own manual) and core/driver/ic7700/doc.go, which mints no driver.WrongRadioError for a length it cannot attribute — core/driver/ic7300/doc.go does the same on its own side. Factory addresses (94h and 74h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 }
 
 // TestTierRecordShapes_DistinctOrDeclared is the tier-close check: every
@@ -760,8 +776,8 @@ func TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames(t *testing.T
 	got := icomModels(t, wiring.SupportedModels(), wiring.StaticCapabilities)
 	want := []string{
 		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7410", "IC-7600",
-		"IC-7610", "IC-7760", "IC-7800", "IC-7850", "IC-7851", "IC-905",
-		"IC-9700", "IC-R8600",
+		"IC-7610", "IC-7700", "IC-7760", "IC-7800", "IC-7850", "IC-7851",
+		"IC-905", "IC-9700", "IC-R8600",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("icomModels(wiring.SupportedModels()) = %v (%d rows),\nwant %v (%d rows) — the registered Yaesu/Icom split has changed; update this list deliberately if it is a real registration, not a proxy regression", got, len(got), want, len(want))
