@@ -85,6 +85,21 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return noSteps(), refuse(ch.Slot, nil, "%v", err)
 	}
 	data := *ch.Data
+
+	// core/driver.CheckFieldStates is THE FLEET'S shared walk rather than
+	// a table of this package's own: every field of ChannelData that
+	// carries a FieldState, judged against this session's own
+	// vocabularies. It exists because s.validateWriteValues below only
+	// judges a field when its State == codeplug.Known — so a value
+	// carried alongside Unknown/Unavailable/Absent (a caller who set a
+	// value and forgot to set the state) would otherwise be DROPPED from
+	// the frame and the write would report success, never refused (the
+	// FT-891 closing review's C-M1, sharpened by MEDIUM-1 to
+	// codeplug.Absent).
+	if field, err := driver.CheckFieldStates(s.caps, data); err != nil {
+		return noSteps(), refuse(ch.Slot, []spec.Field{field}, "%v", err)
+	}
+
 	requested := requestedFields(data)
 	var blocked []spec.Field
 	for _, field := range requested {
