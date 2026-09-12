@@ -323,6 +323,20 @@ than a driver-asserted stop-bit count.
 
 Evidence: `docs/superpowers/icom-matrices/ic9100-capability-matrix.md`.
 
+### IC-7200 (opt-in)
+
+Read and write the memory and scan-edge channels. This radio has no
+channel-name field over CI-V at all — NoTag, the wave's only one — so
+no Tag column is shown for it. Its 17-byte record maps no tone field of
+any kind and no scan-skip bit either, a stricter absence than every
+other radio in this wave: a `Tone` or `Scan Skip` value cannot travel
+over this frame at all, set both at the radio. A write that leaves the
+transmit frequency unset mirrors the receive frequency into it, on the
+same SimplexTxEqualsRx footing as the IC-7410. This driver implements
+CI-V serial framing (8-N-1), unlike the IC-9100's own row.
+
+Evidence: `docs/superpowers/icom-matrices/ic7200-capability-matrix.md`.
+
 ## Kenwood
 
 ### TS-590S and TS-590SG (opt-in)
@@ -600,5 +614,6 @@ by revision in the code that transcribes it.
 | IC-7410 | Icom CI-V Reference Guide |
 | IC-7700 | Icom CI-V Reference Guide |
 | IC-9100 | Icom CI-V Reference Guide |
+| IC-7200 | Icom Advanced Instructions manual (no separate CI-V Reference Guide) |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |

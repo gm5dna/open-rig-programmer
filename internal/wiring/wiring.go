@@ -43,6 +43,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7410"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7600"
@@ -695,6 +696,22 @@ const IC7700Model = "IC-7700"
 // needed no case correction.
 const IC9100Model = "IC-9100"
 
+// IC7200Model names the IC-7200's realDrivers/fakeDrivers key, which must
+// equal ic7200.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's SIXTH AND LAST REGISTRATION, on IC7800Model's
+// footing. Its own record is 17 bytes over a FLAT address (the matrix's
+// own correction of spec.md's superseded 9 B figure) — a length no other
+// family in this tier declares. NOTAG (matrix §1 row 6): this radio has
+// no channel-name route over CI-V at all, TagLen 0 by declaration, so no
+// Tag column is shown for it — the wave's only NoTag row. It implements
+// driver.SerialFramingReporter like the tier's other four single-band
+// transceivers (8-N-1), unlike the IC-9100's bare-port default. Its CI-V
+// address is 76h, reconstructed (address+token), not a static literal,
+// so it needed no case correction either.
+const IC7200Model = "IC-7200"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -984,6 +1001,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic9100.New(ic9100.RealHardware, ic9100.WithConsentedUnverifiedWrites())
 		}
 		return ic9100.New(ic9100.RealHardware)
+	},
+	// The v1.7.0 Icom wave's sixth and last row, on IC7800Model's footing.
+	IC7200Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7200.New(ic7200.RealHardware, ic7200.WithConsentedUnverifiedWrites())
+		}
+		return ic7200.New(ic7200.RealHardware)
 	},
 }
 

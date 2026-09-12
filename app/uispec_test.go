@@ -836,6 +836,16 @@ var ic9100CoreThree = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
 }
 
+// ic7200CoreTwo is the core set every IC-7200 bank derives, on every
+// profile — MEM and SCAN alike (core/driver/ic7200/caps.go's
+// bankFields). TWO, not three: this radio is NoTag (matrix §1 row 6) —
+// FieldTag carries the zero FieldSupport on both banks, so it drops out
+// of bankCoreCandidates' derived set, the first registered model for
+// which that is true.
+var ic7200CoreTwo = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1313,6 +1323,10 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		"IC-7700": ic7700CoreThree,
 		// The IC-9100 (v1.7.0 Icom wave's fifth registration).
 		"IC-9100": ic9100CoreThree,
+		// The IC-7200 (v1.7.0 Icom wave's sixth and last registration):
+		// NoTag, so TWO fields, not three — see ic7200CoreTwo's own doc
+		// comment.
+		"IC-7200": ic7200CoreTwo,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
