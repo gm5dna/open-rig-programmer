@@ -4,17 +4,18 @@ The evidence behind the Icom entries in `docs/radio-notes.md`. Every claim below
 ## The Icom models
 
 IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851,
-IC-7850, IC-7760, IC-7100, IC-R8600 and IC-7800 talk a different wire
-protocol from the Yaesu models (Icom's CI-V, rather than Yaesu's CAT),
-and each carries its own honesty rows beyond the README's shared "no
-radio has ever been connected" small print.
+IC-7850, IC-7760, IC-7100, IC-R8600, IC-7800 and IC-7600 talk a
+different wire protocol from the Yaesu models (Icom's CI-V, rather
+than Yaesu's CAT), and each carries its own honesty rows beyond the
+README's shared "no radio has ever been connected" small print.
 
-Twelve models, ELEVEN memory formats: the IC-7851 and the IC-7850 are
-two entries in the model list over one manual, one address and one
+Thirteen models, TWELVE memory formats: the IC-7851 and the IC-7850
+are two entries in the model list over one manual, one address and one
 record format, because this program cannot tell them apart (see the
-sections below). The IC-7800, registered in the v1.7.0 Icom wave, is a
-HIGH-proximity clone of the IC-7610's record shape (25 B / 2 B flat
-address) at its own address, 6Ah — see `docs/radio-notes.md`.
+sections below). The IC-7800 and IC-7600, registered in the v1.7.0
+Icom wave, are both HIGH-proximity clones of the IC-7610's record
+shape (25 B / 2 B flat address) at their own addresses, 6Ah and 7Ah —
+see `docs/radio-notes.md`.
 
 TEN TRANSCEIVERS AND ONE RECEIVER. The IC-R8600 is a communications
 receiver, and this program says so rather than treating its missing
@@ -27,13 +28,13 @@ invariant, pinned by `internal/wiring`'s
 `TestEveryRegisteredModelDeclaresItsTransmitAnatomy`, which also refuses
 a future row that forgot to say either way).
 
-Three costs are shared by all twelve:
+Three costs are shared by all thirteen:
 
 - **No `--civ-address` option.** Each driver talks only to its one
   factory CI-V address (98h IC-7610, 94h IC-7300, B6h IC-7300MK2, A4h
   IC-705, A2h IC-9700, ACh IC-905, B2h IC-7760, 88h IC-7100, 96h
   IC-R8600, 8Eh IC-7851 AND IC-7850 — that last address is printed in the
-  manual as the default for both radios — 6Ah IC-7800) and
+  manual as the default for both radios — 6Ah IC-7800, 7Ah IC-7600) and
   there is no setting to change it. Two different things can happen when this driver meets a radio
   it did not expect. A different Icom model at ITS OWN factory address
   simply does not answer — nothing was heard from, so nothing can be

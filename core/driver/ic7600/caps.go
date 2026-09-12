@@ -180,8 +180,11 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		//
 		// THE STATIC VALUE IS THE ADDRESS ALONE (spec D3.2): the 19 00
 		// token is a per-session observation (D5 entry 7, matrix lift R7),
-		// recorded and never matched.
-		CATID:    "7A",
+		// recorded and never matched. Lower case, the IC-7610 family's
+		// rendering (driver.go's Identity.CATID casing note): this
+		// driver's own Identity construction is `fmt.Sprintf("%02x%s",
+		// ...)`, so the static half must match its case.
+		CATID:    "7a",
 		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{

@@ -277,6 +277,15 @@ own build (`core/driver/ic7800`'s `FieldSpan`).
 
 Evidence: `docs/superpowers/icom-matrices/ic7800-capability-matrix.md`.
 
+### IC-7600 (opt-in)
+
+Read and write the memory and scan-edge channels. Another
+HIGH-proximity clone of the IC-7610's record shape at its own address,
+7Ah, with one wire deviation of its own: the SELECT byte is a WHOLE
+unmapped E6 region on this radio, not the IC-7610's nibble split.
+
+Evidence: `docs/superpowers/icom-matrices/ic7600-capability-matrix.md`.
+
 ## Kenwood
 
 ### TS-590S and TS-590SG (opt-in)
@@ -550,5 +559,6 @@ by revision in the code that transcribes it.
 | IC-7100 | Icom Full Manual A7085-2EX-5, section 20 |
 | IC-R8600 | Icom CI-V Reference Guide rev 3a |
 | IC-7800 | Icom Instruction Manual, section 14 (no separate CI-V Reference Guide) |
+| IC-7600 | Icom CI-V Reference Guide |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |

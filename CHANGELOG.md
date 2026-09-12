@@ -16,6 +16,9 @@ tag. The full release notes for each version are on the
   memory and scan-edge channels, opt-in unverified writes, a
   HIGH-proximity clone of the IC-7610's record shape at its own
   address.
+- **IC-7600** joins the supported Icom models (v1.7.0 Icom wave):
+  another HIGH-proximity clone of the IC-7610's record shape, at its
+  own address.
 
 ## [1.6.0] - 2026-09-12
 
