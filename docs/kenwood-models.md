@@ -319,21 +319,26 @@ additive (plan decision P11, spec decision 15).
   "no duplex configured" as distinct from simplex and the record has
   nowhere to carry the distinction. `CW`, `CWR` and `RTTY` block on the
   mode: `chirpModeMap` resolves them to `CW-U`, `CW-L` and `RTTY-U`, and
-  Kenwood spells RTTY `FSK` and prints CW without a sideband suffix. **A
-  CHIRP import is refused at the write on these two rows, and since
-  v1.5.1 what it is refused on is the two tone numbers.** A **blank**
-  `Duplex` cell on a bank that grades `FieldTxFrequency` now takes the
-  row's own `spec.SimplexTx` — `SimplexTxZero` here, since each book
+  Kenwood spells RTTY `FSK` and prints CW without a sideband suffix. A
+  **blank** `Duplex` cell on a bank that grades `FieldTxFrequency` takes
+  the row's own `spec.SimplexTx` — `SimplexTxZero` here, since each book
   prints that a simplex channel's split parameters all read 0
   (`890:3217-3218`, `990:2964-2965`) — so rung 6 passes. An `off` cell
-  still blocks in the importer and is not a simplex statement. What
-  remains is `tone_tx` and `tone_rx`: a blank `Tone` row carries a Known
-  tone mode and neither index, and decision B is ruled **B2**, so the
-  file's `rToneFreq`/`cToneFreq` columns — CHIRP's per-row "this is not
-  really data" defaults, the same species as `DtcsCode` 023 — are not
-  read for them. The datum moved six registered rows, the TS-590 pair and
-  the IC-7300/IC-7300MK2 with these two: every bank that grades
-  `FieldTxFrequency` without grading `FieldDuplex` takes this branch.
+  still blocks in the importer and is not a simplex statement. **`tone_tx`
+  and `tone_rx` are now carried too (design 2026-09-12-chirp-b1,
+  symmetric B1, which SUPERSEDES the ruling B2 recorded here since
+  v1.5.1): a blank `Tone` row's `rToneFreq`/`cToneFreq` columns are a
+  complete statement of the channel even though the row's own Tone mode
+  does not use them, so both indices are Known from CHIRP's ordinary 88.5
+  fill values — the same treatment `DtcsCode` 023 already got.** A CHIRP
+  import on these two rows therefore reaches the tone mode/tone_tx/tone_rx
+  live-byte rung with all three Known, and the write proceeds to this
+  radio's unverified-write consent gate rather than refusing on tone. The
+  earlier datum moved six registered rows, the TS-590 pair and the
+  IC-7300/IC-7300MK2 with these two: every bank that grades
+  `FieldTxFrequency` without grading `FieldDuplex` takes this branch —
+  symmetric B1 is scoped to the Icom-tone branch (`FieldToneMode`) instead
+  and does not reopen that count.
 
 ## Costs the TS-990S pays and the TS-890S does not
 

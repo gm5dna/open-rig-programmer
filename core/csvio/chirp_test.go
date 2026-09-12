@@ -3156,20 +3156,18 @@ func TestImportCHIRP_TS890And990BlockCWAndRTTYRows(t *testing.T) {
 					// That closes the v1.5.x follow-up this line used to
 					// defer.
 					//
-					// IT DOES NOT MAKE THE ROW WRITABLE, which this pin
-					// records rather than hides. MA0 Set additionally
-					// requires a Known transmit tone and receive tone, and a
-					// blank-Tone row supplies NEITHER — the tone MODE it does
-					// supply, so the recovery on these two radios is TWO
-					// values, the two indices, not the four the shipped prose
-					// claimed (measured 09/09/2026 §1.4;
-					// TestImportCHIRP_TS890And990TakeTheToneModeBranch pins
-					// the three tone states). Decision B is RULED B2: the
-					// file's rToneFreq/cToneFreq columns are CHIRP's per-row
-					// "this is not really data" defaults, the same species as
-					// DtcsCode 023 (chirp.go's chirpExtraColumnDefaults), so
-					// the indices stay Unknown and the write stays refused,
-					// naming both.
+					// THIS FIXTURE HAS NO Tone/rToneFreq/cToneFreq COLUMNS AT
+					// ALL (its header above is Location,Name,Frequency,Mode),
+					// so both tone indices stay Unknown here regardless of
+					// ruling B2 or its 2026-09-12-chirp-b1 (symmetric B1)
+					// supersession: an absent column is not a fill value to
+					// carry, on either ruling. That is a DIFFERENT case from
+					// TestImportCHIRP_TS890And990TakeTheToneModeBranch's
+					// blank-Tone row, where rToneFreq/cToneFreq ARE present
+					// (88.5 each) and B1 now carries both — see that test for
+					// the current (post-B1) tone-index behaviour on a real
+					// CHIRP export. IT DOES NOT MAKE THIS ROW WRITABLE either
+					// way, which this pin records rather than hides.
 					if ch.Data.TxFreqHz != (codeplug.FreqField{State: codeplug.Known, Value: 0}) {
 						t.Errorf("channels[%d].TxFreqHz = %+v, want Known 0 (890:3217-3218, 990:2964-2965)", i, ch.Data.TxFreqHz)
 					}
