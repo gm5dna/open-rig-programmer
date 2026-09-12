@@ -1701,6 +1701,10 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 		MemoryP5:      cat.P5TxClar,
 		ToneStates:    cat.ToneStatesCTCSS,
 		MWWriteKind:   cat.KindMemory,
+
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
 	})
 	if peer.MWWriteKind() == cat.CombinedMTSetKind {
 		t.Fatal("the peer dialect's MWWriteKind equals the form constant — it cannot discriminate")
