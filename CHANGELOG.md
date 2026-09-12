@@ -19,6 +19,10 @@ tag. The full release notes for each version are on the
 - **IC-7600** joins the supported Icom models (v1.7.0 Icom wave):
   another HIGH-proximity clone of the IC-7610's record shape, at its
   own address.
+- **IC-7410** joins the supported Icom models (v1.7.0 Icom wave): not
+  a clone — a 40-byte record with a genuine TX-duplicate block, and a
+  write that leaves the transmit frequency unset mirrors the receive
+  frequency into it rather than refusing.
 
 ## [1.6.0] - 2026-09-12
 

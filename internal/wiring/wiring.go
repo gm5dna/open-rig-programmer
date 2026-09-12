@@ -44,6 +44,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7410"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
@@ -642,6 +643,20 @@ const IC7800Model = "IC-7800"
 // CI-V address is 7Ah.
 const IC7600Model = "IC-7600"
 
+// IC7410Model names the IC-7410's realDrivers/fakeDrivers key, which must
+// equal ic7410.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's THIRD REGISTRATION, and a single-row one. UNLIKE
+// its two siblings above, core/driver/ic7410's New takes NO profile
+// argument — the IC-7610's own bare-New shape, with WithSimulatedProfile()
+// as the simulated-arm option — so this row's constructor calls read
+// differently from IC7800Model's and IC7600Model's. Its own record is 40
+// bytes, not 25: this is not a literal IC-7610 clone, and its own capability
+// review found a genuinely different TX-duplicate block. Its own CI-V
+// address is 80h.
+const IC7410Model = "IC-7410"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -908,6 +923,15 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7600.New(ic7600.RealHardware, ic7600.WithConsentedUnverifiedWrites())
 		}
 		return ic7600.New(ic7600.RealHardware)
+	},
+	// The v1.7.0 Icom wave's third row: bare New, on the IC-7610's own
+	// footing rather than IC7800Model's/IC7600Model's — no profile argument
+	// to pass, since RealHardware is the zero value.
+	IC7410Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7410.New(ic7410.WithConsentedUnverifiedWrites())
+		}
+		return ic7410.New()
 	},
 }
 

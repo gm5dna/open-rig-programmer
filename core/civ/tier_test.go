@@ -218,6 +218,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7410"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7600"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
@@ -306,6 +307,10 @@ var tierProfilePopulation = []civ.Profile{
 	// capability review (no offset differs). Its four pairings against the
 	// set (IC-7610, IC-7851/7850, IC-7760, IC-7800) are declared below.
 	ic7600.Profile(),
+	// The v1.7.0 Icom wave's third family: 40 bytes record-only, a length
+	// no other family in this tier declares — measured disjoint from
+	// every sibling by the pairwise walk below, no declaration needed.
+	ic7410.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -346,6 +351,8 @@ var tierRegistrationCoverage = map[string]string{
 	"IC-7800": "IC-7800",
 	// And its second: ONE key, ONE family.
 	"IC-7600": "IC-7600",
+	// And its third: ONE key, ONE family.
+	"IC-7410": "IC-7410",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -752,7 +759,7 @@ func TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix(t *testing.T) {
 func TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames(t *testing.T) {
 	got := icomModels(t, wiring.SupportedModels(), wiring.StaticCapabilities)
 	want := []string{
-		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7600",
+		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7410", "IC-7600",
 		"IC-7610", "IC-7760", "IC-7800", "IC-7850", "IC-7851", "IC-905",
 		"IC-9700", "IC-R8600",
 	}
