@@ -308,6 +308,21 @@ tell apart from that sibling's.
 
 Evidence: `docs/superpowers/icom-matrices/ic7700-capability-matrix.md`.
 
+### IC-9100 (opt-in)
+
+Reads and writes the memory channels of ONE band (this build defers
+the optional 4th, 1200 MHz, band; its frequency-field encoding is
+unresolved from this document). Its own record additionally carries
+duplex, offset, DTCS code and DTCS polarity — richer than every other
+radio in this wave — but a CHIRP `DTCS`/`Cross` cell is still refused:
+the record names no DCS tone STATE, only the code and polarity bytes,
+which this program does not yet import from a CHIRP file. This
+radio's own document states no CI-V serial-framing fact, so unlike
+its siblings this row opens at the port's own default framing rather
+than a driver-asserted stop-bit count.
+
+Evidence: `docs/superpowers/icom-matrices/ic9100-capability-matrix.md`.
+
 ## Kenwood
 
 ### TS-590S and TS-590SG (opt-in)
@@ -584,5 +599,6 @@ by revision in the code that transcribes it.
 | IC-7600 | Icom CI-V Reference Guide |
 | IC-7410 | Icom CI-V Reference Guide |
 | IC-7700 | Icom CI-V Reference Guide |
+| IC-9100 | Icom CI-V Reference Guide |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |

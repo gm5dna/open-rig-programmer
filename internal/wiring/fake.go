@@ -24,6 +24,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
@@ -45,6 +46,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7800"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic905"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic9100"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic9700"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeicr8600"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
@@ -479,6 +481,11 @@ var IC7410FakeSessionOpts []fakeic7410.Option
 // demo radio is empty.
 var IC7700FakeSessionOpts []fakeic7700.Option
 
+// IC9100FakeSessionOpts is the IC-9100's own option source, on the same
+// terms as IC7800FakeSessionOpts above. Left at its nil zero value the
+// demo radio is empty.
+var IC9100FakeSessionOpts []fakeic9100.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -630,6 +637,9 @@ var (
 	// The IC-7700's, on the same footing — internal/fakeic7700's Port()
 	// also returns net.Conn.
 	_ fakeRadio = ic7700FakeAdapter{}
+	// The IC-9100's, on the same footing — internal/fakeic9100's Port()
+	// also returns net.Conn.
+	_ fakeRadio = ic9100FakeAdapter{}
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -724,6 +734,13 @@ type ic7700FakeAdapter struct{ *fakeic7700.Radio }
 
 // Port implements fakeRadio. See ic7700FakeAdapter's own doc comment.
 func (a ic7700FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
+
+// ic9100FakeAdapter narrows *fakeic9100.Radio's Port() — net.Conn — to
+// io.ReadWriteCloser. See ic7800FakeAdapter's own doc comment.
+type ic9100FakeAdapter struct{ *fakeic9100.Radio }
+
+// Port implements fakeRadio. See ic9100FakeAdapter's own doc comment.
+func (a ic9100FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
 
 // fakeDriverEntry pairs one model's simulated-profile driver constructor
 // with the fake-rig constructor OpenFakeSessionFor uses to build a live
@@ -1135,6 +1152,12 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	IC7700Model: {
 		newDriver: func() driver.Driver { return ic7700.New(ic7700.Simulated) },
 		newRadio:  func() fakeRadio { return ic7700FakeAdapter{fakeic7700.New(IC7700FakeSessionOpts...)} },
+	},
+	// The IC-9100 (v1.7.0 Icom wave's fifth registration), on IC7800Model's
+	// footing.
+	IC9100Model: {
+		newDriver: func() driver.Driver { return ic9100.New(ic9100.Simulated) },
+		newRadio:  func() fakeRadio { return ic9100FakeAdapter{fakeic9100.New(IC9100FakeSessionOpts...)} },
 	},
 }
 

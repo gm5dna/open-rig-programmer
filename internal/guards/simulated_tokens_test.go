@@ -349,6 +349,9 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// The IC-7700 (v1.7.0 Icom wave's fourth registration), on
 		// IC7800Model's footing.
 		{"ic7700", "Simulated", "fakeic7700.New", "internal/fakeic7700", []string{"IC-7700"}},
+		// The IC-9100 (v1.7.0 Icom wave's fifth registration), on
+		// IC7800Model's footing.
+		{"ic9100", "Simulated", "fakeic9100.New", "internal/fakeic9100", []string{"IC-9100"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

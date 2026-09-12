@@ -226,6 +226,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -318,6 +319,11 @@ var tierProfilePopulation = []civ.Profile{
 	// IC-R8600's 39-member set is separated automatically instead, by its
 	// 4 B address width).
 	ic7700.Profile(),
+	// The v1.7.0 Icom wave's fifth family: 57 bytes record-only over a
+	// 3 B AddressFormBankChannel address (band + 2-byte channel) — a
+	// length no other family in this tier declares, measured disjoint by
+	// the pairwise walk below, no declaration needed.
+	ic9100.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -362,6 +368,8 @@ var tierRegistrationCoverage = map[string]string{
 	"IC-7410": "IC-7410",
 	// And its fourth: ONE key, ONE family.
 	"IC-7700": "IC-7700",
+	// And its fifth: ONE key, ONE family.
+	"IC-9100": "IC-9100",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -777,7 +785,7 @@ func TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames(t *testing.T
 	want := []string{
 		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7410", "IC-7600",
 		"IC-7610", "IC-7700", "IC-7760", "IC-7800", "IC-7850", "IC-7851",
-		"IC-905", "IC-9700", "IC-R8600",
+		"IC-905", "IC-9100", "IC-9700", "IC-R8600",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("icomModels(wiring.SupportedModels()) = %v (%d rows),\nwant %v (%d rows) — the registered Yaesu/Icom split has changed; update this list deliberately if it is a real registration, not a proxy regression", got, len(got), want, len(want))

@@ -52,6 +52,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
@@ -672,6 +673,28 @@ const IC7410Model = "IC-7410"
 // types rather than introducing new ones. Its own CI-V address is 74h.
 const IC7700Model = "IC-7700"
 
+// IC9100Model names the IC-9100's realDrivers/fakeDrivers key, which must
+// equal ic9100.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE v1.7.0 ICOM WAVE's FIFTH REGISTRATION, and a single-row one on
+// IC7800Model's footing. Its own record is 57 bytes over a 3-byte
+// AddressFormBankChannel address (band + 2-byte channel) — a length no
+// other family in this tier declares, so no new indistinguishable-pair
+// declaration is needed. ONE STATIC BANK, MEM: this radio's own
+// capability review deferred the optional 4th (1200 MHz) band, whose
+// frequency-field encoding the matrix leaves unresolved.
+//
+// NO driver.SerialFramingReporter, like the IC-7100: this radio's own
+// document states no CI-V framing fact, so it opens at
+// transport.DefaultStopBits rather than carrying an assumed value. Its
+// CI-V address is 7Ch — the matrix's own headline finding, overriding the
+// 88h/E0h the dispatch title and spec.md §1 carried — set directly
+// (`id.CATID = "7C"`, not the address-plus-token reconstruction the
+// IC-7610 family uses), so unlike the IC-7800's and IC-7600's this row
+// needed no case correction.
+const IC9100Model = "IC-9100"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -954,6 +977,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7700.New(ic7700.RealHardware, ic7700.WithConsentedUnverifiedWrites())
 		}
 		return ic7700.New(ic7700.RealHardware)
+	},
+	// The v1.7.0 Icom wave's fifth row, on IC7800Model's footing.
+	IC9100Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic9100.New(ic9100.RealHardware, ic9100.WithConsentedUnverifiedWrites())
+		}
+		return ic9100.New(ic9100.RealHardware)
 	},
 }
 

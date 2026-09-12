@@ -26,6 +26,10 @@ tag. The full release notes for each version are on the
 - **IC-7700** joins the supported Icom models (v1.7.0 Icom wave): reads
   and writes the transmit (split) frequency, and shares the
   already-registered IC-7300's 39-byte record shape.
+- **IC-9100** joins the supported Icom models (v1.7.0 Icom wave): one
+  band, richer than its siblings (duplex, offset, DTCS code and
+  polarity), and opens at the port's own default framing rather than a
+  driver-asserted stop-bit count.
 
 ## [1.6.0] - 2026-09-12
 
