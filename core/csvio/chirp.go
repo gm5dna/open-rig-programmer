@@ -526,10 +526,15 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 
 	data := &codeplug.ChannelData{}
 
-	// Name -> Tag.
-	tag, nameEntries := sanitizeCHIRPName(line, cell("Name"), caps)
-	data.Tag = tag
-	entries = append(entries, nameEntries...)
+	// Name -> Tag. A NoTag model has no channel-name route at all, so
+	// there is no charset to sanitize into and no per-row loss to
+	// report here — ImportCHIRP itself emits one file-level warning if
+	// any row's Name cell was actually non-empty.
+	if !caps.NoTag {
+		tag, nameEntries := sanitizeCHIRPName(line, cell("Name"), caps)
+		data.Tag = tag
+		entries = append(entries, nameEntries...)
+	}
 
 	// TagDisplay: from the TARGET BANK's own support, never a constant —
 	// see chirpTagDisplay for the rule and why the two answers differ.
@@ -989,6 +994,13 @@ func ImportCHIRP(rd io.Reader, caps spec.Capabilities) ([]codeplug.Channel, Loss
 	var channels []codeplug.Channel
 	var report LossReport
 
+	// sawName tracks, for a NoTag model only, whether any row's Name
+	// cell was actually non-empty — importCHIRPRow itself never sanitizes
+	// or reports per-row for NoTag, so this is the only place that can
+	// tell whether the one file-level warning below is warranted.
+	nameCol, hasNameCol := colIndex["Name"]
+	sawName := false
+
 	line := 1
 	for {
 		record, err := cr.Read()
@@ -1018,6 +1030,10 @@ func ImportCHIRP(rd io.Reader, caps spec.Capabilities) ([]codeplug.Channel, Loss
 			continue
 		}
 
+		if caps.NoTag && hasNameCol && record[nameCol] != "" {
+			sawName = true
+		}
+
 		ch, entries := importCHIRPRow(line, colIndex, record, caps)
 		report.Entries = append(report.Entries, entries...)
 
@@ -1035,6 +1051,13 @@ func ImportCHIRP(rd io.Reader, caps spec.Capabilities) ([]codeplug.Channel, Loss
 		if ch != nil {
 			channels = append(channels, *ch)
 		}
+	}
+
+	if sawName {
+		report.Entries = append(report.Entries, LossEntry{
+			Line: 1, Column: "Name", Action: ActionDropped, Blocking: false,
+			Detail: fmt.Sprintf("%s has no channel-name field; every Name column value in this file was ignored", caps.Model),
+		})
 	}
 
 	return channels, report, nil
