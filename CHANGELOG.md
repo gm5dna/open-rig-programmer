@@ -11,7 +11,30 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Added
+- **A CHIRP row is now a complete statement of a channel's tone state.**
+  Every registered radio that expresses tones as a mode plus independent
+  transmit/receive indices (the TS-590 pair, TS-890S, TS-990S and the
+  Icom tier) now carries CHIRP's `rToneFreq`/`cToneFreq`/`DtcsCode`/
+  `DtcsPolarity` columns even on a row whose own `Tone` column does not
+  select that field — so an ordinary CHIRP export's `88.5`/`023`/`NN`
+  fill values populate the radio's own idle-tone state instead of being
+  left unread. **The TS-890S and TS-990S are the headline case:** a
+  blank-`Tone` CHIRP row previously imported with both tone indices
+  Unknown (decision B, ruled B2, 09/09/2026) and could never pass the
+  write's tone rung; measured on the fake, an imported channel now
+  writes and verifies on a consented session (`rigprog settings
+  unverified-writes TS-890S on`), same for the TS-990S. A value the
+  radio does not admit in one of these newly-read columns is a
+  non-blocking loss-report entry rather than a refusal.
+
 ### Changed
+- Some CHIRP loss-report wording for the tone-family columns on the
+  Icom tier changed to describe the new non-blocking "kept, but this
+  channel's mode does not use it" and "no such field" cases (see Added,
+  above); `DtcsCode`/`DtcsPolarity`'s existing "not really data" fill
+  values are now shared with `rToneFreq`/`cToneFreq` under one
+  `chirpToneFillValues` table.
 - **The send dialogue no longer asks for a firmware version.** The
   FT-710's memory CAT arrived in firmware V01-10 and the radio has no
   version query, so every send used to open with a box to type the
