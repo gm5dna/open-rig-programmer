@@ -45,6 +45,14 @@ const (
 	P2HundredsDigit
 	// P2FixedZero is the TS-480's: "Always 0 for the TS-480." (480:953).
 	P2FixedZero
+	// P2Unused is the TS-570's: byte 4 exists at the family's offset but
+	// the Parameter Table prints a dash, not a digit count — a materially
+	// different "carries nothing at all" convention from P2FixedZero's
+	// printed "0" (ts570-capability-matrix.md §1.4, cited by the Phase 2
+	// brief). It is its own member rather than an alias for P2FixedZero
+	// because the two rows disagree on what byte 4 CONTAINS, not merely on
+	// whether it varies.
+	P2Unused
 )
 
 // String renders p for refusals and logs.
@@ -52,6 +60,7 @@ func (p P2Policy) String() string {
 	return enumName(p, "P2Unset", map[P2Policy]string{
 		P2HundredsDigit: "P2HundredsDigit",
 		P2FixedZero:     "P2FixedZero",
+		P2Unused:        "P2Unused",
 	})
 }
 
@@ -77,6 +86,81 @@ func (b Byte19Meaning) String() string {
 	return enumName(b, "Byte19Unset", map[Byte19Meaning]string{
 		Byte19DataMode: "Byte19DataMode",
 		Byte19Lockout:  "Byte19Lockout",
+	})
+}
+
+// P10Policy says what bytes 25-27 (P10) of a memory record carry on one
+// row: a printed constant on both registered books ("000: Always 000",
+// 590:1558-1559, 480:971) and a live 3-digit DCS code on the TS-2000
+// (ts2000-capability-matrix.md §2, P10). Same shape as P2Policy: the zero
+// value refuses, because a layout that defaulted would read a live DCS
+// code as the registered rows' "always 000", or vice versa.
+type P10Policy int
+
+// The two P10 policies, plus the refusing default.
+const (
+	P10Unset P10Policy = iota
+	// P10FixedZero is the 590 pair's and the TS-480's: "Always 000"
+	// (590:1558-1559, 480:971).
+	P10FixedZero
+	// P10DCSCode is the TS-2000's: a live 3-digit DCS code.
+	P10DCSCode
+)
+
+// String renders p for refusals and logs.
+func (p P10Policy) String() string {
+	return enumName(p, "P10Unset", map[P10Policy]string{
+		P10FixedZero: "P10FixedZero",
+		P10DCSCode:   "P10DCSCode",
+	})
+}
+
+// P12Policy says what byte 29 (P12) of a memory record carries on one row:
+// a printed constant on both registered books ("0: Always 0",
+// 590:1565-1566, 480:975) and a live shift-status enum on the TS-2000 — '0'
+// Simplex, '1' +, '2' -, '3' "= All E-types" (ts2000-capability-matrix.md
+// §2, P12).
+type P12Policy int
+
+// The two P12 policies, plus the refusing default.
+const (
+	P12Unset P12Policy = iota
+	// P12FixedZero is the 590 pair's and the TS-480's: "Always 0"
+	// (590:1565-1566, 480:975).
+	P12FixedZero
+	// P12ShiftLive is the TS-2000's: a live shift-status enum.
+	P12ShiftLive
+)
+
+// String renders p for refusals and logs.
+func (p P12Policy) String() string {
+	return enumName(p, "P12Unset", map[P12Policy]string{
+		P12FixedZero: "P12FixedZero",
+		P12ShiftLive: "P12ShiftLive",
+	})
+}
+
+// P13Policy says what bytes 30-38 (P13) of a memory record carry on one
+// row: a printed constant on both registered books ("000000000: Always
+// 000000000", 590:1567-1568, 480:977) and a live 9-digit offset frequency
+// on the TS-2000 (ts2000-capability-matrix.md §2, P13).
+type P13Policy int
+
+// The two P13 policies, plus the refusing default.
+const (
+	P13Unset P13Policy = iota
+	// P13FixedZero is the 590 pair's and the TS-480's: "Always 000000000"
+	// (590:1567-1568, 480:977).
+	P13FixedZero
+	// P13OffsetLive is the TS-2000's: a live 9-digit offset frequency.
+	P13OffsetLive
+)
+
+// String renders p for refusals and logs.
+func (p P13Policy) String() string {
+	return enumName(p, "P13Unset", map[P13Policy]string{
+		P13FixedZero:  "P13FixedZero",
+		P13OffsetLive: "P13OffsetLive",
 	})
 }
 
@@ -111,6 +195,12 @@ const (
 	// Byte28FixedZero is the TS-480's: a printed constant, and so a member
 	// of that layout's printed-fixed set as well.
 	Byte28FixedZero
+	// Byte28Reverse is the TS-2000's: P11 is a live REVERSE status ('0'/'1'),
+	// the same two-value domain as Byte28FilterLive but a different meaning
+	// (ts2000-capability-matrix.md §2, P11) — a fourth member rather than a
+	// fourth type, since the wire domain the parser and builder admit is
+	// identical to the filter axis's live case.
+	Byte28Reverse
 )
 
 // String renders b for refusals and logs.
@@ -119,6 +209,7 @@ func (b Byte28Policy) String() string {
 		Byte28FilterLive:   "Byte28FilterLive",
 		Byte28FilterEither: "Byte28FilterEither",
 		Byte28FixedZero:    "Byte28FixedZero",
+		Byte28Reverse:      "Byte28Reverse",
 	})
 }
 
@@ -158,13 +249,19 @@ const (
 	Byte41Unset Byte41Meaning = iota
 	Byte41Lockout
 	Byte41FixedZero
+	// Byte41MemoryGroup is the TS-2000's: P15 is a live Memory Group
+	// (0-9), one printed digit, where the 590 pair carry the channel
+	// lockout and the TS-480 prints a constant (ts2000-capability-matrix.md
+	// §2, P15).
+	Byte41MemoryGroup
 )
 
 // String renders b for refusals and logs.
 func (b Byte41Meaning) String() string {
 	return enumName(b, "Byte41Unset", map[Byte41Meaning]string{
-		Byte41Lockout:   "Byte41Lockout",
-		Byte41FixedZero: "Byte41FixedZero",
+		Byte41Lockout:     "Byte41Lockout",
+		Byte41FixedZero:   "Byte41FixedZero",
+		Byte41MemoryGroup: "Byte41MemoryGroup",
 	})
 }
 
@@ -179,6 +276,10 @@ const (
 	ToneModesUnset ToneModeSet = iota
 	ToneModesFour
 	ToneModesThree
+	// ToneModesTwo is the TS-570's: byte 20 (P7) is "0: OFF / 1: ON" only,
+	// narrower than both the 590 pair's four values and the TS-480's three
+	// (ts570-capability-matrix.md §1.4, cited by the Phase 2 brief).
+	ToneModesTwo
 )
 
 // String renders s for refusals and logs.
@@ -186,6 +287,7 @@ func (s ToneModeSet) String() string {
 	return enumName(s, "ToneModesUnset", map[ToneModeSet]string{
 		ToneModesFour:  "ToneModesFour",
 		ToneModesThree: "ToneModesThree",
+		ToneModesTwo:   "ToneModesTwo",
 	})
 }
 
@@ -258,12 +360,30 @@ type LayoutConfig struct {
 	// Model is the row's own name, used only in refusals.
 	Model string
 
+	// RecordLen is the MR answer's and the MW Set frame's width in bytes:
+	// 50 on the 590 pair and the TS-480 (unchanged), 28 on the TS-570
+	// (positions 1-22 a true prefix of the same grid, ts570-capability-
+	// matrix.md §1.4) and, in principle, any other true prefix of it. ZERO
+	// IS REFUSED like every other axis. It is a byte count and not a
+	// design choice a row can leave to a package default: RecordLen was a
+	// package constant before this lift, and the TWO REGISTERED ROWS PIN
+	// IT EXPLICITLY (ts590/layout.go, ts480/layout.go) so their frames stay
+	// byte-identical by construction rather than by an unstated default
+	// surviving the lift.
+	RecordLen uint8
+
 	P2        P2Policy
 	Byte19    Byte19Meaning
 	Byte28    Byte28Policy
 	Byte3940  Byte3940Meaning
 	Byte41    Byte41Meaning
 	ToneModes ToneModeSet
+	// P10, P12 and P13 are the TS-2000 lift's three axes: a printed
+	// constant on both registered books and a live field on the TS-2000
+	// (ts2000-capability-matrix.md §2). Required like every other axis.
+	P10 P10Policy
+	P12 P12Policy
+	P13 P13Policy
 
 	// MaxEXAddress is the highest menu number THIS ROW'S BOOK PRINTS for
 	// the EX command, inclusive: 87 on the TS-590S (590:543), 99 on the
@@ -323,12 +443,17 @@ type Layout struct {
 	book  Book
 	model string
 
+	recordLen uint8
+
 	p2           P2Policy
 	byte19       Byte19Meaning
 	byte28       Byte28Policy
 	byte3940     Byte3940Meaning
 	byte41       Byte41Meaning
 	toneModes    ToneModeSet
+	p10          P10Policy
+	p12          P12Policy
+	p13          P13Policy
 	maxEXAddress uint8
 
 	modeNames    map[Mode]string
@@ -356,10 +481,19 @@ var hardWiredPositions = map[int]bool{
 	41: true,
 }
 
-// commonHardWiring is the run BOTH books print as constants, so no Kenwood
-// layout may omit one: P10 "000: Always 000" (590:1558-1559, 480:971), P12
-// "0: Always 0" (590:1565-1566, 480:975) and P13 "000000000: Always
-// 000000000" (590:1567-1568, 480:977).
+// commonHardWiring is the run both registered books print as constants:
+// P10 "000: Always 000" (590:1558-1559, 480:971), P12 "0: Always 0"
+// (590:1565-1566, 480:975) and P13 "000000000: Always 000000000"
+// (590:1567-1568, 480:977).
+//
+// IT IS NO LONGER A UNIVERSAL REQUIREMENT, and that is the TS-2000 lift's
+// own change to this file. Before it, every Kenwood row hard-wired these
+// three positions, so validatePrintedFixed demanded them unconditionally;
+// the TS-2000 carries all three LIVE (P10Policy/P12Policy/P13Policy), so
+// whether they are fixed is now axis-driven, the same crossChecks shape
+// byte 4, byte 28 and byte 41 already had. This slice remains for the two
+// registered rows' own construction (ts590/layout.go, ts480/layout.go,
+// testlayouts_test.go) to build their PrintedFixed set from, unchanged.
 var commonHardWiring = []FixedField{
 	{Pos: 25, Printed: "000"},
 	{Pos: 29, Printed: "0"},
@@ -395,11 +529,14 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 	if !cfg.Book.valid() {
 		return Layout{}, fmt.Errorf("%w: Book is unset — a layout that names no document cannot quote a cause sentence (got %v)", ErrLayoutInvalid, cfg.Book)
 	}
-	if cfg.Book != Book590 && cfg.Book != Book480 {
-		return Layout{}, fmt.Errorf("%w: %v is a document this package READS but whose memory channel it does not DESCRIBE — this Layout is the 50-byte MR/MW record, printed only by the 590 pair's book and the TS-480's, and the TS-890S/TS-990S channel is core/kw/ma's own layout type", ErrLayoutInvalid, cfg.Book)
+	if cfg.Book != Book590 && cfg.Book != Book480 && cfg.Book != Book570 {
+		return Layout{}, fmt.Errorf("%w: %v is a document this package READS but whose memory channel it does not DESCRIBE — this Layout is the shared MR/MW record family (the 590 pair's and the TS-480's 50-byte grid, and the TS-570's 28-byte PREFIX of the same grid, RecordLen), and the TS-890S/TS-990S channel is core/kw/ma's own layout type while the TS-870S's is core/kw's own Layout870 — a second grid, not a prefix, because its offsets shift rather than merely stopping early", ErrLayoutInvalid, cfg.Book)
 	}
 	if cfg.Model == "" {
 		return Layout{}, fmt.Errorf("%w: Model is empty — every refusal this layout produces names the row it speaks for", ErrLayoutInvalid)
+	}
+	if cfg.RecordLen == 0 {
+		return Layout{}, fmt.Errorf("%w (%s): RecordLen is unset — 50 on the 590 pair and the TS-480, 28 on the TS-570, and a zero here is not a width this codec can build or parse", ErrLayoutInvalid, cfg.Model)
 	}
 	if cfg.P2 == P2Unset {
 		return Layout{}, fmt.Errorf("%w (%s): P2 policy is unset — byte 4 is the channel's hundreds digit on the 590 pair and a printed constant on the 480, and this codec will not guess which", ErrLayoutInvalid, cfg.Model)
@@ -407,17 +544,60 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 	if cfg.Byte19 == Byte19Unset {
 		return Layout{}, fmt.Errorf("%w (%s): byte 19's meaning is unset — the data mode on the 590 pair, the channel lockout on the 480", ErrLayoutInvalid, cfg.Model)
 	}
-	if cfg.Byte28 == Byte28Unset {
-		return Layout{}, fmt.Errorf("%w (%s): byte 28's policy is unset — a live FILTER A/B selection, a field whose printed value is accepted either way, or a printed constant", ErrLayoutInvalid, cfg.Model)
-	}
-	if cfg.Byte3940 == Byte3940Unset {
-		return Layout{}, fmt.Errorf("%w (%s): bytes 39-40's meaning is unset — the FM Normal/Narrow flag on the 590 pair, the tuning step index on the 480", ErrLayoutInvalid, cfg.Model)
-	}
-	if cfg.Byte41 == Byte41Unset {
-		return Layout{}, fmt.Errorf("%w (%s): byte 41's meaning is unset — the channel lockout on the 590 pair, a printed constant on the 480", ErrLayoutInvalid, cfg.Model)
+	// hasTail is whether this row's record reaches past byte 22 (P8) at
+	// all. RecordLen == RecordLen (the package constant, the family's own
+	// full 50-byte grid) is the only width this lift gives a tail to: the
+	// TS-570's 28 stops at the terminator with nothing between P8 and it
+	// (evidence/ts570d-transcription.csv: "23-27 (P9)... NOT USED", "28
+	// terminator... No filter/reverse, shift, offset-frequency, step-size
+	// or name field exists past this point"). So byte 28 (P11), bytes
+	// 39-40 (P14), byte 41 (P15), P10, P12 and P13 have NO BYTE TO
+	// DESCRIBE on a row whose RecordLen is anything else, and CTCSS (P9)
+	// — which has never had a policy axis of its own, because both
+	// registered books always carry it live — is gated the same way in
+	// parse.go/builders.go rather than growing one now.
+	hasTail := cfg.RecordLen == RecordLen
+	if hasTail {
+		if cfg.Byte28 == Byte28Unset {
+			return Layout{}, fmt.Errorf("%w (%s): byte 28's policy is unset — a live FILTER A/B selection, a field whose printed value is accepted either way, a printed constant, or a live REVERSE status", ErrLayoutInvalid, cfg.Model)
+		}
+		if cfg.Byte3940 == Byte3940Unset {
+			return Layout{}, fmt.Errorf("%w (%s): bytes 39-40's meaning is unset — the FM Normal/Narrow flag on the 590 pair, the tuning step index on the 480", ErrLayoutInvalid, cfg.Model)
+		}
+		if cfg.Byte41 == Byte41Unset {
+			return Layout{}, fmt.Errorf("%w (%s): byte 41's meaning is unset — the channel lockout on the 590 pair, a printed constant on the 480, or a live Memory Group", ErrLayoutInvalid, cfg.Model)
+		}
+		if cfg.P10 == P10Unset {
+			return Layout{}, fmt.Errorf("%w (%s): P10's policy is unset — a printed constant on the 590 pair and the TS-480, a live DCS code on the TS-2000", ErrLayoutInvalid, cfg.Model)
+		}
+		if cfg.P12 == P12Unset {
+			return Layout{}, fmt.Errorf("%w (%s): P12's policy is unset — a printed constant on the 590 pair and the TS-480, a live shift-status enum on the TS-2000", ErrLayoutInvalid, cfg.Model)
+		}
+		if cfg.P13 == P13Unset {
+			return Layout{}, fmt.Errorf("%w (%s): P13's policy is unset — a printed constant on the 590 pair and the TS-480, a live offset frequency on the TS-2000", ErrLayoutInvalid, cfg.Model)
+		}
+	} else {
+		if cfg.Byte28 != Byte28Unset {
+			return Layout{}, fmt.Errorf("%w (%s): byte 28's policy is %s, but this row's %d-byte record has no byte 28 at all", ErrLayoutInvalid, cfg.Model, cfg.Byte28, cfg.RecordLen)
+		}
+		if cfg.Byte3940 != Byte3940Unset {
+			return Layout{}, fmt.Errorf("%w (%s): bytes 39-40's meaning is %s, but this row's %d-byte record has no bytes 39-40 at all", ErrLayoutInvalid, cfg.Model, cfg.Byte3940, cfg.RecordLen)
+		}
+		if cfg.Byte41 != Byte41Unset {
+			return Layout{}, fmt.Errorf("%w (%s): byte 41's meaning is %s, but this row's %d-byte record has no byte 41 at all", ErrLayoutInvalid, cfg.Model, cfg.Byte41, cfg.RecordLen)
+		}
+		if cfg.P10 != P10Unset {
+			return Layout{}, fmt.Errorf("%w (%s): P10's policy is %s, but this row's %d-byte record has no byte 25-27 run at all", ErrLayoutInvalid, cfg.Model, cfg.P10, cfg.RecordLen)
+		}
+		if cfg.P12 != P12Unset {
+			return Layout{}, fmt.Errorf("%w (%s): P12's policy is %s, but this row's %d-byte record has no byte 29 at all", ErrLayoutInvalid, cfg.Model, cfg.P12, cfg.RecordLen)
+		}
+		if cfg.P13 != P13Unset {
+			return Layout{}, fmt.Errorf("%w (%s): P13's policy is %s, but this row's %d-byte record has no bytes 30-38 run at all", ErrLayoutInvalid, cfg.Model, cfg.P13, cfg.RecordLen)
+		}
 	}
 	if cfg.ToneModes == ToneModesUnset {
-		return Layout{}, fmt.Errorf("%w (%s): the tone-mode value set is unset — four values on the 590 pair, three on the 480", ErrLayoutInvalid, cfg.Model)
+		return Layout{}, fmt.Errorf("%w (%s): the tone-mode value set is unset — four values on the 590 pair, three on the 480, two on the TS-570", ErrLayoutInvalid, cfg.Model)
 	}
 	if cfg.MaxEXAddress == 0 {
 		return Layout{}, fmt.Errorf("%w (%s): the highest printed EX menu number is unset — each book prints its own domain per row, \"000 ~ 087\" for the TS-590S (590:543), \"000 ~ 099\" for the TS-590SG (590:544) and \"000 ~ 060\" for the TS-480 (480:401), and a zero here is not \"no menu surface\": address 000 is a real menu on all three", ErrLayoutInvalid, cfg.Model)
@@ -434,9 +614,12 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 	if err := validateSlots(cfg); err != nil {
 		return Layout{}, err
 	}
-	if len(cfg.PrintedFixed) == 0 {
-		return Layout{}, fmt.Errorf("%w (%s): the printed-fixed byte set is empty — both books hard-wire P10, P12 and P13, so no Kenwood row has an empty set", ErrLayoutInvalid, cfg.Model)
-	}
+	// AN EMPTY SET IS NO LONGER REFUSED OUTRIGHT, since the TS-2000 lift
+	// gives P10, P12 and P13 a live reading too — a row with P2
+	// HundredsDigit-like live axes on all six cross-checked positions
+	// would have nothing to hard-wire at all. validatePrintedFixed's
+	// crossChecks below is what still catches a set that omits a position
+	// its OWN axes say is fixed.
 	if err := validatePrintedFixed(cfg); err != nil {
 		return Layout{}, err
 	}
@@ -454,12 +637,16 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 	return Layout{
 		book:         cfg.Book,
 		model:        cfg.Model,
+		recordLen:    cfg.RecordLen,
 		p2:           cfg.P2,
 		byte19:       cfg.Byte19,
 		byte28:       cfg.Byte28,
 		byte3940:     cfg.Byte3940,
 		byte41:       cfg.Byte41,
 		toneModes:    cfg.ToneModes,
+		p10:          cfg.P10,
+		p12:          cfg.P12,
+		p13:          cfg.P13,
 		maxEXAddress: cfg.MaxEXAddress,
 		modeNames:    names,
 		slots:        slots,
@@ -531,6 +718,9 @@ func validateSlots(cfg LayoutConfig) error {
 		if cfg.P2 == P2FixedZero && r.Hi > maxFixedZeroSlot {
 			return fmt.Errorf("%w (%s): slot range %d-%d reaches %d, but byte 4's policy is %s — a row whose P2 prints \"Always 0\" (480:953) carries its channel number in P3's two digits alone, \"00 ~ 99\" (480:955), so it has no hundreds digit for a slot above %d", ErrLayoutInvalid, cfg.Model, r.Lo, r.Hi, r.Hi, cfg.P2, maxFixedZeroSlot)
 		}
+		if cfg.P2 == P2Unused && r.Hi > maxFixedZeroSlot {
+			return fmt.Errorf("%w (%s): slot range %d-%d reaches %d, but byte 4's policy is %s — the TS-570's Parameter Table prints no hundreds digit at byte 4 at all (ts570-capability-matrix.md §1.4), so this row's channel number is P3's two digits alone, and it has no hundreds digit for a slot above %d", ErrLayoutInvalid, cfg.Model, r.Lo, r.Hi, r.Hi, cfg.P2, maxFixedZeroSlot)
+		}
 	}
 	for i, a := range cfg.Slots {
 		for _, b := range cfg.Slots[i+1:] {
@@ -570,23 +760,25 @@ func validatePrintedFixed(cfg LayoutConfig) error {
 		starts[f.Pos] = f.Printed
 	}
 
-	for _, want := range commonHardWiring {
-		if starts[want.Pos] != want.Printed {
-			return fmt.Errorf("%w (%s): the printed-fixed set omits %q at position %d, which BOTH books print as a constant (590:1558-1568, 480:971-977)", ErrLayoutInvalid, cfg.Model, want.Printed, want.Pos)
-		}
-	}
-
-	// The three positions that carry a meaning on one radio and a constant
-	// on another. Each axis and the set must say the same thing.
+	// The six positions that carry a meaning on one radio and a constant on
+	// another. Each axis and the set must say the same thing — P2, byte 28
+	// and byte 41 by the file's original design; P10, P12 and P13 by the
+	// TS-2000 lift's, which is what retired the unconditional "every row
+	// hard-wires these three" check this loop used to open with (see
+	// commonHardWiring's own comment).
 	crossChecks := []struct {
 		pos     int
 		fixed   bool
 		axis    string
 		meaning string
+		want    string
 	}{
-		{4, cfg.P2 == P2FixedZero, "P2 policy", cfg.P2.String()},
-		{28, cfg.Byte28 == Byte28FixedZero, "byte 28's policy", cfg.Byte28.String()},
-		{41, cfg.Byte41 == Byte41FixedZero, "byte 41's meaning", cfg.Byte41.String()},
+		{4, cfg.P2 == P2FixedZero, "P2 policy", cfg.P2.String(), "0"},
+		{25, cfg.P10 == P10FixedZero, "P10 policy", cfg.P10.String(), "000"},
+		{28, cfg.Byte28 == Byte28FixedZero, "byte 28's policy", cfg.Byte28.String(), "0"},
+		{29, cfg.P12 == P12FixedZero, "P12 policy", cfg.P12.String(), "0"},
+		{30, cfg.P13 == P13FixedZero, "P13 policy", cfg.P13.String(), "000000000"},
+		{41, cfg.Byte41 == Byte41FixedZero, "byte 41's meaning", cfg.Byte41.String(), "0"},
 	}
 	for _, c := range crossChecks {
 		_, inSet := starts[c.pos]
@@ -595,8 +787,8 @@ func validatePrintedFixed(cfg LayoutConfig) error {
 			return fmt.Errorf("%w (%s): %s is %s but position %d is not in the printed-fixed set", ErrLayoutInvalid, cfg.Model, c.axis, c.meaning, c.pos)
 		case !c.fixed && inSet:
 			return fmt.Errorf("%w (%s): position %d is in the printed-fixed set but %s is %s, which gives that byte a meaning", ErrLayoutInvalid, cfg.Model, c.pos, c.axis, c.meaning)
-		case c.fixed && starts[c.pos] != "0":
-			return fmt.Errorf("%w (%s): position %d is printed %q, but the book that hard-wires it prints \"0\"", ErrLayoutInvalid, cfg.Model, c.pos, starts[c.pos])
+		case c.fixed && starts[c.pos] != c.want:
+			return fmt.Errorf("%w (%s): position %d is printed %q, but the book that hard-wires it prints %q", ErrLayoutInvalid, cfg.Model, c.pos, starts[c.pos], c.want)
 		}
 	}
 	return nil
@@ -628,6 +820,18 @@ func (l Layout) Byte41() Byte41Meaning { return l.byte41 }
 
 // ToneModes is byte 20's value set on this row.
 func (l Layout) ToneModes() ToneModeSet { return l.toneModes }
+
+// RecordLen is this row's MR answer / MW Set frame width in bytes.
+func (l Layout) RecordLen() uint8 { return l.recordLen }
+
+// P10Policy is bytes 25-27's policy on this row.
+func (l Layout) P10Policy() P10Policy { return l.p10 }
+
+// P12Policy is byte 29's policy on this row.
+func (l Layout) P12Policy() P12Policy { return l.p12 }
+
+// P13Policy is bytes 30-38's policy on this row.
+func (l Layout) P13Policy() P13Policy { return l.p13 }
 
 // MaxEXAddress is the highest EX menu number this row's book prints,
 // inclusive (590:543, 590:544, 480:401). It is 0 on the zero Layout, which

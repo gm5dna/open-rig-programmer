@@ -58,12 +58,25 @@ var layout480 = kw.MustNewLayout(kw.LayoutConfig{
 	Book:  kw.Book480,
 	Model: "TS-480",
 
+	// RecordLen was a package constant before the Kenwood/Yaesu wave's
+	// RecordLen lift; it is pinned here explicitly so this row's frames
+	// stay byte-identical by construction rather than by an unstated
+	// default surviving the lift.
+	RecordLen: kw.RecordLen,
+
 	P2:        kw.P2FixedZero,       // "Always 0 for the TS-480." (480:953)
 	Byte19:    kw.Byte19Lockout,     // (480:962)
 	Byte28:    kw.Byte28FixedZero,   // "Always 0 for the TS-480." (480:973)
 	Byte3940:  kw.Byte3940StepIndex, // "Step size. Refer to the ST command." (480:979)
 	Byte41:    kw.Byte41FixedZero,   // "Always 0 for the TS-480." (480:982)
 	ToneModes: kw.ToneModesThree,    // "0: OFF, 1: TONE, 2: CTCSS" (480:964)
+	// P10, P12 and P13 are the TS-2000 lift's three axes, pinned to their
+	// constant readings here: "Always 000 for the TS-480." (480:971),
+	// "Always 0 for the TS-480." (480:975), "Always 000000000 for the
+	// TS-480." (480:977).
+	P10: kw.P10FixedZero,
+	P12: kw.P12FixedZero,
+	P13: kw.P13FixedZero,
 
 	// The EX chart's own printed domain, "000 ~ 060: Menu No." (480:401) —
 	// the narrowest of the three registry rows, and 27 addresses below the

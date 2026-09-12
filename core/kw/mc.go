@@ -193,6 +193,11 @@ func (l Layout) parseMCFields(what string, frame []byte) (MCChannel, error) {
 		if b != '0' {
 			return MCChannel{}, newParseError(frame, "%s: position 3 is %q, and the %s prints \"0: Always 0 for the TS-480 (Memory bank number)\" there (480:827) — that book prints no space convention", what, b, l.model)
 		}
+	case P2Unused:
+		// The book prints nothing at all for this byte (P2Unused's own doc
+		// comment, layout.go), so nothing is asserted about its content
+		// here either — the same "read but never asserted" treatment
+		// parseSlot gives the MR/MW record's own byte 4.
 	default:
 		return MCChannel{}, newParseError(frame, "%s: the 100's-digit policy is unset on this layout — refusing to guess whether position 3 is the channel's hundreds digit or a printed constant", what)
 	}

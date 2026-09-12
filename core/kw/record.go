@@ -48,6 +48,18 @@ const (
 	recNameOff     = 41 // positions 42-49, P16
 	recByte41Off   = 40 // position 41,    P15
 	recTermOff     = 49 // position 50,    ';'
+
+	// recDCSOff, recShiftOff and recOffsetOff are the TS-2000 lift's three
+	// positions: P10 (DCS code), P12 (shift status) and P13 (offset
+	// frequency), which both registered books print as constants
+	// (commonHardWiring, layout.go) and the TS-2000 carries live
+	// (ts2000-capability-matrix.md §2). They are package constants like
+	// every other offset in this file, because both books agree on the
+	// GRID; the P10Policy/P12Policy/P13Policy axes (layout.go) say what
+	// each carries on a given row.
+	recDCSOff    = 24 // positions 25-27, P10
+	recShiftOff  = 28 // position 29,    P12
+	recOffsetOff = 29 // positions 30-38, P13
 )
 
 // Field widths for the offsets above.
@@ -61,6 +73,9 @@ const (
 	recPrefixLen    = 2
 	recTailLen      = 1 // the terminator
 	recFixedNonBody = recPrefixLen + recTailLen
+
+	recDCSDigits    = 3
+	recOffsetDigits = 9
 )
 
 // The empty-channel window: P4 through P15, positions 7 to 41 inclusive.
@@ -103,6 +118,17 @@ const maxFixedZeroSlot = 99
 // document read rather than a wire observation because a width is not a
 // range. Nothing here says a radio will accept 99,999,999,999 Hz.
 const MaxRecordFreqHz = 99_999_999_999
+
+// MaxDCSCode and MaxOffsetHz are the widest values the TS-2000 lift's two
+// live BCD runs can carry: P10's 3 digits and P13's 9 (both
+// commonHardWiring on the registered rows, live on a P10DCSCode /
+// P13OffsetLive row). Field widths, exactly as MaxRecordFreqHz is: neither
+// document is read by this lift, so nothing here claims a DCS chart or a
+// tuning range, only what the digit count holds.
+const (
+	MaxDCSCode  = 999
+	MaxOffsetHz = 999_999_999
+)
 
 // ErrOutOfDomain is the sentinel every OutOfDomainError wraps.
 var ErrOutOfDomain = errors.New("kw: value outside a wire field's domain")
@@ -342,6 +368,25 @@ type Record struct {
 	// (590:1572-1574) and a printed constant on the 480 (480:982).
 	Byte41 byte
 
+	// DCSCode is P10, positions 25-27: a printed constant on the 590 pair
+	// and the TS-480 (commonHardWiring) and a live 3-digit DCS code on a
+	// row whose P10Policy is P10DCSCode. It is always 0 on a
+	// P10FixedZero row — checkPrintedFixed has already required "000"
+	// there before this field is populated — the same "raw, gated by the
+	// layout's own axis" shape Byte19/Byte28/Byte41 already have.
+	DCSCode int
+
+	// Shift is P12, position 29, as a wire byte: a printed constant "0" on
+	// the 590 pair and the TS-480 (commonHardWiring) and a live shift-status
+	// enum on a row whose P12Policy is P12ShiftLive — '0' Simplex, '1' +,
+	// '2' -, '3' "= All E-types" (ts2000-capability-matrix.md §2).
+	Shift byte
+
+	// OffsetHz is P13, positions 30-38: a printed constant on the 590 pair
+	// and the TS-480 (commonHardWiring) and a live 9-digit offset frequency
+	// in Hz on a row whose P13Policy is P13OffsetLive.
+	OffsetHz uint64
+
 	// Name is P16, right-trimmed of the spaces a write pads it with — A1,
 	// which is assumed rather than printed and whose lift is a write-then-
 	// read on each registry row.
@@ -373,6 +418,14 @@ const emptyName = "        " // recNameLen spaces
 // sentence: the other half is P16, which parseRecordFrame requires to be
 // emptyName.
 func isEmptyWindow(frame []byte) bool {
+	// A frame shorter than the window it tests (the TS-570's 28 bytes,
+	// against a window that runs to byte 41) has no P15 to be part of an
+	// "all zero" reading at all, so it is not this shape — see the
+	// RecordLen lift's hasTail in parse.go for the citation that this row
+	// has no such byte.
+	if len(frame) <= recEmptyHiOff {
+		return false
+	}
 	for _, b := range frame[recEmptyLoOff : recEmptyHiOff+1] {
 		if b != '0' {
 			return false

@@ -83,6 +83,8 @@ func (l Layout) ValidToneMode(t ToneMode) bool {
 		return t == ToneModeOff || t == ToneModeTone || t == ToneModeCTCSS || t == ToneModeCross
 	case ToneModesThree:
 		return t == ToneModeOff || t == ToneModeTone || t == ToneModeCTCSS
+	case ToneModesTwo:
+		return t == ToneModeOff || t == ToneModeTone
 	default:
 		return false
 	}
@@ -97,6 +99,8 @@ func (l Layout) toneModeText() string {
 		return `'0' TONE/CTCSS OFF, '1' TONE ON, '2' CTCSS ON or '3' Cross Tone ON (590:1549-1553)`
 	case ToneModesThree:
 		return `'0' OFF, '1' TONE or '2' CTCSS (480:964) — this radio's book prints no cross tone`
+	case ToneModesTwo:
+		return `'0' OFF or '1' ON (ts570-capability-matrix.md §1.4) — this radio's book prints no CTCSS or cross tone`
 	default:
 		return "a P7 value this layout declares, but it declares none"
 	}
