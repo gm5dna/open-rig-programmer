@@ -104,7 +104,7 @@ func PrefixLenMatcher(prefix string, exactLen int) func(frame []byte) bool {
 // frame and never retains it.
 func (l Layout) MRAnswerMatcher(s Slot) func(frame []byte) bool {
 	return func(frame []byte) bool {
-		if len(frame) != RecordLen {
+		if len(frame) != int(l.recordLen) {
 			return false
 		}
 		if frame[recPrefixOff] != 'M' || frame[recPrefixOff+1] != 'R' {

@@ -169,15 +169,23 @@ func (e *StreamError) Unwrap() error { return ErrStream }
 //
 // IT PANICS on a frame that is not one of the two tokens OR on a book that
 // names no document, and the loudness is deliberate — but the panic arm
-// fires on TWO conditions and the caller guarantees BOTH, which is what
-// this comment used to overstate. framing.IsFatal has recognised the token
-// (streamErrorToken returned non-empty) AND has already returned early on
-// an invalid book, so neither condition can reach here from the only door
-// there is. Reaching this branch therefore means the recogniser and the
-// constructor have drifted apart, and that is worth a panic: returning nil
-// instead would make a fatal frame silently ordinary — the one failure mode
-// this whole design exists to prevent — and returning a placeholder
-// sentence would put words in a manufacturer's mouth.
+// fires on THREE conditions now, not the two this comment used to say, and
+// the RecordLen/ts570/ts870s lift added the third. framing.IsFatal has
+// recognised the token (streamErrorToken returned non-empty) AND has
+// already returned early on an INVALID book (book.valid() false), so
+// neither of the original two conditions can reach here from the only door
+// there is. What CAN reach here, as of Book570 and Book870S joining
+// valid()'s set, is a VALID book this switch has no case for: S2/S3's
+// evidence for both new documents stops at the command-table pages (the
+// byte-diagram and Parameter Table pages this lift's axes needed), so
+// neither the TS-570's nor the TS-870S's "E;"/"O;" cause sentence has a
+// transcription to cite. Inventing one would put words in a manufacturer's
+// mouth this codec has never read, which is worse than refusing to guess —
+// so this stays a panic rather than gaining a soft fallback, and a live
+// NewFraming session for either book MUST NOT be wired up (no driver in
+// this repository does, as of this lift) until a citation lands here.
+// That is Phase 3's gate to clear before either radio goes live, not a bug
+// in this lift.
 //
 // The unconfigured book is refused at the CALLER rather than here because
 // IsFatal runs on the engine's reader goroutine, which has no recover; see
@@ -206,7 +214,7 @@ func newStreamError(token string, book Book) *StreamError {
 	case token == receiveOverrunFrame && book == Book990:
 		return &StreamError{Token: token, Book: book, Cause: "A receive buffer overrun error occurred", Citation: "990:121"}
 	default:
-		panic(fmt.Sprintf("kw: newStreamError(%q, %v): not a stream-health token, or no book to quote — IsFatal is the only caller and it has already recognised the token", token, book))
+		panic(fmt.Sprintf("kw: newStreamError(%q, %v): not a stream-health token, or a valid book whose stream-error table has no transcription yet (Book570, Book870S) — IsFatal is the only caller and it has already recognised the token and the book", token, book))
 	}
 }
 

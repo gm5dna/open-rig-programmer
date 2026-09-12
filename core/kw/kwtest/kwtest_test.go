@@ -30,6 +30,10 @@ func fixture590SG() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book590,
 		Model:        "KWTEST-590SG",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2HundredsDigit,      // "refer to the MC command" (590:1539-1540)
 		Byte19:       kw.Byte19DataMode,       // P6, the data mode (590:1546-1548)
 		Byte28:       kw.Byte28FilterLive,     // P11, FILTER A/B (590:1560-1563)
@@ -55,6 +59,10 @@ func fixture590S() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book590,
 		Model:        "KWTEST-590S",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2HundredsDigit,
 		Byte19:       kw.Byte19DataMode,
 		Byte28:       kw.Byte28FilterEither,
@@ -77,6 +85,10 @@ func fixture480() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book480,
 		Model:        "KWTEST-480",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2FixedZero,       // "Always 0 for the TS-480." (480:953)
 		Byte19:       kw.Byte19Lockout,     // P6 is the lockout here (480:962)
 		Byte28:       kw.Byte28FixedZero,   // (480:973)
@@ -176,6 +188,10 @@ func TestRun_ATinySlotSpaceStillSatisfiesEveryLeg(t *testing.T) {
 	tiny := kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book480,
 		Model:        "KWTEST-TINY",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2FixedZero,
 		Byte19:       kw.Byte19Lockout,
 		Byte28:       kw.Byte28FixedZero,

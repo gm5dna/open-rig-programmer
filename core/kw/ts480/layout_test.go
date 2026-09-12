@@ -44,9 +44,10 @@ func TestLayout_IsConfiguredAndNamed(t *testing.T) {
 	}
 }
 
-// TestLayout_EveryAxisByValue pins all ten axes outright, each against the
-// line its own book prints it on. "Ten" is made a fact, not a habit, by
-// core/kw/ts590/layout_test.go's TestLayoutConfig_HasExactlyTenComparedAxes.
+// TestLayout_EveryAxisByValue pins all fourteen axes outright, each against
+// the line its own book prints it on. The count is made a fact, not a
+// habit, by core/kw/ts590/layout_test.go's
+// TestLayoutConfig_HasExactlyTenComparedAxes.
 func TestLayout_EveryAxisByValue(t *testing.T) {
 	l := ts480.Layout()
 
@@ -67,6 +68,18 @@ func TestLayout_EveryAxisByValue(t *testing.T) {
 	}
 	if got := l.ToneModes(); got != kw.ToneModesThree {
 		t.Errorf("the tone-mode value set is %v, want %v — \"0: OFF, 1: TONE, 2: CTCSS\" and no cross tone (480:964)", got, kw.ToneModesThree)
+	}
+	if got := l.RecordLen(); got != kw.RecordLen {
+		t.Errorf("the record length is %d, want %d", got, kw.RecordLen)
+	}
+	if got := l.P10Policy(); got != kw.P10FixedZero {
+		t.Errorf("P10's policy is %v, want %v — \"Always 000 for the TS-480.\" (480:971)", got, kw.P10FixedZero)
+	}
+	if got := l.P12Policy(); got != kw.P12FixedZero {
+		t.Errorf("P12's policy is %v, want %v — \"Always 0 for the TS-480.\" (480:975)", got, kw.P12FixedZero)
+	}
+	if got := l.P13Policy(); got != kw.P13FixedZero {
+		t.Errorf("P13's policy is %v, want %v — \"Always 000000000 for the TS-480.\" (480:977)", got, kw.P13FixedZero)
 	}
 
 	if got := l.MaxEXAddress(); got != 60 {

@@ -55,15 +55,23 @@ func (e *RecordLengthError) Unwrap() error { return ErrParse }
 // checkRecordLen is the ONE width predicate this codec has, consulted by
 // the answer parser and by the MW builder's own gate on its own output.
 //
+// IT READS THE RECEIVER'S OWN RecordLen, NOT THE PACKAGE CONSTANT, since
+// the RecordLen lift: 50 on the 590 pair and the TS-480, 28 on the TS-570.
+// The package-level RecordLen constant is unchanged (50) and stays the
+// external contract core/driver/ts590 and core/driver/ts480 already read;
+// this method is the ONLY caller that used to consult it directly, so
+// widening it to a per-layout axis touches no code outside this package.
+//
 // A SINGLE PREDICATE RATHER THAN TWO LITERALS is the point. The reason
 // string names what a wrong width would mean: 590:1579-1581 describes a
 // short MW that ERASES the channel, its length is a reading rather than a
 // printed number (A5, erratum E19), and this milestone never builds it
-// (decision 8). Two `!= 50` comparisons one file apart would be one edit
+// (decision 8). Two `!= want` comparisons one file apart would be one edit
 // from disagreeing, and the disagreement would be silent in the direction
 // that erases a user's channel.
-func checkRecordLen(command string, got int, frame []byte) error {
-	if got == RecordLen {
+func (l Layout) checkRecordLen(command string, got int, frame []byte) error {
+	want := int(l.recordLen)
+	if got == want {
 		return nil
 	}
 	n := len(frame)
@@ -73,8 +81,8 @@ func checkRecordLen(command string, got int, frame []byte) error {
 	return &RecordLengthError{
 		Command: command,
 		Got:     got,
-		Want:    RecordLen,
-		reason:  "both books print one 50-byte grid for MR's answer and MW's Set (590:1440-1461, 590:1518-1536; 480:923-943, 480:955-976), and the short MW form 590:1579-1581 describes ERASES the channel, so a frame of any other width is refused rather than interpreted",
+		Want:    want,
+		reason:  "both books print one grid for MR's answer and MW's Set (590:1440-1461, 590:1518-1536; 480:923-943, 480:955-976), and the short MW form 590:1579-1581 describes ERASES the channel, so a frame of any other width than this row's RecordLen is refused rather than interpreted",
 		Frame:   copyBytes(frame[:n]),
 	}
 }
@@ -117,14 +125,23 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 	if !l.Configured() {
 		return Record{}, newParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
 	}
-	if err := checkRecordLen(command, len(frame), frame); err != nil {
+	if err := l.checkRecordLen(command, len(frame), frame); err != nil {
 		return Record{}, err
 	}
 	if frame[recPrefixOff] != command[0] || frame[recPrefixOff+1] != command[1] {
 		return Record{}, newParseError(frame, "%s: missing %q prefix — MR has no Set and MW has no Answer on either radio (480:911, 480:985, erratum E17), so an %q frame is not an alternative spelling of this one", what, command, frame[:recPrefixLen])
 	}
-	if frame[recTermOff] != ';' {
-		return Record{}, newParseError(frame, "%s: missing ';' terminator at position %d", what, recTermOff+1)
+	// hasTail is whether this row's record reaches past P8 (byte 22) at
+	// all — false only for a RecordLen:28 row (the TS-570), whose own
+	// document prints nothing from byte 23 to the terminator but "NOT
+	// USED" (evidence/ts570d-transcription.csv). NewLayout has already
+	// refused a config that gives such a row a tail axis, so this is a
+	// read of the SAME fact the construction-time refusal enforces, not a
+	// second decision.
+	hasTail := l.recordLen == RecordLen
+	termOff := int(l.recordLen) - 1
+	if frame[termOff] != ';' {
+		return Record{}, newParseError(frame, "%s: missing ';' terminator at position %d", what, termOff+1)
 	}
 	if err := l.checkPrintedFixed(what, frame); err != nil {
 		return Record{}, err
@@ -204,6 +221,18 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 	}
 	rec.ToneIndex = int(toneIdx)
 
+	// Everything from here on is the family's TAIL: P9 (CTCSS) onward, none
+	// of which exists on a row whose RecordLen is anything but the
+	// package's own RecordLen constant (the TS-570's 28-byte record, whose
+	// own document prints "NOT USED" from byte 23 to the terminator —
+	// evidence/ts570d-transcription.csv). CTCSS has never had a policy
+	// axis of its own, because both registered books carry it live
+	// unconditionally; hasTail is what a third row without it needs
+	// instead of one.
+	if !hasTail {
+		return rec, nil
+	}
+
 	ctcssIdx, err := parseDigits(frame[recCTCSSOff:recCTCSSOff+recCTCSSDigits], "P9, the CTCSS number")
 	if err != nil {
 		return Record{}, newParseError(frame, "%s: %v", what, err)
@@ -213,10 +242,33 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 	}
 	rec.CTCSSIndex = int(ctcssIdx)
 
+	dcs, err := parseDigits(frame[recDCSOff:recDCSOff+recDCSDigits], "P10, the DCS code")
+	if err != nil {
+		return Record{}, newParseError(frame, "%s: %v", what, err)
+	}
+	if err := l.checkP10(dcs); err != nil {
+		return Record{}, newParseError(frame, "%s: %v", what, err)
+	}
+	rec.DCSCode = int(dcs)
+
 	if err := l.checkByte28(frame[recByte28Off]); err != nil {
 		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
 	rec.Byte28 = frame[recByte28Off]
+
+	if err := l.checkP12(frame[recShiftOff]); err != nil {
+		return Record{}, newParseError(frame, "%s: %v", what, err)
+	}
+	rec.Shift = frame[recShiftOff]
+
+	offset, err := parseDigits(frame[recOffsetOff:recOffsetOff+recOffsetDigits], "P13, the offset frequency")
+	if err != nil {
+		return Record{}, newParseError(frame, "%s: %v", what, err)
+	}
+	if err := l.checkP13(offset); err != nil {
+		return Record{}, newParseError(frame, "%s: %v", what, err)
+	}
+	rec.OffsetHz = offset
 
 	b3940 := string(frame[recByte3940Off : recByte3940Off+recByte3940Len])
 	if err := l.checkByte3940(b3940); err != nil {
@@ -279,6 +331,13 @@ func (l Layout) parseSlot(what string, frame []byte, p1 byte) (Slot, error) {
 		// checkPrintedFixed has already required '0' here, which is what the
 		// 480 prints (480:953); the arm exists so the two policies are
 		// exhaustive rather than one being an implicit default.
+		hundreds = 0
+	case P2Unused:
+		// The TS-570's own Parameter Table prints a dash rather than a
+		// digit count (evidence/ts570d-transcription.csv), so this byte is
+		// read but never asserted: whatever it carries is not the
+		// channel's hundreds digit, and this row's slot space stops at 99
+		// (validateSlots) the same way a P2FixedZero row's does.
 		hundreds = 0
 	default:
 		return Slot{}, newParseError(frame, "%s: byte 4's policy is unset on this layout", what)
@@ -395,13 +454,77 @@ func (l Layout) checkByte28(b byte) error {
 			return fmt.Errorf("byte 28 is %q, and the %s's P11 prints '0' FILTER A and '1' FILTER B (590:1560-1563)", b, l.model)
 		}
 		return nil
+	case Byte28Reverse:
+		if b != '0' && b != '1' {
+			return fmt.Errorf("byte 28 is %q, and the %s's P11 prints a live REVERSE status, '0' or '1' (ts2000-capability-matrix.md §2)", b, l.model)
+		}
+		return nil
 	case Byte28FixedZero:
 		if b != '0' {
 			return fmt.Errorf("byte 28 is %q, and the %s prints \"Always 0\" there (480:973)", b, l.model)
 		}
 		return nil
 	default:
-		return fmt.Errorf("byte 28's policy is unset on this layout — refusing to guess whether it is a live filter selection or a printed constant")
+		return fmt.Errorf("byte 28's policy is unset on this layout — refusing to guess whether it is a live filter selection, a live reverse status, or a printed constant")
+	}
+}
+
+// checkP10 applies this row's P10 policy to the decoded 3-digit run.
+//
+// THE FixedZero ARM VALIDATES NOTHING ON PARSE OR BUILD, unlike
+// checkByte28/checkByte41's fixed arms. Those two axes existed before this
+// lift and every caller already set Byte28/Byte41 deliberately; DCSCode is
+// new, no existing Record ever carries one, and the wire byte for a
+// FixedZero row is enforced once already — on the PARSE side by
+// checkPrintedFixed before this method is ever reached, and on the BUILD
+// side by the printedFixed loop that overwrites whatever this field held.
+// Re-requiring zero here would refuse every existing 590/480 build, whose
+// records never set DCSCode at all.
+func (l Layout) checkP10(v uint64) error {
+	switch l.p10 {
+	case P10DCSCode:
+		if v > MaxDCSCode {
+			return fmt.Errorf("P10 is %d, and the %s's DCS code holds at most %d (its own three printed digits)", v, l.model, MaxDCSCode)
+		}
+		return nil
+	case P10FixedZero:
+		return nil
+	default:
+		return fmt.Errorf("P10's policy is unset on this layout — refusing to guess whether it is a live DCS code or a printed constant")
+	}
+}
+
+// checkP12 applies this row's P12 policy to one wire byte. See checkP10's
+// doc comment for why the FixedZero arm validates nothing: Shift is new,
+// and an existing Record's zero-valued byte (0x00, not '0') would
+// otherwise refuse every existing 590/480 build.
+func (l Layout) checkP12(b byte) error {
+	switch l.p12 {
+	case P12ShiftLive:
+		if b < '0' || b > '3' {
+			return fmt.Errorf("P12 is %q, and the %s's shift status prints '0' Simplex, '1' +, '2' - or '3' \"All E-types\" (ts2000-capability-matrix.md §2)", b, l.model)
+		}
+		return nil
+	case P12FixedZero:
+		return nil
+	default:
+		return fmt.Errorf("P12's policy is unset on this layout — refusing to guess whether it is a live shift-status enum or a printed constant")
+	}
+}
+
+// checkP13 applies this row's P13 policy to the decoded 9-digit run. See
+// checkP10's doc comment for why the FixedZero arm validates nothing.
+func (l Layout) checkP13(v uint64) error {
+	switch l.p13 {
+	case P13OffsetLive:
+		if v > MaxOffsetHz {
+			return fmt.Errorf("P13 is %d, and the %s's offset frequency holds at most %d (its own nine printed digits)", v, l.model, MaxOffsetHz)
+		}
+		return nil
+	case P13FixedZero:
+		return nil
+	default:
+		return fmt.Errorf("P13's policy is unset on this layout — refusing to guess whether it is a live offset frequency or a printed constant")
 	}
 }
 
@@ -461,13 +584,18 @@ func (l Layout) checkByte41(b byte) error {
 			return fmt.Errorf("byte 41 is %q, and the %s's P15 prints '0' Channel Lockout OFF and '1' Channel Lockout ON (590:1572-1574)", b, l.model)
 		}
 		return nil
+	case Byte41MemoryGroup:
+		if b < '0' || b > '9' {
+			return fmt.Errorf("byte 41 is %q, and the %s's P15 prints a live Memory Group, one digit '0'-'9' (ts2000-capability-matrix.md §2)", b, l.model)
+		}
+		return nil
 	case Byte41FixedZero:
 		if b != '0' {
 			return fmt.Errorf("byte 41 is %q, and the %s prints \"Always 0\" there (480:982)", b, l.model)
 		}
 		return nil
 	default:
-		return fmt.Errorf("byte 41's meaning is unset on this layout — refusing to guess whether it is the channel lockout or a printed constant")
+		return fmt.Errorf("byte 41's meaning is unset on this layout — refusing to guess whether it is the channel lockout, a live Memory Group, or a printed constant")
 	}
 }
 
