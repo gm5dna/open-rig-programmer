@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
@@ -66,6 +67,23 @@ func withEngineOptions(opts ...transport.Option) Option {
 	return func(d *Driver) { d.engineOptions = append(d.engineOptions, opts...) }
 }
 
+// noSettleClock is the engine clock a Simulated session gets: real time
+// throughout, except transport.Engine's 20 ms inter-exchange settle sleep,
+// which is a no-op. Simulated has no serial link to pace — fakeic705
+// answers in-process — so paying the real clock's 20 ms per exchange on a
+// 1 000-exchange inventory walk (internal/wiring's fake sessions, and any
+// other Simulated caller) is twenty seconds spent settling a link that
+// does not exist (follow-up (i), design 2026-09-12-chirp-b1). Promoted
+// from this package's own test-only noSettleClock (formerly
+// scripted_test.go), which every in-package test already used; New now
+// applies it in production for Simulated instead of tests re-deriving it
+// through the unexported withEngineOptions seam.
+type noSettleClock struct{}
+
+func (noSettleClock) Now() time.Time                         { return time.Now() }
+func (noSettleClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+func (noSettleClock) Sleep(time.Duration)                    {}
+
 // New builds the IC-705 driver for profile. RealHardware — the ZERO VALUE
 // — selects the all-Unverified capability set while writeTrialsComplete is
 // false (nothing writable), and ANY unrecognised Profile value
@@ -75,6 +93,10 @@ func New(profile Profile, opts ...Option) driver.Driver {
 	d := &Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
+	}
+	if profile == Simulated {
+		// See noSettleClock: nothing here paces a real serial link.
+		d.engineOptions = append(d.engineOptions, transport.WithClock(noSettleClock{}))
 	}
 	return d
 }
