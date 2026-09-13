@@ -649,6 +649,13 @@ const (
 // (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
 const TS2000Model = "TS-2000"
 
+// TS2000XModel names the TS-2000X's realDrivers/fakeDrivers key — the
+// second of three rows over core/driver/ts2000. CATID "019" is ASSUMED for
+// this row (the driver's probe cannot distinguish it from a TS-2000 by
+// wire identity), and its record is byte-identical to the TS-2000's — see
+// TS2000Model's own doc comment.
+const TS2000XModel = "TS-2000X"
+
 // FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
 // must equal ftdx5000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel.
@@ -1020,6 +1027,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts2000.NewTS2000(ts2000.WithConsentedUnverifiedWrites())
 		}
 		return ts2000.NewTS2000()
+	},
+	// v1.7.0 Kenwood/Yaesu wave, second row: NewTS2000X, same shape.
+	TS2000XModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts2000.NewTS2000X(ts2000.WithConsentedUnverifiedWrites())
+		}
+		return ts2000.NewTS2000X()
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

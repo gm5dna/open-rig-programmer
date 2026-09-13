@@ -1365,6 +1365,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// is byte-identical across its rows — see ts2000CoreFour's own doc
 		// comment.
 		"TS-2000": ts2000CoreFour,
+		// The TS-2000X (v1.7.0 Kenwood/Yaesu wave, second row): shares
+		// ts2000CoreFour, same driver package, zero byte difference.
+		"TS-2000X": ts2000CoreFour,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

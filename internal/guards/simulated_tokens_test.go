@@ -369,7 +369,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// not just a constant (fileHasSelector matches any <recv>.<sel>),
 		// so this is the same confinement check on this package's own
 		// shape. ONE row for THREE registered models.
-		{"ts2000", "WithSimulatedProfile", "fakets2000.New", "internal/fakets2000", []string{"TS-2000"}},
+		{"ts2000", "WithSimulatedProfile", "fakets2000.New", "internal/fakets2000", []string{"TS-2000", "TS-2000X"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

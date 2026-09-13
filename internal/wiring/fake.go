@@ -1179,6 +1179,16 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		newDriver: func() driver.Driver { return ts2000.NewTS2000(ts2000.WithSimulatedProfile()) },
 		newRadio:  func() fakeRadio { return fakets2000.New(TS2000FakeSessionOpts...) },
 	},
+	// v1.7.0 Kenwood/Yaesu wave, second row: same shared TS2000FakeSessionOpts
+	// as the TS-2000's own entry above — safe here, unlike the ts590 pair's
+	// two SEPARATE variables, because internal/fakets2000's WithModelName
+	// carries no wire meaning at all (its own doc comment), so there is no
+	// "seeded the wrong radio differently" hazard for a shared variable to
+	// create.
+	TS2000XModel: {
+		newDriver: func() driver.Driver { return ts2000.NewTS2000X(ts2000.WithSimulatedProfile()) },
+		newRadio:  func() fakeRadio { return fakets2000.New(append([]fakets2000.Option{fakets2000.WithModelName("TS-2000X")}, TS2000FakeSessionOpts...)...) },
+	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.
 	// writeTrialsComplete is false (core/driver/ic7800/caps.go), so this
