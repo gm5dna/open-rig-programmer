@@ -364,6 +364,9 @@ var ownParticulars = map[string][]string{
 	"TS-570D": {"TS-570D"},
 	// v1.7.0 Kenwood/Yaesu wave, fifth row: bare name.
 	"TS-570S": {"TS-570S"},
+	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare name, on the TS-890S/
+	// TS-990S footing.
+	"TS-870S": {"TS-870S"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2577,4 +2580,28 @@ func TestRadiotext_TS570SVerbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "TS-570S", got)
+}
+
+// TestRadiotext_TS870SVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// seventh row's prose byte-for-byte.
+func TestRadiotext_TS870SVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-870S: no builder for one exists, and no TS-870S has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for this radio, unlike the Yaesu radios this programme also supports: its 22-byte memory record carries a channel-lockout flag and a shared tone mode/transmit-tone index, at printed positions this build's own chart matches. There is no receive-tone byte anywhere on this row's record, so tone_rx stays unreadable and unwritable regardless. This radio also has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a tone mode and a transmit-tone index (no receive-tone byte exists on this row). Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-870S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-870S")
+	if !ok {
+		t.Fatal(`For("TS-870S") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-870S\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-870S", got)
 }

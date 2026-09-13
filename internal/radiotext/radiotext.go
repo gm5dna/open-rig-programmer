@@ -2228,6 +2228,27 @@ var ts570sText = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
 }
 
+// ts870sText is the TS-870S's entry — v1.7.0 Kenwood/Yaesu wave, seventh
+// row, its own package separate from ts570 (a different document, a
+// different 22-byte width, one bare New).
+//
+// NOTAG: no channel-name field over this radio's interface at all, so no
+// Tag column is shown for it. Tone mode and transmit tone ARE read and
+// written (one shared index, P8), but there is no receive-tone byte at all
+// on this row's own record. Scan skip is also reachable (a channel-lockout
+// flag). No TS-870S has ever answered a frame from this project
+// (writeTrialsComplete false), so every write stays behind the opt-in
+// consent route.
+var ts870sText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-870S: no builder for one exists, and no TS-870S has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for this radio, unlike the Yaesu radios this programme also supports: its 22-byte memory record carries a channel-lockout flag and a shared tone mode/transmit-tone index, at printed positions this build's own chart matches. There is no receive-tone byte anywhere on this row's record, so tone_rx stays unreadable and unwritable regardless. This radio also has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a tone mode and a transmit-tone index (no receive-tone byte exists on this row). Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-870S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2286,6 +2307,8 @@ var texts = map[string]Text{
 	"TS-570D": ts570dText,
 	// v1.7.0 Kenwood/Yaesu wave, fifth row.
 	"TS-570S": ts570sText,
+	// v1.7.0 Kenwood/Yaesu wave, seventh row.
+	"TS-870S": ts870sText,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

@@ -887,6 +887,16 @@ var ts570CoreThree = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip,
 }
 
+// ts870sCoreThree is the core set the TS-870S's one MEM bank derives, on
+// every profile (core/driver/ts870s/caps.go's bankFields): frequency, mode
+// and scan_skip. NoTag (matrix §1.6), so FieldTag stays the zero
+// FieldSupport and drops out of the derived set, on the ts570 rows'
+// footing (registered separately from that package — a different
+// document, a different width).
+var ts870sCoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1386,6 +1396,8 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The TS-570S (v1.7.0 Kenwood/Yaesu wave, fifth row): shares
 		// ts570CoreThree, same driver package.
 		"TS-570S": ts570CoreThree,
+		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row).
+		"TS-870S": ts870sCoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
