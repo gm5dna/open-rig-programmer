@@ -30,6 +30,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts570"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
@@ -56,6 +57,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeicr8600"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets2000"
+	"github.com/gm5dna/open-rig-programmer/internal/fakets570"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets590"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets890"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets990"
@@ -464,6 +466,18 @@ var (
 // because no test using it calls t.Parallel().
 var TS2000FakeSessionOpts []fakets2000.Option
 
+// TS570DFakeSessionOpts is the TS-570 family's own option source: extra
+// fakets570.Option values applied, on top of the always-empty production
+// default, to the shared fake rig on every OpenFakeSessionFor call. ONE
+// variable for THREE registry rows — internal/fakets570's New takes no row
+// argument (WithModelName is the option form, per fake.md), so there is no
+// per-row variable to keep separate the way the 590 pair's are.
+//
+// A test that sets this MUST restore the previous value (e.g. via
+// t.Cleanup) — shared, unsynchronised package state, acceptable only
+// because no test using it calls t.Parallel().
+var TS570DFakeSessionOpts []fakets570.Option
+
 // FTdx5000FakeSessionOpts is the FTdx5000's own option source, on the same
 // terms as every single-row model's above — one row, one package, one
 // simulator.
@@ -655,6 +669,10 @@ var (
 	// v1.7.0 Kenwood/Yaesu wave, first row: fakets2000's Port() already
 	// returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakets2000.Radio)(nil)
+	// v1.7.0 Kenwood/Yaesu wave, fourth row: internal/fakets570's Port()
+	// returns net.Conn, on the ic7610 footing, not the 590/890/990/2000
+	// rows' direct one.
+	_ fakeRadio = ts570FakeAdapter{}
 	// v1.7.0 Kenwood/Yaesu wave, tenth row: fakeftdx5000's Port() already
 	// returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeftdx5000.Radio)(nil)
@@ -701,6 +719,15 @@ type ic7610FakeAdapter struct{ *fakeic7610.Radio }
 // Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
 // io.ReadWriteCloser. See ic7610FakeAdapter's own doc comment.
 func (a ic7610FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
+
+// ts570FakeAdapter narrows *fakets570.Radio's Port() — net.Conn — to
+// io.ReadWriteCloser. See ic7610FakeAdapter's own doc comment for the
+// type-identity reasoning; this is the same gap on the TS-570 family's own
+// simulator (v1.7.0 Kenwood/Yaesu wave, fourth row).
+type ts570FakeAdapter struct{ *fakets570.Radio }
+
+// Port implements fakeRadio. See ts570FakeAdapter's own doc comment.
+func (a ts570FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
 
 // ic7851FakeAdapter narrows *fakeic7851.Radio's Port() — which returns
 // net.Conn, since internal/fakeic7851 is written against the net package
@@ -1194,6 +1221,12 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	TSB2000Model: {
 		newDriver: func() driver.Driver { return ts2000.NewTSB2000(ts2000.WithSimulatedProfile()) },
 		newRadio:  func() fakeRadio { return fakets2000.New(append([]fakets2000.Option{fakets2000.WithModelName("TS-B2000")}, TS2000FakeSessionOpts...)...) },
+	},
+	// v1.7.0 Kenwood/Yaesu wave, fourth row: fakets570's Port() returns
+	// net.Conn, so it goes through ts570FakeAdapter (like ic7610's).
+	TS570DModel: {
+		newDriver: func() driver.Driver { return ts570.NewD(ts570.Simulated) },
+		newRadio:  func() fakeRadio { return ts570FakeAdapter{fakets570.New(TS570DFakeSessionOpts...)} },
 	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.

@@ -877,6 +877,16 @@ var ts2000CoreFour = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip, spec.FieldTag,
 }
 
+// ts570CoreThree is the core set every TS-570D/S/DG bank derives, on
+// every profile (core/driver/ts570/caps.go's bankFields): frequency, mode
+// and scan_skip. NoTag (matrix §4), so FieldTag stays the zero
+// FieldSupport and drops out of the derived set. ONE variable for all
+// three registered rows — the package's own record is field-for-field
+// identical across D/S/DG for the candidates this derivation reads.
+var ts570CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1371,6 +1381,8 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The TS-B2000 (v1.7.0 Kenwood/Yaesu wave, third and last ts2000
 		// row): same shared variable.
 		"TS-B2000": ts2000CoreFour,
+		// The TS-570D (v1.7.0 Kenwood/Yaesu wave, fourth row).
+		"TS-570D": ts570CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

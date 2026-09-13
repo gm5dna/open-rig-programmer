@@ -1070,6 +1070,18 @@ func tsb2000LikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ts570dLikeCapabilities returns the TS-570D's own REGISTERED capabilities
+// verbatim (v1.7.0 Kenwood/Yaesu wave, fourth row). Its scan_skip IS
+// reachable (byte 19, this family's channel-lockout flag), so this
+// fixture goes straight into chirpFixtures, on the TS-590 pair's footing.
+func ts570dLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS570DModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS570DModel, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2849,6 +2861,7 @@ func chirpFixtures() []spec.Capabilities {
 		ts2000LikeCapabilities(),
 		ts2000xLikeCapabilities(),
 		tsb2000LikeCapabilities(),
+		ts570dLikeCapabilities(),
 	)
 }
 
