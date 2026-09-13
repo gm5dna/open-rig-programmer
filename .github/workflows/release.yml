@@ -484,6 +484,75 @@ jobs:
           path: open-rig-programmer_*.deb
           if-no-files-found: error
 
+  gui-linux-flatpak:
+    # Independent of gui-linux above: this job builds its own wails
+    # binary rather than reusing that job's artefact (which is a .deb,
+    # not a bare binary), so nothing here can hold up the .deb build.
+    # continue-on-error means a failure here still counts as "success"
+    # for the release job's `needs` check below, so a flatpak-specific
+    # break (a Flathub outage, a flatpak-builder regression) never
+    # blocks the .deb, tarballs or installers from reaching the draft
+    # release — see app/build/flatpak/README.md for the bundle-not-
+    # Flathub scope this job stays inside.
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    env:
+      APP_ID: io.github.gm5dna.open-rig-programmer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux GUI and Flatpak build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev flatpak flatpak-builder xvfb
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive -y flathub org.gnome.Platform//47 org.gnome.Sdk//47
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Add Go bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Wails CLI
+        run: go install "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
+
+      - name: wails build (linux/amd64)
+        working-directory: app
+        env:
+          # Same reasoning as gui-linux: the GUI links GTK/WebKit via cgo.
+          CGO_ENABLED: '1'
+        run: wails build -tags webkit2_41 -ldflags "-X ${VERSION_PKG}.version=${VERSION}"
+
+      - name: Copy the binary into the manifest's build context
+        run: cp app/build/bin/open-rig-programmer app/build/flatpak/open-rig-programmer
+
+      - name: flatpak-builder
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean \
+            --repo=flatpak-repo flatpak-build-dir "app/build/flatpak/${APP_ID}.yml"
+
+      - name: Build the single-file bundle
+        run: flatpak build-bundle flatpak-repo "open-rig-programmer-${VERSION}-x86_64.flatpak" "${APP_ID}"
+
+      - name: Check the bundle
+        run: bash app/build/flatpak/check-flatpak.sh "open-rig-programmer-${VERSION}-x86_64.flatpak" "${APP_ID}"
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-linux-flatpak
+          path: open-rig-programmer-*.flatpak
+          if-no-files-found: error
+
   windows:
     runs-on: windows-2025
     timeout-minutes: 40
@@ -670,6 +739,7 @@ jobs:
       - cli-linux
       - gui-darwin-universal
       - gui-linux
+      - gui-linux-flatpak
       - windows
     runs-on: ubuntu-latest
     permissions:

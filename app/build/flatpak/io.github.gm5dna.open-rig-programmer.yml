@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Flatpak bundle manifest. Built by release.yml's gui-linux-flatpak job
+# from the wails-produced Linux binary (not a Flathub submission — see
+# app/build/flatpak/README.md). App ID follows the reverse-DNS-from-GitHub
+# convention (io.github.<owner>.<repo>); homepage/maintainer taken from
+# app/build/linux/nfpm.yaml, not invented here.
+#
+# --device=all: serial CAT ports are arbitrary /dev/ttyUSBn or
+# /dev/ttyACMn nodes with no stable udev tag inside the sandbox yet
+# (narrowing to the CP2105 VID:PID deferred — see README). --device=dri
+# and the two display sockets are WebKitGTK/GTK's own requirements.
+app-id: io.github.gm5dna.open-rig-programmer
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: open-rig-programmer
+
+finish-args:
+  - --device=all
+  - --device=dri
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+
+# The desktop file, icon and their Icon= key say "open-rig-programmer";
+# flatpak-builder renames the installed copies to the app-id itself
+# (required for icon-theme/desktop lookup under the app-id) rather than
+# hand-editing the reused files from build/linux/.
+rename-desktop-file: open-rig-programmer.desktop
+rename-icon: open-rig-programmer
+
+modules:
+  - name: open-rig-programmer
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 open-rig-programmer /app/bin/open-rig-programmer
+      - install -Dm644 open-rig-programmer.desktop /app/share/applications/open-rig-programmer.desktop
+      - install -Dm644 open-rig-programmer-512.png /app/share/icons/hicolor/512x512/apps/open-rig-programmer.png
+      - install -Dm644 io.github.gm5dna.open-rig-programmer.metainfo.xml /app/share/metainfo/io.github.gm5dna.open-rig-programmer.metainfo.xml
+    sources:
+      # Placed here by the CI job before flatpak-builder runs (it does
+      # not exist in the repo — it's the wails build output).
+      - type: file
+        path: open-rig-programmer
+      - type: file
+        path: ../linux/open-rig-programmer.desktop
+      - type: file
+        path: ../linux/open-rig-programmer-512.png
+      - type: file
+        path: io.github.gm5dna.open-rig-programmer.metainfo.xml
