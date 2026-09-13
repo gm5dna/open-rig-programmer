@@ -2332,6 +2332,26 @@ var ft950Text = Text{
 	ProbeFirmwareNote: "The FT-950 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
+// ftdx3000Text is the FTDX3000's entry — v1.8.0 Yaesu trio, first row,
+// bare New (single row, own document, INLINE dialect).
+//
+// NOTAG. CTCSS tone is a live, mapped tone-table index on READ but
+// printed-fixed on WRITE — the fleet's first read-only tone (core/cat's
+// new P9ToneIndexReadOnly policy): a read-modify-write silently loses it.
+// AM-N is excluded from the write-capable Mode enum, ASSUMED (the memory
+// record's own legend stops at 'C'; 'D' exists only on the live MD
+// command). No FTDX3000 has ever answered a frame from this project
+// (writeTrialsComplete false), so every write stays behind the opt-in
+// consent route.
+var ftdx3000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FTDX3000: no builder for one exists, and no FTDX3000 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FTDX3000's tone is read as a live CTCSS-tone index but cannot be written back over CAT at all — its memory-write frame prints that field fixed, so a read-modify-write silently loses it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. AM-N is excluded from the modes this build will write: it appears only on this radio's live mode command, never on its memory-read or memory-write legend.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read as a live CTCSS-tone index for the FTDX3000, but this radio's own memory-write frame cannot carry a tone at all — a rewrite always loses it, not merely an untested one",
+	},
+	ProbeFirmwareNote: "The FTDX3000 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2403,6 +2423,8 @@ var texts = map[string]Text{
 	"FTdx9000": ftdx9000Text,
 	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row.
 	"FT-950": ft950Text,
+	// v1.8.0 Yaesu trio, first row.
+	"FTDX3000": ftdx3000Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

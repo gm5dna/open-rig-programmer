@@ -43,6 +43,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx3000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
@@ -773,6 +774,24 @@ const FTdx9000Model = "FTdx9000"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT950Model = "FT-950"
 
+// FTdx3000Model names the FTDX3000's realDrivers/fakeDrivers key, which
+// must equal ftdx3000.New(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel. The registry key is
+// "FTDX3000" (all-caps), the manual's own printed spelling
+// (core/driver/ftdx3000/ftdx3000.go's modelName comment) — a deliberate
+// departure from this file's usual "FTdxNNNN" casing for the earlier rows.
+//
+// v1.8.0 YAESU TRIO, FIRST ROW: bare New (single row, own document, INLINE
+// dialect — matrix's own two-package verdict against ftdx1200). 27-byte
+// MR/MW frame, 8-digit FreqHz (Lift Y), numeric PMS 100-117. NOTAG. CATID
+// "0462" (matrix). CTCSSTone is LIVE on read but printed-fixed on write
+// (core/cat's new P9ToneIndexReadOnly policy) — read-only over CAT, unlike
+// every other mapped-tone Yaesu row. AM-N excluded from the write-capable
+// Mode enum, ASSUMED (ceiling 'C', not the live MD command's 'D').
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTdx3000Model = "FTDX3000"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1137,6 +1156,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft950.New(ft950.RealHardware, ft950.WithConsentedUnverifiedWrites())
 		}
 		return ft950.New(ft950.RealHardware)
+	},
+	// v1.8.0 Yaesu trio, first row: bare New takes the profile as its
+	// first argument.
+	FTdx3000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx3000.New(ftdx3000.RealHardware, ftdx3000.WithConsentedUnverifiedWrites())
+		}
+		return ftdx3000.New(ftdx3000.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is
