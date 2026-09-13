@@ -2,15 +2,12 @@
 
 package fakets870s
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Option configures a *Radio at construction time. See New.
-//
-// THE SET IS SMALL, AND THERE IS NO WithStreamError HERE. doc.go's register
-// entry STREAM ERRORS ARE NOT SCRIPTABLE explains why: reviews/driver-ts870s.md's
-// `## Verdict` states core/driver/ts870s never builds a live session at all,
-// so a scriptable "E;"/"O;" token would have nothing on the driver side to
-// exercise.
 type Option func(*Radio)
 
 // WithLatency makes every reply the fake sends wait d before being written to
@@ -93,5 +90,37 @@ func WithMemoryReadUnsupported() Option {
 func WithTransientNAKSuppressed() Option {
 	return func(r *Radio) {
 		r.transientNAKSuppressed = true
+	}
+}
+
+// WithStreamError scripts one of the two SERIAL-LINE error tokens
+// (ts870s:8434-8450) in place of exchange n's reply, where n counts EVENTS
+// the fake has handled from 1 — an accumulator overflow counts too, since
+// handleEvent increments before it knows whether the event is a complete
+// frame.
+//
+// STREAM ERRORS ARE SCRIPTABLE — doc.go's register entry of that name,
+// revised once `core/driver/ts870s` wired a live session (lift K `e7515d0`,
+// driver follow-up `e97d307`) for a scripted fault to interrupt. The tokens
+// are not command outcomes: "E;" reports "A communication error occurred
+// such as an overrun or framing error during a serial data transmission."
+// (ts870s:8445-8447) and "O;" that "Receive data was sent but processing was
+// not completed." (ts870s:8449-8450). They therefore REPLACE whatever the
+// exchange would have produced, including a fire-and-forget silence, and
+// they are not suppressed by WithTransientNAKSuppressed, whose sentence is
+// about "?;" alone.
+//
+// The kind is required: StreamErrorUnset panics rather than defaulting to
+// one of the two tokens, which would put a test on the wrong sentence of the
+// book. n below 1 panics for the same reason — there is no exchange 0.
+func WithStreamError(kind StreamError, n int) Option {
+	if kind != StreamErrorE && kind != StreamErrorO {
+		panic(fmt.Sprintf("fakets870s: WithStreamError(%v) — the token is REQUIRED; the two are printed with different causes (ts870s:8434-8450)", kind))
+	}
+	if n < 1 {
+		panic(fmt.Sprintf("fakets870s: WithStreamError exchange %d — exchanges are counted from 1", n))
+	}
+	return func(r *Radio) {
+		r.streamErrors[n] = kind
 	}
 }

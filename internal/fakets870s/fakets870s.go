@@ -24,6 +24,12 @@ type Radio struct {
 	// so serve() and the parser may read them without r.mu.
 	memoryReadUnsupported  bool
 	transientNAKSuppressed bool
+	streamErrors           map[int]StreamError
+
+	// exchanges counts the frames serve() has handled, 1-based, and is
+	// touched by serve() alone — the only goroutine that ever reads or
+	// writes the pipe — so it indexes streamErrors without r.mu.
+	exchanges int
 
 	mu      sync.Mutex
 	records map[recordKey]MemState
@@ -40,9 +46,10 @@ type Radio struct {
 // prints one identity for it (doc.go); there is no sibling row to select.
 func New(opts ...Option) *Radio {
 	r := &Radio{
-		pipe:    fakepipe.New(),
-		records: DefaultImage(),
-		ai:      aiOff,
+		pipe:         fakepipe.New(),
+		streamErrors: map[int]StreamError{},
+		records:      DefaultImage(),
+		ai:           aiOff,
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -83,7 +90,18 @@ func (r *Radio) serve() {
 // radio takes — doc.go's register entry AN ACCEPTED MW PRODUCES NO REPLY:
 // the accepted-Set path and the nothing-to-say path are the same path,
 // deliberately.
+//
+// A SCRIPTED STREAM ERROR REPLACES THIS EXCHANGE'S REPLY WITH "E;" OR "O;"
+// (WithStreamError, STREAM ERRORS ARE SCRIPTABLE) — doc.go's register entry
+// of that name, revised once a live session existed to interrupt.
 func (r *Radio) handleEvent(ev accEvent) {
+	r.exchanges++
+
+	if kind, ok := r.streamErrors[r.exchanges]; ok {
+		r.rawWrite([]byte(kind.token()))
+		return
+	}
+
 	var reply []byte
 	if ev.overflow {
 		reply = rejection

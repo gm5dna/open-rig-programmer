@@ -21,6 +21,54 @@ import "strings"
 // WithTransientNAKSuppressed rather than assumed away).
 var rejection = []byte("?;")
 
+// StreamError is one of the two SERIAL-LINE error tokens this book prints
+// beside "?;", which are not command outcomes at all: "E;" for "A
+// communication error occurred such as an overrun or framing error during a
+// serial data transmission." (ts870s:8445-8447) and "O;" for "Receive data
+// was sent but processing was not completed." (ts870s:8449-8450) — the same
+// wording internal/fakets480's own "O;" citation carries.
+//
+// STREAM ERRORS ARE SCRIPTABLE (doc.go's register entry of that name,
+// revised 13/09/2026 once lift K's `e7515d0` and `core/driver/ts870s`'s
+// follow-up `e97d307` gave this row a live session for one to interrupt).
+//
+// The zero value is refused by WithStreamError: a scripted fault that
+// defaulted to one of the two tokens would put a test on the wrong sentence.
+type StreamError int
+
+// The two stream-error tokens, plus the refusing default.
+const (
+	StreamErrorUnset StreamError = iota
+	// StreamErrorE is "E;" (ts870s:8445-8447).
+	StreamErrorE
+	// StreamErrorO is "O;" (ts870s:8449-8450).
+	StreamErrorO
+)
+
+// token renders s as the bytes the radio would put on the wire.
+func (s StreamError) token() string {
+	switch s {
+	case StreamErrorE:
+		return "E;"
+	case StreamErrorO:
+		return "O;"
+	default:
+		return ""
+	}
+}
+
+// String renders s for refusals and test failures.
+func (s StreamError) String() string {
+	switch s {
+	case StreamErrorE:
+		return "StreamErrorE"
+	case StreamErrorO:
+		return "StreamErrorO"
+	default:
+		return "StreamErrorUnset"
+	}
+}
+
 // maxAccumulatorBytes is the reassembler's byte cap — this package's own
 // bounded-input policy, not a manual figure. THE FRAME ACCUMULATOR'S CAP AND
 // RESYNC is doc.go's register entry for this whole reassembler.
