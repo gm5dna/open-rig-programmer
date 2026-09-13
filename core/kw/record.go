@@ -22,6 +22,13 @@ import (
 const (
 	// RecordLen is the MR answer and the MW Set frame: 50 bytes.
 	RecordLen = 50
+	// RecordLenPrefix is the TS-570's own width: 28 bytes, a true PREFIX
+	// of the family's 50-byte grid (positions 1-22 the same offsets, then
+	// the terminator — ts570-capability-matrix.md §1.4). RecordLen is a
+	// DISCRETE SHAPE, not an arithmetic threshold (hasTail's own reasoning,
+	// parse.go), so NewLayout's validation names these two values rather
+	// than accepting any width at or above some computed minimum.
+	RecordLenPrefix = 28
 	// MRReadLen is the MR read request, "M R P1 P2 P3 P3 ;": 7 bytes
 	// (590:1442, 480:918). The 590SG chart prints its terminator cell as
 	// ':' — erratum E1, doc.go — and the frame is a ';' frame like every

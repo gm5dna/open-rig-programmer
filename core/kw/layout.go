@@ -535,8 +535,23 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 	if cfg.Model == "" {
 		return Layout{}, fmt.Errorf("%w: Model is empty — every refusal this layout produces names the row it speaks for", ErrLayoutInvalid)
 	}
-	if cfg.RecordLen == 0 {
-		return Layout{}, fmt.Errorf("%w (%s): RecordLen is unset — 50 on the 590 pair and the TS-480, 28 on the TS-570, and a zero here is not a width this codec can build or parse", ErrLayoutInvalid, cfg.Model)
+	// RecordLen MUST BE ONE OF THE FAMILY'S TWO KNOWN WIDTHS, not merely
+	// nonzero. Both parseRecordFrame and BuildMWSet index this frame at
+	// FIXED offsets up to and including the terminator at recordLen-1
+	// (the prefix, P1, P2/P3, P4-P8), so any RecordLen shorter than that
+	// fixed-field span — RecordLenPrefix's own 28, the narrowest shape
+	// this codec knows — indexes past a frame this short and PANICS
+	// rather than refusing (Codex close review, P2): RecordLen: 1 would
+	// reach recFreqOff+recFreqDigits (byte 17) on a one-byte slice before
+	// any length check could catch it. A zero-refusal alone caught the
+	// FT-891 Stage 0 shape (an omitted axis silently defaulting); it does
+	// not catch a PRESENT but too-small one, which is the same failure
+	// mode one step removed. Restricting to the two discrete widths
+	// hasTail's own reasoning already treats as the only shapes (parse.go)
+	// is the smaller fix over computing a minimum from the fixed-field
+	// offsets, and it is what "the known widths 28/50" names.
+	if cfg.RecordLen != RecordLen && cfg.RecordLen != RecordLenPrefix {
+		return Layout{}, fmt.Errorf("%w (%s): RecordLen is %d — this codec knows two widths, %d (the 590 pair and the TS-480) and %d (the TS-570's prefix of the same grid), and any other value either cannot hold this family's fixed fields at all or is a shape no row has needed yet", ErrLayoutInvalid, cfg.Model, cfg.RecordLen, RecordLen, RecordLenPrefix)
 	}
 	if cfg.P2 == P2Unset {
 		return Layout{}, fmt.Errorf("%w (%s): P2 policy is unset — byte 4 is the channel's hundreds digit on the 590 pair and a printed constant on the 480, and this codec will not guess which", ErrLayoutInvalid, cfg.Model)
