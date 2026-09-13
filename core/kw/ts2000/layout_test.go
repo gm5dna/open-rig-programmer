@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/kw"
+	"github.com/gm5dna/open-rig-programmer/core/kw/kwtest"
 	"github.com/gm5dna/open-rig-programmer/core/kw/ts2000"
 )
 
@@ -15,29 +16,18 @@ import (
 // still three separate proofs, since kwtest.Run walks each Layout's own
 // builders and gate independently.
 //
-// IT IS SKIPPED, AND THE REASON IS A GAP IN kwtest ITSELF, NOT IN THIS
-// PACKAGE. kwtest.conformanceRecord (core/kw/kwtest/kwtest.go:957-980)
-// builds its one shared fixture with NO Shift field at all — its own doc
-// comment enumerates the axes it was written against (byte 19, byte 28,
-// bytes 39-40, byte 41) and stops there, because P10/P12/P13 postdate it
-// (lift K, this wave). DCSCode (int) and OffsetHz (uint64) default to Go's
-// zero value harmlessly under P10DCSCode/P13OffsetLive — 0 is a valid DCS
-// code and a valid offset — but Shift is a byte read as an ASCII digit
-// (checkP12: '0'..'3'), and its Go zero value, 0x00, is not one; every
-// row whose P12Policy is P12ShiftLive therefore fails kwtest.Run on its
-// very first BuildMWSet, on a byte this package's own layout never
-// populates.
-//
-// THIS PACKAGE MAY NOT FIX IT: kwtest.go is core/kw/kwtest, and this
-// brief's own worktree discipline forbids touching any core/kw file but
-// this package's new one. TestCrosscheck_FiveLiveAxesRoundTrip
-// (crosscheck_test.go) is this package's own substitute proof that
-// BuildMWSet/ParseMRAnswer round-trip a REAL Shift value (P12, alongside
-// P10/P11/P13/P15) correctly; it is what stands in for kwtest.Run's walk
-// until kwtest's own fixture is widened for the three axes this wave
-// added — a follow-up outside this package's brief and this file's reach.
+// NO LONGER SKIPPED. kwtest.conformanceRecord (core/kw/kwtest/kwtest.go)
+// had no Shift field, so every P12ShiftLive row (this package's own) failed
+// on BuildMWSet's zero-byte Shift; lift K's follow-up (commit e7515d0) added
+// Shift to the fixture and its round-trip check, and widened
+// checkLayoutSelfConsistency/checkGateRefusesAMutatedPrintedFixedByte to
+// accept an empty PrintedFixed set, which this package's own all-live-axis
+// layout legitimately has. kwtest.Run now walks all five of this row's
+// live axes (P10/P11/P12/P13/P15) for real.
 func TestConformance(t *testing.T) {
-	t.Skip("kwtest.conformanceRecord has no Shift field (core/kw/kwtest/kwtest.go:957-980, predates lift K's P12ShiftLive); every P12ShiftLive row fails on BuildMWSet's zero-byte Shift, which this package cannot fix without editing core/kw/kwtest — see TestCrosscheck_FiveLiveAxesRoundTrip for this package's own round-trip proof of P10/P11/P12/P13/P15")
+	kwtest.Run(t, ts2000.TS2000)
+	kwtest.Run(t, ts2000.TS2000X)
+	kwtest.Run(t, ts2000.TSB2000)
 }
 
 // TestLayout_IsConfiguredAndNamed is the vacuity guard the pins below rest
