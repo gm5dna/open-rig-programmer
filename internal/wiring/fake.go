@@ -1189,6 +1189,12 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		newDriver: func() driver.Driver { return ts2000.NewTS2000X(ts2000.WithSimulatedProfile()) },
 		newRadio:  func() fakeRadio { return fakets2000.New(append([]fakets2000.Option{fakets2000.WithModelName("TS-2000X")}, TS2000FakeSessionOpts...)...) },
 	},
+	// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row: same shared
+	// TS2000FakeSessionOpts, same reasoning as TS-2000X's entry above.
+	TSB2000Model: {
+		newDriver: func() driver.Driver { return ts2000.NewTSB2000(ts2000.WithSimulatedProfile()) },
+		newRadio:  func() fakeRadio { return fakets2000.New(append([]fakets2000.Option{fakets2000.WithModelName("TS-B2000")}, TS2000FakeSessionOpts...)...) },
+	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.
 	// writeTrialsComplete is false (core/driver/ic7800/caps.go), so this

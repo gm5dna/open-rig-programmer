@@ -2179,6 +2179,20 @@ var ts2000xText = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-2000X. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
 }
 
+// tsb2000Text is the TS-B2000's entry — v1.7.0 Kenwood/Yaesu wave, third
+// and last row sharing core/driver/ts2000: zero byte difference in the
+// record, CATID "019" shared by ASSUMPTION. This entry names only
+// "TS-B2000" throughout.
+var tsb2000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-B2000: no builder for one exists, and no TS-B2000 has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-B2000, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over the TS-B2000's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over the TS-B2000's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-B2000. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2231,6 +2245,8 @@ var texts = map[string]Text{
 	"TS-2000": ts2000Text,
 	// v1.7.0 Kenwood/Yaesu wave, second row.
 	"TS-2000X": ts2000xText,
+	// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row.
+	"TS-B2000": tsb2000Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
