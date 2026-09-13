@@ -47,8 +47,8 @@ is plenty, since a whole memory file carries your callsign.
 Everything is on the [Releases page](../../releases), with a
 `SHA256SUMS` file to check any download.
 
-- **macOS**: unzip the app. It is not notarised, so the first time,
-  right-click it and choose *Open*.
+- **macOS**: unzip the app. It is signed with a Developer ID and
+  notarised by Apple, so it opens like any other download.
 - **Windows**: run the installer for your machine (amd64 or ARM64).
   SmartScreen will say *Windows protected your PC*: click *More info*,
   then *Run anyway*. [docs/windows-setup.md](docs/windows-setup.md)
