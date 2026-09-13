@@ -19,6 +19,56 @@ import "strings"
 // transceiver (even though the command syntax was correct)."
 var rejection = []byte("?;")
 
+// StreamError is one of the two SERIAL-LINE error tokens this radio's own
+// manual prints beside "?;" (PDF p.76, printed folio 70, layout lines
+// 5158-5175): "E;" for "A communication error occurred such as an overrun or
+// framing error during a serial data transmission" and "O;" for "Receive
+// data was sent but processing was not completed." — the identical two
+// sentences the TS-480/590 pair's own books print (core/kw's lift-K
+// follow-up, commit e7515d0, cites this same manual span as
+// "ts570:5158-5175").
+//
+// These are not command outcomes: they REPLACE whatever an exchange would
+// otherwise have produced, including a fire-and-forget silence, exactly as
+// the sibling Kenwood fakes' own StreamError does — see Radio.handleEvent.
+//
+// The zero value is refused by WithStreamError: a scripted fault that
+// defaulted to one of the two tokens would put a test on the wrong sentence.
+type StreamError int
+
+// The two stream-error tokens, plus the refusing default.
+const (
+	StreamErrorUnset StreamError = iota
+	// StreamErrorE is "E;" (printed folio 70).
+	StreamErrorE
+	// StreamErrorO is "O;" (printed folio 70).
+	StreamErrorO
+)
+
+// token renders s as the bytes the radio would put on the wire.
+func (s StreamError) token() string {
+	switch s {
+	case StreamErrorE:
+		return "E;"
+	case StreamErrorO:
+		return "O;"
+	default:
+		return ""
+	}
+}
+
+// String renders s for panics and test failures.
+func (s StreamError) String() string {
+	switch s {
+	case StreamErrorE:
+		return "StreamErrorE"
+	case StreamErrorO:
+		return "StreamErrorO"
+	default:
+		return "StreamErrorUnset"
+	}
+}
+
 // maxAccumulatorBytes is the reassembler's byte cap — this package's own
 // bounded-input policy, not a manual figure, matching the sibling Kenwood
 // fakes' own choice.

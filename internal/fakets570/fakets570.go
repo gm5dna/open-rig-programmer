@@ -70,6 +70,15 @@ type Radio struct {
 	row   string
 	catID string
 
+	// streamErrors is populated only while New's options run and never
+	// mutated afterwards, so serve() may read it without r.mu — the same
+	// shape the sibling Kenwood fakes use.
+	streamErrors map[int]StreamError
+	// exchanges counts frames/overflows serve() has handled, 1-based, and is
+	// touched by serve()'s own goroutine alone — the only goroutine that
+	// ever reads or writes the pipe. It indexes streamErrors.
+	exchanges int
+
 	mu      sync.Mutex
 	records map[recordKey]MemState
 }
@@ -78,10 +87,11 @@ type Radio struct {
 // WithModelName option the row is TS-570D — doc.go's register entry 1.
 func New(opts ...Option) *Radio {
 	r := &Radio{
-		pipe:    fakepipe.New(),
-		row:     "TS-570D",
-		catID:   "017",
-		records: map[recordKey]MemState{},
+		pipe:         fakepipe.New(),
+		row:          "TS-570D",
+		catID:        "017",
+		streamErrors: map[int]StreamError{},
+		records:      map[recordKey]MemState{},
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -136,7 +146,20 @@ func (r *Radio) serve() {
 // silence, and silence is SUCCESS for every accepted Set this radio takes:
 // neither MW's chart nor the general command grammar prints an
 // acknowledgement, matching the sibling Kenwood fakes' own reading.
+//
+// A SCRIPTED STREAM ERROR REPLACES THIS EXCHANGE'S REPLY ENTIRELY, including a
+// fire-and-forget silent success — WithStreamError, doc.go register entry 7.
+// This is now a live wire path per the lift-K follow-up (e7515d0): the
+// manual's own "E;"/"O;" tokens are cited (printed folio 70), so this fake
+// must be able to script them for the cross-check to drive core/driver/ts570's
+// framing against a real fault.
 func (r *Radio) handleEvent(ev accEvent) {
+	r.exchanges++
+	if kind, ok := r.streamErrors[r.exchanges]; ok {
+		r.pipe.Write([]byte(kind.token()))
+		return
+	}
+
 	var reply []byte
 	if ev.overflow {
 		reply = rejection
