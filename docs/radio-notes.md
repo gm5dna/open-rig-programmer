@@ -637,14 +637,20 @@ from this project, so every write stays behind the opt-in consent route.
 
 Evidence: `docs/kenwood-models.md`.
 
-### TS-570D and TS-570S (opt-in)
+### TS-570D, TS-570S and TS-570DG (opt-in)
 
 Read and write the memory channels. Tone mode, both transmit and receive
 tone numbers, and scan skip are all read and written, unlike the Yaesu
 radios this programme also supports. This radio has no channel-name field
 over its interface at all, so no Tag column is shown for it. No TS-570 of
-either row has ever answered a frame from this project, so every write
-stays behind the opt-in consent route.
+any row has ever answered a frame from this project, so every write stays
+behind the opt-in consent route.
+
+**The TS-570DG is UNVERIFIED-BY-INHERITANCE.** The manual behind this row
+names the TS-570D and TS-570S only, never the DG — its support here is
+inherited from its siblings' command set, not read from a DG-specific
+document, and its CATID is ASSUMED equal to the D's rather than printed
+anywhere.
 
 Evidence: `docs/kenwood-models.md`.
 
@@ -713,6 +719,7 @@ by revision in the code that transcribes it.
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-2000, TS-2000X, TS-B2000 | Kenwood PC Control Command reference (TS-2000 series) |
 | TS-570D, TS-570S | Kenwood PC Control Command reference B62-1542-00 |
+| TS-570DG | Kenwood PC Control Command reference B62-1542-00 (names the D and S only — UNVERIFIED-BY-INHERITANCE) |
 | TS-870S | Kenwood PC Control Command reference B62-1536-00, via the rigpix.com mirror (12/09/2026 provenance widening) |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |
 | FTdx5000 | Yaesu CAT Operation Reference Manual, revision 1907-D |

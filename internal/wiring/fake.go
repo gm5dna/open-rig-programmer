@@ -1302,6 +1302,14 @@ var fakeDrivers = map[string]fakeDriverEntry{
 			return ts570FakeAdapter{fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570S")}, TS570DFakeSessionOpts...)...)}
 		},
 	},
+	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: same shared
+	// TS570DFakeSessionOpts, same reasoning as TS-570S's entry above.
+	TS570DGModel: {
+		newDriver: func() driver.Driver { return ts570.NewDG(ts570.Simulated) },
+		newRadio: func() fakeRadio {
+			return ts570FakeAdapter{fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570DG")}, TS570DFakeSessionOpts...)...)}
+		},
+	},
 	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New, no adapter needed.
 	TS870SModel: {
 		newDriver: func() driver.Driver { return ts870s.New(ts870s.Simulated) },

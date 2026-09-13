@@ -1396,6 +1396,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The TS-570S (v1.7.0 Kenwood/Yaesu wave, fifth row): shares
 		// ts570CoreThree, same driver package.
 		"TS-570S": ts570CoreThree,
+		// The TS-570DG (v1.7.0 Kenwood/Yaesu wave, sixth and last ts570
+		// row): shares ts570CoreThree, same driver package.
+		// UNVERIFIED-BY-INHERITANCE — see internal/radiotext and
+		// docs/kenwood-models.md.
+		"TS-570DG": ts570CoreThree,
 		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row).
 		"TS-870S": ts870sCoreThree,
 		// The FT-2000 (v1.7.0 Kenwood/Yaesu wave, eighth row): shares

@@ -9,9 +9,9 @@ reviewers and contributors.
 ## The rows built, and which are selectable
 
 The **TS-590S**, the **TS-590SG**, the **TS-890S**, the **TS-990S**, the
-**TS-2000**/**TS-2000X**/**TS-B2000** family, the **TS-570D**/**TS-570S**
-pair and the **TS-870S** are in the model list. The **TS-480** is not,
-although its driver is written, tested and shipped in the binary — see
+**TS-2000**/**TS-2000X**/**TS-B2000** family, the **TS-570D**/**TS-570S**/
+**TS-570DG** trio and the **TS-870S** are in the model list. The **TS-480**
+is not, although its driver is written, tested and shipped in the binary — see
 *The TS-480 is built and not registered* below, which is the longest
 entry on this page because an absence needs more explaining than a
 presence.
@@ -46,13 +46,28 @@ REVERSE, tuning-step index, Memory Group) this milestone models no
 has ever answered a frame from this project, so every write stays behind
 the opt-in consent route.
 
-**The TS-570D/TS-570S pair (v1.7.0 Kenwood/Yaesu wave).** NoTag — no
-channel-name field over this radio's interface at all — with tone mode
+**The TS-570D/TS-570S/TS-570DG trio (v1.7.0 Kenwood/Yaesu wave).** NoTag —
+no channel-name field over this radio's interface at all — with tone mode
 and both transmit and receive tone numbers reachable, plus scan skip, on
 the TS-2000's read/write footing. CATID `"017"` (D) and `"018"` (S) are
-each printed directly; the two rows are otherwise field-for-field
-identical. `writeTrialsComplete` is false: no TS-570 of either row has
+each printed directly; the three rows are otherwise field-for-field
+identical. `writeTrialsComplete` is false: no TS-570 of any row has
 ever answered a frame from this project.
+
+**The TS-570DG is UNVERIFIED-BY-INHERITANCE.** Document B62-1542-00 names
+the TS-570D and TS-570S only — zero "DG" hits anywhere in it. The command
+set registered here is the document's own, and the DG is a D with the DSP
+option fitted, so this row is registered rather than dropped to a roadmap
+note (spec.md §6 Q2); its radiotext and README entries carry
+UNVERIFIED-BY-INHERITANCE verbatim so an owner sees the same caveat this
+page states. Its CATID is **ASSUMED** equal to the D's ("017"): no document
+prints one for the DG at all, `core/driver/ts570` makes the same ASSUMED
+choice independently (`ts570.go`, `modelDG.catID == modelD.catID`), and
+this is never implied MANUAL-EVIDENCED. `internal/fakets570` mirrors that
+same placeholder rather than inventing an independent one (doc.go register
+entry 6) — the only field in this wave where a fake deliberately copies a
+driver's ASSUMED value, because neither side has any manual content to
+disagree about.
 
 **The TS-870S (v1.7.0 Kenwood/Yaesu wave).** NoTag, with tone mode and a
 shared transmit-tone index reachable (no receive-tone byte on this row's

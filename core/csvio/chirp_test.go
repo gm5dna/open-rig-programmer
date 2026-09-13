@@ -1092,6 +1092,18 @@ func ts570sLikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ts570dgLikeCapabilities is the TS-570DG's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row).
+// UNVERIFIED-BY-INHERITANCE — see internal/radiotext and
+// docs/kenwood-models.md.
+func ts570dgLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS570DGModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS570DGModel, err))
+	}
+	return caps
+}
+
 // ts870sLikeCapabilities returns the TS-870S's own REGISTERED capabilities
 // verbatim (v1.7.0 Kenwood/Yaesu wave, seventh row). Its scan_skip IS
 // reachable (byte 18, this record's own channel-lockout flag), so this
@@ -2925,6 +2937,7 @@ func chirpFixtures() []spec.Capabilities {
 		tsb2000LikeCapabilities(),
 		ts570dLikeCapabilities(),
 		ts570sLikeCapabilities(),
+		ts570dgLikeCapabilities(),
 		ts870sLikeCapabilities(),
 		ft2000LikeCapabilities(),
 		ft2000dLikeCapabilities(),
