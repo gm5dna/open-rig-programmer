@@ -25,43 +25,41 @@ import (
 func TestConformance_TS570D(t *testing.T) { runConformance(t, ts570.LayoutD()) }
 func TestConformance_TS570S(t *testing.T) { runConformance(t, ts570.LayoutS()) }
 
-// runConformance is kwtest.Run, with the REMAINING RecordLen=28 gaps
+// runConformance is kwtest.Run, with the ONE REMAINING RecordLen=28 gap
 // documented rather than silenced.
 //
-// core/kw's Lift K follow-up (commit e7515d0, 13/09/2026) closed the two
-// gaps this comment used to cite — checkMemorySets' width assertion and
-// checkGateRefusesAMutatedPrintedFixedByte's non-empty-PrintedFixed
-// requirement — plus BuildMWSet's own P9-span and isEmptyWindow's
-// width-awareness. Re-running kwtest.Run(t, ts570.LayoutD()) directly
-// (a throwaway probe, not committed) surfaces THREE FURTHER gaps that
-// commit did not touch, because its own scope was the TS-2000's
-// all-live-axis shape and the two named framing/build fixes, not this
-// row's Book570/no-tail shape:
+// core/kw's Lift K follow-up (commit e7515d0) and its own follow-up
+// (commit 51b61dc, "checkLayoutSelfConsistency/checkIdentity/
+// checkEmptyChannel are Book570- and width-aware") together closed every
+// gap this comment used to cite: the width assertion and PrintedFixed
+// requirement, BuildMWSet's P9-span and isEmptyWindow's width-awareness,
+// the Book590/Book480-only switches in checkLayoutSelfConsistency and
+// checkIdentity, and checkEmptyChannel's out-of-range panic.
 //
-//   - checkLayoutSelfConsistency switches on `l.Book()` over exactly
-//     kw.Book590/kw.Book480 and errors for any other book (Book570
-//     included), and separately requires Byte28()/Byte3940()/Byte41() to
-//     be set UNCONDITIONALLY — all three are legitimately Unset on this
-//     row's no-tail layout (layout.go).
-//   - checkIdentity's FV/TY switch is the same Book590/Book480-only
-//     shape and errors "neither the FV leg nor the TY leg ran" for
-//     Book570, which is correct per this document (doc.go: neither
-//     command exists here) but which the suite treats as a fault rather
-//     than a third, legitimate case.
-//   - checkEmptyChannel hardcodes `for i := 6; i <= 40` and
-//     `for i := 41; i <= 48`, both past a 28-byte frame's last valid
-//     index (27) — a genuine PANIC ("index out of range [28] with
-//     length 28"), not merely a failed assertion.
+// ONE BUG REMAINS, NAMED IN 51b61dc's OWN COMMIT MESSAGE AS "ALREADY-
+// DOCUMENTED, NOT-YET-FIXED": checkMemorySets asserts the built MW frame
+// is exactly kw.RecordLen (the package CONSTANT, 50) bytes wide rather
+// than l.RecordLen(), and its round-trip equality check compares
+// Byte28/Byte3940/Byte41/DCSCode/Shift/OffsetHz unconditionally — none of
+// which a no-tail record's wire form carries at all, so BuildMWSet
+// neither reads nor writes them and a fixture record that sets them
+// nonzero can never survive the comparison. Re-running
+// kwtest.Run(t, ts570.LayoutD()) directly (a throwaway probe, not
+// committed) confirms these are the ONLY failures left — no panic, no
+// Book570-specific fault — and every downstream symptom (e.g. "no refusal
+// of kind 'another channel's MR answer' was ever SEEN") traces to the same
+// root: the round-trip failure `continue`s past the refusal legs below it
+// in the sample loop.
 //
-// None of these three is fixable from core/kw/ts570: they are internal to
+// Not fixable from core/kw/ts570: checkMemorySets is internal to
 // kwtest.go, which this milestone's brief reserves editing core/kw to one
-// cited exception (errors.go's Book570/Book870S stream-error entries) that
-// does not cover this file. So this test still SKIPS, with the current,
-// accurate citation, rather than crash the build gate or paper over a
-// panic — see reviews/driver-ts570.md's "## Follow-up" for the full report.
+// cited exception (errors.go's Book570/Book870S stream-error entries)
+// that does not cover this file. So this test still SKIPS, with the
+// current, narrowed citation — see reviews/driver-ts570.md's "## Follow-up"
+// for the full account.
 func runConformance(t *testing.T, l kw.Layout) {
 	t.Helper()
-	t.Skip("kwtest.go's checkLayoutSelfConsistency and checkIdentity switch on l.Book() over exactly Book590/Book480 (Book570 falls into their fault arms), checkLayoutSelfConsistency also requires Byte28/Byte3940/Byte41 set unconditionally (legitimately Unset on this row's no-tail layout), and checkEmptyChannel indexes past a 28-byte frame's last valid position (a panic, not an assertion failure) — all three remain in core/kw/kwtest after Lift K's e7515d0 follow-up closed the two gaps this test used to cite, and none is fixable from core/kw/ts570 — see reviews/driver-ts570.md's Follow-up section")
+	t.Skip("kwtest.go's checkMemorySets still asserts len(frame) != kw.RecordLen (the package constant, 50) rather than l.RecordLen(), and its round-trip comparison checks Byte28/Byte3940/Byte41/DCSCode/Shift/OffsetHz unconditionally though a no-tail record carries none of them — the one gap 51b61dc's own commit message names as already-documented and not yet fixed; every other kwtest gap for this row (Book570 awareness, the out-of-range panic) is now fixed — see reviews/driver-ts570.md's Follow-up section")
 	kwtest.Run(t, l)
 }
 
