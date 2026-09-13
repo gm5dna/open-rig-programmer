@@ -41,23 +41,20 @@
 //	    §1.12). Register home: this driver register (core/driver/ts870s);
 //	    lift: a wire read of the port at 9600 on first contact.
 //
-// # The lift-K gap: no Book870S stream-error citation
+// # The lift-K gap: CLOSED (13/09/2026 follow-up, commit e7515d0)
 //
-// core/kw/errors.go's newStreamError panics on Book870S (and Book570) —
-// S2/S3's evidence transcription for this document stops at the
-// command-table pages, so neither "E;" nor "O;" has a cited cause
-// sentence here, and inventing one would be fabrication (framing.go's own
-// doc comment, and errors.go's newStreamError doc comment, both say so in
-// as many words: "a live NewFraming session for either book must not be
-// wired up ... until a citation lands here").
-//
-// THIS PACKAGE ROUTES AROUND THE GAP RATHER THAN RESOLVING IT (brief
-// option 2, not option 1): core/kw.NewFramingFor takes a kw.Layout, not a
-// Layout870, so there is today no live-framing constructor Layout870
-// could even be handed to — Book870S's stream-health machinery is
-// structurally unreachable from this package, not merely undialled. See
-// core/driver/ts870s's own doc comment for the driver-side consequence
-// (no live Open this phase).
+// core/kw/errors.go's newStreamError used to panic on Book870S (and
+// Book570): S2/S3's evidence transcription for this document stopped at
+// the command-table pages, so neither "E;" nor "O;" had a cited cause
+// sentence. The Lift K follow-up read each document's own full manual
+// text instead and found the table for both — this document's own "E;"
+// sentence carries one fewer comma than the original four books'
+// (commErrorCauseNoComma, ts870s:8445-8447), and its "O;" sentence agrees
+// with the TS-480's (ts870s:8449-8450) — so newStreamError no longer
+// panics on Book870S at all. The same follow-up added Layout870.Book(),
+// a one-grammar AllowedCommand and NewFramingFor870, so a live session is
+// now possible; core/driver/ts870s's own doc comment carries what it
+// actually builds and what it deliberately still does not.
 //
 // # MaxEXAddress — the one value the matrix left for this package to cite
 //
@@ -75,14 +72,24 @@
 // package's own citation, not the matrix's: the matrix scoped EX out and
 // so never settled this number.
 //
-// # A landed-codec imprecision, noted rather than fixed
+// # Two record870.go items, both FIXED in this follow-up
 //
-// record870.go's BuildMWSet/ParseMRAnswer bound P8 against the shared
-// kw.MinToneIndex/kw.MaxToneIndex (00-42, the family's TN/CN chart width)
-// rather than against this row's own 39-entry SUBTONE TABLE (01-39,
-// matrix §1.9). A tone index of 40-42 would therefore build and parse
-// through this codec despite this document's own chart not printing it.
-// record870.go is landed and this package does not modify it (brief); it
-// is recorded here so a later reader does not mistake the wider bound for
-// a fact about this radio.
+// record870.go's BuildMWSet/ParseMRAnswer used to bound P8 against the
+// shared kw.MinToneIndex/kw.MaxToneIndex (00-42, the family's TN/CN chart
+// width) rather than this row's own 39-entry SUBTONE TABLE (01-39,
+// matrix §1.9) — a tone index of 40-42 wrongly round-tripped. It now
+// bounds P8 against its own rec870MinToneIndex/rec870MaxToneIndex (1-39).
+//
+// record870.go also carried no "P4-P8 all zero" empty-channel pre-check
+// (unlike the family's kw.Record), so a genuinely vacant channel's mode
+// byte ('0') was refused by the mode-legend check before ever reaching
+// an empty-window test. Record870 now carries an Empty field and
+// isEmptyWindow870 tests P4-P8 before any of them is interpreted — the
+// manual's own sentence, "the Answer command sends '0' for all
+// parameters except the memory channel number" (ts870s:9101-9104),
+// finally round-trips.
+//
+// Both were small, cited fixes made directly in core/kw/record870.go
+// once this package's own driver follow-up needed a working live session
+// (this package does not otherwise touch that file).
 package ts870s
