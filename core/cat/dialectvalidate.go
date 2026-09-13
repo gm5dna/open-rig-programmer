@@ -828,9 +828,9 @@ func validateMemoryFrameShape(cfg DialectConfig) error {
 // field must be declared.
 func validateMemoryP9(cfg DialectConfig) error {
 	switch cfg.MemoryP9 {
-	case P9Fixed00, P9ToneIndex:
+	case P9Fixed00, P9ToneIndex, P9ToneIndexReadOnly:
 		return nil
 	default:
-		return fmt.Errorf("cat: MemoryP9 is %v, which is not a policy — declare P9Fixed00 or P9ToneIndex explicitly (the P9 field is a printed-fixed \"00\" on some radios and a live CTCSS tone-table index on others)", cfg.MemoryP9)
+		return fmt.Errorf("cat: MemoryP9 is %v, which is not a policy — declare P9Fixed00, P9ToneIndex or P9ToneIndexReadOnly explicitly (the P9 field is a printed-fixed \"00\" on some radios, a live CTCSS tone-table index on others, and live-on-read/fixed-on-write on the FTDX3000)", cfg.MemoryP9)
 	}
 }
