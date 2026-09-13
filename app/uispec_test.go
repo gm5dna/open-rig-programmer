@@ -859,6 +859,19 @@ var ftdx5000CoreSix = []spec.Field{
 	spec.FieldShift, spec.FieldCTCSSState, spec.FieldCTCSSTone,
 }
 
+// ftdx1200CoreFive is the core set both of the FTDX1200's banks derive, on
+// every profile (core/driver/ftdx1200/caps.go's bankFields, shared by MEM
+// and PMS): frequency, mode, clarifier, shift and ctcss_state. FIVE, not
+// ftdx5000CoreSix's six: FieldCTCSSTone is the zero FieldSupport
+// unconditionally on this row (P9 is printed-fixed "00" on both read and
+// write, matrix §1.3) — the only registered Yaesu sibling for which
+// ctcss_tone never derives, since every other mapped-clarifier row in
+// this family has at least a read-side tone value.
+var ftdx1200CoreFive = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState,
+}
+
 // ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
 // derives, on every profile — MEM and SCAN alike
 // (core/driver/ts2000/caps.go's bankFields, applied identically to both
@@ -1422,6 +1435,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// {Read: rw.Read, Write: Unsupported}, non-zero on every profile,
 		// so it stays a core field despite the write side being fixed.
 		"FTDX3000": ftdx5000CoreSix,
+		// The FTDX1200 (v1.8.0 Yaesu trio, second row): FIVE fields, not
+		// ftdx5000CoreSix's six — see ftdx1200CoreFive's own doc comment.
+		"FTDX1200": ftdx1200CoreFive,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

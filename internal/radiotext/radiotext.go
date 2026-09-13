@@ -2352,6 +2352,28 @@ var ftdx3000Text = Text{
 	ProbeFirmwareNote: "The FTDX3000 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
+// ftdx1200Text is the FTDX1200's entry — v1.8.0 Yaesu trio, second row,
+// bare New (single row, own document, INLINE dialect, TWO packages
+// against ftdx3000).
+//
+// NOTAG. CTCSS tone is the zero FieldSupport, unconditionally, on BOTH
+// directions: P9 is printed-fixed "00" on read AND write alike — no live
+// tone state anywhere on this radio's CAT surface. The Mode domain has a
+// genuine hole at 'A' (printed "----" on every command carrying it, live
+// or stored), with no 'D' anywhere. This radio answers with ONE of TWO
+// CAT IDs, "0582" (FFT-1 fitted) or "0583" (not fitted) — one product,
+// not two rows. No FTDX1200 has ever answered a frame from this project
+// (writeTrialsComplete false), so every write stays behind the opt-in
+// consent route.
+var ftdx1200Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FTDX1200: no builder for one exists, and no FTDX1200 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FTDX1200 has no CTCSS tone route over CAT at all: its memory frames print the tone field fixed on both read and write, so this build neither reads nor writes it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. This radio identifies with either of two CAT IDs depending on whether its optional FFT-1 board is fitted — both are accepted as the same radio.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "not read or written over CAT for the FTDX1200 — its own memory frames print the tone field fixed on both read and write",
+	},
+	ProbeFirmwareNote: "The FTDX1200 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2425,6 +2447,8 @@ var texts = map[string]Text{
 	"FT-950": ft950Text,
 	// v1.8.0 Yaesu trio, first row.
 	"FTDX3000": ftdx3000Text,
+	// v1.8.0 Yaesu trio, second row.
+	"FTDX1200": ftdx1200Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
