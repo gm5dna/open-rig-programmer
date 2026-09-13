@@ -2214,6 +2214,20 @@ var ts570dText = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570D. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
 }
 
+// ts570sText is the TS-570S's entry — v1.7.0 Kenwood/Yaesu wave, fifth
+// row, sharing core/driver/ts570 with the TS-570D. Its own printed CATID
+// is "018", distinct from the TS-570D's "017". This entry names only
+// "TS-570S" throughout.
+var ts570sText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-570S: no builder for one exists, and no TS-570S has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570S, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over the TS-570S's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over the TS-570S's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2270,6 +2284,8 @@ var texts = map[string]Text{
 	"TS-B2000": tsb2000Text,
 	// v1.7.0 Kenwood/Yaesu wave, fourth row.
 	"TS-570D": ts570dText,
+	// v1.7.0 Kenwood/Yaesu wave, fifth row.
+	"TS-570S": ts570sText,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
