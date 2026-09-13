@@ -846,6 +846,57 @@ var ic7200CoreTwo = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode,
 }
 
+// ftdx5000CoreSix is the core set both of the FTdx5000's banks (MEM and
+// PMS) derive, on every profile (core/driver/ftdx5000/caps.go's
+// bankFields, shared by both banks): frequency, mode, clarifier, shift,
+// ctcss_state and ctcss_tone. SIX, not the candidate universe's nine: this
+// record has no scan-skip position and no tag/name command at all, and no
+// tone_mode/tone_tx/tone_rx vocabulary — it uses the Icom-shaped
+// clarifier/shift/ctcss vocabulary instead, the same family as the
+// registered FTdx10/FTdx101 dialects.
+var ftdx5000CoreSix = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldCTCSSTone,
+}
+
+// ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
+// derives, on every profile — MEM and SCAN alike
+// (core/driver/ts2000/caps.go's bankFields, applied identically to both
+// banks): frequency, mode, scan_skip and tag. ONE variable for all three
+// registered rows, since the three share one driver package with zero
+// byte difference between them (matrix §1-§2) — there is no per-row
+// divergence for a separate variable to guard against, unlike the TS-590
+// pair's.
+//
+// FOUR, not the candidate universe's nine: this record maps tone as
+// tone_mode/tone_tx/tone_rx (byte position 20 and the 39-entry chart),
+// which is not a bankCoreCandidates member, and it maps duplex/offset
+// rather than the clarifier/shift/ctcss_state/ctcss_tone vocabulary — so
+// those candidates stay the zero FieldSupport here too.
+var ts2000CoreFour = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip, spec.FieldTag,
+}
+
+// ts570CoreThree is the core set every TS-570D/S/DG bank derives, on
+// every profile (core/driver/ts570/caps.go's bankFields): frequency, mode
+// and scan_skip. NoTag (matrix §4), so FieldTag stays the zero
+// FieldSupport and drops out of the derived set. ONE variable for all
+// three registered rows — the package's own record is field-for-field
+// identical across D/S/DG for the candidates this derivation reads.
+var ts570CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip,
+}
+
+// ts870sCoreThree is the core set the TS-870S's one MEM bank derives, on
+// every profile (core/driver/ts870s/caps.go's bankFields): frequency, mode
+// and scan_skip. NoTag (matrix §1.6), so FieldTag stays the zero
+// FieldSupport and drops out of the derived set, on the ts570 rows'
+// footing (registered separately from that package — a different
+// document, a different width).
+var ts870sCoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1327,6 +1378,45 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// NoTag, so TWO fields, not three — see ic7200CoreTwo's own doc
 		// comment.
 		"IC-7200": ic7200CoreTwo,
+		// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row).
+		"FTdx5000": ftdx5000CoreSix,
+		// The TS-2000, TS-2000X and TS-B2000 (v1.7.0 Kenwood/Yaesu wave,
+		// first row): one shared variable for all three, since the package
+		// is byte-identical across its rows — see ts2000CoreFour's own doc
+		// comment.
+		"TS-2000": ts2000CoreFour,
+		// The TS-2000X (v1.7.0 Kenwood/Yaesu wave, second row): shares
+		// ts2000CoreFour, same driver package, zero byte difference.
+		"TS-2000X": ts2000CoreFour,
+		// The TS-B2000 (v1.7.0 Kenwood/Yaesu wave, third and last ts2000
+		// row): same shared variable.
+		"TS-B2000": ts2000CoreFour,
+		// The TS-570D (v1.7.0 Kenwood/Yaesu wave, fourth row).
+		"TS-570D": ts570CoreThree,
+		// The TS-570S (v1.7.0 Kenwood/Yaesu wave, fifth row): shares
+		// ts570CoreThree, same driver package.
+		"TS-570S": ts570CoreThree,
+		// The TS-570DG (v1.7.0 Kenwood/Yaesu wave, sixth and last ts570
+		// row): shares ts570CoreThree, same driver package.
+		// UNVERIFIED-BY-INHERITANCE — see internal/radiotext and
+		// docs/kenwood-models.md.
+		"TS-570DG": ts570CoreThree,
+		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row).
+		"TS-870S": ts870sCoreThree,
+		// The FT-2000 (v1.7.0 Kenwood/Yaesu wave, eighth row): shares
+		// ftdx5000CoreSix's exact composition (core/driver/ft2000/caps.go's
+		// bankFields is identical to ftdx5000's — same dialect family),
+		// reused rather than re-declared.
+		"FT-2000": ftdx5000CoreSix,
+		// The FT-2000D (v1.7.0 Kenwood/Yaesu wave, ninth row): shares
+		// ftdx5000CoreSix, same driver package as the FT-2000.
+		"FT-2000D": ftdx5000CoreSix,
+		// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row): shares
+		// ftdx5000CoreSix's exact composition.
+		"FTdx9000": ftdx5000CoreSix,
+		// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row):
+		// shares ftdx5000CoreSix's exact composition.
+		"FT-950": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

@@ -531,6 +531,19 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{f}, Reason: why}
 	}
 
+	// RUNG 6d. core/driver.CheckFieldStates, THE FLEET'S shared walk
+	// rather than a table of this package's own. unsayable above judges
+	// a value ONLY when its own `known` flag (State == codeplug.Known)
+	// is true, so an Absent field carrying a non-zero Value sails
+	// through both rung 4's mandatoryKnownFields and unsayable untouched
+	// — it names no field requestedFields would include, so it was
+	// previously DROPPED from the frame with the write reporting
+	// success, never refused (the FT-891 closing review's C-M1,
+	// sharpened by MEDIUM-1 to codeplug.Absent).
+	if field, err := driver.CheckFieldStates(s.caps, data); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
+	}
+
 	// RUNG 7. THE CAPABILITY GATE — defence in depth below the clone
 	// service. Every requested field must pass FieldSupport.CanWrite for
 	// this slot's bank in THIS session's capabilities (spec.Supported, or

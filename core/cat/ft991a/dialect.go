@@ -254,6 +254,13 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	// that this manual happens to fix at the same byte. See
 	// TestIdentityPinMWWriteKind, which says exactly this much and no more.
 	MWWriteKind: cat.CombinedMTSetKind,
+	// Pinned explicitly (v1.7.0 Kenwood/Yaesu wave, S1 lift): this radio's
+	// MR-answer/MW-set frame is the registered 28-byte, 9-digit-P2 shape,
+	// and its P9 is printed-fixed "00" on every memory-bearing block. Not
+	// an assumption: this is the legend, transcribed.
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         cat.P9Fixed00,
 })
 
 // Dialect returns the FT-991A's cat.Dialect.

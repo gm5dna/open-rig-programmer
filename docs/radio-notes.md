@@ -134,6 +134,62 @@ first is silent, try the other.
 Evidence: `core/driver/ft991a/doc.go`; the manual is Yaesu's CAT
 Operation Reference Book 1711-D.
 
+### FTdx5000 (opt-in)
+
+Read and write the memory and PMS (programmable memory scan) channels.
+This radio has no tag/name command anywhere in its manual, so no Tag
+column is shown for it. The CTCSS tone is a live tone-table index and is
+read and written like the clarifier, shift and CTCSS state; there is no
+scan-skip position and no data-mode byte in this 27-byte record. No
+FTdx5000 has ever answered a frame from this project, so every write
+stays behind the opt-in consent route.
+
+Evidence: `core/driver/ftdx5000/doc.go`; the manual is the Yaesu CAT
+Operation Reference Manual, revision 1907-D.
+
+### FT-2000 and FT-2000D (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTdx5000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. The CTCSS tone is a live
+tone-table index and is read and written. One SERIES manual documents
+both the FT-2000 and the FT-2000D; this program tells them apart only by
+which one you chose when you connected. No radio of this family has ever
+answered a frame from this project, so every write stays behind the
+opt-in consent route.
+
+Evidence: `core/driver/ft2000/doc.go`; the manual is the Yaesu CAT
+Operation Reference Manual, revision EH025H124.
+
+### FTdx9000 (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTdx5000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. The CTCSS tone is a live
+tone-table index and is read and written. This radio is also marketed as
+the "FT-9000" — one SERIES manual covers both names — and answers its
+identity probe with one of three printed CAT IDs, all accepted. No
+FTdx9000 has ever answered a frame from this project, so every write
+stays behind the opt-in consent route.
+
+Evidence: `core/driver/ftdx9000/doc.go`; the manual is the Yaesu CAT
+Operation Reference Manual, revision EH010H121.
+
+### FT-950 (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTdx5000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. The CTCSS tone is a live
+tone-table index and is read and written; leaving a channel's tone
+unset when writing defaults it to wire index 0 rather than refusing.
+This radio has one extra regular memory channel over the rest of this
+family — its channels are numbered from 000, not 001. No FT-950 has ever
+answered a frame from this project, so every write stays behind the
+opt-in consent route.
+
+Evidence: `core/driver/ft950/doc.go`; the manual is the Yaesu CAT
+Operation Reference Manual, revision EC030H120.
+
 ## Icom
 
 ### Shared by every Icom model
@@ -565,6 +621,51 @@ so the absence is a decision rather than an oversight.
 
 Evidence: `docs/kenwood-models.md`.
 
+### TS-2000, TS-2000X and TS-B2000 (opt-in)
+
+Read and write the memory and scan-edge channels. Tone and scan skip ARE
+read and written, unlike the Yaesu radios this programme also supports:
+its 50-byte memory record carries a channel-lockout flag and a tone mode
+with separate transmit and receive tone numbers. This radio has an
+8-character channel name, so a Tag column is shown for it — the only row
+in this wave that has one. A channel is written back once its transmit
+frequency, DCS code, REVERSE state and memory group are read from the
+radio first. The TS-2000X and TS-B2000 answer identically to the TS-2000
+over the wire; this program tells them apart only by which one you chose
+when you connected. No radio of this family has ever answered a frame
+from this project, so every write stays behind the opt-in consent route.
+
+Evidence: `docs/kenwood-models.md`.
+
+### TS-570D, TS-570S and TS-570DG (opt-in)
+
+Read and write the memory channels. Tone mode, both transmit and receive
+tone numbers, and scan skip are all read and written, unlike the Yaesu
+radios this programme also supports. This radio has no channel-name field
+over its interface at all, so no Tag column is shown for it. No TS-570 of
+any row has ever answered a frame from this project, so every write stays
+behind the opt-in consent route.
+
+**The TS-570DG is UNVERIFIED-BY-INHERITANCE.** The manual behind this row
+names the TS-570D and TS-570S only, never the DG — its support here is
+inherited from its siblings' command set, not read from a DG-specific
+document, and its CATID is ASSUMED equal to the D's rather than printed
+anywhere.
+
+Evidence: `docs/kenwood-models.md`.
+
+### TS-870S (opt-in)
+
+Read and write the memory channels. This radio has no channel-name field
+over its interface at all — NoTag — so no Tag column is shown for it.
+Tone mode and transmit tone ARE read and written (one shared index): its
+22-byte record has no receive-tone byte at all, so tone_rx cannot travel
+over this frame regardless of what you set at the radio. Scan skip is
+also read and written. No TS-870S has ever answered a frame from this
+project, so every write stays behind the opt-in consent route.
+
+Evidence: `docs/kenwood-models.md`.
+
 ### TS-480 (built, not selectable)
 
 The TS-480's driver exists in this program and the radio is **not in the
@@ -616,4 +717,12 @@ by revision in the code that transcribes it.
 | IC-9100 | Icom CI-V Reference Guide |
 | IC-7200 | Icom Advanced Instructions manual (no separate CI-V Reference Guide) |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
+| TS-2000, TS-2000X, TS-B2000 | Kenwood PC Control Command reference (TS-2000 series) |
+| TS-570D, TS-570S | Kenwood PC Control Command reference B62-1542-00 |
+| TS-570DG | Kenwood PC Control Command reference B62-1542-00 (names the D and S only — UNVERIFIED-BY-INHERITANCE) |
+| TS-870S | Kenwood PC Control Command reference B62-1536-00, via the rigpix.com mirror (12/09/2026 provenance widening) |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |
+| FTdx5000 | Yaesu CAT Operation Reference Manual, revision 1907-D |
+| FT-2000, FT-2000D | Yaesu CAT Operation Reference Manual, revision EH025H124 |
+| FTdx9000 | Yaesu CAT Operation Reference Manual, revision EH010H121 |
+| FT-950 | Yaesu CAT Operation Reference Manual, revision EC030H120 |

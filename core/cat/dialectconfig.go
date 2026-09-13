@@ -482,6 +482,46 @@ func (p MemoryP5Policy) String() string {
 	})
 }
 
+// MemoryP9Policy names what the two-byte P9 field of the shared memory
+// field block — positions 25-26, memdata.go's memP9Offset — MEANS on one
+// family. Copied verbatim from MemoryP5Policy's shape (dialectconfig.go),
+// which is the exact precedent this axis follows.
+//
+// Every registered dialect enforces literal "00" there today: the ft2000
+// family (ft2000/ftdx5000/ftdx9000/ft950) instead carries a live CTCSS
+// tone-table index — a two-digit index, 0-49, into the standard 50-entry
+// chart (ft2000 matrix §1.3, "P9: Tone Number (See Page 5: 'CTCSS Tone
+// Chart')", reprinted on MR/OI too).
+//
+// IT GOVERNS BOTH DIRECTIONS, for MemoryP5Policy's reason: under
+// P9Fixed00 the encoder writes "00" and every builder REFUSES a record
+// carrying a nonzero ToneIndex rather than silently correcting it, and the
+// parser REQUIRES "00" — a printed-fixed field that comes back as
+// something else is an undocumented frame. Under P9ToneIndex the field is
+// MemoryData.ToneIndex, round-tripped as a two-digit decimal.
+//
+// Its zero value is deliberately NOT a policy, so a config omitting it is
+// refused (V18) rather than defaulted, for MemoryP5Policy's reason:
+// neither default is safe.
+type MemoryP9Policy int
+
+const (
+	// P9Fixed00 is every registered dialect's reading: the two-byte P9
+	// field is printed-fixed "00" and carries no state.
+	P9Fixed00 MemoryP9Policy = iota + 1
+	// P9ToneIndex is the ft2000 family's: the field is a live two-digit
+	// index, 0-49, into the standard 50-entry CTCSS tone chart.
+	P9ToneIndex
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MemoryP9Policy) String() string {
+	return enumName(p, "MemoryP9Policy", map[MemoryP9Policy]string{
+		P9Fixed00:   "P9Fixed00",
+		P9ToneIndex: "P9ToneIndex",
+	})
+}
+
 // ToneStateDomain names the set of values byte 24 of the shared memory
 // field block — P8, memdata.go's memCTCSSOffset — may hold on one family.
 //
@@ -586,6 +626,29 @@ type DialectConfig struct {
 	// DCS ones. It has no default: see ToneStateDomain.
 	ToneStates ToneStateDomain
 
+	// MemoryFrameLen is the fixed length, in bytes, of this family's
+	// MR-answer/MW-set frame: 28 for every registered dialect (a 9-digit
+	// P2), 27 for the ft2000 family (an 8-digit P2). It has no default: a
+	// zero value is refused (V17) rather than silently taken as 28, which
+	// would size every frame this codec builds or parses off the wrong
+	// family.
+	MemoryFrameLen uint8
+
+	// MemoryFreqDigits is the width, in digits, of the P2 frequency field:
+	// 9 for every registered dialect, 8 for the ft2000 family. Every field
+	// after P2 in the shared memory block SLIDES by the same number of
+	// bytes a narrower P2 saves — a pure position slide, not a reordering
+	// (ft2000 matrix §1.1) — so this single axis is threaded through both
+	// the frame length above and every offset parseMemoryFields/
+	// encodeMemoryFields compute after it. It has no default: see
+	// MemoryFrameLen.
+	MemoryFreqDigits uint8
+
+	// MemoryP9 says what the two-byte P9 field of the shared memory field
+	// block means on this family: printed-fixed "00", or a live CTCSS
+	// tone-table index. It has no default: see MemoryP9Policy.
+	MemoryP9 MemoryP9Policy
+
 	// MWWriteKind is the single P7 "kind" byte this family accepts on
 	// EVERY memory write, e.g. KindMemory for the FT-710.
 	//
@@ -689,6 +752,10 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 		memoryP5:    cfg.MemoryP5,
 		toneStates:  cfg.ToneStates,
 		mwWriteKind: cfg.MWWriteKind,
+
+		memoryFrameLen:   cfg.MemoryFrameLen,
+		memoryFreqDigits: cfg.MemoryFreqDigits,
+		memoryP9:         cfg.MemoryP9,
 	}, nil
 }
 

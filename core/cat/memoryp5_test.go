@@ -211,10 +211,13 @@ func TestMemoryP5_CombinedMTCarriesTheSamePolicy(t *testing.T) {
 			Form: MTFormCombined, ReadSlots: MTReadsReadable, P11: P11Fixed,
 			TagMaxBytes: 6, TagFill: ' ',
 		},
-		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:    P5Fixed,
-		ToneStates:  ToneStatesCTCSS,
-		MWWriteKind: KindMemory,
+		Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         P5Fixed,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindMemory,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
 	}
 	fixed, err := NewDialect(cfg)
 	if err != nil {

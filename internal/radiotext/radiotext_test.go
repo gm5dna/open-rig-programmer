@@ -193,6 +193,19 @@ func TestTextFields_CoversEveryFieldOfText(t *testing.T) {
 var yaesuModels = map[string]bool{
 	"FT-710": true, "FTdx10": true, "FTdx101D": true, "FTdx101MP": true,
 	"FT-891": true, "FT-991A": true,
+	// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row): it speaks CAT
+	// too, so its own prose legitimately says "CAT" and the vocabulary
+	// check must skip it, on the FT-891/FT-991A footing above.
+	"FTdx5000": true,
+	// The FT-2000 (v1.7.0 Kenwood/Yaesu wave, eighth row): same reason.
+	"FT-2000": true,
+	// The FT-2000D (v1.7.0 Kenwood/Yaesu wave, ninth row): same reason.
+	"FT-2000D": true,
+	// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row): same reason.
+	"FTdx9000": true,
+	// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row): same
+	// reason.
+	"FT-950": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -338,6 +351,49 @@ var ownParticulars = map[string][]string{
 	"IC-7700": {"IC-7700", "74h"},
 	"IC-9100": {"IC-9100", "7Ch"},
 	"IC-7200": {"IC-7200", "76h"},
+	// v1.7.0 Kenwood/Yaesu wave, tenth row: bare name, no CI-V address (not
+	// an Icom family) and no hardware finding to guard, on the FT-891/
+	// FT-991A footing.
+	"FTdx5000": {"FTdx5000"},
+	// v1.7.0 Kenwood/Yaesu wave, first row: bare name, no address hex (not
+	// a CI-V family) and no hardware finding to guard.
+	"TS-2000": {"TS-2000"},
+	// v1.7.0 Kenwood/Yaesu wave, second row: bare name. "TS-2000" IS a
+	// strict prefix of "TS-2000X" (the TS-590S/TS-590SG shape), and
+	// stripOwnName's word-boundary match is what keeps that honest: this
+	// entry's own prose names only "TS-2000X" throughout (radiotext.go's
+	// own doc comment), never the bare "TS-2000", so stripping "TS-2000X"
+	// as a whole word leaves no "TS-2000" substring behind to trip the
+	// borrowed-particular check.
+	"TS-2000X": {"TS-2000X"},
+	// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row: bare name, no
+	// prefix-collision concern with any other registered model.
+	"TS-B2000": {"TS-B2000"},
+	// v1.7.0 Kenwood/Yaesu wave, fourth row: bare name.
+	"TS-570D": {"TS-570D"},
+	// v1.7.0 Kenwood/Yaesu wave, fifth row: bare name.
+	"TS-570S": {"TS-570S"},
+	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: bare name.
+	// UNVERIFIED-BY-INHERITANCE.
+	"TS-570DG": {"TS-570DG"},
+	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare name, on the TS-890S/
+	// TS-990S footing.
+	"TS-870S": {"TS-870S"},
+	// v1.7.0 Kenwood/Yaesu wave, eighth row: bare name, on the FT-891/
+	// FT-991A footing.
+	"FT-2000": {"FT-2000"},
+	// v1.7.0 Kenwood/Yaesu wave, ninth row: bare name. "FT-2000" IS a
+	// strict prefix of "FT-2000D" (the TS-2000/TS-2000X shape), and this
+	// entry's own prose names only "FT-2000D" throughout (radiotext.go's
+	// own doc comment), never the bare "FT-2000".
+	"FT-2000D": {"FT-2000D"},
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row: bare name. "FT-9000" is a
+	// marketed alias for this radio (spec.md §6 Q5) but is deliberately
+	// NOT listed here — it names no model this project registers, and
+	// this entry's own prose is the one place it may appear at all.
+	"FTdx9000": {"FTdx9000"},
+	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: bare name.
+	"FT-950": {"FT-950"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2408,4 +2464,288 @@ func TestRadiotext_IC7200Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "IC-7200", got)
+}
+
+// TestRadiotext_FTdx5000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// tenth row's prose byte-for-byte.
+func TestRadiotext_FTdx5000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTdx5000: no builder for one exists, and no FTdx5000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for this radio as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT by this build, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for this radio — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+	}
+
+	got, ok := radiotext.For("FTdx5000")
+	if !ok {
+		t.Fatal(`For("FTdx5000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTdx5000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx5000", got)
+}
+
+// TestRadiotext_TS2000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's first
+// row's prose byte-for-byte.
+func TestRadiotext_TS2000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-2000: no builder for one exists, and no TS-2000 has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for this radio, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for this radio. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-2000")
+	if !ok {
+		t.Fatal(`For("TS-2000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-2000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-2000", got)
+}
+
+// TestRadiotext_TS2000XVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// second row's prose byte-for-byte.
+func TestRadiotext_TS2000XVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-2000X: no builder for one exists, and no TS-2000X has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-2000X, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over the TS-2000X's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over the TS-2000X's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-2000X. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-2000X")
+	if !ok {
+		t.Fatal(`For("TS-2000X") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-2000X\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-2000X", got)
+}
+
+// TestRadiotext_TSB2000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// third and last ts2000 row's prose byte-for-byte.
+func TestRadiotext_TSB2000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-B2000: no builder for one exists, and no TS-B2000 has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-B2000, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over the TS-B2000's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over the TS-B2000's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-B2000. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-B2000")
+	if !ok {
+		t.Fatal(`For("TS-B2000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-B2000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-B2000", got)
+}
+
+// TestRadiotext_TS570DVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// fourth row's prose byte-for-byte.
+func TestRadiotext_TS570DVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-570D: no builder for one exists, and no TS-570D has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570D, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over the TS-570D's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over the TS-570D's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570D. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-570D")
+	if !ok {
+		t.Fatal(`For("TS-570D") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-570D\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-570D", got)
+}
+
+// TestRadiotext_TS570SVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// fifth row's prose byte-for-byte.
+func TestRadiotext_TS570SVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-570S: no builder for one exists, and no TS-570S has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570S, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over the TS-570S's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over the TS-570S's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-570S")
+	if !ok {
+		t.Fatal(`For("TS-570S") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-570S\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-570S", got)
+}
+
+// TestRadiotext_TS570DGVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// sixth and last ts570 row's prose byte-for-byte, including its
+// UNVERIFIED-BY-INHERITANCE flag.
+func TestRadiotext_TS570DGVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-570DG: no builder for one exists, and no TS-570DG has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570DG, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it. UNVERIFIED-BY-INHERITANCE: the manual behind this row names two sibling rows only — this radio's support here is inherited from them, not read from a document naming the TS-570DG directly.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over the TS-570DG's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over the TS-570DG's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570DG. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-570DG")
+	if !ok {
+		t.Fatal(`For("TS-570DG") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-570DG\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-570DG", got)
+}
+
+// TestRadiotext_TS870SVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// seventh row's prose byte-for-byte.
+func TestRadiotext_TS870SVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-870S: no builder for one exists, and no TS-870S has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for this radio, unlike the Yaesu radios this programme also supports: its 22-byte memory record carries a channel-lockout flag and a shared tone mode/transmit-tone index, at printed positions this build's own chart matches. There is no receive-tone byte anywhere on this row's record, so tone_rx stays unreadable and unwritable regardless. This radio also has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a tone mode and a transmit-tone index (no receive-tone byte exists on this row). Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-870S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-870S")
+	if !ok {
+		t.Fatal(`For("TS-870S") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-870S\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-870S", got)
+}
+
+// TestRadiotext_FT2000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// eighth row's prose byte-for-byte.
+func TestRadiotext_FT2000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-2000: no builder for one exists, and no FT-2000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the FT-2000 as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT for the FT-2000, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000 — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+	}
+
+	got, ok := radiotext.For("FT-2000")
+	if !ok {
+		t.Fatal(`For("FT-2000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-2000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-2000", got)
+}
+
+// TestRadiotext_FT2000DVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// ninth row's prose byte-for-byte.
+func TestRadiotext_FT2000DVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-2000D: no builder for one exists, and no FT-2000D has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the FT-2000D as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT for the FT-2000D, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000D — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+	}
+
+	got, ok := radiotext.For("FT-2000D")
+	if !ok {
+		t.Fatal(`For("FT-2000D") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-2000D\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-2000D", got)
+}
+
+// TestRadiotext_FTdx9000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// eleventh row's prose byte-for-byte.
+func TestRadiotext_FTdx9000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTdx9000: no builder for one exists, and no FTdx9000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the FTdx9000 as a live CTCSS-tone index. This radio (also marketed as the FT-9000) has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT for the FTdx9000; nothing here is preserved. Whether a rewrite preserves the tone index has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "This radio has no firmware query in this build. It answers its identity probe with one of three printed CAT IDs, all accepted by this driver, and its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FTdx9000")
+	if !ok {
+		t.Fatal(`For("FTdx9000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTdx9000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx9000", got)
+}
+
+// TestRadiotext_FT950Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// twelfth and last row's prose byte-for-byte.
+func TestRadiotext_FT950Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-950: no builder for one exists, and no FT-950 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FT-950's tone is read and written as a live CTCSS-tone index, but there is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. Its regular memory channels are numbered from 000, one lower than every sibling in this family.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written for the FT-950; this build has never tested whether a rewrite preserves the tone index on a real radio",
+		},
+		ProbeFirmwareNote: "The FT-950 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FT-950")
+	if !ok {
+		t.Fatal(`For("FT-950") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-950\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-950", got)
 }

@@ -94,13 +94,16 @@ var testDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
 	},
-	EXItems:       nil,
-	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:      P5TxClar,
-	ToneStates:    ToneStatesCTCSS,
-	MWWriteKind:   KindMemory,
+	EXItems:          nil,
+	EXAddressForm:    EXAddressTriple,
+	MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // noneWireDialect exists for ONE attribute: slotSpace.noneWire, the only
@@ -128,13 +131,16 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "900", // FT-710: "000"
 		MCSelects:     MCSelectsAll,
 	},
-	EXItems:       nil,
-	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:      P5TxClar,
-	ToneStates:    ToneStatesCTCSS,
-	MWWriteKind:   KindMemory,
+	EXItems:          nil,
+	EXAddressForm:    EXAddressTriple,
+	MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // peerDialect is the dialect that makes this file's proof complete, and it
@@ -189,13 +195,16 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "777", // FT-710: "000"
 		MCSelects:     MCSelectsAll,
 	},
-	EXItems:       peerEXItems,
-	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:      P5TxClar,
-	ToneStates:    ToneStatesCTCSS,
-	MWWriteKind:   KindMemory,
+	EXItems:          peerEXItems,
+	EXAddressForm:    EXAddressTriple,
+	MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // ft710P4MaxBytes is the FT-710's own widest P4 answer field: 12, the
@@ -1557,13 +1566,16 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
 	},
-	EXItems:       combinedEXItems,
-	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
-	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:      P5TxClar,
-	ToneStates:    ToneStatesCTCSS,
-	MWWriteKind:   KindMemory,
+	EXItems:          combinedEXItems,
+	EXAddressForm:    EXAddressTriple,
+	MT:               MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // combinedEXItems is combinedDialect's own small inventory. Its P1 group is
@@ -1611,13 +1623,16 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "777", // FT-710: "000"
 		MCSelects:     MCSelectsAll,
 	},
-	EXItems:       peerEXItems,
-	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
-	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:      P5TxClar,
-	ToneStates:    ToneStatesCTCSS,
-	MWWriteKind:   KindMemTune,
+	EXItems:          peerEXItems,
+	EXAddressForm:    EXAddressTriple,
+	MT:               MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemTune,
 })
 
 // pairEXItems is the four-digit form's inventory: two items in a P1=08
@@ -1669,13 +1684,16 @@ var pairDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll, // unremarkable, as the doc comment says: the address width is this fixture's one variable
 	},
-	EXItems:       pairEXItems,
-	EXAddressForm: EXAddressPair, // the FT-891's four-digit field (EXAddressPair's doc comment, dialectconfig.go, has the naming caveat)
-	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:      P5TxClar,
-	ToneStates:    ToneStatesCTCSS,
-	MWWriteKind:   KindMemory,
+	EXItems:          pairEXItems,
+	EXAddressForm:    EXAddressPair, // the FT-891's four-digit field (EXAddressPair's doc comment, dialectconfig.go, has the naming caveat)
+	MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // --- FT-891 Stage 0: one fixture per new dialect axis ---
@@ -1710,13 +1728,16 @@ var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "000",
 		MCSelects:     MCSelectsMemoryPMS, // THE AXIS UNDER TEST
 	},
-	EXItems:       nil,
-	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
-	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:      P5TxClar,
-	ToneStates:    ToneStatesCTCSS,
-	MWWriteKind:   KindMemory,
+	EXItems:          nil,
+	EXAddressForm:    EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // mtReadMemoryPMSDialect declares MTReadsMemoryPMS: its MT READ may name a
@@ -1746,10 +1767,13 @@ var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 		ReadSlots:   MTReadsMemoryPMS, // THE AXIS UNDER TEST
 		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
 	},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:    P5TxClar,
-	ToneStates:  ToneStatesCTCSS,
-	MWWriteKind: KindMemory,
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // p5FixedDialect declares MemoryP5: P5Fixed — byte 21 of the shared memory
@@ -1777,10 +1801,13 @@ var p5FixedDialect = mustFixtureDialect(DialectConfig{
 		Form: MTFormShort, ReadSlots: MTReadsReadable,
 		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
 	},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:    P5Fixed, // THE AXIS UNDER TEST
-	ToneStates:  ToneStatesCTCSS,
-	MWWriteKind: KindMemory,
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5Fixed, // THE AXIS UNDER TEST
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // combinedTagDisplayDialect declares MTP11Policy P11TagDisplay: byte 28 of
@@ -1815,10 +1842,13 @@ var combinedTagDisplayDialect = mustFixtureDialect(DialectConfig{
 		TagMaxBytes: 9,
 		TagFill:     '.',
 	},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:    P5TxClar,
-	ToneStates:  ToneStatesCTCSS,
-	MWWriteKind: KindMemory,
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // --- FT-991A Stage 0: the PMS wire-form axis ---
@@ -1861,10 +1891,13 @@ var numericPMSDialect = mustFixtureDialect(DialectConfig{
 		Form: MTFormShort, ReadSlots: MTReadsReadable,
 		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
 	},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:    P5TxClar,
-	ToneStates:  ToneStatesCTCSS,
-	MWWriteKind: KindMemory,
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSS,
+	MWWriteKind:      KindMemory,
 })
 
 // dcsStatesDialect declares ToneStatesCTCSSAndDCS: byte 24 of its memory
@@ -1918,8 +1951,11 @@ var dcsStatesDialect = mustFixtureDialect(DialectConfig{
 		P11:         P11Fixed,
 		TagMaxBytes: 8, TagFill: '-',
 	},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MemoryP5:    P5TxClar,
-	ToneStates:  ToneStatesCTCSSAndDCS, // THE AXIS UNDER TEST
-	MWWriteKind: KindMemory,
+	Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:         P5TxClar,
+	MemoryFrameLen:   28,
+	MemoryFreqDigits: 9,
+	MemoryP9:         P9Fixed00,
+	ToneStates:       ToneStatesCTCSSAndDCS, // THE AXIS UNDER TEST
+	MWWriteKind:      KindMemory,
 })

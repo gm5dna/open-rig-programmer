@@ -2123,6 +2123,215 @@ var ic7200Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7200: this build knows of none to require. This driver talks only to CI-V address 76h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// ftdx5000Text is the FTdx5000's entry — v1.7.0 Kenwood/Yaesu wave, tenth
+// row, bare New (single row, own document).
+//
+// NOTAG: no tag/name command anywhere in the 20-page manual, so no Tag
+// column is shown for it. The CTCSS tone IS a live, mapped tone-table
+// index (read and written), unlike every registered 9-digit-family
+// dialect's fixed "00". No FTdx5000 has ever answered a frame from this
+// project (writeTrialsComplete false), so every write stays behind the
+// opt-in consent route.
+var ftdx5000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FTdx5000: no builder for one exists, and no FTdx5000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for this radio as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT by this build, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for this radio — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+}
+
+// ts2000Text is the TS-2000's entry — v1.7.0 Kenwood/Yaesu wave, first row
+// of three sharing one driver package (core/driver/ts2000) and one 50-byte
+// MR/MW record with zero byte difference between the rows.
+//
+// TAGGED, unlike every other row this wave registers (TagLen 8, an 8-byte
+// channel name) — the wave's only tagged package. Tone and scan skip ARE
+// read and written here, on the TS-590 pair's footing rather than the
+// Yaesu radios' or the IC-7200's: byte 19 is a channel-lockout flag and
+// byte 20 plus the 39-entry chart carries a tone mode and separate
+// transmit/receive tone numbers. No TS-2000 of any of the three rows has
+// ever answered a frame from this project (writeTrialsComplete false), so
+// every write stays behind the opt-in consent route.
+var ts2000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-2000: no builder for one exists, and no TS-2000 has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for this radio, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over this radio's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over this radio's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for this radio. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
+// ts2000xText is the TS-2000X's entry — v1.7.0 Kenwood/Yaesu wave, second
+// row, sharing core/driver/ts2000 with the TS-2000: zero byte difference
+// in the record, CATID "019" shared by ASSUMPTION (not MANUAL-EVIDENCED,
+// unlike the TS-2000's own). This entry names only "TS-2000X" throughout
+// (never the bare "TS-2000") so the non-borrowing check can tell the two
+// rows' prose apart.
+var ts2000xText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-2000X: no builder for one exists, and no TS-2000X has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-2000X, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over the TS-2000X's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over the TS-2000X's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-2000X. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
+// tsb2000Text is the TS-B2000's entry — v1.7.0 Kenwood/Yaesu wave, third
+// and last row sharing core/driver/ts2000: zero byte difference in the
+// record, CATID "019" shared by ASSUMPTION. This entry names only
+// "TS-B2000" throughout.
+var tsb2000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-B2000: no builder for one exists, and no TS-B2000 has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-B2000, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over the TS-B2000's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over the TS-B2000's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-B2000. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
+// ts570dText is the TS-570D's entry — v1.7.0 Kenwood/Yaesu wave, fourth
+// row, first of three sharing core/driver/ts570 (a 28-byte record, no
+// bare New).
+//
+// NOTAG: no channel-name field over this radio's interface at all, so no
+// Tag column is shown for it — cited to the 12/09/2026 nameless-capability
+// rule change. Tone mode and both transmit and receive tone numbers ARE
+// read and written (one shared index), and scan skip is also reachable
+// (a channel-lockout flag). No TS-570D has ever answered a frame from
+// this project (writeTrialsComplete false), so every write stays behind
+// the opt-in consent route.
+var ts570dText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-570D: no builder for one exists, and no TS-570D has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570D, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over the TS-570D's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over the TS-570D's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570D. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
+// ts570sText is the TS-570S's entry — v1.7.0 Kenwood/Yaesu wave, fifth
+// row, sharing core/driver/ts570 with the TS-570D. Its own printed CATID
+// is "018", distinct from the TS-570D's "017". This entry names only
+// "TS-570S" throughout.
+var ts570sText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-570S: no builder for one exists, and no TS-570S has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570S, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over the TS-570S's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over the TS-570S's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
+// ts570dgText is the TS-570DG's entry — v1.7.0 Kenwood/Yaesu wave, sixth
+// and last row over core/driver/ts570. UNVERIFIED-BY-INHERITANCE: document
+// B62-1542-00 names the TS-570D and TS-570S only, never the DG variant
+// (spec.md §0 footnote, driver-ts570.md deviation 7) — the command set is
+// the document's own, but no printed line confirms the DG answers it. Its
+// CATID is ASSUMED equal to the TS-570D's ("017"), never MANUAL-EVIDENCED.
+var ts570dgText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-570DG: no builder for one exists, and no TS-570DG has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570DG, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it. UNVERIFIED-BY-INHERITANCE: the manual behind this row names two sibling rows only — this radio's support here is inherited from them, not read from a document naming the TS-570DG directly.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over the TS-570DG's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over the TS-570DG's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570DG. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
+// ts870sText is the TS-870S's entry — v1.7.0 Kenwood/Yaesu wave, seventh
+// row, its own package separate from ts570 (a different document, a
+// different 22-byte width, one bare New).
+//
+// NOTAG: no channel-name field over this radio's interface at all, so no
+// Tag column is shown for it. Tone mode and transmit tone ARE read and
+// written (one shared index, P8), but there is no receive-tone byte at all
+// on this row's own record. Scan skip is also reachable (a channel-lockout
+// flag). No TS-870S has ever answered a frame from this project
+// (writeTrialsComplete false), so every write stays behind the opt-in
+// consent route.
+var ts870sText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the TS-870S: no builder for one exists, and no TS-870S has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+	GridLegendNote: "Tone and Scan Skip ARE read and written for this radio, unlike the Yaesu radios this programme also supports: its 22-byte memory record carries a channel-lockout flag and a shared tone mode/transmit-tone index, at printed positions this build's own chart matches. There is no receive-tone byte anywhere on this row's record, so tone_rx stays unreadable and unwritable regardless. This radio also has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a tone mode and a transmit-tone index (no receive-tone byte exists on this row). Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over this radio's interface, so nothing here is preserved: the 22-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-870S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+}
+
+// ft2000Text is the FT-2000's entry — v1.7.0 Kenwood/Yaesu wave, eighth
+// row, first of two sharing core/driver/ft2000 (one SERIES manual, the
+// ftdx101 shape).
+//
+// NOTAG: no tag/name command anywhere in the 20-page manual. The CTCSS
+// tone IS a live, mapped tone-table index (read and written), unlike
+// every registered 9-digit-family dialect's fixed "00". No FT-2000 has
+// ever answered a frame from this project (writeTrialsComplete false), so
+// every write stays behind the opt-in consent route.
+var ft2000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-2000: no builder for one exists, and no FT-2000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the FT-2000 as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT for the FT-2000, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000 — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+}
+
+// ft2000dText is the FT-2000D's entry — v1.7.0 Kenwood/Yaesu wave, ninth
+// row, sharing core/driver/ft2000 with the FT-2000 (one SERIES manual
+// names both radios). Its own CATID is "0252", distinct from the
+// FT-2000's "0251".
+var ft2000dText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-2000D: no builder for one exists, and no FT-2000D has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the FT-2000D as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT for the FT-2000D, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000D — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+}
+
+// ftdx9000Text is the FTdx9000's entry — v1.7.0 Kenwood/Yaesu wave,
+// eleventh row, bare New (single row; also marketed as the "FT-9000",
+// which this driver's probe accepts alongside two other printed CAT IDs,
+// but which never appears as a Model constant, a CATID or a wiring key —
+// spec.md §6 Q5 — only in this one sentence of prose).
+//
+// NOTAG. CTCSS tone IS a live, mapped tone-table index. No FTdx9000 has
+// ever answered a frame from this project (writeTrialsComplete false), so
+// every write stays behind the opt-in consent route.
+var ftdx9000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FTdx9000: no builder for one exists, and no FTdx9000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the FTdx9000 as a live CTCSS-tone index. This radio (also marketed as the FT-9000) has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT for the FTdx9000; nothing here is preserved. Whether a rewrite preserves the tone index has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "This radio has no firmware query in this build. It answers its identity probe with one of three printed CAT IDs, all accepted by this driver, and its default baud of 38400 is unverified against real hardware.",
+}
+
+// ft950Text is the FT-950's entry — v1.7.0 Kenwood/Yaesu wave, twelfth and
+// last row, bare New (single row, own document).
+//
+// NOTAG. CTCSS tone IS a live, mapped tone-table index, and is optional
+// on write: a non-Known tone defaults to wire index 0 rather than
+// refusing. One extra regular memory channel over every sibling in this
+// family (numbered from 000, not 001). No FT-950 has ever answered a
+// frame from this project (writeTrialsComplete false), so every write
+// stays behind the opt-in consent route.
+var ft950Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-950: no builder for one exists, and no FT-950 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FT-950's tone is read and written as a live CTCSS-tone index, but there is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. Its regular memory channels are numbered from 000, one lower than every sibling in this family.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written for the FT-950; this build has never tested whether a rewrite preserves the tone index on a real radio",
+	},
+	ProbeFirmwareNote: "The FT-950 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2169,6 +2378,31 @@ var texts = map[string]Text{
 	"IC-9100": ic9100Text,
 	// The v1.7.0 Icom wave's sixth and last registration.
 	"IC-7200": ic7200Text,
+	// v1.7.0 Kenwood/Yaesu wave, tenth row.
+	"FTdx5000": ftdx5000Text,
+	// v1.7.0 Kenwood/Yaesu wave, first row.
+	"TS-2000": ts2000Text,
+	// v1.7.0 Kenwood/Yaesu wave, second row.
+	"TS-2000X": ts2000xText,
+	// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row.
+	"TS-B2000": tsb2000Text,
+	// v1.7.0 Kenwood/Yaesu wave, fourth row.
+	"TS-570D": ts570dText,
+	// v1.7.0 Kenwood/Yaesu wave, fifth row.
+	"TS-570S": ts570sText,
+	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row.
+	// UNVERIFIED-BY-INHERITANCE.
+	"TS-570DG": ts570dgText,
+	// v1.7.0 Kenwood/Yaesu wave, seventh row.
+	"TS-870S": ts870sText,
+	// v1.7.0 Kenwood/Yaesu wave, eighth row.
+	"FT-2000": ft2000Text,
+	// v1.7.0 Kenwood/Yaesu wave, ninth row.
+	"FT-2000D": ft2000dText,
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row.
+	"FTdx9000": ftdx9000Text,
+	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row.
+	"FT-950": ft950Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

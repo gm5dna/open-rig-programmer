@@ -24,11 +24,14 @@ radio, and every write is previewed, snapshotted and read back.
 | Radio | Read | Write |
 | --- | --- | --- |
 | **FT-710** | ✅ | ✅ verified on a real radio |
-| **FTdx10**, **FTdx101D**, **FTdx101MP**, **FT-891**, **FT-991A** | ✅ | ⚠️ opt-in |
+| **FTdx10**, **FTdx101D**, **FTdx101MP**, **FT-891**, **FT-991A**, **FTdx5000**, **FT-2000**, **FT-2000D**, **FTdx9000**, **FT-950** | ✅ | ⚠️ opt-in |
 | **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760**, **IC-7100**, **IC-7800**, **IC-7600**, **IC-7410**, **IC-7700**, **IC-9100**, **IC-7200** | ✅ | ⚠️ opt-in |
 | **IC-R8600** (a receiver) | ✅ | ⚠️ opt-in |
 | **TS-590S**, **TS-590SG** | ✅ | ⚠️ opt-in |
 | **TS-890S**, **TS-990S** | ✅ | ⚠️ opt-in, existing channels only |
+| **TS-2000**, **TS-2000X**, **TS-B2000** | ✅ | ⚠️ opt-in |
+| **TS-570D**, **TS-570S**, **TS-570DG** (UNVERIFIED-BY-INHERITANCE — see radio-notes.md) | ✅ | ⚠️ opt-in |
+| **TS-870S** | ✅ | ⚠️ opt-in |
 
 Per-radio detail, including where the program is guessing, is in
 [docs/radio-notes.md](docs/radio-notes.md).

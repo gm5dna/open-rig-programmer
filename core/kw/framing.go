@@ -57,6 +57,27 @@ const (
 	Book890
 	// Book990 is the TS-990S PC control command reference (990:LINE).
 	Book990
+	// Book570 is the TS-570D/S/DG PC control command reference, document
+	// code B62-1542-00 (evidence/ts570d.md §1). Its 28-byte memory record
+	// is a true prefix of the 590 pair's/TS-480's grid (RecordLen), so it
+	// is one of the three books kw.Layout describes.
+	Book570
+	// Book870S is the TS-870S PC control command reference, document code
+	// B62-1536-00, read via the rigpix.com community mirror under the
+	// 12/09/2026 provenance widening (evidence/ts870s.md §1). Its 22-byte
+	// memory record is NOT a prefix of the family grid (its offsets shift
+	// rather than merely stop early), so its channel is core/kw's own
+	// Layout870 rather than a kw.Layout.
+	//
+	// BOTH NEW BOOKS' STREAM-ERROR TABLES ARE NOW CITED. S2/S3's original
+	// evidence for both stopped at the command-table pages; the Lift K
+	// follow-up (13/09/2026) read each document's own full manual text
+	// instead and found the "?;"/"E;"/"O;" table for both (errors.go's
+	// bookCitations and newStreamError). Both agree with the TS-480's own
+	// wording on "O;" and print "E;" with one comma fewer than the
+	// original four's shared sentence — a genuine textual variant, not a
+	// transcription slip (commErrorCauseNoComma, errors.go).
+	Book870S
 )
 
 // String renders a Book for diagnostics.
@@ -70,6 +91,10 @@ func (b Book) String() string {
 		return "TS-890S PC command reference"
 	case Book990:
 		return "TS-990S PC command reference"
+	case Book570:
+		return "TS-570D/S/DG PC command reference"
+	case Book870S:
+		return "TS-870S PC command reference (rigpix.com mirror of B62-1536-00)"
 	default:
 		return "unset PC command reference"
 	}
@@ -79,7 +104,12 @@ func (b Book) String() string {
 // type's doc comment for why that is not the same question as "a document
 // this package's 50-byte record describes", which is NewLayout's.
 func (b Book) valid() bool {
-	return b == Book590 || b == Book480 || b == Book890 || b == Book990
+	switch b {
+	case Book590, Book480, Book890, Book990, Book570, Book870S:
+		return true
+	default:
+		return false
+	}
 }
 
 // DrainIdleGap and DrainCap are the Kenwood DrainPolicy. The cap is a

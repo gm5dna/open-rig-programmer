@@ -11,29 +11,127 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-13
+
 ### Added
-- **IC-7800** joins the supported Icom models (v1.7.0 Icom wave):
-  memory and scan-edge channels, opt-in unverified writes, a
-  HIGH-proximity clone of the IC-7610's record shape at its own
-  address.
-- **IC-7600** joins the supported Icom models (v1.7.0 Icom wave):
-  another HIGH-proximity clone of the IC-7610's record shape, at its
-  own address.
-- **IC-7410** joins the supported Icom models (v1.7.0 Icom wave): not
-  a clone — a 40-byte record with a genuine TX-duplicate block, and a
-  write that leaves the transmit frequency unset mirrors the receive
-  frequency into it rather than refusing.
-- **IC-7700** joins the supported Icom models (v1.7.0 Icom wave): reads
-  and writes the transmit (split) frequency, and shares the
-  already-registered IC-7300's 39-byte record shape.
-- **IC-9100** joins the supported Icom models (v1.7.0 Icom wave): one
-  band, richer than its siblings (duplex, offset, DTCS code and
-  polarity), and opens at the port's own default framing rather than a
-  driver-asserted stop-bit count.
-- **IC-7200** joins the supported Icom models (v1.7.0 Icom wave, the
-  last of six): NoTag — no channel-name field over CI-V at all, so no
-  Tag column is shown for it — and no tone or scan-skip field of any
-  kind, on a 17-byte record.
+- **A radio whose memory write route has no channel-name field can now be
+  registered.** The new NoTag capability marks a profile as having nothing
+  for a channel name to occupy, rather than forcing every profile through
+  the existing tag-field machinery. On such a radio the desktop grid hides
+  the Tag column, a CHIRP import drops the file's `Name` column with a
+  single warning per import instead of refusing the file outright, and the
+  native CSV export writes an empty `Name` column so the file's shape
+  still matches every other radio's export. A profile that claims NoTag
+  but whose bank still lists a tag field is rejected at validation, so the
+  two can never disagree.
+- **IC-7800** joins the supported Icom models (v1.7.0 Icom wave) at CI-V
+  address 6Ah: memory and scan-edge channels, opt-in unverified writes, a
+  HIGH-proximity clone of the IC-7610's record shape at its own address.
+  Manual-derived only: no real IC-7800 has ever answered a frame from this
+  program, and writing to it stays switched off until you switch it on.
+- **IC-7600** joins the supported Icom models (v1.7.0 Icom wave) at CI-V
+  address 7Ah: another HIGH-proximity clone of the IC-7610's record shape,
+  at its own address. Manual-derived only: no real IC-7600 has ever
+  answered a frame from this program, and writing to it stays switched off
+  until you switch it on.
+- **IC-7410** joins the supported Icom models (v1.7.0 Icom wave) at CI-V
+  address 80h: not a clone — a 40-byte record with a genuine TX-duplicate
+  block, and a write that leaves the transmit frequency unset mirrors the
+  receive frequency into it rather than refusing. Manual-derived only: no
+  real IC-7410 has ever answered a frame from this program, and writing to
+  it stays switched off until you switch it on.
+- **IC-7700** joins the supported Icom models (v1.7.0 Icom wave) at CI-V
+  address 74h: reads and writes the transmit (split) frequency, and shares
+  the already-registered IC-7300's 39-byte record shape. Manual-derived
+  only: no real IC-7700 has ever answered a frame from this program, and
+  writing to it stays switched off until you switch it on.
+- **IC-9100** joins the supported Icom models (v1.7.0 Icom wave) at CI-V
+  address 7Ch: one band, richer than its siblings (duplex, offset, DTCS
+  code and polarity), and opens at the port's own default framing rather
+  than a driver-asserted stop-bit count. Manual-derived only: no real
+  IC-9100 has ever answered a frame from this program, and writing to it
+  stays switched off until you switch it on.
+- **IC-7200** joins the supported Icom models (v1.7.0 Icom wave, the last
+  of six) at CI-V address 76h: NoTag — no channel-name field over CI-V at
+  all, so no Tag column is shown for it — and no tone or scan-skip field
+  of any kind, on a 17-byte record. Manual-derived only: no real IC-7200
+  has ever answered a frame from this program, and writing to it stays
+  switched off until you switch it on.
+- **TS-2000, TS-2000X and TS-B2000** join the supported tier as one
+  package covering three model rows on a shared 50-byte memory record:
+  tone mode, both transmit and receive tone numbers, scan skip and an
+  eight-character channel name are all read and written — the only
+  package in this release with a channel name. A channel is written back
+  only after its own transmit frequency, DCS code, REVERSE state and
+  memory group are first read from the radio, so this driver can write an
+  existing channel but not create a new one. Manual-derived only: no radio
+  of this family has ever answered a frame from this program, and writing
+  to it stays switched off until you switch it on.
+- **TS-570D, TS-570S and TS-570DG** join the supported tier as one
+  package covering three model rows on a shared 28-byte memory record with
+  no channel-name field at all. Tone mode, both tone numbers and scan skip
+  are read and written. The TS-570DG row is UNVERIFIED-BY-INHERITANCE: the
+  manual behind this package documents the D and S models only, and the
+  DG's own values are inferred from its siblings' command set rather than
+  read from a DG-specific page. Manual-derived only: no TS-570 of any row
+  has ever answered a frame from this program, and writing to it stays
+  switched off until you switch it on.
+- **TS-870S** joins the supported tier with its own 22-byte memory
+  record — a different shape from the TS-2000/TS-570 family, not a
+  narrower cut of it — and no channel-name field. Tone mode and one shared
+  transmit/receive tone index are read and written; the record has no
+  separate receive-tone byte at all. Manual-derived only: no TS-870S has
+  ever answered a frame from this program, and writing to it stays
+  switched off until you switch it on.
+- **FTdx5000** joins the supported tier: memory and programmable-memory-
+  scan channels on a 27-byte record with no channel-name field. The CTCSS
+  tone is a live tone-table index, read and written along with the
+  clarifier, shift and CTCSS state. Manual-derived only: no FTdx5000 has
+  ever answered a frame from this program, and writing to it stays
+  switched off until you switch it on.
+- **FT-2000 and FT-2000D** join the supported tier as one package on the
+  same 27-byte record shape as the FTdx5000, again with no channel-name
+  field; one manual documents both models, and this program tells them
+  apart only by which one you chose when you connected. Manual-derived
+  only: no radio of this family has ever answered a frame from this
+  program, and writing to it stays switched off until you switch it on.
+- **FTdx9000** joins the supported tier on the same 27-byte record shape,
+  no channel-name field. Its own manual never actually prints the string
+  "FT-9000" — the export-market name this radio is also sold under — so
+  this program treats that name as descriptive text only, not a second
+  model row or an alias you can type. Manual-derived only: no FTdx9000 has
+  ever answered a frame from this program, and writing to it stays
+  switched off until you switch it on.
+- **FT-950** joins the supported tier on the same 27-byte record shape, no
+  channel-name field; it has one extra regular memory channel over the
+  rest of this family, numbered from 000 rather than 001. Manual-derived
+  only: no FT-950 has ever answered a frame from this program, and writing
+  to it stays switched off until you switch it on.
+- None of the Control Command Lists for FT-2000, FTdx5000, FTdx9000 or
+  FT-950 documents a memory-tag/combined write command at all — only a
+  plain read and write pair — which is simply a fact about those radios,
+  not a limitation this programme imposes. Nine of this release's twelve
+  new Kenwood and Yaesu rows have no channel-name field over their own CAT
+  protocol at all; only the three TS-2000 rows carry one.
+- **Every write now runs the same field-safety check.** The check that
+  refuses a field carrying a value its own radio never actually read —
+  already run by every other driver — is now also run by all fifteen Icom
+  drivers, closing a gap where such a value could previously be silently
+  dropped from the frame rather than refused.
+
+### Notes
+- Nothing changes for any existing radio: byte identity is verified
+  across every captured artefact (1,063 in total); the only movers are
+  the bare-usage banner, `help`, an unrecognised `--model` and an
+  unrecognised subcommand — all four just reflecting the new model
+  count and list — plus the TS-2000 and TS-870S capture legs, which move
+  from an unrecognised-model error under the pre-release base to a real
+  reading now that both are registered.
+- None of this release's eighteen new models (six Icom, twelve Kenwood and
+  Yaesu) has ever been connected to a real radio; each is opt-in and
+  refuses to write until you switch it on for that model (README,
+  *Switching on writes for an unverified radio*). Thirty-nine models are
+  now registered in total, up from twenty-one.
 
 ## [1.6.0] - 2026-09-12
 
@@ -376,7 +474,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.4.1...v1.5.0
