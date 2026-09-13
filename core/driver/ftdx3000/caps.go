@@ -7,9 +7,9 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
-// writeTrialsComplete is FALSE. NO FTDX3000 HAS EVER BEEN ASKED ANYTHING
+// writeTrialsComplete is FALSE. NO FTdx3000 HAS EVER BEEN ASKED ANYTHING
 // BY THIS PROJECT (matrix header note): every byte here came from the
-// FTDX3000 CAT manual (revision 2006-D) through the reviewed capability
+// FTdx3000 CAT manual (revision 2006-D) through the reviewed capability
 // matrix, and from nothing else.
 const writeTrialsComplete = false
 

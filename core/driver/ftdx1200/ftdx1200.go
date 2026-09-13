@@ -15,7 +15,7 @@ import (
 )
 
 // modelName is this package's registry-key spelling (matrix §2.1).
-const modelName = "FTDX1200"
+const modelName = "FTdx1200"
 
 // acceptedCATIDs is BOTH IDs this ONE radio identifies with: "0582" (FFT-1
 // fitted) or "0583" (not fitted) — matrix §1.6/§2.2, an option-split on a
@@ -70,13 +70,13 @@ func WithConsentedUnverifiedWrites() Option {
 	return func(d *ftdx1200Driver) { d.Consented = true }
 }
 
-// New builds the FTDX1200 driver for profile. ONE row, bare New: matrix
+// New builds the FTdx1200 driver for profile. ONE row, bare New: matrix
 // §5's own two-package verdict against ftdx3000 gives this package
 // nothing to disambiguate, and the "0582"/"0583" option split is handled
 // inside identify(), not by a second constructor (there is only one
 // product here, unlike ftdx101's genuinely separate D/MP). RealHardware —
 // the zero value — selects the all-Unverified capability set while
-// writeTrialsComplete is false: NO FTDX1200 HAS EVER BEEN ASKED ANYTHING
+// writeTrialsComplete is false: NO FTdx1200 HAS EVER BEEN ASKED ANYTHING
 // BY THIS PROJECT. Any unrecognised Profile value selects the same
 // fail-safe.
 func New(profile Profile, opts ...Option) driver.Driver {
@@ -87,7 +87,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 	return d
 }
 
-// ftdx1200Driver implements driver.Driver for the Yaesu FTDX1200.
+// ftdx1200Driver implements driver.Driver for the Yaesu FTdx1200.
 type ftdx1200Driver struct {
 	driver.Base
 	dialect         cat.Dialect
@@ -170,7 +170,7 @@ func (d *ftdx1200Driver) open(ctx context.Context, eng *transport.Engine, id dri
 	}, nil
 }
 
-// Session is the FTDX1200's driver.Session: one open, identity-verified
+// Session is the FTdx1200's driver.Session: one open, identity-verified
 // connection.
 type Session struct {
 	eng     *transport.Engine

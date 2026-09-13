@@ -33,7 +33,7 @@ var shiftNames = map[cat.Shift]string{
 
 // acceptedKinds is the P7 kind-byte domain an MR answer may legitimately
 // carry, for EITHER bank. Matrix §1.4: the read side prints only "0: VFO
-// 1: Memory" — the ordinary two-value domain. NO FTDX3000 HAS EVER BEEN
+// 1: Memory" — the ordinary two-value domain. NO FTdx3000 HAS EVER BEEN
 // ASKED ANYTHING BY THIS PROJECT, so there is no hardware finding to widen
 // this against.
 var acceptedKinds = []byte{cat.KindVFO, cat.KindMemory}

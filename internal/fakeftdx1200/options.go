@@ -8,7 +8,7 @@ import "time"
 type Option func(*Radio)
 
 // defaultCATID and fft1NotFittedCATID are the two ID answers this ONE radio
-// gives, "P1 0582: FTDX1200 (optional FFT-1 is installed) / 0583: FTDX1200
+// gives, "P1 0582: FTdx1200 (optional FFT-1 is installed) / 0583: FTdx1200
 // (optional FFT-1 is not installed)" (matrix §2.2) — the only byte-level
 // difference the manual states, an internal option-split rather than two
 // model rows.

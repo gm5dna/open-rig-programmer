@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package fakeftdx3000 is an independent, stdlib-only FTDX3000 CAT
+// Package fakeftdx3000 is an independent, stdlib-only FTdx3000 CAT
 // simulator: the test double the transport engine, core/driver/ftdx3000,
 // the CLI's --fake mode and the GUI's demo mode run against, the role
 // internal/fakeradio plays for the FT-710 and internal/fakeft2000 for the
 // FT-2000/FT-2000D.
 //
 // ONE ROW, BARE New. Unlike internal/fakeft2000's two-row WithModelName
-// shape, the FTDX3000 CAT manual states exactly one ID answer, "P1 0462:
-// FTDX3000" (layout:759, `ID IDENTIFICATION`) — there is no second row to
+// shape, the FTdx3000 CAT manual states exactly one ID answer, "P1 0462:
+// FTdx3000" (layout:759, `ID IDENTIFICATION`) — there is no second row to
 // select, so New takes no model option at all and always answers CATID
 // "0462". This matches the driver verdict's own finding
 // (reviews/driver-ftdx3000.md, "one row, bare New, CATID 0462").
@@ -35,7 +35,7 @@
 // offset or an enum spelling — precisely so that a systematic error in
 // that driver's own reading of the manual cannot sit on both sides of the
 // cross-check `go test ./core/driver/ftdx3000/...` runs against a fake
-// shaped like this one. Every field below is re-derived from the FTDX3000
+// shaped like this one. Every field below is re-derived from the FTdx3000
 // CAT OPERATION MANUAL (revision 2006-D,
 // docs/fixtures-private/manuals/ftdx3000_layout.txt, gitignored) and from
 // docs/superpowers/ftdx3000-capability-matrix.md, cited "layout:NNN"
@@ -77,7 +77,7 @@
 package fakeftdx3000
 
 // writeTrialsComplete records this package's one honest status line: NO
-// FTDX3000 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT, AND NONE IS
+// FTdx3000 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT, AND NONE IS
 // AVAILABLE TO IT (the capability matrix's own opening sentence). Every
 // place below marked ASSUMED is a place this fake had to decide something
 // neither the manual nor the matrix settles, and none of them has been
@@ -86,7 +86,7 @@ const writeTrialsComplete = false
 
 // THE ASSUMED REGISTER
 //
-// Every place this fake had to decide something neither the FTDX3000 CAT
+// Every place this fake had to decide something neither the FTdx3000 CAT
 // OPERATION MANUAL nor docs/superpowers/ftdx3000-capability-matrix.md
 // settles is listed here, cited BY NAME at the code that implements it
 // (register_test.go's TestASSUMEDRegisterIsComplete holds both halves
@@ -177,7 +177,7 @@ const writeTrialsComplete = false
 //  10. AUTOMATIC-INFORMATION SUPPRESSION. This fake never PUSHES anything
 //     unsolicited, whatever AI is set to. The manual documents AI only in
 //     its command index and its own four-cell block (layout:210-217),
-//     never in a worked example, and no FTDX3000 has been observed by
+//     never in a worked example, and no FTdx3000 has been observed by
 //     this project. Modelling silence is the honest default, not a claim
 //     that the radio is silent.
 //     (parser.go: handleAI; fakeftdx3000.go: New, handleEvent)

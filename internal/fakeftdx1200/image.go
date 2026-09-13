@@ -98,7 +98,7 @@ func pmsSlot(pair int, half byte) string {
 // CHANNEL "000" IS OUT OF SCOPE).
 //
 // THE CONTENT IS INVENTED (doc.go's register entry THE DEFAULT IMAGE'S
-// CONTENT IS INVENTED). No FTDX1200's
+// CONTENT IS INVENTED). No FTdx1200's
 // factory memory contents have been read by this project.
 func DefaultImage() map[string]MemState {
 	return map[string]MemState{

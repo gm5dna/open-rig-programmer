@@ -11,8 +11,8 @@ import (
 func TestNew_DefaultsToFFT1Fitted(t *testing.T) {
 	r := New()
 	defer r.Close()
-	if r.Model() != "FTDX1200" {
-		t.Errorf("Model() = %q, want %q", r.Model(), "FTDX1200")
+	if r.Model() != "FTdx1200" {
+		t.Errorf("Model() = %q, want %q", r.Model(), "FTdx1200")
 	}
 	if r.CATID() != "0582" {
 		t.Errorf("CATID() = %q, want %q", r.CATID(), "0582")

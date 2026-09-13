@@ -14,7 +14,7 @@ import (
 // memdata_test.go carries a frozen literal-order golden
 // (TestEvidenceLiterals_OrderedRecordsSurvive) this axis must not perturb.
 
-// p9ReadOnlyDialect declares MemoryP9 P9ToneIndexReadOnly: the FTDX3000's
+// p9ReadOnlyDialect declares MemoryP9 P9ToneIndexReadOnly: the FTdx3000's
 // asymmetric P9 (dialectconfig.go's MemoryP9Policy doc comment) — live
 // tone-table index on read, printed-fixed "00" refused-if-nonzero on
 // write. The one axis this fixture varies is P9, mirroring p5FixedDialect's
@@ -71,7 +71,7 @@ func TestMemoryP9_ReadOnlyIndex(t *testing.T) {
 		m.ToneIndex = 5
 		cmd, err := p9ReadOnlyDialect.BuildMWSet(m)
 		if err == nil {
-			t.Fatalf("BuildMWSet with ToneIndex 5 succeeded, emitting %q — the FTDX3000's MW P9 is printed-fixed \"00\", there is no write-side tone index to set", cmd.Bytes())
+			t.Fatalf("BuildMWSet with ToneIndex 5 succeeded, emitting %q — the FTdx3000's MW P9 is printed-fixed \"00\", there is no write-side tone index to set", cmd.Bytes())
 		}
 		for _, want := range []string{"P9", P9ToneIndexReadOnly.String()} {
 			if !strings.Contains(err.Error(), want) {

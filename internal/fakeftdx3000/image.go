@@ -105,7 +105,7 @@ func pmsSlot(pair int, half byte) string {
 // this radio's headline wrinkle at all.
 //
 // THE CONTENT IS INVENTED (doc.go's register entry THE DEFAULT IMAGE'S
-// CONTENT IS INVENTED). No FTDX3000 has been read by this project.
+// CONTENT IS INVENTED). No FTdx3000 has been read by this project.
 func DefaultImage() map[string]MemState {
 	ch002 := defaultState(14_250_000, modeUSB)
 	ch002.CTCSS = '1'

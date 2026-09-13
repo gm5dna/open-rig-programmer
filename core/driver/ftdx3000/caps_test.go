@@ -67,7 +67,7 @@ func TestDeliberatelyZeroAudit(t *testing.T) {
 
 func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 	if writeTrialsComplete {
-		t.Fatal("writeTrialsComplete is true — no FTDX3000 has ever been asked anything by this project; flipping this constant needs real hardware evidence first")
+		t.Fatal("writeTrialsComplete is true — no FTdx3000 has ever been asked anything by this project; flipping this constant needs real hardware evidence first")
 	}
 }
 

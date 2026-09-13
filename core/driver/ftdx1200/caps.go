@@ -7,7 +7,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
-// writeTrialsComplete is FALSE. NO FTDX1200 HAS EVER BEEN ASKED ANYTHING
+// writeTrialsComplete is FALSE. NO FTdx1200 HAS EVER BEEN ASKED ANYTHING
 // BY THIS PROJECT (matrix header note).
 const writeTrialsComplete = false
 
