@@ -2280,6 +2280,24 @@ var ft2000dText = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000D — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
 }
 
+// ftdx9000Text is the FTdx9000's entry — v1.7.0 Kenwood/Yaesu wave,
+// eleventh row, bare New (single row; also marketed as the "FT-9000",
+// which this driver's probe accepts alongside two other printed CAT IDs,
+// but which never appears as a Model constant, a CATID or a wiring key —
+// spec.md §6 Q5 — only in this one sentence of prose).
+//
+// NOTAG. CTCSS tone IS a live, mapped tone-table index. No FTdx9000 has
+// ever answered a frame from this project (writeTrialsComplete false), so
+// every write stays behind the opt-in consent route.
+var ftdx9000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FTdx9000: no builder for one exists, and no FTdx9000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the FTdx9000 as a live CTCSS-tone index. This radio (also marketed as the FT-9000) has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT for the FTdx9000; nothing here is preserved. Whether a rewrite preserves the tone index has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "This radio has no firmware query in this build. It answers its identity probe with one of three printed CAT IDs, all accepted by this driver, and its default baud of 38400 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2344,6 +2362,8 @@ var texts = map[string]Text{
 	"FT-2000": ft2000Text,
 	// v1.7.0 Kenwood/Yaesu wave, ninth row.
 	"FT-2000D": ft2000dText,
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row.
+	"FTdx9000": ftdx9000Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
