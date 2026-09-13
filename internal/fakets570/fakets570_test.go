@@ -217,6 +217,37 @@ func TestMR_RefusesMalformedRequests(t *testing.T) {
 	}
 }
 
+func TestAI_PowerOnValueIsOffAndSetRoundTrips(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if got := exchange(t, r.Port(), "AI;"); !bytes.Equal(got, []byte("AI0;")) {
+		t.Fatalf("power-on AI read = %q, want %q (manual: restores '0')", got, "AI0;")
+	}
+	// core/transport.Engine.Init's own fire-and-forget "AI0;": accepted with
+	// silence, on the critical path of every fake session's Open.
+	expectSilence(t, r.Port(), "AI0;")
+	expectSilence(t, r.Port(), "AI3;")
+	if got := exchange(t, r.Port(), "AI;"); !bytes.Equal(got, []byte("AI3;")) {
+		t.Fatalf("AI after set = %q, want %q", got, "AI3;")
+	}
+}
+
+func TestAI_RefusesOutsideTheLegendAndMalformedBodies(t *testing.T) {
+	for _, tc := range []struct{ name, req string }{
+		{"digit above legend", "AI4;"},
+		{"non-digit", "AIX;"},
+		{"two-byte body", "AI00;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := New()
+			defer r.Close()
+			if got := exchange(t, r.Port(), tc.req); !bytes.Equal(got, rejection) {
+				t.Fatalf("%s = %q, want %q", tc.name, got, rejection)
+			}
+		})
+	}
+}
+
 func TestUnknownCommandIsRefused(t *testing.T) {
 	r := New()
 	defer r.Close()

@@ -96,11 +96,12 @@
 // for this row at all — unlike the TS-480/TS-590 pair, this package carries no
 // ex.go and no menu inventory.
 //
-// FV/FIRMWARE. No "FV" or firmware-version command is cited anywhere in the
-// matrix for this row, and a grep of the manual layout text for "firmware"
-// under the PC-command appendix returns nothing tied to a TS-2000-specific
-// command; inventing one would be exactly the fabrication the quarantine
-// forbids. TY is likewise uncited and not modelled.
+// FV. No "FV" command is cited anywhere in the matrix or the transcribed
+// appendix for this row; inventing one would be exactly the fabrication the
+// quarantine forbids. TY IS now modelled (Follow-up 2, below) — parser.go's
+// handleTY — because core/driver/ts2000's own Open sends it unconditionally
+// after ID, per reviews/registration.md's finding; it was omitted from the
+// first pass only because the matrix itself does not cite it.
 //
 // FAULT INJECTION beyond the book. No dropped-reply, garbled-byte,
 // spurious-frame or chunked-write option here, for the same reason
@@ -229,4 +230,19 @@
 //     title and front matter name it first of the three
 //     (ts2000:100, PDF p.3) — a reasonable single default for a caller that
 //     names no model, not an arbitrary pick.
+//
+//  17. THE DEFAULT TY ANSWER (Follow-up 2, added once reviews/registration.md
+//     found core/driver/ts2000's Open sends "TY;" unconditionally after
+//     "ID;" and this fake had no case for it). TY's OWN Set chart prints no
+//     content (ts2000:11678-11693, ruler only under "Se t") — the TS-480's
+//     own erratum E10 shape — so this fake refuses a TY Set and only
+//     answers a Read. P1 (two bytes, "Reserved", no legend at all,
+//     ts2000:11680) ships as "00", an invented placeholder with no hard-wired
+//     convention to borrow (this row has no printed-fixed byte anywhere,
+//     matrix §2). P2 ships as "0", the FIRST of the three printed variants,
+//     "0: Overseas type" (ts2000:11683-11685) — not a claim that any
+//     TS-2000 is the overseas type. Both bytes are the SAME across all
+//     three rows — entry 16's reasoning again, and the coordinator's own
+//     instruction: the manual gives no separate TY answer for TS-2000X or
+//     TS-B2000, so the TS-2000 one is answered for all three, ASSUMED.
 package fakets2000

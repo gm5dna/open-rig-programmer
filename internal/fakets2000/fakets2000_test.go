@@ -147,6 +147,38 @@ func TestID_HasNoSetDirection(t *testing.T) {
 	assertRejected(t, conn, "ID12345;")
 }
 
+// --- TY (Follow-up 2: core/driver/ts2000's Open sends this unconditionally
+// after ID, per reviews/registration.md) ---
+
+func TestTY_AnswersTheInventedDefault(t *testing.T) {
+	_, conn := newTestRadio(t)
+	if got := exchange(t, conn, "TY;"); got != "TY000;" {
+		t.Errorf("TY read = %q, want %q", got, "TY000;")
+	}
+}
+
+// TestTY_AnswersSameForAllThreeRows pins doc.go's register entry 17: the
+// manual gives no separate TY answer for TS-2000X/TS-B2000, so all three
+// rows answer the TS-2000 one.
+func TestTY_AnswersSameForAllThreeRows(t *testing.T) {
+	for _, model := range []string{"TS-2000", "TS-2000X", "TS-B2000"} {
+		t.Run(model, func(t *testing.T) {
+			_, conn := newTestRadio(t, WithModelName(model))
+			if got := exchange(t, conn, "TY;"); got != "TY000;" {
+				t.Errorf("TY answer = %q, want %q", got, "TY000;")
+			}
+		})
+	}
+}
+
+// TestTY_HasNoSetDirection pins the TS-480-shaped erratum: the chart prints
+// a "Se t" heading over an empty grid (ts2000:11678-11693), so a TY Set is
+// simply unknown, not merely refused-with-a-value.
+func TestTY_HasNoSetDirection(t *testing.T) {
+	_, conn := newTestRadio(t)
+	assertRejected(t, conn, "TY001;")
+}
+
 // --- MR: unwritten channel ---
 
 // TestMR_UnwrittenChannelAnswersTheInventedEmptyRecord pins doc.go's register
