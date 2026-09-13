@@ -175,6 +175,21 @@ stays behind the opt-in consent route.
 Evidence: `core/driver/ftdx9000/doc.go`; the manual is the Yaesu CAT
 Operation Reference Manual, revision EH010H121.
 
+### FT-950 (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTdx5000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. The CTCSS tone is a live
+tone-table index and is read and written; leaving a channel's tone
+unset when writing defaults it to wire index 0 rather than refusing.
+This radio has one extra regular memory channel over the rest of this
+family — its channels are numbered from 000, not 001. No FT-950 has ever
+answered a frame from this project, so every write stays behind the
+opt-in consent route.
+
+Evidence: `core/driver/ft950/doc.go`; the manual is the Yaesu CAT
+Operation Reference Manual, revision EC030H120.
+
 ## Icom
 
 ### Shared by every Icom model
@@ -703,3 +718,4 @@ by revision in the code that transcribes it.
 | FTdx5000 | Yaesu CAT Operation Reference Manual, revision 1907-D |
 | FT-2000, FT-2000D | Yaesu CAT Operation Reference Manual, revision EH025H124 |
 | FTdx9000 | Yaesu CAT Operation Reference Manual, revision EH010H121 |
+| FT-950 | Yaesu CAT Operation Reference Manual, revision EC030H120 |

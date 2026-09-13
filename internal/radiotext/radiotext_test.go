@@ -203,6 +203,9 @@ var yaesuModels = map[string]bool{
 	"FT-2000D": true,
 	// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row): same reason.
 	"FTdx9000": true,
+	// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row): same
+	// reason.
+	"FT-950": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -386,6 +389,8 @@ var ownParticulars = map[string][]string{
 	// NOT listed here — it names no model this project registers, and
 	// this entry's own prose is the one place it may appear at all.
 	"FTdx9000": {"FTdx9000"},
+	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: bare name.
+	"FT-950": {"FT-950"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2692,4 +2697,27 @@ func TestRadiotext_FTdx9000Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FTdx9000", got)
+}
+
+// TestRadiotext_FT950Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// twelfth and last row's prose byte-for-byte.
+func TestRadiotext_FT950Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-950: no builder for one exists, and no FT-950 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FT-950's tone is read and written as a live CTCSS-tone index, but there is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. Its regular memory channels are numbered from 000, one lower than every sibling in this family.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written for the FT-950; this build has never tested whether a rewrite preserves the tone index on a real radio",
+		},
+		ProbeFirmwareNote: "The FT-950 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FT-950")
+	if !ok {
+		t.Fatal(`For("FT-950") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-950\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-950", got)
 }

@@ -1409,6 +1409,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row): shares
 		// ftdx5000CoreSix's exact composition.
 		"FTdx9000": ftdx5000CoreSix,
+		// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row):
+		// shares ftdx5000CoreSix's exact composition.
+		"FT-950": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
