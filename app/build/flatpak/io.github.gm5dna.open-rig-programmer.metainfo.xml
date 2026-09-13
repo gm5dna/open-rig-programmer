@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: CC0-1.0 -->
+<component type="desktop-application">
+  <id>io.github.gm5dna.open-rig-programmer</id>
+  <name>Open Rig Programmer</name>
+  <summary>Memory-channel programmer for Yaesu, Icom and Kenwood transceivers</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      Reads and writes memory channels on Yaesu, Icom and Kenwood radios
+      over a serial CAT connection. The FT-710 is verified against real
+      hardware; other supported models read, and write only once
+      switched on for that radio.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.gm5dna.open-rig-programmer.desktop</launchable>
+  <url type="homepage">https://github.com/gm5dna/open-rig-programmer</url>
+  <content_rating type="oars-1.1" />
+</component>
