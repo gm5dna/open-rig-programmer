@@ -58,6 +58,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts570"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
@@ -662,6 +663,25 @@ const TS2000XModel = "TS-2000X"
 // TS-2000's — see TS2000Model's own doc comment.
 const TSB2000Model = "TS-B2000"
 
+// TS570DModel names the TS-570D's realDrivers/fakeDrivers key, which must
+// equal ts570.NewD(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, FOURTH ROW, FIRST OF THREE over one driver
+// package (core/driver/ts570, NewD/NewS/NewDG — no bare New, an unexported
+// modelParams mirroring ftdx101's NewD/NewMP shape). 28-byte MR/MW record,
+// positions 1-22 matching the TS-2000's field-for-field, terminating short
+// of CTCSS/DCS/shift/offset/group/name.
+//
+// NOTAG: TagLen 0 (matrix §4, whole-document grep finds no name route at
+// all) — cited to the 12/09/2026 nameless-capability rule change, not the
+// old triage verdict.
+//
+// CATID "017" (matrix §2, Parameter Table). IMPLEMENTS
+// driver.SerialFramingReporter, STOPBITS 1
+// (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
+const TS570DModel = "TS-570D"
+
 // FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
 // must equal ftdx5000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel.
@@ -1048,6 +1068,15 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts2000.NewTSB2000(ts2000.WithConsentedUnverifiedWrites())
 		}
 		return ts2000.NewTSB2000()
+	},
+	// v1.7.0 Kenwood/Yaesu wave, fourth row: core/driver/ts570's NewD takes
+	// the profile as its first argument (the ftdx101 shape), so the consent
+	// arm names ts570.RealHardware explicitly.
+	TS570DModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts570.NewD(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}
+		return ts570.NewD(ts570.RealHardware)
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

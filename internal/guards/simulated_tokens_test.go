@@ -370,6 +370,12 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// so this is the same confinement check on this package's own
 		// shape. ONE row for THREE registered models.
 		{"ts2000", "WithSimulatedProfile", "fakets2000.New", "internal/fakets2000", []string{"TS-2000", "TS-2000X", "TS-B2000"}},
+		// The TS-570 family (v1.7.0 Kenwood/Yaesu wave, fourth row of
+		// three): core/driver/ts570's NewD/NewS/NewDG each take the
+		// profile as their first argument, the ordinary shape, so the
+		// token is a bare "ts570.Simulated" constant. ONE row for THREE
+		// registered models (one constructor family, one fake).
+		{"ts570", "Simulated", "fakets570.New", "internal/fakets570", []string{"TS-570D"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

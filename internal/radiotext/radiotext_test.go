@@ -360,6 +360,8 @@ var ownParticulars = map[string][]string{
 	// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row: bare name, no
 	// prefix-collision concern with any other registered model.
 	"TS-B2000": {"TS-B2000"},
+	// v1.7.0 Kenwood/Yaesu wave, fourth row: bare name.
+	"TS-570D": {"TS-570D"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2525,4 +2527,28 @@ func TestRadiotext_TSB2000Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "TS-B2000", got)
+}
+
+// TestRadiotext_TS570DVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// fourth row's prose byte-for-byte.
+func TestRadiotext_TS570DVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-570D: no builder for one exists, and no TS-570D has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for the TS-570D, unlike the Yaesu radios this programme also supports: its 28-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. This radio has no channel-name field over its interface at all, so this build shows no Tag column for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over the TS-570D's interface, so nothing here is preserved: the 28-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over the TS-570D's interface, so nothing here is preserved: the 28-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the TS-570D. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-570D")
+	if !ok {
+		t.Fatal(`For("TS-570D") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-570D\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-570D", got)
 }
