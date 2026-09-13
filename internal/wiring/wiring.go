@@ -60,6 +60,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts570"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts870s"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -688,6 +689,20 @@ const TS570DModel = "TS-570D"
 // TS-570D's "017".
 const TS570SModel = "TS-570S"
 
+// TS870SModel names the TS-870S's realDrivers/fakeDrivers key, which must
+// equal ts870s.New(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, SEVENTH ROW: bare New (single row, no sibling),
+// 22-byte MR/MW record, own package separate from ts570 (a different
+// document, a different width). NOTAG (matrix §1.6, TagLen 0), cited to
+// the 12/09/2026 nameless-capability rule change, not the old triage
+// verdict. CATID "015" (matrix §1.2).
+//
+// IMPLEMENTS driver.SerialFramingReporter, STOPBITS 1
+// (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
+const TS870SModel = "TS-870S"
+
 // FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
 // must equal ftdx5000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel.
@@ -1090,6 +1105,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts570.NewS(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
 		}
 		return ts570.NewS(ts570.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New takes the profile as
+	// its first argument.
+	TS870SModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts870s.New(ts870s.RealHardware, ts870s.WithConsentedUnverifiedWrites())
+		}
+		return ts870s.New(ts870s.RealHardware)
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

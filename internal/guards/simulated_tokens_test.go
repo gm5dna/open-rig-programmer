@@ -376,6 +376,10 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// token is a bare "ts570.Simulated" constant. ONE row for THREE
 		// registered models (one constructor family, one fake).
 		{"ts570", "Simulated", "fakets570.New", "internal/fakets570", []string{"TS-570D", "TS-570S"}},
+		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row): bare New
+		// takes the profile as its first argument, one package, one
+		// simulator, no sibling.
+		{"ts870s", "Simulated", "fakets870s.New", "internal/fakets870s", []string{"TS-870S"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

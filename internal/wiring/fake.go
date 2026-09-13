@@ -32,6 +32,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts570"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts870s"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
@@ -59,6 +60,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakets2000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets570"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets590"
+	"github.com/gm5dna/open-rig-programmer/internal/fakets870s"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets890"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets990"
 )
@@ -478,6 +480,16 @@ var TS2000FakeSessionOpts []fakets2000.Option
 // because no test using it calls t.Parallel().
 var TS570DFakeSessionOpts []fakets570.Option
 
+// TS870SFakeSessionOpts is the TS-870S's own option source: extra
+// fakets870s.Option values applied, on top of the always-empty production
+// default, to its fake rig on every OpenFakeSessionFor call — one row, one
+// package, one simulator, no sibling to share either with.
+//
+// A test that sets this MUST restore the previous value (e.g. via
+// t.Cleanup) — shared, unsynchronised package state, acceptable only
+// because no test using it calls t.Parallel().
+var TS870SFakeSessionOpts []fakets870s.Option
+
 // FTdx5000FakeSessionOpts is the FTdx5000's own option source, on the same
 // terms as every single-row model's above — one row, one package, one
 // simulator.
@@ -673,6 +685,9 @@ var (
 	// returns net.Conn, on the ic7610 footing, not the 590/890/990/2000
 	// rows' direct one.
 	_ fakeRadio = ts570FakeAdapter{}
+	// v1.7.0 Kenwood/Yaesu wave, seventh row: fakets870s's Port() already
+	// returns io.ReadWriteCloser, so no adapter is needed.
+	_ fakeRadio = (*fakets870s.Radio)(nil)
 	// v1.7.0 Kenwood/Yaesu wave, tenth row: fakeftdx5000's Port() already
 	// returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeftdx5000.Radio)(nil)
@@ -1237,6 +1252,11 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		newRadio: func() fakeRadio {
 			return ts570FakeAdapter{fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570S")}, TS570DFakeSessionOpts...)...)}
 		},
+	},
+	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New, no adapter needed.
+	TS870SModel: {
+		newDriver: func() driver.Driver { return ts870s.New(ts870s.Simulated) },
+		newRadio:  func() fakeRadio { return fakets870s.New(TS870SFakeSessionOpts...) },
 	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.

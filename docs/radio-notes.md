@@ -594,6 +594,29 @@ from this project, so every write stays behind the opt-in consent route.
 
 Evidence: `docs/kenwood-models.md`.
 
+### TS-570D and TS-570S (opt-in)
+
+Read and write the memory channels. Tone mode, both transmit and receive
+tone numbers, and scan skip are all read and written, unlike the Yaesu
+radios this programme also supports. This radio has no channel-name field
+over its interface at all, so no Tag column is shown for it. No TS-570 of
+either row has ever answered a frame from this project, so every write
+stays behind the opt-in consent route.
+
+Evidence: `docs/kenwood-models.md`.
+
+### TS-870S (opt-in)
+
+Read and write the memory channels. This radio has no channel-name field
+over its interface at all — NoTag — so no Tag column is shown for it.
+Tone mode and transmit tone ARE read and written (one shared index): its
+22-byte record has no receive-tone byte at all, so tone_rx cannot travel
+over this frame regardless of what you set at the radio. Scan skip is
+also read and written. No TS-870S has ever answered a frame from this
+project, so every write stays behind the opt-in consent route.
+
+Evidence: `docs/kenwood-models.md`.
+
 ### TS-480 (built, not selectable)
 
 The TS-480's driver exists in this program and the radio is **not in the
@@ -646,5 +669,7 @@ by revision in the code that transcribes it.
 | IC-7200 | Icom Advanced Instructions manual (no separate CI-V Reference Guide) |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-2000, TS-2000X, TS-B2000 | Kenwood PC Control Command reference (TS-2000 series) |
+| TS-570D, TS-570S | Kenwood PC Control Command reference B62-1542-00 |
+| TS-870S | Kenwood PC Control Command reference B62-1536-00, via the rigpix.com mirror (12/09/2026 provenance widening) |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |
 | FTdx5000 | Yaesu CAT Operation Reference Manual, revision 1907-D |
