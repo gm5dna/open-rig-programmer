@@ -465,7 +465,7 @@ func missingMandatory(d codeplug.ChannelData) (spec.Field, string) {
 //
 // THE UNMAPPED SET: record byte 0 ENTIRELY — printed 'e', whose HIGH
 // nibble is implicitly fixed 0 and whose LOW nibble is the four-valued
-// SELECT-group marker — and record byte 8's LOW nibble, printed '!1''s
+// SELECT-group marker — and record byte 8's LOW nibble, printed '!1”s
 // lower printed value list, the four-valued data mode. UNLIKE THE IC-7610
 // FAMILY, byte 8's HIGH nibble is tone_mode here (matrix §1b: "byte !1,
 // high nibble" for tone_mode, "byte !1, low nibble" for data_mode — the
