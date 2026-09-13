@@ -2267,6 +2267,19 @@ var ft2000Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000 — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
 }
 
+// ft2000dText is the FT-2000D's entry — v1.7.0 Kenwood/Yaesu wave, ninth
+// row, sharing core/driver/ft2000 with the FT-2000 (one SERIES manual
+// names both radios). Its own CATID is "0252", distinct from the
+// FT-2000's "0251".
+var ft2000dText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-2000D: no builder for one exists, and no FT-2000D has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the FT-2000D as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT for the FT-2000D, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000D — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2329,6 +2342,8 @@ var texts = map[string]Text{
 	"TS-870S": ts870sText,
 	// v1.7.0 Kenwood/Yaesu wave, eighth row.
 	"FT-2000": ft2000Text,
+	// v1.7.0 Kenwood/Yaesu wave, ninth row.
+	"FT-2000D": ft2000dText,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

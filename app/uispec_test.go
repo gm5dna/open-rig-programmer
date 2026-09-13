@@ -1403,6 +1403,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// bankFields is identical to ftdx5000's — same dialect family),
 		// reused rather than re-declared.
 		"FT-2000": ftdx5000CoreSix,
+		// The FT-2000D (v1.7.0 Kenwood/Yaesu wave, ninth row): shares
+		// ftdx5000CoreSix, same driver package as the FT-2000.
+		"FT-2000D": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

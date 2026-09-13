@@ -718,6 +718,11 @@ const TS870SModel = "TS-870S"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT2000Model = "FT-2000"
 
+// FT2000DModel names the FT-2000D's realDrivers/fakeDrivers key — the
+// second of two rows over core/driver/ft2000 (NewFT2000D). CATID "0252"
+// (matrix), distinct from the FT-2000's "0251".
+const FT2000DModel = "FT-2000D"
+
 // FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
 // must equal ftdx5000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel.
@@ -1136,6 +1141,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft2000.NewFT2000(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
 		}
 		return ft2000.NewFT2000(ft2000.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, ninth row: NewFT2000D, same shape.
+	FT2000DModel: func(consent bool) driver.Driver {
+		if consent {
+			return ft2000.NewFT2000D(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+		}
+		return ft2000.NewFT2000D(ft2000.RealHardware)
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

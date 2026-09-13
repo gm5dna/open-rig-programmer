@@ -1283,6 +1283,14 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		newDriver: func() driver.Driver { return ft2000.NewFT2000(ft2000.Simulated) },
 		newRadio:  func() fakeRadio { return fakeft2000.New(FT2000FakeSessionOpts...) },
 	},
+	// v1.7.0 Kenwood/Yaesu wave, ninth row: same shared FT2000FakeSessionOpts
+	// as the FT-2000's own entry above, WithModelName selecting the D row.
+	FT2000DModel: {
+		newDriver: func() driver.Driver { return ft2000.NewFT2000D(ft2000.Simulated) },
+		newRadio: func() fakeRadio {
+			return fakeft2000.New(append([]fakeft2000.Option{fakeft2000.WithModelName("FT-2000D")}, FT2000FakeSessionOpts...)...)
+		},
+	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.
 	// writeTrialsComplete is false (core/driver/ic7800/caps.go), so this
