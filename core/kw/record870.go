@@ -52,6 +52,17 @@ const (
 	rec870ToneOff     = 19
 	rec870ToneDigits  = 2
 	rec870TermOff     = 21
+
+	// rec870MinToneIndex/rec870MaxToneIndex are THIS ROW'S OWN tone-chart
+	// bound, 01-39 (matrix-ts870s.md §1.9's 39-entry SUBTONE TABLE) — NOT
+	// the family's kw.MinToneIndex/kw.MaxToneIndex (00-42, the 590/480
+	// TN/CN chart width), which this file used before the Lift K follow-up
+	// (13/09/2026) and which wrongly let indices 00 and 40-42 round-trip
+	// through a codec this document's own chart does not print. There is
+	// no index 00 on this chart at all: the matrix's own table starts at
+	// 01 (670 decihertz) and ends at 39 (17500).
+	rec870MinToneIndex = 1
+	rec870MaxToneIndex = 39
 )
 
 // Layout870Config is what a future ts870s model package hands
@@ -182,12 +193,42 @@ type Record870 struct {
 	// document (matrix-ts870s.md: "ToneModes is 2 values (OFF/TONE)").
 	ToneMode  ToneMode
 	ToneIndex int
+
+	// Empty reports that the frame carried P4-P8 all zero: "For a vacant
+	// channel, the Answer command sends '0' for all parameters except the
+	// memory channel number." (ts870s:9101-9104, matrix §1.15/§2.1) — this
+	// row's own vacant-channel sentence, the TS-570's own no-tail note
+	// (record.go's emptyWindowHiNoTail) verbatim, read independently
+	// against this document. Set by the parser only; a builder never
+	// writes an empty channel (BuildMWSet refuses one).
+	Empty bool
 }
 
 // ParseMRAnswer decodes a 22-byte MR ANSWER under this layout's reading of
 // its own grid.
 func (l Layout870) ParseMRAnswer(frame []byte) (Record870, error) {
 	return l.parseRecordFrame870("MR", "MR answer", frame)
+}
+
+// isEmptyWindow870 reports whether every byte of frame from P4 through P8
+// (0-indexed rec870FreqOff through rec870ToneOff+rec870ToneDigits-1,
+// inclusive) is '0' — record.go's isEmptyWindow, restated for this row's
+// own offsets rather than shared with it: the two vacant windows agree on
+// WHICH fields (P4-P8, "all parameters except the memory channel number",
+// ts870s:9101-9104) but not on WHERE those fields sit in the frame, since
+// this grid's fields all sit one byte earlier than the family's own
+// (P2Unused's absence, doc.go).
+func isEmptyWindow870(frame []byte) bool {
+	const hi = rec870ToneOff + rec870ToneDigits - 1
+	if len(frame) <= hi {
+		return false
+	}
+	for _, b := range frame[rec870FreqOff : hi+1] {
+		if b != '0' {
+			return false
+		}
+	}
+	return true
 }
 
 func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Record870, error) {
@@ -230,6 +271,16 @@ func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Reco
 		return Record870{}, newParseError(frame, "%s: channel %d is outside the %s's %d-%d bank", what, channel, l.model, l.channelLo, l.channelHi)
 	}
 
+	// A18a's TS-870S reading, TESTED BEFORE ANY OTHER FIELD IS INTERPRETED
+	// — the same ordering record.go's own vacant-window check uses and for
+	// the same reason: P5 is byte 17 here, inside this window, so a vacant
+	// channel answers with mode nibble '0', a nibble no legend names. A
+	// parser that reached parseMode870 first would refuse at the first
+	// vacant channel and fail a whole-radio read of a fresh TS-870S.
+	if isEmptyWindow870(frame) {
+		return Record870{Channel: channel, Empty: true}, nil
+	}
+
 	freq, err := parseDigits(frame[rec870FreqOff:rec870FreqOff+rec870FreqDigits], "P4, the frequency")
 	if err != nil {
 		return Record870{}, newParseError(frame, "%s: %v", what, err)
@@ -254,8 +305,8 @@ func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Reco
 	if err != nil {
 		return Record870{}, newParseError(frame, "%s: %v", what, err)
 	}
-	if toneIdx > MaxToneIndex {
-		return Record870{}, newParseError(frame, "%s: P8 is %d, outside 00-%d", what, toneIdx, MaxToneIndex)
+	if toneIdx < rec870MinToneIndex || toneIdx > rec870MaxToneIndex {
+		return Record870{}, newParseError(frame, "%s: P8 is %d, outside this row's own %02d-%d chart (matrix §1.9), not the family's 00-%d", what, toneIdx, rec870MinToneIndex, rec870MaxToneIndex, MaxToneIndex)
 	}
 
 	return Record870{
@@ -276,6 +327,16 @@ func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 	if rec.Channel < l.channelLo || rec.Channel > l.channelHi {
 		return Command{}, newParseError(nil, "MW set: channel %d is outside the %s's %d-%d bank", rec.Channel, l.model, l.channelLo, l.channelHi)
 	}
+	if rec.Empty {
+		// record.go's own rule, restated: the only documented clear on
+		// this document's own family relative (the 590/480 short-MW erase)
+		// has no TS-870S counterpart printed anywhere in this manual, and
+		// this codec builds no erase frame of any kind. Writing an EMPTY
+		// record would ask this builder to manufacture P4-P8 as zero,
+		// which is indistinguishable from a genuine 0 Hz/mode-'0' channel
+		// this document does not describe either.
+		return Command{}, newParseError(nil, "MW set: rec.Empty is true, and this codec builds no empty/erase MW frame for the TS-870S")
+	}
 	if rec.FreqHz == 0 {
 		return Command{}, newParseError(nil, "MW set: P4 is zero")
 	}
@@ -291,8 +352,8 @@ func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 	if rec.ToneMode != ToneModeOff && rec.ToneMode != ToneModeTone {
 		return Command{}, newParseError(nil, "MW set: P7 is %q, and this document's P7 prints only '0' OFF and '1' TONE", rec.ToneMode.Wire())
 	}
-	if rec.ToneIndex < MinToneIndex || rec.ToneIndex > MaxToneIndex {
-		return Command{}, newParseError(nil, "MW set: P8 is %d, outside %02d-%d", rec.ToneIndex, MinToneIndex, MaxToneIndex)
+	if rec.ToneIndex < rec870MinToneIndex || rec.ToneIndex > rec870MaxToneIndex {
+		return Command{}, newParseError(nil, "MW set: P8 is %d, outside this row's own %02d-%d chart (matrix §1.9)", rec.ToneIndex, rec870MinToneIndex, rec870MaxToneIndex)
 	}
 
 	frame := make([]byte, rec870Len)
@@ -312,29 +373,155 @@ func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 	return newCommand(frame), nil
 }
 
-// AllowedCommand admits an MW SET frame this layout's own builder would
-// have produced, byte for byte — validMWCommand's pattern (allowlist.go):
-// decode, re-validate every field, rebuild, and demand equality with what
-// came in.
+// BuildIDRead builds the transceiver-identity read, "ID;" — the SAME three
+// bytes kw.Layout's own BuildIDRead builds (identity.go). ID is common to
+// every Kenwood book this codec speaks and this row's own document is no
+// exception: Read "ID;", Answer "I D" + P1 + ";" (matrix §1.2, PDF p.97
+// printed ~91, ts870s:8969-9002) — the identical six-byte, three-digit
+// shape identity.go already describes, which is why this is a literal
+// rather than a second grammar description.
+func (l Layout870) BuildIDRead() (Command, error) {
+	if !l.Configured() {
+		return Command{}, newParseError(nil, "ID read: this layout is unconfigured and describes no radio")
+	}
+	return newCommand([]byte(idReadFrame)), nil
+}
+
+// ParseIDAnswer decodes "I D P1 P1 P1 ;" exactly as kw.Layout's own
+// ParseIDAnswer does (identity.go) — this row's own document prints the
+// same six-byte, three-digit shape (matrix §1.2), and "015" is the printed
+// value (matrix §1.2, ts870s:8300-8302).
+func (l Layout870) ParseIDAnswer(frame []byte) (string, error) {
+	if !l.Configured() {
+		return "", newParseError(frame, "ID answer: this layout is unconfigured and describes no radio")
+	}
+	if len(frame) != IDAnswerLen {
+		return "", newParseError(frame, "ID answer: got %d bytes, want exactly %d", len(frame), IDAnswerLen)
+	}
+	if frame[0] != 'I' || frame[1] != 'D' {
+		return "", newParseError(frame, "ID answer: missing \"ID\" prefix")
+	}
+	if frame[len(frame)-1] != ';' {
+		return "", newParseError(frame, "ID answer: missing ';' terminator")
+	}
+	field := frame[2 : 2+IDDigits]
+	for i, b := range field {
+		if b < '0' || b > '9' {
+			return "", newParseError(frame, "ID answer: P1 byte %d is %q, not a digit (matrix §1.2 prints three digits)", i+1, b)
+		}
+	}
+	return string(field), nil
+}
+
+// BuildMRRead builds the memory-channel read request for channel: "M R P1
+// P3 P3 ;", six bytes. P1 is always '0': this grid has no scan/extension
+// class to select through a read any more than BuildMWSet's own P1 refusal
+// admits one on write — channel 99's P1=1 Start/End half is resolved the
+// TS-480 way and stays unreachable through this programme (matrix
+// §1.4/§2.2).
+func (l Layout870) BuildMRRead(channel int) (Command, error) {
+	if !l.Configured() {
+		return Command{}, newParseError(nil, "MR read: this layout is unconfigured and describes no radio")
+	}
+	if channel < l.channelLo || channel > l.channelHi {
+		return Command{}, newParseError(nil, "MR read: channel %d is outside the %s's %d-%d bank", channel, l.model, l.channelLo, l.channelHi)
+	}
+	frame := make([]byte, 0, 6)
+	frame = append(frame, 'M', 'R', '0')
+	frame = append(frame, fmt.Sprintf("%0*d", rec870ChanDigits, channel)...)
+	frame = append(frame, ';')
+	return newCommand(frame), nil
+}
+
+// MRAnswerMatcher returns the ANSWER MATCHER for one MR read of channel —
+// kw.Layout.MRAnswerMatcher's own pattern (matcher.go), restated for this
+// row's shifted offsets: the frame must be this grid's own 22 bytes, start
+// "MR", and name channel in its own P3 digits. It reads only the channel
+// number, not the whole record, so a corrupt answer TO THIS READ is still
+// delivered to ParseMRAnswer and refused there with a message naming what
+// was wrong with it, rather than silently missing its match and being
+// reported as a timeout.
+func (l Layout870) MRAnswerMatcher(channel int) func(frame []byte) bool {
+	return func(frame []byte) bool {
+		if len(frame) != rec870Len {
+			return false
+		}
+		if frame[rec870PrefixOff] != 'M' || frame[rec870PrefixOff+1] != 'R' {
+			return false
+		}
+		d := frame[rec870ChanOff : rec870ChanOff+rec870ChanDigits]
+		if d[0] < '0' || d[0] > '9' || d[1] < '0' || d[1] > '9' {
+			return false
+		}
+		got := int(d[0]-'0')*10 + int(d[1]-'0')
+		return got == channel
+	}
+}
+
+// AllowedCommand admits the four grammars a live TS-870S session actually
+// needs: the ONE AI Set (initFrame, "AI0;") transport.Engine.Init writes
+// at the start of every Kenwood session — this document prints "AI AUTO
+// INFORMATION" in its own command index (ts870s:8612), so admitting it is
+// not a borrowed convention — the fixed "ID;" read, an MR READ this
+// layout's own BuildMRRead would have produced, and an MW SET this
+// layout's own BuildMWSet would have produced — validMWCommand's pattern
+// (allowlist.go) applied to each: decode, re-validate every field,
+// rebuild, and demand equality with what came in.
 //
-// ONE GRAMMAR, NOT EIGHT, BECAUSE THAT IS ALL THIS TYPE BUILDS TODAY. Unlike
-// kw.Layout (ID, AI, FV/TY, MC, MR, MW, EX) or ma.Layout (seven grammars
-// across five opcodes), Layout870 has no BuildIDRead, no BuildMRRead, no MC
-// or EX support at all — record870.go is Lift K's proof that the 22-byte
-// grid can be described, not a finished driver codec. A future addition of
-// any of those builders must widen this method in the same commit, on the
+// WIDENED FROM ONE GRAMMAR TO FOUR in the Lift K follow-up (13/09/2026),
+// which is what let a TS-870S driver open a live session at all
+// (NewFramingFor870's own doc comment): a session that could not even
+// clear transport.Engine.Init (which writes AI0; unconditionally, the
+// whole Kenwood family's own preamble) could never reach the ID probe
+// that follows it. Layout870 still has no MC or EX support — a future
+// addition of either must widen this method in the same commit, on the
 // standing rule that this is the last defence before bytes reach a
-// physical radio; until then, refusing everything but a self-produced MW
-// Set is the closed direction, not an oversight.
+// physical radio.
 func (l Layout870) AllowedCommand(frame []byte) bool {
 	if !l.Configured() {
 		return false
 	}
-	rec, err := l.parseRecordFrame870("MW", "MW set", frame)
-	if err != nil {
+	if len(frame) < IDReadLen || !exactlyOneTrailingSemicolon(frame) {
 		return false
 	}
-	cmd, err := l.BuildMWSet(rec)
+	switch string(frame[:2]) {
+	case "AI":
+		return string(frame) == initFrame
+	case "ID":
+		return string(frame) == idReadFrame
+	case "MR":
+		return l.validMRRead870(frame)
+	case "MW":
+		rec, err := l.parseRecordFrame870("MW", "MW set", frame)
+		if err != nil {
+			return false
+		}
+		cmd, err := l.BuildMWSet(rec)
+		if err != nil {
+			return false
+		}
+		return bytes.Equal(cmd.Bytes(), frame)
+	default:
+		return false
+	}
+}
+
+// validMRRead870 is AllowedCommand's MR leg: decode the channel BuildMRRead
+// would need, rebuild, and demand byte equality — the same discipline
+// allowlist.go's validMRCommand applies to the family's own MR read.
+func (l Layout870) validMRRead870(frame []byte) bool {
+	if len(frame) != 6 {
+		return false
+	}
+	if frame[rec870P1Off] != '0' {
+		return false
+	}
+	d := frame[rec870ChanOff : rec870ChanOff+rec870ChanDigits]
+	if d[0] < '0' || d[0] > '9' || d[1] < '0' || d[1] > '9' {
+		return false
+	}
+	channel := int(d[0]-'0')*10 + int(d[1]-'0')
+	cmd, err := l.BuildMRRead(channel)
 	if err != nil {
 		return false
 	}

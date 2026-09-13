@@ -314,7 +314,11 @@ func TestLift_Followup_Layout870FramingAcceptsSelfBuiltMWAndRefusesJunk(t *testi
 	if err != nil {
 		t.Fatalf("NewFramingFor870: %v", err)
 	}
-	cmd, err := l.BuildMWSet(Record870{Channel: 5, FreqHz: 7100000, Mode: ModeLSB, Lockout: '0', ToneMode: ToneModeOff})
+	// ToneIndex: 1, not the zero value — the P8-bound follow-up (13/09/2026)
+	// narrowed this row's own chart to 01-39 (matrix-ts870s.md §1.9), so 0
+	// is no longer a tone index this codec admits (rec870MinToneIndex,
+	// record870.go).
+	cmd, err := l.BuildMWSet(Record870{Channel: 5, FreqHz: 7100000, Mode: ModeLSB, Lockout: '0', ToneMode: ToneModeOff, ToneIndex: 1})
 	if err != nil {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
