@@ -427,6 +427,43 @@ func (r *Radio) handleID(body []byte) []byte {
 	return out
 }
 
+// --- AI: AUTO INFORMATION (availability "O O O X"; block layout:201-206) ---
+//
+// Set frame (4 bytes) "AI" + P1 + ';', fire-and-forget; Read "AI;" (3 bytes)
+// answered by "AI" + P1 + ';' (4 bytes). P1 is "0: Auto Information OFF /
+// 1: Auto Information ON" (layout:202-203).
+//
+// core/transport.Engine.Init opens every CAT session with an unconditional
+// "AI0;" (ClassWrite), so this handler's silent-accept path is on the
+// critical path of every fake session — an unmodelled AI answering "?;" like
+// any other unknown command would make Init's write draw a rejection and
+// fail the open outright.
+//
+// THIS FAKE NEVER PUSHES AN UNSOLICITED FRAME, WHATEVER AI IS SET TO —
+// doc.go's register entry AUTOMATIC-INFORMATION SUPPRESSION. "AI1;" is
+// accepted, stored and read back faithfully, and then nothing follows from
+// it: this package writes to the port only in reply to a frame that arrived
+// on it.
+
+func (r *Radio) handleAI(body []byte) []byte {
+	switch len(body) {
+	case 0:
+		r.mu.Lock()
+		ai := r.ai
+		r.mu.Unlock()
+		return []byte{'A', 'I', ai, ';'}
+	case 1:
+		if !validBoolFlagByte(body[0]) {
+			return rejection
+		}
+		r.mu.Lock()
+		r.ai = body[0]
+		r.mu.Unlock()
+		return nil // fire-and-forget success
+	}
+	return rejection
+}
+
 // --- Top-level dispatch ---
 
 // upperASCII folds the two ASCII bytes of a command name to upper case and
@@ -464,6 +501,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	switch cmd {
 	case [2]byte{'I', 'D'}:
 		return r.handleID(rest)
+	case [2]byte{'A', 'I'}:
+		return r.handleAI(rest)
 	case [2]byte{'M', 'W'}:
 		return r.handleMW(rest)
 	case [2]byte{'M', 'R'}:
