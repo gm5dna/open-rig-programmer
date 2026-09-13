@@ -37,6 +37,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
@@ -811,6 +812,25 @@ const FTdx3000Model = "FTDX3000"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FTdx1200Model = "FTDX1200"
 
+// FT450DModel names the FT-450D's realDrivers/fakeDrivers key, which must
+// equal ft450d.New(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.8.0 YAESU TRIO, THIRD AND LAST ROW: bare New (single row, own
+// document, INLINE dialect). 27-byte MR/MW frame, 8-digit FreqHz. NOTAG
+// (front-panel-only 7-character tag, no CAT text route). CATID "0244"
+// (matrix). CTCSSTone is LIVE and mapped on read AND write. TWO STATIC
+// BANKS WITH GENUINELY DIFFERENT WRITE POSTURE — the roadmap's SAFE SHAPE
+// ruling (radio-roadmap.md, RELEASE PATH RULING 13/09/2026): MEM
+// (001-500) read/write; PMS (501-504, numeric) READ-ONLY unconditionally,
+// on both profiles, immune to WithConsentedUnverifiedWrites, until an
+// owner probe shows a PMS write succeeding on real hardware. 505-510 (60 m
+// + Alaska Emergency) is not in the dialect at all: SixtyLo/SixtyHi = 0,
+// the pre-existing "feature absent" state.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT450DModel = "FT-450D"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1191,6 +1211,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ftdx1200.New(ftdx1200.RealHardware, ftdx1200.WithConsentedUnverifiedWrites())
 		}
 		return ftdx1200.New(ftdx1200.RealHardware)
+	},
+	// v1.8.0 Yaesu trio, third and last row: bare New takes the profile as
+	// its first argument.
+	FT450DModel: func(consent bool) driver.Driver {
+		if consent {
+			return ft450d.New(ft450d.RealHardware, ft450d.WithConsentedUnverifiedWrites())
+		}
+		return ft450d.New(ft450d.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is

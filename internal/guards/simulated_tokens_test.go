@@ -401,6 +401,10 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// profile as its first argument, one package, one simulator, no
 		// sibling.
 		{"ftdx1200", "Simulated", "fakeftdx1200.New", "internal/fakeftdx1200", []string{"FTDX1200"}},
+		// The FT-450D (v1.8.0 Yaesu trio, third and last row): bare New
+		// takes the profile as its first argument, one package, one
+		// simulator, no sibling.
+		{"ft450d", "Simulated", "fakeft450d.New", "internal/fakeft450d", []string{"FT-450D"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

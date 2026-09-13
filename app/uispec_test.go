@@ -1438,6 +1438,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The FTDX1200 (v1.8.0 Yaesu trio, second row): FIVE fields, not
 		// ftdx5000CoreSix's six — see ftdx1200CoreFive's own doc comment.
 		"FTDX1200": ftdx1200CoreFive,
+		// The FT-450D (v1.8.0 Yaesu trio, third and last row): shares
+		// ftdx5000CoreSix's exact composition — the PMS bank's fields are
+		// Write: Unsupported but Read stays rw.Read, non-zero on every
+		// profile, so all six candidates still derive on both banks.
+		"FT-450D": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

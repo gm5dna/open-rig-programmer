@@ -2374,6 +2374,29 @@ var ftdx1200Text = Text{
 	ProbeFirmwareNote: "The FTDX1200 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
+// ft450dText is the FT-450D's entry — v1.8.0 Yaesu trio, third and last
+// row, bare New (single row, own document, INLINE dialect).
+//
+// NOTAG: the front-panel 7-character tag has no CAT text route at all
+// (matrix §0/§2.7), distinct from the ft2000 family's total absence of a
+// name field. CTCSS tone is a live, mapped tone-table index, read and
+// written — but only on the regular memory bank. The PMS (scan-limit)
+// bank is READ-ONLY, unconditionally, on every field, per the SAFE SHAPE
+// ruling (radio-roadmap.md, RELEASE PATH RULING 13/09/2026): this
+// project's own caution about writing into a scan-limit pair blind,
+// pending a bench probe, not a hardware-unverified state the opt-in
+// consent gate could open. 60 m and the Alaska Emergency channel
+// (505-510) are not in the dialect at all: real channels the Operating
+// Manual names but the CAT book never addresses.
+var ft450dText = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-450D: no builder for one exists, and no FT-450D has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FT-450D's 7-character memory tag exists only on the radio's own front panel — there is no CAT command that carries its text at all, so this build shows no Tag column for it. Tone is a live CTCSS-tone index, read and written, but only for the 500 regular memory channels: its 2 scan-limit (PMS) pairs are read-only on every field, including tone, until a bench probe on real hardware shows a scan-limit write succeeding — a caution this programme applies itself, not a limit the radio's manual states. The 60-metre band and Alaska Emergency channels are real but have no CAT command of their own in either manual this build was built from, so this programme cannot see or write them at all.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written for the FT-450D's regular memory channels; this build has never tested whether a rewrite preserves the tone index on a real radio",
+	},
+	ProbeFirmwareNote: "The FT-450D has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2449,6 +2472,8 @@ var texts = map[string]Text{
 	"FTDX3000": ftdx3000Text,
 	// v1.8.0 Yaesu trio, second row.
 	"FTDX1200": ftdx1200Text,
+	// v1.8.0 Yaesu trio, third and last row.
+	"FT-450D": ft450dText,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
