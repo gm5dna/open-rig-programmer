@@ -1417,6 +1417,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row):
 		// shares ftdx5000CoreSix's exact composition.
 		"FT-950": ftdx5000CoreSix,
+		// The FTDX3000 (v1.8.0 Yaesu trio, first row): shares
+		// ftdx5000CoreSix's exact composition — its FieldCTCSSTone is
+		// {Read: rw.Read, Write: Unsupported}, non-zero on every profile,
+		// so it stays a core field despite the write side being fixed.
+		"FTDX3000": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
