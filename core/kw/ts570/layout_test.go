@@ -51,15 +51,14 @@ func TestConformance_TS570S(t *testing.T) { runConformance(t, ts570.LayoutS()) }
 // root: the round-trip failure `continue`s past the refusal legs below it
 // in the sample loop.
 //
-// Not fixable from core/kw/ts570: checkMemorySets is internal to
-// kwtest.go, which this milestone's brief reserves editing core/kw to one
-// cited exception (errors.go's Book570/Book870S stream-error entries)
-// that does not cover this file. So this test still SKIPS, with the
-// current, narrowed citation — see reviews/driver-ts570.md's "## Follow-up"
-// for the full account.
+// checkMemorySets was not fixable from core/kw/ts570 — it is internal to
+// kwtest.go, which this milestone's brief reserved editing core/kw to one
+// cited exception that did not cover this file — but a further Lift K
+// follow-up (commit 436ead2, "checkMemorySets is layout-width-aware and
+// hasTail-conditioned") closed it too. This test no longer skips; see
+// reviews/driver-ts570.md's "## Follow-up" for the full account.
 func runConformance(t *testing.T, l kw.Layout) {
 	t.Helper()
-	t.Skip("kwtest.go's checkMemorySets still asserts len(frame) != kw.RecordLen (the package constant, 50) rather than l.RecordLen(), and its round-trip comparison checks Byte28/Byte3940/Byte41/DCSCode/Shift/OffsetHz unconditionally though a no-tail record carries none of them — the one gap 51b61dc's own commit message names as already-documented and not yet fixed; every other kwtest gap for this row (Book570 awareness, the out-of-range panic) is now fixed — see reviews/driver-ts570.md's Follow-up section")
 	kwtest.Run(t, l)
 }
 
