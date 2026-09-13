@@ -98,10 +98,9 @@
 //     register home `ts570-p2-unused` leaves "what byte the write side
 //     actually emits" to the implementer; this fake does not choose one
 //     emitted value because it is not the emitter — it stores whatever a Set
-//     sends (validated only by the general filler-byte rule, printed folio
-//
-//  70. and echoes it back on a Read. The zero record's own P2 and P9 use
-//     '0' fill, matching entry 2's zero shape.
+//     sends, validated only by the general filler-byte rule (manual printed
+//     folio seventy), and echoes it back on a Read. The zero record's own P2
+//     and P9 use '0' fill, matching entry 2's zero shape.
 //
 //  4. THE TONE NUMBER (P8) IS STORED, NOT RANGE-CHECKED. The Parameter Table
 //     prints "01~39" (matrix §1.2, format code 14) but says nothing about
@@ -122,18 +121,20 @@
 //     not a claim about any radio. WithCATID overrides it, for the day a
 //     DG-specific document or a corroborating ID capture surfaces.
 //
-//  7. NO STREAM-ERROR OPTION IS BUILT (lift-K gap, option 2). "E;" and "O;"
-//     are printed in this radio's own manual (printed folio 70, the same
-//     general error-message table the 480/590 pair carry) — a fact this
-//     fake's report flags as a correction to reviews/driver-ts570.md's
-//     "no citation exists" wording — but the matching driver verdict states
-//     no live session in this milestone ever reaches a stream-error path
-//     (paper registration, no real port), so there is nothing on the wire
-//     for a WithStreamError option to exercise. Building one anyway would be
-//     the same fabrication lift K's own option 2 refused. The basic "?;"
-//     syntax-refusal token, by contrast, IS exercised by this fake — it is
-//     the ordinary reply to every malformed or unrecognised frame, and its
-//     citation (printed folio 70) is not in question.
+//  7. WithStreamError SCRIPTS "E;"/"O;" (lift-K follow-up, commit e7515d0;
+//     superseding this entry's original stance under option 2). Both tokens
+//     are printed in this radio's own manual (printed folio 70, layout lines
+//     5158-5175, the same general error-message table the 480/590 pair
+//     carry) — a fact this fake's first report flagged as a correction to
+//     reviews/driver-ts570.md's original "no citation exists" wording. The
+//     lift-K follow-up then wired a real, cited Book570 stream-error entry
+//     in core/kw, and core/driver/ts570's `Open` builds ordinary framing
+//     unconditionally, so a live session can now reach that path — this
+//     option (StreamError, parser.go) is what lets a test script it against
+//     this fake, the same shape internal/fakets590's own WithStreamError
+//     takes. The basic "?;" syntax-refusal token remains separate and
+//     unconditional — the ordinary reply to every malformed or unrecognised
+//     frame — and was never in question.
 //
 // # What this fake deliberately does NOT model
 //

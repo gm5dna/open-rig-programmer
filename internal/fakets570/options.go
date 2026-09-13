@@ -68,3 +68,28 @@ func WithEmptyChannel(channel int) Option {
 		delete(r.records, recordKey{channel: channel, half: HalfTXOrEnd})
 	}
 }
+
+// WithStreamError scripts one of the two serial-line error tokens ("E;" or
+// "O;", printed folio 70 — see StreamError) in place of exchange n's reply,
+// where n counts events the fake has handled from 1 (an accumulator overflow
+// counts too). It replaces whatever the exchange would otherwise have
+// produced, including a fire-and-forget silent success.
+//
+// This is now a LIVE wire path (doc.go register entry 7, updated per the
+// lift-K follow-up, commit e7515d0): core/kw's Book570 now carries a cited
+// stream-error entry for this same manual span, so a real driver session may
+// reach it, and this fake must be able to script it for the cross-check to
+// drive that path against something real.
+//
+// The kind is required: StreamErrorUnset panics rather than defaulting to one
+// of the two tokens, which would put a test on the wrong sentence of the
+// manual. n below 1 panics for the same reason — there is no exchange 0.
+func WithStreamError(kind StreamError, n int) Option {
+	if kind != StreamErrorE && kind != StreamErrorO {
+		panic(fmt.Sprintf("fakets570: WithStreamError(%v) — the token is REQUIRED; the two are printed with different causes (printed folio 70)", kind))
+	}
+	if n < 1 {
+		panic(fmt.Sprintf("fakets570: WithStreamError exchange %d — exchanges are counted from 1", n))
+	}
+	return func(r *Radio) { r.streamErrors[n] = kind }
+}

@@ -256,6 +256,60 @@ func TestAccumulatorOverflowRejectsOnceAndResyncs(t *testing.T) {
 	}
 }
 
+// TestWithStreamError_ReplacesTheScriptedExchangeAndNothingElse pins the two
+// serial-line error tokens the manual prints beside "?;" (printed folio 70,
+// layout lines 5158-5175) — doc.go register entry 7, lift-K follow-up
+// e7515d0. Exchange 2 (the second frame handled) is scripted to answer "E;"
+// in place of its ordinary ID reply; exchange 1 and exchange 3 are
+// untouched, proving the script is per-exchange, not sticky.
+func TestWithStreamError_ReplacesTheScriptedExchangeAndNothingElse(t *testing.T) {
+	r := New(WithStreamError(StreamErrorE, 2))
+	defer r.Close()
+	c := r.Port()
+
+	if got := exchange(t, c, "ID;"); !bytes.Equal(got, []byte("ID017;")) {
+		t.Fatalf("exchange 1 = %q, want the ordinary ID reply", got)
+	}
+	if got := exchange(t, c, "ID;"); !bytes.Equal(got, []byte("E;")) {
+		t.Fatalf("exchange 2 = %q, want the scripted %q", got, "E;")
+	}
+	if got := exchange(t, c, "ID;"); !bytes.Equal(got, []byte("ID017;")) {
+		t.Fatalf("exchange 3 = %q, want the ordinary ID reply again", got)
+	}
+}
+
+// TestWithStreamError_ReplacesAFireAndForgetSuccessToo pins that a scripted
+// stream error pre-empts even an accepted Set's silence — the manual's two
+// tokens are not command outcomes, so they can arrive in place of any reply
+// at all, including no reply.
+func TestWithStreamError_ReplacesAFireAndForgetSuccessToo(t *testing.T) {
+	r := New(WithStreamError(StreamErrorO, 1))
+	defer r.Close()
+	req := "MW0" + "0" + "05" + "00014250000" + "2" + "0" + "1" + "17" + "00000;"
+	if got := exchange(t, r.Port(), req); !bytes.Equal(got, []byte("O;")) {
+		t.Fatalf("scripted exchange over an accepted MW = %q, want %q", got, "O;")
+	}
+}
+
+func TestWithStreamError_PanicsOnAnUnsetKindOrAnExchangeBelowOne(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fn   func()
+	}{
+		{"unset kind", func() { WithStreamError(StreamErrorUnset, 1) }},
+		{"exchange zero", func() { WithStreamError(StreamErrorE, 0) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("expected a panic")
+				}
+			}()
+			tc.fn()
+		})
+	}
+}
+
 func TestClose_IsPromptWithNoTraffic(t *testing.T) {
 	r := New()
 	done := make(chan error, 1)
