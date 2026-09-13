@@ -243,6 +243,7 @@ func TestValidateDialectConfig_EveryClause(t *testing.T) {
 		// V18 — P9 policy (S1 lift)
 		{"V18 zero MemoryP9", func(c *DialectConfig) { c.MemoryP9 = 0 }, "MemoryP9"},
 		{"V18 P9ToneIndex accepted", func(c *DialectConfig) { c.MemoryP9 = P9ToneIndex }, ""},
+		{"V18 P9ToneIndexReadOnly accepted", func(c *DialectConfig) { c.MemoryP9 = P9ToneIndexReadOnly }, ""},
 	}
 
 	for _, tc := range tests {

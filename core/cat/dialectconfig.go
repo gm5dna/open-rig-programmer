@@ -500,6 +500,18 @@ func (p MemoryP5Policy) String() string {
 // something else is an undocumented frame. Under P9ToneIndex the field is
 // MemoryData.ToneIndex, round-tripped as a two-digit decimal.
 //
+// P9ToneIndexReadOnly is the FTDX3000's: MR's P9 pair is a LIVE tone-table
+// index (ftdx3000 matrix §1.3, "P9: Tone Number (See Table 1)" on the read
+// leg) but MW's is printed-fixed "0: (Fixed)" — the two other values each
+// govern both directions the SAME way, and neither fits an asymmetric
+// radio. It splits the difference along the existing direction boundary:
+// parse reads a live index exactly as P9ToneIndex does; encode and the
+// write-direction builder refusal both treat the field exactly as
+// P9Fixed00 does, refusing a nonzero ToneIndex rather than writing it. A
+// third policy rather than a new bidirectional flag, because every other
+// axis on this axis already tags read and write together as ONE name and
+// this keeps that shape.
+//
 // Its zero value is deliberately NOT a policy, so a config omitting it is
 // refused (V18) rather than defaulted, for MemoryP5Policy's reason:
 // neither default is safe.
@@ -512,13 +524,18 @@ const (
 	// P9ToneIndex is the ft2000 family's: the field is a live two-digit
 	// index, 0-49, into the standard 50-entry CTCSS tone chart.
 	P9ToneIndex
+	// P9ToneIndexReadOnly is the FTDX3000's: live index on read (as
+	// P9ToneIndex), printed-fixed "00" and refused-if-nonzero on write (as
+	// P9Fixed00).
+	P9ToneIndexReadOnly
 )
 
 // String names the policy, so a refusal can quote it.
 func (p MemoryP9Policy) String() string {
 	return enumName(p, "MemoryP9Policy", map[MemoryP9Policy]string{
-		P9Fixed00:   "P9Fixed00",
-		P9ToneIndex: "P9ToneIndex",
+		P9Fixed00:           "P9Fixed00",
+		P9ToneIndex:         "P9ToneIndex",
+		P9ToneIndexReadOnly: "P9ToneIndexReadOnly",
 	})
 }
 
