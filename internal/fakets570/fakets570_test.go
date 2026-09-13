@@ -61,7 +61,7 @@ func TestWithModelName_SelectsTheRowsCATID(t *testing.T) {
 	for _, tc := range []struct{ name, want string }{
 		{"TS-570D", "ID017;"},
 		{"TS-570S", "ID018;"},
-		{"TS-570DG", "ID000;"},
+		{"TS-570DG", "ID017;"}, // inherited from the driver's own placeholder — doc.go register entry 6
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := New(WithModelName(tc.name))
