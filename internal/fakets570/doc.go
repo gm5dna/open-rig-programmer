@@ -115,10 +115,26 @@
 //     family. No TS-570-specific text says so directly, so this is this
 //     fake's own crossing, not a manual fact.
 //
-//  6. TS-570DG's CATID IS A PLACEHOLDER, "000". The matrix states plainly
-//     that no document assigns TS-570DG a CATID at all (matrix §2, register
-//     home `ts570-dg-catid-assumed`) — there is nothing to read, and "000" is
-//     not a claim about any radio. WithCATID overrides it, for the day a
+//  6. TS-570DG's CATID IS "017", INHERITED FROM THE DRIVER'S OWN PLACEHOLDER,
+//     NOT FROM THE MANUAL. The matrix states plainly that no document
+//     assigns TS-570DG a CATID at all (matrix §2, register home
+//     `ts570-dg-catid-assumed`) — there is nothing to read. This entry
+//     originally chose an unrelated placeholder ("000") to keep the two
+//     independent guesses from colliding by accident; that surfaced a real
+//     ambiguity end to end (`core/driver/ts570`'s own `WrongRadioError` on
+//     Open) rather than one masking the other, which was useful exactly
+//     once. `core/driver/ts570` ALSO has no document to read and made its
+//     own ASSUMED choice: `modelDG.catID == modelD.catID`, "017"
+//     (`ts570.go:52`; `reviews/driver-ts570.md` deviation 7, "TS-570DG's
+//     CATID is ASSUMED to equal the D's ... this creates a real, named
+//     ambiguity ... recorded in doc.go, not resolved"). Blocking every
+//     TS-570DG *registration* on an artefact of two fakes picking DIFFERENT
+//     arbitrary numbers for the same undocumented field is not a wire
+//     defect worth failing Open over, so this fake now mirrors the driver's
+//     placeholder instead of disagreeing with it — a deliberate exception
+//     to "never copy the driver's ASSUMED value" for the one field where
+//     neither side has any manual content to disagree ABOUT, only a naming
+//     coincidence to align. WithCATID overrides it, for the day a
 //     DG-specific document or a corroborating ID capture surfaces.
 //
 //  7. WithStreamError SCRIPTS "E;"/"O;" (lift-K follow-up, commit e7515d0;

@@ -16,9 +16,12 @@ type Option func(*Radio)
 // internal/fakeic7851's option mechanism, doc.go's "Three rows, one Option".
 func WithModelName(name string) Option {
 	catID, ok := map[string]string{
-		"TS-570D":  "017",
-		"TS-570S":  "018",
-		"TS-570DG": "000", // ASSUMED placeholder — doc.go register entry 6
+		"TS-570D": "017",
+		"TS-570S": "018",
+		// ASSUMED, inherited from core/driver/ts570's own placeholder
+		// (modelDG.catID == modelD.catID, ts570.go:52; reviews/driver-ts570.md
+		// deviation 7), not the manual — doc.go register entry 6.
+		"TS-570DG": "017",
 	}[name]
 	if !ok {
 		panic(fmt.Sprintf("fakets570: WithModelName(%q) — this package plays TS-570D, TS-570S or TS-570DG, and no other row", name))
@@ -31,9 +34,10 @@ func WithModelName(name string) Option {
 
 // WithCATID overrides the row's CATID answer directly. It exists for
 // TS-570DG alone (doc.go register entry 6): no document assigns that row a
-// CATID, so "000" is a placeholder rather than evidence, and this option is
-// the lift for a DG-specific document or a corroborating ID capture
-// surfacing without waiting for this package to change.
+// CATID, so "017" (inherited from the driver's own same placeholder) is not
+// evidence, and this option is the lift for a DG-specific document or a
+// corroborating ID capture surfacing without waiting for this package to
+// change.
 func WithCATID(id string) Option {
 	if len(id) != 3 || !allDigits(id) {
 		panic(fmt.Sprintf("fakets570: WithCATID(%q) — the ID answer's P1 is exactly three ASCII digits (matrix §2, PDF p.83 printed 77)", id))
