@@ -2,7 +2,11 @@
 
 package kw
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 // lift_test.go is the Phase 2 Kenwood/Yaesu-wave lift's own runnable check
 // (ponytail: the smallest one, not the fleet script — see the brief's own
@@ -354,6 +358,39 @@ func TestLift_Followup_Book570AndBook870SStreamErrorsCiteRealLines(t *testing.T)
 		got := newStreamError(tc.token, tc.book)
 		if got.Cause == "" || got.Citation == "" {
 			t.Errorf("newStreamError(%q, %v) = %+v, want a non-empty Cause and Citation", tc.token, tc.book, got)
+		}
+	}
+}
+
+// TestLift_Codex_RefusesATooShortRecordLenAtValidation is the pin for the
+// Codex close review's P2 finding: NewLayout accepted any nonzero
+// RecordLen, including widths shorter than the shared record's own fixed
+// fields, and parseRecordFrame/BuildMWSet would then index the prefix,
+// P1, P2/P3, P4-P8 and the terminator past the end of a frame that short
+// — a PANIC ("index out of range"), not a refusal, and one no caller can
+// recover from at construction time. NewLayout must catch this at
+// validation, before any frame is ever built or parsed.
+func TestLift_Codex_RefusesATooShortRecordLenAtValidation(t *testing.T) {
+	for _, tooShort := range []uint8{1, 7, 21, 27, 49, 51} {
+		cfg := LayoutConfig{
+			Book: Book570, Model: "LIFT-CODEX-SHORT", RecordLen: tooShort,
+			P2: P2Unused, Byte19: Byte19Lockout, ToneModes: ToneModesTwo,
+			MaxEXAddress: 60, ModeNames: modeNames480(),
+			Slots: []SlotRange{{Class: SlotMemory, Lo: 0, Hi: 99}},
+		}
+		l, err := NewLayout(cfg)
+		if err == nil {
+			t.Errorf("NewLayout accepted RecordLen: %d — this codec knows only 28 and 50", tooShort)
+			continue
+		}
+		if !errors.Is(err, ErrLayoutInvalid) {
+			t.Errorf("errors.Is(err, ErrLayoutInvalid) = false for RecordLen %d: %v", tooShort, err)
+		}
+		if !strings.Contains(err.Error(), "RecordLen") {
+			t.Errorf("refusal for RecordLen %d = %q, want it to name RecordLen", tooShort, err)
+		}
+		if l.Configured() {
+			t.Errorf("NewLayout returned a Configured Layout alongside its error for RecordLen %d", tooShort)
 		}
 	}
 }
