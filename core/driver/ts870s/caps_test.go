@@ -3,12 +3,9 @@
 package ts870s
 
 import (
-	"context"
-	"io"
 	"reflect"
 	"testing"
 
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -127,28 +124,7 @@ func TestBaseline_Validate(t *testing.T) {
 	}
 }
 
-// closeTrackingPort is the minimal transport.Port (io.ReadWriteCloser)
-// fixture TestOpen_AlwaysRefuses needs: Open's fail-closed contract is
-// that it never reaches a real port's Book870S framing (package doc
-// comment), and this fixture only needs to prove Close was called.
-type closeTrackingPort struct {
-	closed bool
-}
-
-func (p *closeTrackingPort) Read([]byte) (int, error)    { return 0, io.EOF }
-func (p *closeTrackingPort) Write(b []byte) (int, error) { return len(b), nil }
-func (p *closeTrackingPort) Close() error {
-	p.closed = true
-	return nil
-}
-
-func TestOpen_AlwaysRefuses(t *testing.T) {
-	port := &closeTrackingPort{}
-	_, err := New(RealHardware).Open(context.Background(), port, driver.Identity{})
-	if err == nil {
-		t.Fatal("Open succeeded; want ErrNoLiveSession")
-	}
-	if !port.closed {
-		t.Error("Open did not close the port on refusal")
-	}
-}
+// Open/ReadChannel/WriteChannel are exercised against a scripted radio in
+// ts870s_test.go (respondingport_test.go), now that a live session is
+// wired up — see the package doc comment (ts870s.go) for why that
+// changed.
