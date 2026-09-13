@@ -134,6 +134,19 @@ first is silent, try the other.
 Evidence: `core/driver/ft991a/doc.go`; the manual is Yaesu's CAT
 Operation Reference Book 1711-D.
 
+### FTdx5000 (opt-in)
+
+Read and write the memory and PMS (programmable memory scan) channels.
+This radio has no tag/name command anywhere in its manual, so no Tag
+column is shown for it. The CTCSS tone is a live tone-table index and is
+read and written like the clarifier, shift and CTCSS state; there is no
+scan-skip position and no data-mode byte in this 27-byte record. No
+FTdx5000 has ever answered a frame from this project, so every write
+stays behind the opt-in consent route.
+
+Evidence: `core/driver/ftdx5000/doc.go`; the manual is the Yaesu CAT
+Operation Reference Manual, revision 1907-D.
+
 ## Icom
 
 ### Shared by every Icom model
@@ -617,3 +630,4 @@ by revision in the code that transcribes it.
 | IC-7200 | Icom Advanced Instructions manual (no separate CI-V Reference Guide) |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |
+| FTdx5000 | Yaesu CAT Operation Reference Manual, revision 1907-D |

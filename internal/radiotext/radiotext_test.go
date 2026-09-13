@@ -193,6 +193,10 @@ func TestTextFields_CoversEveryFieldOfText(t *testing.T) {
 var yaesuModels = map[string]bool{
 	"FT-710": true, "FTdx10": true, "FTdx101D": true, "FTdx101MP": true,
 	"FT-891": true, "FT-991A": true,
+	// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row): it speaks CAT
+	// too, so its own prose legitimately says "CAT" and the vocabulary
+	// check must skip it, on the FT-891/FT-991A footing above.
+	"FTdx5000": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -338,6 +342,10 @@ var ownParticulars = map[string][]string{
 	"IC-7700": {"IC-7700", "74h"},
 	"IC-9100": {"IC-9100", "7Ch"},
 	"IC-7200": {"IC-7200", "76h"},
+	// v1.7.0 Kenwood/Yaesu wave, tenth row: bare name, no CI-V address (not
+	// an Icom family) and no hardware finding to guard, on the FT-891/
+	// FT-991A footing.
+	"FTdx5000": {"FTdx5000"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2408,4 +2416,27 @@ func TestRadiotext_IC7200Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "IC-7200", got)
+}
+
+// TestRadiotext_FTdx5000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// tenth row's prose byte-for-byte.
+func TestRadiotext_FTdx5000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTdx5000: no builder for one exists, and no FTdx5000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for this radio as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT by this build, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for this radio — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+	}
+
+	got, ok := radiotext.For("FTdx5000")
+	if !ok {
+		t.Fatal(`For("FTdx5000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTdx5000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx5000", got)
 }

@@ -41,6 +41,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -621,6 +622,20 @@ const (
 	TS990SModel = "TS-990S"
 )
 
+// FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
+// must equal ftdx5000.New(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, TENTH ROW: bare New (single row, own
+// document, own package — the ft2000 dialect family's own words, not a
+// shared package). 27-byte MR/MW frame, 8-digit FreqHz (Lift Y). NOTAG:
+// TagLen 0, no tag/name command in the 20-page manual. CATID "0362"
+// (matrix). CTCSSTone is MAPPED (rw) — the live P9 tone-table index —
+// unlike every registered 9-digit-family dialect's fixed "00".
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTdx5000Model = "FTdx5000"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -961,6 +976,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites())
 		}
 		return ts990.New(ts990.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, tenth row: bare New takes the profile as
+	// its first argument.
+	FTdx5000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites())
+		}
+		return ftdx5000.New(ftdx5000.RealHardware)
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

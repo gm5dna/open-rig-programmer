@@ -13,6 +13,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -35,6 +36,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft991a"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx5000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic705"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7100"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7200"
@@ -448,6 +450,11 @@ var (
 	TS990SFakeSessionOpts []fakets990.Option
 )
 
+// FTdx5000FakeSessionOpts is the FTdx5000's own option source, on the same
+// terms as every single-row model's above — one row, one package, one
+// simulator.
+var FTdx5000FakeSessionOpts []fakeftdx5000.Option
+
 // IC7800FakeSessionOpts is the IC-7800's own option source, on the same
 // terms as every other model's own variable above: internal/fakeic7800
 // simulates the IC-7800 specifically, its Option is a
@@ -631,6 +638,9 @@ var (
 	// fakeRadio as written and neither needs an adapter.
 	_ fakeRadio = (*fakets890.Radio)(nil)
 	_ fakeRadio = (*fakets990.Radio)(nil)
+	// v1.7.0 Kenwood/Yaesu wave, tenth row: fakeftdx5000's Port() already
+	// returns io.ReadWriteCloser, so no adapter is needed.
+	_ fakeRadio = (*fakeftdx5000.Radio)(nil)
 	// The IC-7800's (v1.7.0 Icom wave) — via ic7800FakeAdapter, like the
 	// IC-7610's and unlike the four directly-satisfying Icom simulators:
 	// internal/fakeic7800's Port() returns net.Conn.
@@ -1140,6 +1150,11 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	TS990SModel: {
 		newDriver: func() driver.Driver { return ts990.New(ts990.Simulated) },
 		newRadio:  func() fakeRadio { return fakets990.New(TS990SFakeSessionOpts...) },
+	},
+	// v1.7.0 Kenwood/Yaesu wave, tenth row: bare New, no adapter needed.
+	FTdx5000Model: {
+		newDriver: func() driver.Driver { return ftdx5000.New(ftdx5000.Simulated) },
+		newRadio:  func() fakeRadio { return fakeftdx5000.New(FTdx5000FakeSessionOpts...) },
 	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.

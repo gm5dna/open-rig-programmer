@@ -2123,6 +2123,24 @@ var ic7200Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7200: this build knows of none to require. This driver talks only to CI-V address 76h, with no --civ-address option to change it and no way to detect a radio set to a different address. Its default baud of 19200 is unverified against real hardware, on the tier's usual footing. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// ftdx5000Text is the FTdx5000's entry — v1.7.0 Kenwood/Yaesu wave, tenth
+// row, bare New (single row, own document).
+//
+// NOTAG: no tag/name command anywhere in the 20-page manual, so no Tag
+// column is shown for it. The CTCSS tone IS a live, mapped tone-table
+// index (read and written), unlike every registered 9-digit-family
+// dialect's fixed "00". No FTdx5000 has ever answered a frame from this
+// project (writeTrialsComplete false), so every write stays behind the
+// opt-in consent route.
+var ftdx5000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FTdx5000: no builder for one exists, and no FTdx5000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for this radio as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT by this build, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for this radio — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2169,6 +2187,8 @@ var texts = map[string]Text{
 	"IC-9100": ic9100Text,
 	// The v1.7.0 Icom wave's sixth and last registration.
 	"IC-7200": ic7200Text,
+	// v1.7.0 Kenwood/Yaesu wave, tenth row.
+	"FTdx5000": ftdx5000Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

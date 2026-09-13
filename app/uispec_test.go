@@ -846,6 +846,19 @@ var ic7200CoreTwo = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode,
 }
 
+// ftdx5000CoreSix is the core set both of the FTdx5000's banks (MEM and
+// PMS) derive, on every profile (core/driver/ftdx5000/caps.go's
+// bankFields, shared by both banks): frequency, mode, clarifier, shift,
+// ctcss_state and ctcss_tone. SIX, not the candidate universe's nine: this
+// record has no scan-skip position and no tag/name command at all, and no
+// tone_mode/tone_tx/tone_rx vocabulary — it uses the Icom-shaped
+// clarifier/shift/ctcss vocabulary instead, the same family as the
+// registered FTdx10/FTdx101 dialects.
+var ftdx5000CoreSix = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldCTCSSTone,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1327,6 +1340,8 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// NoTag, so TWO fields, not three — see ic7200CoreTwo's own doc
 		// comment.
 		"IC-7200": ic7200CoreTwo,
+		// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row).
+		"FTdx5000": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
