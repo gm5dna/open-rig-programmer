@@ -1406,6 +1406,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The FT-2000D (v1.7.0 Kenwood/Yaesu wave, ninth row): shares
 		// ftdx5000CoreSix, same driver package as the FT-2000.
 		"FT-2000D": ftdx5000CoreSix,
+		// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row): shares
+		// ftdx5000CoreSix's exact composition.
+		"FTdx9000": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

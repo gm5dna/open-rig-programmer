@@ -201,6 +201,8 @@ var yaesuModels = map[string]bool{
 	"FT-2000": true,
 	// The FT-2000D (v1.7.0 Kenwood/Yaesu wave, ninth row): same reason.
 	"FT-2000D": true,
+	// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row): same reason.
+	"FTdx9000": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -379,6 +381,11 @@ var ownParticulars = map[string][]string{
 	// entry's own prose names only "FT-2000D" throughout (radiotext.go's
 	// own doc comment), never the bare "FT-2000".
 	"FT-2000D": {"FT-2000D"},
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row: bare name. "FT-9000" is a
+	// marketed alias for this radio (spec.md §6 Q5) but is deliberately
+	// NOT listed here — it names no model this project registers, and
+	// this entry's own prose is the one place it may appear at all.
+	"FTdx9000": {"FTdx9000"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2662,4 +2669,27 @@ func TestRadiotext_FT2000DVerbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FT-2000D", got)
+}
+
+// TestRadiotext_FTdx9000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// eleventh row's prose byte-for-byte.
+func TestRadiotext_FTdx9000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTdx9000: no builder for one exists, and no FTdx9000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the FTdx9000 as a live CTCSS-tone index. This radio (also marketed as the FT-9000) has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT for the FTdx9000; nothing here is preserved. Whether a rewrite preserves the tone index has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "This radio has no firmware query in this build. It answers its identity probe with one of three printed CAT IDs, all accepted by this driver, and its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FTdx9000")
+	if !ok {
+		t.Fatal(`For("FTdx9000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTdx9000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx9000", got)
 }

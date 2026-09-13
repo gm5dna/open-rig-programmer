@@ -43,6 +43,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -737,6 +738,19 @@ const FT2000DModel = "FT-2000D"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FTdx5000Model = "FTdx5000"
 
+// FTdx9000Model names the FTdx9000's realDrivers/fakeDrivers key, which
+// must equal ftdx9000.New(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, ELEVENTH ROW: bare New (single row, "FT-9000"
+// an alias in radiotext prose only — never a Model constant, matrix §1
+// footnote, spec.md §6 Q5). 27-byte MR/MW frame, 8-digit FreqHz. NOTAG.
+// CATID "0101" canonical, though this driver's own probe accepts all
+// three documented answers (0101/0102/0103) via a custom handshake.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTdx9000Model = "FTdx9000"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1085,6 +1099,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites())
 		}
 		return ftdx5000.New(ftdx5000.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row: bare New takes the profile
+	// as its first argument.
+	FTdx9000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx9000.New(ftdx9000.RealHardware, ftdx9000.WithConsentedUnverifiedWrites())
+		}
+		return ftdx9000.New(ftdx9000.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is
