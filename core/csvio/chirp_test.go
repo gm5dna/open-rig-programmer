@@ -1017,6 +1017,22 @@ func ic7200LikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ftdx5000LikeCapabilities returns the FTdx5000's own REGISTERED
+// capabilities verbatim (v1.7.0 Kenwood/Yaesu wave, tenth row) — see
+// ic7200LikeCapabilities' own doc comment for why this is a
+// wiring.StaticCapabilities call rather than a hand-written fixture, and
+// for why it goes straight into chirpFixtures rather than
+// unreachableScanSkipCapabilities (that bucket is fixed to the
+// hand-written fixtures TestImportCHIRP_ScanSkipIsCapabilityAware asserts
+// against).
+func ftdx5000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FTdx5000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FTdx5000Model, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2791,6 +2807,8 @@ func chirpFixtures() []spec.Capabilities {
 		ic7700LikeCapabilities(),
 		ic9100LikeCapabilities(),
 		ic7200LikeCapabilities(),
+		// v1.7.0 Kenwood/Yaesu wave.
+		ftdx5000LikeCapabilities(),
 	)
 }
 

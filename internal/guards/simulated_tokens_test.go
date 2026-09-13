@@ -355,6 +355,10 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// The IC-7200 (v1.7.0 Icom wave's sixth and last registration), on
 		// IC7800Model's footing.
 		{"ic7200", "Simulated", "fakeic7200.New", "internal/fakeic7200", []string{"IC-7200"}},
+		// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row): bare New
+		// takes the profile as its first argument, one package, one
+		// simulator, no sibling.
+		{"ftdx5000", "Simulated", "fakeftdx5000.New", "internal/fakeftdx5000", []string{"FTdx5000"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site
