@@ -171,8 +171,36 @@ func (s *Session) channelData(rec kw.Record870) (*codeplug.ChannelData, error) {
 		},
 		ToneMode: codeplug.StringField{State: codeplug.Known, Value: toneModeValue},
 		ToneTx:   toneTx,
-		// TxFreqHz: the zero FreqField, State Unavailable (see doc comment).
+		// TxFreqHz: see the package doc comment — this session never
+		// sends the P1=1 read.
 		TxFreqHz: codeplug.FreqField{State: codeplug.Unavailable},
+
+		// UNAVAILABLE, EVERY ONE EXPLICIT (the ts480/ts590/ic7200 shape):
+		// wiring's own read invariant
+		// (TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot)
+		// requires every codeplug FieldState to be Known, Unknown or
+		// Unavailable before Save can choose a schema — the Go zero value
+		// of each of these types is Absent, which satisfies none of the
+		// three, so every field this 22-byte record has no byte for must
+		// be stated here rather than left at its zero value. TagDisplay
+		// is Unavailable because NoTag (matrix §1.6): there is no name
+		// route to display in place of the frequency at all.
+		TagDisplay:          codeplug.BoolField{State: codeplug.Unavailable},
+		CTCSSTone:           codeplug.ToneField{State: codeplug.Unavailable},
+		Duplex:              codeplug.StringField{State: codeplug.Unavailable},
+		OffsetHz:            codeplug.FreqField{State: codeplug.Unavailable},
+		ToneRx:              codeplug.ToneField{State: codeplug.Unavailable},
+		DTCSCode:            codeplug.IntField{State: codeplug.Unavailable},
+		DTCSPolarity:        codeplug.StringField{State: codeplug.Unavailable},
+		Filter:              codeplug.StringField{State: codeplug.Unavailable},
+		DataMode:            codeplug.BoolField{State: codeplug.Unavailable},
+		TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+		TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+		ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+		AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 	}, nil
 }
 

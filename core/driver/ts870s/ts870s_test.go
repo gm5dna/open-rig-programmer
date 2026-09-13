@@ -179,3 +179,70 @@ func TestWriteChannel_RefusesUnknownToneTx(t *testing.T) {
 }
 
 func ptr(d codeplug.ChannelData) *codeplug.ChannelData { return &d }
+
+// tierFieldStates is internal/wiring's own wiringTierFieldStates, restated
+// here so this package's test can hold ReadChannel to the SAME invariant
+// without importing a test-only helper from another package: the
+// seventeen codeplug FieldState members the Icom-tier D4/D8 extension
+// added (spec.AllFields() minus the ten pre-tier ones), each of which a
+// fresh read must state Known, Unknown or Unavailable — never left at
+// its Go zero value, Absent.
+func tierFieldStates(d *codeplug.ChannelData) map[string]codeplug.FieldState {
+	return map[string]codeplug.FieldState{
+		"tx_frequency":        d.TxFreqHz.State,
+		"duplex":              d.Duplex.State,
+		"offset":              d.OffsetHz.State,
+		"tone_mode":           d.ToneMode.State,
+		"tone_tx":             d.ToneTx.State,
+		"tone_rx":             d.ToneRx.State,
+		"dtcs_code":           d.DTCSCode.State,
+		"dtcs_polarity":       d.DTCSPolarity.State,
+		"filter":              d.Filter.State,
+		"data_mode":           d.DataMode.State,
+		"tuning_step_enabled": d.TuningStepEnabled.State,
+		"tuning_step":         d.TuningStep.State,
+		"program_tuning_step": d.ProgramTuningStepHz.State,
+		"attenuator":          d.AttenuatorDB.State,
+		"preamp":              d.Preamp.State,
+		"antenna":             d.Antenna.State,
+		"ip_plus":             d.IPPlus.State,
+		// Pre-tier fields this row also carries a FieldState for, held to
+		// the same rule: TagDisplay (NoTag) and CTCSSTone (this row's
+		// tone axis is tone_tx/tone_mode, not the Yaesu ctcss_tone pair).
+		"tag_display": d.TagDisplay.State,
+		"ctcss_tone":  d.CTCSSTone.State,
+	}
+}
+
+// TestReadChannel_NoTierFieldIsLeftAbsent is the wiring-level read
+// invariant (internal/wiring's
+// TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot)
+// restated at package level: "ReadChannel(...) left <field> Absent; a
+// fresh read must state Known, Unknown or Unavailable before Save
+// chooses a schema" is exactly the failure this pins against, for both
+// a channel with tone ON (TestReadChannel_Populated's own fixture) and
+// one with tone OFF (a second populated channel, so tone_tx's own
+// Unavailable-when-OFF arm is covered too).
+func TestReadChannel_NoTierFieldIsLeftAbsent(t *testing.T) {
+	toneOn := kw.Record870{Channel: 1, FreqHz: 14_250_000, Mode: kw.ModeUSB, Lockout: '0', ToneMode: kw.ToneModeTone, ToneIndex: 1}
+	toneOff := kw.Record870{Channel: 2, FreqHz: 7_100_000, Mode: kw.ModeLSB, Lockout: '1', ToneMode: kw.ToneModeOff, ToneIndex: 1}
+	sess, _ := openSession(t, RealHardware, radioImage{mrAnswers: map[string]string{
+		"01": mrAnswer(t, toneOn),
+		"02": mrAnswer(t, toneOff),
+	}})
+
+	for _, slot := range []string{"01", "02"} {
+		ch, err := sess.ReadChannel(context.Background(), slot)
+		if err != nil {
+			t.Fatalf("ReadChannel(%q): %v", slot, err)
+		}
+		if ch.Empty() {
+			t.Fatalf("ReadChannel(%q) came back empty", slot)
+		}
+		for field, state := range tierFieldStates(ch.Data) {
+			if state == codeplug.Absent {
+				t.Errorf("ReadChannel(%q) left %s Absent; a fresh read must state Known, Unknown or Unavailable before Save chooses a schema", slot, field)
+			}
+		}
+	}
+}
