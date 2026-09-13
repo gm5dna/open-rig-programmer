@@ -81,18 +81,18 @@
 // doc comment used to describe all three as open gaps, and the history is
 // worth keeping legible.
 //
-// core/kw/kwtest's conformance suite still has THREE further gaps that
-// commit did not touch — its own scope was the TS-2000's all-live-axis
-// shape and the two fixes above, not this row's Book570/no-tail shape.
-// checkLayoutSelfConsistency and checkIdentity both switch on l.Book()
-// over exactly Book590/Book480 and fault on any other book, and the
-// former also demands Byte28()/Byte3940()/Byte41() be set
-// unconditionally — all three are legitimately Unset on a no-tail layout.
-// checkEmptyChannel indexes past a 28-byte frame's last valid position, a
-// genuine panic rather than a failed assertion. None is fixable from this
+// A second follow-up (commit 51b61dc) then made
+// checkLayoutSelfConsistency, checkIdentity and checkEmptyChannel Book570-
+// and width-aware, closing the panic and the two Book590/Book480-only
+// switches. ONE kwtest gap remains, named in that commit's own message as
+// "already-documented, not-yet-fixed": checkMemorySets asserts the built
+// MW frame is exactly kw.RecordLen (the package CONSTANT, 50) bytes wide
+// rather than l.RecordLen(), and its round-trip comparison checks
+// Byte28/Byte3940/Byte41/DCSCode/Shift/OffsetHz unconditionally — none of
+// which a no-tail record's wire form carries. Not fixable from this
 // package; core/kw/ts570/layout_test.go's runConformance documents and
-// skips rather than silences or crashes — see reviews/driver-ts570.md's
-// "## Follow-up" section for the full account.
+// skips rather than silences — see reviews/driver-ts570.md's "## Follow-up"
+// section for the full account.
 //
 // # EX/menu inventory is out of scope
 //
