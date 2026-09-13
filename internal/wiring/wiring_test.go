@@ -282,6 +282,8 @@ var fakePackageForModel = map[string]string{
 	// v1.7.0 Kenwood/Yaesu wave, fourth row: internal/fakets570 serves all
 	// three TS-570 rows through WithModelName.
 	TS570DModel: "internal/fakets570",
+	// v1.7.0 Kenwood/Yaesu wave, fifth row: same package.
+	TS570SModel: "internal/fakets570",
 	// v1.7.0 Kenwood/Yaesu wave, tenth row: one simulator package to
 	// itself.
 	FTdx5000Model: "internal/fakeftdx5000",
@@ -1559,7 +1561,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1738,6 +1740,10 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// v1.7.0 Kenwood/Yaesu wave, fourth row.
 	if TS570DModel != "TS-570D" {
 		t.Errorf("TS570DModel = %q, want \"TS-570D\"", TS570DModel)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, fifth row.
+	if TS570SModel != "TS-570S" {
+		t.Errorf("TS570SModel = %q, want \"TS-570S\"", TS570SModel)
 	}
 	// v1.7.0 Kenwood/Yaesu wave, tenth row.
 	if FTdx5000Model != "FTdx5000" {
@@ -2327,7 +2333,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2619,6 +2625,10 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: TS570DModel, want: func() driver.Driver { return ts570.NewD(ts570.RealHardware) }, wantConsent: func() driver.Driver {
 			return ts570.NewD(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
 		}},
+		// v1.7.0 Kenwood/Yaesu wave, fifth row: same shape as TS-570D's.
+		{model: TS570SModel, want: func() driver.Driver { return ts570.NewS(ts570.RealHardware) }, wantConsent: func() driver.Driver {
+			return ts570.NewS(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -2873,6 +2883,9 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// every row, so its RealHardware profile carries a write-side
 		// Unverified field.
 		TS570DModel: true,
+		// The TS-570S (v1.7.0 Kenwood/Yaesu wave, fifth row). Same
+		// package, same writeTrialsComplete false.
+		TS570SModel: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -3159,6 +3172,7 @@ func TestStopBitsFor_EveryKenwoodDriverReportsOne(t *testing.T) {
 		// framing outright too (matrix §2), so this row reports 1 on the
 		// same footing as every Kenwood row above it.
 		{"TS-570D (registered)", mustRealDriver(t, TS570DModel)},
+		{"TS-570S (registered)", mustRealDriver(t, TS570SModel)},
 		// The UNREGISTERED TS-480, constructed directly: there is no
 		// registry key to look it up by, by design.
 		{"TS-480 (built, unregistered — plan P3)", ts480.New(ts480.RealHardware)},
@@ -3289,7 +3303,7 @@ var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, 
 // the two above them and both covered by the same seam pin. The list grew
 // by two names and by nothing else — see wantIdentityWidth below, which
 // this pair leaves UNCHANGED.
-var kenwoodModels = []string{TS590SModel, TS590SGModel, TS890SModel, TS990SModel, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel}
+var kenwoodModels = []string{TS590SModel, TS590SGModel, TS890SModel, TS990SModel, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel}
 
 // TestMakerModelListsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1

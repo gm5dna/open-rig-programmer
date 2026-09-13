@@ -682,6 +682,12 @@ const TSB2000Model = "TS-B2000"
 // (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
 const TS570DModel = "TS-570D"
 
+// TS570SModel names the TS-570S's realDrivers/fakeDrivers key — the
+// second of three rows over core/driver/ts570 (NewS). CATID "018"
+// (matrix §2, "TS-570S: 018"), its own printed value, not shared with the
+// TS-570D's "017".
+const TS570SModel = "TS-570S"
+
 // FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
 // must equal ftdx5000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel.
@@ -1077,6 +1083,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts570.NewD(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
 		}
 		return ts570.NewD(ts570.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, fifth row: NewS, same shape.
+	TS570SModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts570.NewS(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}
+		return ts570.NewS(ts570.RealHardware)
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

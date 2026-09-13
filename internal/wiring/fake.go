@@ -1228,6 +1228,16 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		newDriver: func() driver.Driver { return ts570.NewD(ts570.Simulated) },
 		newRadio:  func() fakeRadio { return ts570FakeAdapter{fakets570.New(TS570DFakeSessionOpts...)} },
 	},
+	// v1.7.0 Kenwood/Yaesu wave, fifth row: same shared TS570DFakeSessionOpts
+	// as the TS-570D's own entry above — internal/fakets570's WithModelName
+	// changes only its own CATID answer (own doc register), on the same
+	// no-hazard footing as the ts2000 family's shared variable.
+	TS570SModel: {
+		newDriver: func() driver.Driver { return ts570.NewS(ts570.Simulated) },
+		newRadio: func() fakeRadio {
+			return ts570FakeAdapter{fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570S")}, TS570DFakeSessionOpts...)...)}
+		},
+	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.
 	// writeTrialsComplete is false (core/driver/ic7800/caps.go), so this

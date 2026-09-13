@@ -1383,6 +1383,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		"TS-B2000": ts2000CoreFour,
 		// The TS-570D (v1.7.0 Kenwood/Yaesu wave, fourth row).
 		"TS-570D": ts570CoreThree,
+		// The TS-570S (v1.7.0 Kenwood/Yaesu wave, fifth row): shares
+		// ts570CoreThree, same driver package.
+		"TS-570S": ts570CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
