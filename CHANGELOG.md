@@ -11,6 +11,38 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-13
+
+### Added
+- **FTdx3000** joins the supported Yaesu models: a paper-only
+  registration, opt-in for writes via the unverified-write consent
+  gate, since no real radio has ever answered this program. NoTag: no
+  channel-name field over CAT. CTCSS tone is read-only over CAT (the
+  write command's own tone field is fixed to `"00"`); AM-N is assumed
+  not storable via CAT and is excluded from the write-capable mode
+  list.
+- **FTdx1200** joins the supported Yaesu models as one radio
+  identified by either of two CAT IDs (`0582` with the FFT-1 filter
+  fitted, `0583` without): the same paper-only, opt-in-write, NoTag
+  shape as the FTdx3000.
+- **FT-450D** joins the supported Yaesu models, also paper-only and
+  opt-in-write, in a deliberately safe shape: only memory channels
+  001-500 are written; the Programmable Memory Scan channels (501-504)
+  stay read-only until an owner probes a real radio; the 60 m and
+  Alaska-emergency channels are not exposed at all. Six probes that
+  would lift these limits are listed in `docs/radio-notes.md`.
+- **Light/dark mode**: a System/Light/Dark picker in the settings
+  panel; the app follows the OS setting by default.
+- **Flatpak bundle** (`.flatpak`, app id
+  `io.github.gm5dna.open-rig-programmer`, GNOME 47 runtime,
+  `--device=all` for the radio's serial port) is now attached to each
+  release; Flathub submission is not yet done.
+
+### Changed
+- Internal: a new `cat.MemoryP9Policy` value, `P9ToneIndexReadOnly`,
+  covers a write dialect whose tone field cannot be set. Supported
+  models: 39 → 42.
+
 ## [1.7.1] - 2026-09-13
 
 ### Changed
@@ -483,7 +515,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.5.1...v1.6.0

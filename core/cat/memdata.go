@@ -609,8 +609,10 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 	// P9, BY THIS DIALECT'S OWN READING (MemoryP9Policy, dialectconfig.go),
 	// copied verbatim from P5's shape above. Under P9Fixed00 the field is
 	// printed-fixed and a value other than "00" is an undocumented frame,
-	// refused rather than decoded. Under P9ToneIndex it is a two-digit
-	// index into the standard 50-entry CTCSS tone chart.
+	// refused rather than decoded. Under P9ToneIndex or P9ToneIndexReadOnly
+	// it is a two-digit index into the standard 50-entry CTCSS tone chart —
+	// the two share a read side, and only the write side (encode, plus the
+	// builder refusal in validateSetFields) tells them apart.
 	//
 	// A SWITCH, not an if/else with a wide else arm, for the same reason as
 	// P5's: NewDialect's V18 already refuses a zero MemoryP9Policy at
@@ -623,7 +625,7 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 		if string(p9Field) != "00" {
 			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 field must be fixed \"00\" under %v", wantPrefix, d.memoryP9))
 		}
-	case P9ToneIndex:
+	case P9ToneIndex, P9ToneIndexReadOnly:
 		if !allDigits(p9Field) {
 			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 field (tone index) must be 2 digits", wantPrefix))
 		}
@@ -725,11 +727,12 @@ func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) error {
 	frame[d.memKindOff()] = m.Kind
 	frame[d.memCTCSSOff()] = m.CTCSS.Wire()
 	// P9, BY THIS DIALECT'S OWN READING, copied verbatim from P5's shape
-	// above: under P9Fixed00 the field is schema, and both callers have
-	// already REFUSED a record carrying a nonzero ToneIndex; under
+	// above: under P9Fixed00 OR P9ToneIndexReadOnly the field is schema on
+	// this (write) side, and both callers have already REFUSED a record
+	// carrying a nonzero ToneIndex (validateSetFields, mw.go); under
 	// P9ToneIndex it is the two-digit tone-table index.
 	switch d.memoryP9 {
-	case P9Fixed00:
+	case P9Fixed00, P9ToneIndexReadOnly:
 		copy(frame[d.memP9Off():], "00")
 	case P9ToneIndex:
 		copy(frame[d.memP9Off():], fmt.Sprintf("%02d", m.ToneIndex))

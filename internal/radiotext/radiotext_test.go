@@ -206,6 +206,12 @@ var yaesuModels = map[string]bool{
 	// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row): same
 	// reason.
 	"FT-950": true,
+	// The FTdx3000 (v1.8.0 Yaesu trio, first row): same reason.
+	"FTdx3000": true,
+	// The FTdx1200 (v1.8.0 Yaesu trio, second row): same reason.
+	"FTdx1200": true,
+	// The FT-450D (v1.8.0 Yaesu trio, third and last row): same reason.
+	"FT-450D": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -394,6 +400,12 @@ var ownParticulars = map[string][]string{
 	"FTdx9000": {"FTdx9000"},
 	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: bare name.
 	"FT-950": {"FT-950"},
+	// v1.8.0 Yaesu trio, first row: bare name (registry key, all-caps).
+	"FTdx3000": {"FTdx3000"},
+	// v1.8.0 Yaesu trio, second row: bare name (registry key, all-caps).
+	"FTdx1200": {"FTdx1200"},
+	// v1.8.0 Yaesu trio, third and last row: bare name.
+	"FT-450D": {"FT-450D"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2748,4 +2760,73 @@ func TestRadiotext_FT950Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FT-950", got)
+}
+
+// TestRadiotext_FTdx3000Verbatim pins the v1.8.0 Yaesu trio's first row's
+// prose byte-for-byte.
+func TestRadiotext_FTdx3000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTdx3000: no builder for one exists, and no FTdx3000 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FTdx3000's tone is read as a live CTCSS-tone index but cannot be written back over CAT at all — its memory-write frame prints that field fixed, so a read-modify-write silently loses it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. AM-N is excluded from the modes this build will write: it appears only on this radio's live mode command, never on its memory-read or memory-write legend.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read as a live CTCSS-tone index for the FTdx3000, but this radio's own memory-write frame cannot carry a tone at all — a rewrite always loses it, not merely an untested one",
+		},
+		ProbeFirmwareNote: "The FTdx3000 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FTdx3000")
+	if !ok {
+		t.Fatal(`For("FTdx3000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTdx3000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx3000", got)
+}
+
+// TestRadiotext_FTdx1200Verbatim pins the v1.8.0 Yaesu trio's second row's
+// prose byte-for-byte.
+func TestRadiotext_FTdx1200Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTdx1200: no builder for one exists, and no FTdx1200 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FTdx1200 has no CTCSS tone route over CAT at all: its memory frames print the tone field fixed on both read and write, so this build neither reads nor writes it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. This radio identifies with either of two CAT IDs depending on whether its optional FFT-1 board is fitted — both are accepted as the same radio.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "not read or written over CAT for the FTdx1200 — its own memory frames print the tone field fixed on both read and write",
+		},
+		ProbeFirmwareNote: "The FTdx1200 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FTdx1200")
+	if !ok {
+		t.Fatal(`For("FTdx1200") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTdx1200\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx1200", got)
+}
+
+// TestRadiotext_FT450DVerbatim pins the v1.8.0 Yaesu trio's third and
+// last row's prose byte-for-byte.
+func TestRadiotext_FT450DVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-450D: no builder for one exists, and no FT-450D has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FT-450D's 7-character memory tag exists only on the radio's own front panel — there is no CAT command that carries its text at all, so this build shows no Tag column for it. Tone is a live CTCSS-tone index, read and written, but only for the 500 regular memory channels: its 2 scan-limit (PMS) pairs are read-only on every field, including tone, until a bench probe on real hardware shows a scan-limit write succeeding — a caution this programme applies itself, not a limit the radio's manual states. The 60-metre band and Alaska Emergency channels are real but have no CAT command of their own in either manual this build was built from, so this programme cannot see or write them at all.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written for the FT-450D's regular memory channels; this build has never tested whether a rewrite preserves the tone index on a real radio",
+		},
+		ProbeFirmwareNote: "The FT-450D has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FT-450D")
+	if !ok {
+		t.Fatal(`For("FT-450D") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-450D\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-450D", got)
 }

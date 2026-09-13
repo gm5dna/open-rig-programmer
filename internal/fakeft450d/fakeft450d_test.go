@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package fakeft450d
+
+import (
+	"bytes"
+	"testing"
+	"time"
+)
+
+func TestNew_DefaultsToFT450D(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if reply, want := send(r, "ID;"), []byte("ID0244;"); !bytes.Equal(reply, want) {
+		t.Errorf("ID answer = %q, want %q", reply, want)
+	}
+}
+
+func TestPort_RoundTrip(t *testing.T) {
+	r := New()
+	defer r.Close()
+	port := r.Port()
+	if _, err := port.Write([]byte("ID;")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	buf := make([]byte, 64)
+	n, err := port.Read(buf)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got, want := buf[:n], []byte("ID0244;"); !bytes.Equal(got, want) {
+		t.Errorf("reply over the port = %q, want %q", got, want)
+	}
+}
+
+func TestClose_IsPromptDespiteAPendingLatency(t *testing.T) {
+	r := New(WithLatency(time.Hour))
+	port := r.Port()
+	if _, err := port.Write([]byte("ID;")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	done := make(chan struct{})
+	go func() {
+		r.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close did not return promptly despite a pending latency wait")
+	}
+}
+
+func TestWithSlot_Overlay(t *testing.T) {
+	r := New(WithSlot("050", MemState{
+		Freq: "21200000", ClarSign: '+', ClarMag: "0000",
+		Mode: '3', Kind: kindMemory, CTCSS: '0', Tone: "00", Shift: '0',
+	}))
+	defer r.Close()
+	s, ok := r.SlotState("050")
+	if !ok || s.Freq != "21200000" {
+		t.Errorf("WithSlot did not overlay channel 050: %+v, ok=%v", s, ok)
+	}
+	// The rest of the default image is untouched.
+	if _, ok := r.SlotState("001"); !ok {
+		t.Error("WithSlot dropped the default image's channel 001")
+	}
+}
+
+func TestWithSlot_IsTheOnlyRouteToNonDefaultPMSState(t *testing.T) {
+	// doc.go's register entry PMS SLOTS (501-504) REFUSE EVERY MW SET:
+	// WithSlot/WithFactoryImage are the sole way a PMS slot ever carries
+	// scripted state.
+	r := New(WithSlot("503", MemState{
+		Freq: "05000000", ClarSign: '+', ClarMag: "0000",
+		Mode: '4', Kind: kindMemory, CTCSS: '0', Tone: "00", Shift: '0',
+	}))
+	defer r.Close()
+	s, ok := r.SlotState("503")
+	if !ok || s.Freq != "05000000" {
+		t.Errorf("WithSlot did not overlay PMS channel 503: %+v, ok=%v", s, ok)
+	}
+}
+
+func TestWithFactoryImage_ReplacesTheWholeMap(t *testing.T) {
+	empty := func() map[string]MemState { return map[string]MemState{} }
+	r := New(WithFactoryImage(empty))
+	defer r.Close()
+	if _, ok := r.SlotState("001"); ok {
+		t.Error("WithFactoryImage did not replace the default image")
+	}
+}
+
+func TestTwoRadiosDoNotShareState(t *testing.T) {
+	r1 := New()
+	defer r1.Close()
+	r2 := New()
+	defer r2.Close()
+
+	block := mustBlock(t, "010", "07100000", '+', "0000", false, false, '1', mwSetKindFixed, '0', "00", '0')
+	send(r1, "MW"+string(block)+";")
+
+	if _, ok := r2.SlotState("010"); ok {
+		t.Error("a write to r1 is visible on r2 — the two Radios share mutable state")
+	}
+}

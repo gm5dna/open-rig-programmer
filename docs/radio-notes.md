@@ -190,6 +190,73 @@ opt-in consent route.
 Evidence: `core/driver/ft950/doc.go`; the manual is the Yaesu CAT
 Operation Reference Manual, revision EC030H120.
 
+### FTdx3000 (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTdx5000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. The CTCSS tone is a live
+tone-table index on READ but is printed FIXED on the memory-write frame,
+so it is read-only over CAT: a read-modify-write silently loses it. AM-N
+(the manual's own mode 'D') is ASSUMED excluded from the modes this
+programme will write — it is printed only on the live mode command, never
+on the memory-read or memory-write legend. No FTdx3000 has ever answered
+a frame from this project, so every write stays behind the opt-in consent
+route.
+
+Evidence: `core/driver/ftdx3000/doc.go`; the manual is the Yaesu FTdx3000
+CAT Operation Manual, revision 2006-D.
+
+### FTdx1200 (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTdx3000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. There is no CTCSS tone route
+over CAT at all: the tone field is printed fixed on both the read and
+write frames, so this build neither reads nor writes it. This radio
+identifies with either of two CAT IDs, "0582" or "0583", depending on
+whether its optional FFT-1 board is fitted — both answers are accepted
+as the same radio. No FTdx1200 has ever answered a frame from this
+project, so every write stays behind the opt-in consent route.
+
+Evidence: `core/driver/ftdx1200/doc.go`; the manual is the Yaesu FTdx1200
+CAT Operation Manual, revision 1507-E0.
+
+### FT-450D (opt-in) — SAFE SHAPE (agreed 13/09/2026)
+
+Registered in the SAFE SHAPE agreed 13/09/2026 (radio-roadmap.md,
+RELEASE PATH RULING): read channels 001-504; write 001-500 ONLY (the
+Operating Manual folio 58 says the regular channels are read/write, the
+CAT book gives MW the ordinary 27-byte frame). PMS 501-504 (2 scan-limit
+pairs) are READ-ONLY until an owner probe shows `MW501...;` succeeding on
+real hardware, at which point this is a one-line capability flip — not a
+hardware-unverified state the opt-in write consent can open, since this
+project's own caution rather than a documented radio limit. 505-510 (the
+60 m band and the Alaska Emergency channel) are NOT in the dialect at
+all: real channels the Operating Manual names, but the CAT book never
+gives them a channel number. Tags are front-panel-only (a 7-character
+name field with no CAT text route), so NoTag. Tone is a live CTCSS-tone
+index and is written, for the 500 regular channels only.
+
+**ASSUMED — the six bench probes this build's registration is waiting
+on** (`.superpowers/sdd/2026-09-13-ft450d-paper/reviews/community-hints.md`):
+
+1. `MC505;` then `IF;` — does it select a channel, and what does it read back?
+2. `MC510;` then `IF;` — same, at the far end of the hypothesised 505-510 span.
+3. `MW505...;` — a normal MW frame at channel 505: expect refusal if fixed.
+4. `MC501;MW501...;` — confirms whether a PMS pair is actually writable (positive control against probe 3).
+5. `MC511;` — one past the hypothesised span, expect refusal, to nail the upper bound.
+6. `MC000;IF;` vs `MC505;IF;` vs the Alaska channel via the front panel, then `IF;` — whether Alaska has its own MC slot distinct from the five US 60 m slots.
+
+Informed-by, NOT cited as evidence (neither ever sends a CAT frame to
+confirm this): Hamlib's `ft450.c` chan_list (1-500 regular, 501-504
+PMS/EDGE, silent on 505-510) and CHIRP's `ft450d.py` (`pms[4]` writable
+in its own clone protocol; `m60[5]` read-only; a 7-character tag exists
+in clone memory only, never exposed by CAT).
+
+Evidence: `core/driver/ft450d/doc.go`; the manuals are the Yaesu FT-450D
+CAT Operation Reference Book, revision 1710-B, and the Operating Manual,
+revision 1901L-LS-1.
+
 ## Icom
 
 ### Shared by every Icom model
@@ -726,3 +793,6 @@ by revision in the code that transcribes it.
 | FT-2000, FT-2000D | Yaesu CAT Operation Reference Manual, revision EH025H124 |
 | FTdx9000 | Yaesu CAT Operation Reference Manual, revision EH010H121 |
 | FT-950 | Yaesu CAT Operation Reference Manual, revision EC030H120 |
+| FTdx3000 | Yaesu FTdx3000 CAT Operation Manual, revision 2006-D |
+| FTdx1200 | Yaesu FTdx1200 CAT Operation Manual, revision 1507-E0 |
+| FT-450D | Yaesu FT-450D CAT Operation Reference Book, revision 1710-B; Operating Manual, revision 1901L-LS-1 |
