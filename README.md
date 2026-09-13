@@ -30,7 +30,7 @@ radio, and every write is previewed, snapshotted and read back.
 | **TS-590S**, **TS-590SG** | ✅ | ⚠️ opt-in |
 | **TS-890S**, **TS-990S** | ✅ | ⚠️ opt-in, existing channels only |
 | **TS-2000**, **TS-2000X**, **TS-B2000** | ✅ | ⚠️ opt-in |
-| **TS-570D**, **TS-570S** | ✅ | ⚠️ opt-in |
+| **TS-570D**, **TS-570S**, **TS-570DG** (UNVERIFIED-BY-INHERITANCE — see radio-notes.md) | ✅ | ⚠️ opt-in |
 | **TS-870S** | ✅ | ⚠️ opt-in |
 
 Per-radio detail, including where the program is guessing, is in

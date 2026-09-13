@@ -692,6 +692,15 @@ const TS570DModel = "TS-570D"
 // TS-570D's "017".
 const TS570SModel = "TS-570S"
 
+// TS570DGModel names the TS-570DG's realDrivers/fakeDrivers key — the
+// third and last of three rows over core/driver/ts570 (NewDG).
+// UNVERIFIED-BY-INHERITANCE (matrix §5, spec.md §6 Q2): document
+// B62-1542-00 names the TS-570D and TS-570S only, never the DG variant.
+// CATID is ASSUMED equal to the TS-570D's ("017"), since no document
+// prints one for this row — recorded here and in radiotext/README, never
+// implied MANUAL-EVIDENCED.
+const TS570DGModel = "TS-570DG"
+
 // TS870SModel names the TS-870S's realDrivers/fakeDrivers key, which must
 // equal ts870s.New(...).Model() — pinned, like every other constant above,
 // by TestDriverTableKeysMatchDriverModel.
@@ -1168,6 +1177,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts570.NewS(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
 		}
 		return ts570.NewS(ts570.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: NewDG, same
+	// shape.
+	TS570DGModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts570.NewDG(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}
+		return ts570.NewDG(ts570.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New takes the profile as
 	// its first argument.

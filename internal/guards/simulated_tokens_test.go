@@ -375,7 +375,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// profile as their first argument, the ordinary shape, so the
 		// token is a bare "ts570.Simulated" constant. ONE row for THREE
 		// registered models (one constructor family, one fake).
-		{"ts570", "Simulated", "fakets570.New", "internal/fakets570", []string{"TS-570D", "TS-570S"}},
+		{"ts570", "Simulated", "fakets570.New", "internal/fakets570", []string{"TS-570D", "TS-570S", "TS-570DG"}},
 		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row): bare New
 		// takes the profile as its first argument, one package, one
 		// simulator, no sibling.
