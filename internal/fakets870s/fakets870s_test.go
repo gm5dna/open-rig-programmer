@@ -479,3 +479,74 @@ func TestClose_IsPromptDespiteAPendingLatency(t *testing.T) {
 		t.Fatal("Close did not return promptly despite a pending 5s latency")
 	}
 }
+
+// TestWithStreamError_ScriptsEAndO scripts both tokens the error table
+// prints beside "?;" — "E;", "A communication error occurred such as an
+// overrun or framing error during a serial data transmission."
+// (ts870s:8445-8447), and "O;", "Receive data was sent but processing was
+// not completed." (ts870s:8434-8450 for the whole table). Each replaces an
+// otherwise-silent MW's reply outright, at the scripted exchange only —
+// doc.go's register entry STREAM ERRORS ARE SCRIPTABLE.
+func TestWithStreamError_ScriptsEAndO(t *testing.T) {
+	tests := []struct {
+		name string
+		kind StreamError
+		want string
+	}{
+		{"E — communication error (ts870s:8445-8447)", StreamErrorE, "E;"},
+		{"O — processing not completed (ts870s:8449-8450)", StreamErrorO, "O;"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, conn := newTestRadio(t, WithStreamError(tt.kind, 1))
+
+			// Exchange 1 would otherwise be a silent, accepted MW —
+			// exercising the "REPLACES a fire-and-forget silence" half of
+			// the option's own doc comment, not merely a rejection.
+			write := "0" + "09" + "00007000000" + "4" + "0" + "0" + "00"
+			writeFrame(t, conn, "MW"+write+";")
+			if got := mustReadFrame(t, conn); got != tt.want {
+				t.Errorf("scripted exchange 1 -> %q, want %q", got, tt.want)
+			}
+
+			// Exchange 2 is unaffected: the script names one exchange only.
+			if got, want := exchange(t, conn, "ID;"), "ID015;"; got != want {
+				t.Errorf("exchange 2 (ID;) -> %q, want %q — the script must not leak past its own exchange", got, want)
+			}
+		})
+	}
+}
+
+// TestWithStreamError_PanicsOnTheZeroKindOrANonPositiveExchange pins the
+// same two guards internal/fakets480's own WithStreamError carries: a
+// script must name a real token and a real exchange.
+func TestWithStreamError_PanicsOnTheZeroKindOrANonPositiveExchange(t *testing.T) {
+	mustPanic := func(t *testing.T, f func()) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Error("expected a panic, got none")
+			}
+		}()
+		f()
+	}
+	mustPanic(t, func() { WithStreamError(StreamErrorUnset, 1) })
+	mustPanic(t, func() { WithStreamError(StreamErrorE, 0) })
+}
+
+// --- The Open sequence core/driver/ts870s now sends: "AI0;" then "ID;" ---
+
+// TestOpenSequence_AI0ThenID confirms this fake answers the exact two-frame
+// sequence core/driver/ts870s.Open now sends over a live session
+// (reviews/driver-ts870s.md's `## Follow-up`): the family's `Engine.Init`
+// preamble "AI0;" (fire-and-forget, Format 32's own first legend value, "0:
+// AI OFF"), followed immediately by an "ID;" probe that must answer this
+// row's own identity for Open to accept the port as a TS-870S.
+func TestOpenSequence_AI0ThenID(t *testing.T) {
+	_, conn := newTestRadio(t)
+
+	assertNoReply2(t, conn, "AI0;")
+	if got, want := exchange(t, conn, "ID;"), "ID015;"; got != want {
+		t.Errorf("ID; after AI0; -> %q, want %q", got, want)
+	}
+}

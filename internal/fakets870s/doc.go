@@ -75,9 +75,9 @@
 //     "Receive data was sent but processing was not completed."
 //     (ts870s:8449-8450) against "?;"'s two causes (ts870s:8434-8438) and
 //     "E;"'s "A communication error occurred such as an overrun or framing
-//     error during a serial data transmission." (ts870s:8445-8447). See the
-//     STREAM ERRORS register entry below for why this package does not make
-//     them scriptable despite the citation existing.
+//     error during a serial data transmission." (ts870s:8445-8447). Both are
+//     now SCRIPTABLE (WithStreamError) — see the STREAM ERRORS register entry
+//     below, revised once `core/driver/ts870s` wired a live session.
 //
 // # What this fake deliberately does NOT model
 //
@@ -157,17 +157,22 @@
 //     reads as being about; no radio has confirmed the TX/End half answers
 //     the same shape rather than refusing outright.
 //
-//  6. STREAM ERRORS ARE NOT SCRIPTABLE, DESPITE THIS BOOK CITING "E;"/"O;"
-//     ITSELF. reviews/driver-ts870s.md's `## Verdict` — the only part of
-//     that report this package's author was permitted to read — states
-//     lift K's gap resolved to option 2 for this row: `core/driver/ts870s`'s
-//     `Open` always refuses (`ErrNoLiveSession`) and never builds a live
-//     session at all. There is therefore no live stream for a scripted "E;"
-//     or "O;" to interrupt on the driver side of this row, and building a
-//     `WithStreamError` option nothing can exercise would be the same
-//     fabrication lift K's own "not wired" branch already refused to commit.
-//     If a later milestone wires a live TS-870S session, this is the entry to
-//     revisit.
+//  6. STREAM ERRORS ARE SCRIPTABLE, NOW THAT A LIVE SESSION EXISTS TO
+//     INTERRUPT. Revised 13/09/2026: this entry originally refused to build
+//     a `WithStreamError` option because `reviews/driver-ts870s.md`'s
+//     `## Verdict` (the only part of that report read at the time) showed
+//     `core/driver/ts870s.Open` always refusing without ever building a
+//     session. The coordinator's follow-up instruction pointed at that
+//     report's own `## Follow-up` section and at `reviews/lift-K.md`'s
+//     `## Follow-up`: lift K `e7515d0` added `Layout870.Book()`,
+//     `NewFramingFor870` and real Book570/Book870S stream-error citations,
+//     and `core/driver/ts870s`'s own follow-up (`e97d307`) wired `Open`
+//     to a genuine `transport.Engine` over it. There is now a live stream on
+//     the driver side for a scripted "E;"/"O;" to interrupt, so
+//     `WithStreamError` (options.go) scripts either token at one exchange,
+//     the same shape internal/fakets480's and internal/fakets590's own
+//     options take, cited to this book's own error table
+//     (ts870s:8434-8450).
 //
 //  7. THE FRAME ACCUMULATOR'S CAP AND RESYNC. The 256-byte bound, the single
 //     "?;" per overflow and the discard-to-next-';' resync are this

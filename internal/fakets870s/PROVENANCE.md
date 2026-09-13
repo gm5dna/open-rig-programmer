@@ -79,12 +79,14 @@ of those values, never an observed reading or a factory default —
   (`ts870s:9028`) but no graded `spec.Capabilities` field or bank `Field`
   depends on it — MR and MW both address a channel directly by P3 — so this
   package models no selector.
-- **No scriptable stream-error tokens**, despite this book citing "E;"/"O;"
-  itself (`ts870s:8434-8449`, worded identically to `internal/fakets480`'s
-  own citation of the same two tokens). `reviews/driver-ts870s.md`'s
-  `## Verdict` — the only part of that report this package's author read —
-  states `core/driver/ts870s.Open` never builds a live session at all, so a
-  scripted stream fault would have nothing on the driver side to interrupt.
-  `doc.go`'s register entry STREAM ERRORS ARE NOT SCRIPTABLE records the
-  decision; a later milestone wiring a live session is the point to revisit
-  it.
+- **Stream-error tokens ARE scriptable, as of 13/09/2026.** This book cites
+  "E;"/"O;" itself (`ts870s:8434-8450`, worded identically to
+  `internal/fakets480`'s own citation of the same two tokens). The first cut
+  of this package left them unscriptable because `reviews/driver-ts870s.md`'s
+  `## Verdict` — the only part of that report read at the time — showed
+  `core/driver/ts870s.Open` never building a live session. Its `## Follow-up`
+  (read once the coordinator pointed at it) records that lift K `e7515d0`
+  and the driver's own follow-up `e97d307` wired a real live session, so
+  `WithStreamError` (options.go) now scripts either token, cited to the same
+  lines. `doc.go`'s register entry STREAM ERRORS ARE SCRIPTABLE carries the
+  revision.
