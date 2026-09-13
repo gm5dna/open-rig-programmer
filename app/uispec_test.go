@@ -1398,6 +1398,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		"TS-570S": ts570CoreThree,
 		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row).
 		"TS-870S": ts870sCoreThree,
+		// The FT-2000 (v1.7.0 Kenwood/Yaesu wave, eighth row): shares
+		// ftdx5000CoreSix's exact composition (core/driver/ft2000/caps.go's
+		// bankFields is identical to ftdx5000's — same dialect family),
+		// reused rather than re-declared.
+		"FT-2000": ftdx5000CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

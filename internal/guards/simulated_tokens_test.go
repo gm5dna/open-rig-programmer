@@ -380,6 +380,11 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// takes the profile as its first argument, one package, one
 		// simulator, no sibling.
 		{"ts870s", "Simulated", "fakets870s.New", "internal/fakets870s", []string{"TS-870S"}},
+		// The FT-2000 family (v1.7.0 Kenwood/Yaesu wave, eighth row of
+		// two): core/driver/ft2000's NewFT2000/NewFT2000D each take the
+		// profile as their first argument, the ordinary shape. ONE row for
+		// TWO registered models (one constructor family, one fake).
+		{"ft2000", "Simulated", "fakeft2000.New", "internal/fakeft2000", []string{"FT-2000"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

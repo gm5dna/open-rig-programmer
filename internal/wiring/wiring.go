@@ -36,6 +36,7 @@ import (
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
@@ -703,6 +704,20 @@ const TS570SModel = "TS-570S"
 // (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
 const TS870SModel = "TS-870S"
 
+// FT2000Model names the FT-2000's realDrivers/fakeDrivers key, which must
+// equal ft2000.NewFT2000(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, EIGHTH ROW, FIRST OF TWO over one driver
+// package (core/driver/ft2000, NewFT2000/NewFT2000D — no bare New, the
+// ftdx101 shape: one SERIES manual names both radios). 27-byte MR/MW
+// frame, 8-digit FreqHz (Lift Y). NOTAG: no tag/name command anywhere in
+// the 20-page manual. CATID "0251" (matrix). CTCSSTone is MAPPED (rw) —
+// the live P9 tone-table index.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT2000Model = "FT-2000"
+
 // FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
 // must equal ftdx5000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel.
@@ -1113,6 +1128,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts870s.New(ts870s.RealHardware, ts870s.WithConsentedUnverifiedWrites())
 		}
 		return ts870s.New(ts870s.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, eighth row: NewFT2000 takes the profile as
+	// its first argument (the ftdx101 shape).
+	FT2000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ft2000.NewFT2000(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+		}
+		return ft2000.NewFT2000(ft2000.RealHardware)
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'
