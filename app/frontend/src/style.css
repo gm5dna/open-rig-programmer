@@ -31,6 +31,9 @@
 	--colour-warn: #e8c547;
 	--colour-warn-bg: #38301a;
 
+	--colour-on-accent: #241605;
+	--colour-hover-overlay: rgba(255, 255, 255, 0.08);
+
 	--font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 	--font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
 
@@ -45,6 +48,70 @@
 
 	--transition-fast: 120ms ease;
 	--focus-ring: 0 0 0 2px var(--colour-bg), 0 0 0 4px var(--colour-accent-strong);
+}
+
+/* Light theme (v1.8.0 Phase 5): same token names, contrast-matched for a
+ * light ground (body text >= 4.5:1, UI chrome >= 3:1) — the accent/
+ * good/demo/danger/warn hues are the same amber/teal/violet/red/mustard
+ * families, darkened enough to still read as text on white (the dark
+ * theme's bright pastel versions only work on a near-black ground).
+ * Explicit choice (data-theme="light", set by theme.js) wins outright;
+ * "System" leaves data-theme unset, so it's this same palette but only
+ * while the OS itself prefers light AND nothing has forced dark. */
+:root[data-theme="light"] {
+	--colour-bg: #eef1f6;
+	--colour-panel: #ffffff;
+	--colour-panel-raised: #ffffff;
+	--colour-panel-sunken: #e3e8f0;
+	--colour-hairline: #7b8ba6;
+	--colour-hairline-soft: #d7dee8;
+
+	--colour-text: #1b2432;
+	--colour-text-dim: #48566e;
+	--colour-text-faint: #74809a;
+
+	--colour-accent: #9c5f00;
+	--colour-accent-strong: #7a4900;
+	--colour-good: #067a63;
+	--colour-demo: #6e3fc0;
+	--colour-danger: #b3261e;
+	--colour-danger-bg: #fbe4e1;
+	--colour-warn: #7a5f00;
+	--colour-warn-bg: #faf1d6;
+
+	--colour-on-accent: #fff7ec;
+	--colour-hover-overlay: rgba(0, 0, 0, 0.06);
+
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme="dark"]) {
+		--colour-bg: #eef1f6;
+		--colour-panel: #ffffff;
+		--colour-panel-raised: #ffffff;
+		--colour-panel-sunken: #e3e8f0;
+		--colour-hairline: #7b8ba6;
+		--colour-hairline-soft: #d7dee8;
+
+		--colour-text: #1b2432;
+		--colour-text-dim: #48566e;
+		--colour-text-faint: #74809a;
+
+		--colour-accent: #9c5f00;
+		--colour-accent-strong: #7a4900;
+		--colour-good: #067a63;
+		--colour-demo: #6e3fc0;
+		--colour-danger: #b3261e;
+		--colour-danger-bg: #fbe4e1;
+		--colour-warn: #7a5f00;
+		--colour-warn-bg: #faf1d6;
+
+		--colour-on-accent: #fff7ec;
+		--colour-hover-overlay: rgba(0, 0, 0, 0.06);
+
+		color-scheme: light;
+	}
 }
 
 *,
@@ -188,7 +255,7 @@ button:disabled {
 .modal-btn-primary {
 	background: var(--colour-accent);
 	border-color: var(--colour-accent);
-	color: #241605;
+	color: var(--colour-on-accent);
 }
 
 .modal-btn-primary:hover:not(:disabled) {
