@@ -25,30 +25,43 @@ import (
 func TestConformance_TS570D(t *testing.T) { runConformance(t, ts570.LayoutD()) }
 func TestConformance_TS570S(t *testing.T) { runConformance(t, ts570.LayoutS()) }
 
-// runConformance is kwtest.Run, with the two RecordLen=28 gaps documented
-// rather than silenced.
+// runConformance is kwtest.Run, with the REMAINING RecordLen=28 gaps
+// documented rather than silenced.
 //
-// kwtest.go (core/kw/kwtest) was not updated for Lift K's RecordLen axis in
-// two places: checkMemorySets asserts the built MW frame is exactly
-// kw.RecordLen (the package CONSTANT, 50) bytes wide, and
-// checkGateRefusesAMutatedPrintedFixedByte fails outright when a layout's
-// PrintedFixed set is empty. Both are genuinely reached by ANY layout whose
-// RecordLen is not 50 — this row's 28-byte, no-tail record has no
-// printed-fixed run at all (layout.go) — and BOTH are bugs in the shared
-// harness, not in this package's codec: kw.BuildMWSet correctly emits
-// exactly l.RecordLen() bytes for this row (core/kw/builders.go,
-// `frame := make([]byte, l.recordLen)`).
+// core/kw's Lift K follow-up (commit e7515d0, 13/09/2026) closed the two
+// gaps this comment used to cite — checkMemorySets' width assertion and
+// checkGateRefusesAMutatedPrintedFixedByte's non-empty-PrintedFixed
+// requirement — plus BuildMWSet's own P9-span and isEmptyWindow's
+// width-awareness. Re-running kwtest.Run(t, ts570.LayoutD()) directly
+// (a throwaway probe, not committed) surfaces THREE FURTHER gaps that
+// commit did not touch, because its own scope was the TS-2000's
+// all-live-axis shape and the two named framing/build fixes, not this
+// row's Book570/no-tail shape:
 //
-// core/kw/kwtest is outside this package's own directories (core/kw/ts570,
-// core/driver/ts570) and this milestone's brief reserves editing core/kw to
-// one cited exception (errors.go's Book570/Book870S stream-error entries),
-// which does not cover this file. So this test SKIPS rather than either
-// papering over the two known failures with a filtering harness or leaving
-// a red test the build gate would then reject — see
-// reviews/driver-ts570.md for the full report.
+//   - checkLayoutSelfConsistency switches on `l.Book()` over exactly
+//     kw.Book590/kw.Book480 and errors for any other book (Book570
+//     included), and separately requires Byte28()/Byte3940()/Byte41() to
+//     be set UNCONDITIONALLY — all three are legitimately Unset on this
+//     row's no-tail layout (layout.go).
+//   - checkIdentity's FV/TY switch is the same Book590/Book480-only
+//     shape and errors "neither the FV leg nor the TY leg ran" for
+//     Book570, which is correct per this document (doc.go: neither
+//     command exists here) but which the suite treats as a fault rather
+//     than a third, legitimate case.
+//   - checkEmptyChannel hardcodes `for i := 6; i <= 40` and
+//     `for i := 41; i <= 48`, both past a 28-byte frame's last valid
+//     index (27) — a genuine PANIC ("index out of range [28] with
+//     length 28"), not merely a failed assertion.
+//
+// None of these three is fixable from core/kw/ts570: they are internal to
+// kwtest.go, which this milestone's brief reserves editing core/kw to one
+// cited exception (errors.go's Book570/Book870S stream-error entries) that
+// does not cover this file. So this test still SKIPS, with the current,
+// accurate citation, rather than crash the build gate or paper over a
+// panic — see reviews/driver-ts570.md's "## Follow-up" for the full report.
 func runConformance(t *testing.T, l kw.Layout) {
 	t.Helper()
-	t.Skip("kwtest.go hardcodes RecordLen=50 in checkMemorySets and requires a non-empty PrintedFixed in checkGateRefusesAMutatedPrintedFixedByte; both fail unconditionally for this row's genuinely 28-byte, no-tail layout and neither is fixable from core/kw/ts570 — see reviews/driver-ts570.md")
+	t.Skip("kwtest.go's checkLayoutSelfConsistency and checkIdentity switch on l.Book() over exactly Book590/Book480 (Book570 falls into their fault arms), checkLayoutSelfConsistency also requires Byte28/Byte3940/Byte41 set unconditionally (legitimately Unset on this row's no-tail layout), and checkEmptyChannel indexes past a 28-byte frame's last valid position (a panic, not an assertion failure) — all three remain in core/kw/kwtest after Lift K's e7515d0 follow-up closed the two gaps this test used to cite, and none is fixable from core/kw/ts570 — see reviews/driver-ts570.md's Follow-up section")
 	kwtest.Run(t, l)
 }
 

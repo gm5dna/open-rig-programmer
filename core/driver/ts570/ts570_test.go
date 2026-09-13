@@ -225,48 +225,59 @@ func TestReadChannel_TrulyEmptyChannel(t *testing.T) {
 	}
 }
 
-// TestWriteChannel_CurrentlyRefusedByCoreKWsOwnGate PINS A GENUINE core/kw
-// GAP RATHER THAN THIS PACKAGE'S OWN BEHAVIOUR: every field this ladder
-// accepts still fails at the wire, on every profile, because
-// core/kw.BuildMWSet and core/kw.Layout.AllowedCommand disagree with
-// EACH OTHER for a RecordLen=28 (no-tail) layout, and this package cannot
-// resolve that disagreement without editing core/kw (out of scope; see
-// doc.go).
-//
-// BuildMWSet leaves positions 23-27 (the P9 "NOT USED" span, matrix §1.2)
-// as Go's zero byte, 0x00 — never written on the hasTail-false path
-// (core/kw/builders.go: the tail block that would fill them is guarded by
-// `if hasTail`). A 0x00 byte fails the outbound envelope's printable-ASCII
-// rule. During this package's own development a fix was tried — filling
-// that span with the '0' filler byte the codec already uses for the
-// P2Unused position — and it does NOT help: AllowedCommand's
-// validMWCommand re-parses the frame and re-builds it via BuildMWSet, then
-// requires byte-for-byte equality with THAT rebuild, which carries the
-// same zero bytes. No 28-byte MW frame can satisfy both checks
-// simultaneously as core/kw stands today.
-//
-// So this test asserts the CURRENT, fully reproducible outcome — a gate
-// refusal, not a wire round trip — so a future core/kw fix that fills the
-// P9 span on the build side breaks this test LOUDLY rather than leaving a
-// silently-still-broken write path uncaught.
-func TestWriteChannel_CurrentlyRefusedByCoreKWsOwnGate(t *testing.T) {
-	sess, _ := openSession(t, modelS, Simulated, radioImage{})
+// TestWriteChannel_RoundTrips writes a channel against a Simulated session
+// and pins both the fire-and-forget result shape (Sent true, Confirmed
+// always false — A6, no Kenwood radio has ever been written to by this
+// project) and that the frame which actually reached the wire decodes
+// back to the same values, now that core/kw's Lift K follow-up (commit
+// e7515d0) fills this row's P9 span so BuildMWSet's own output passes its
+// own AllowedCommand.
+func TestWriteChannel_RoundTrips(t *testing.T) {
+	sess, p := openSession(t, modelS, Simulated, radioImage{})
 	ch := codeplug.Channel{Slot: "07", Data: &codeplug.ChannelData{
 		FreqHz:   7_100_000,
 		Mode:     "LSB",
-		ScanSkip: codeplug.BoolField{State: codeplug.Known, Value: false},
-		ToneMode: codeplug.StringField{State: codeplug.Known, Value: "OFF"},
+		ScanSkip: codeplug.BoolField{State: codeplug.Known, Value: true},
+		ToneMode: codeplug.StringField{State: codeplug.Known, Value: "ON"},
 		ToneTx:   codeplug.ToneField{State: codeplug.Known, Value: 670},
 		ToneRx:   codeplug.ToneField{State: codeplug.Known, Value: 670},
 	}}
-	_, err := sess.WriteChannel(context.Background(), ch)
-	if err == nil {
-		t.Fatal("WriteChannel succeeded — core/kw's BuildMWSet/AllowedCommand gap for this row appears to be fixed; update this test (and doc.go, and reviews/driver-ts570.md) to assert the round trip instead")
+	res, err := sess.WriteChannel(context.Background(), ch)
+	if err != nil {
+		t.Fatalf("WriteChannel: %v", err)
 	}
-	if !strings.Contains(err.Error(), "AllowedCommand") {
-		t.Fatalf("WriteChannel err = %v, want a gate refusal naming AllowedCommand (the known core/kw gap)", err)
+	if len(res.Steps) != 1 || res.Steps[0].Command != "MW" || !res.Steps[0].Sent || res.Steps[0].Confirmed {
+		t.Fatalf("WriteResult = %+v, want one MW step, Sent true, Confirmed false", res)
+	}
+
+	tr := p.transcript()
+	if len(tr) == 0 || len(tr[len(tr)-1]) != 28 {
+		t.Fatalf("last frame = %q, want a 28-byte MW", tr)
+	}
+	sent := tr[len(tr)-1]
+	if !kwts570LayoutS().AllowedCommand([]byte(sent)) {
+		t.Fatalf("the MW frame this driver actually sent %q is refused by its own row's gate", sent)
+	}
+	answer := "MR" + sent[2:]
+	rec, err := kwts570LayoutS().ParseMRAnswer([]byte(answer))
+	if err != nil {
+		t.Fatalf("ParseMRAnswer(%q): %v", answer, err)
+	}
+	if rec.FreqHz != 7_100_000 || rec.Mode != mustModeWire(t, "LSB") || rec.Byte19 != '1' || rec.ToneMode.Wire() != '1' || rec.ToneIndex != 1 {
+		t.Errorf("sent record = %+v, want the channel's own values round-tripped", rec)
 	}
 }
+
+func mustModeWire(t *testing.T, name string) kw.Mode {
+	t.Helper()
+	m, ok := modeWire(kwts570LayoutS(), name)
+	if !ok {
+		t.Fatalf("modeWire(%q): not found", name)
+	}
+	return m
+}
+
+func kwts570LayoutS() kw.Layout { return modelS.layout }
 
 // TestWriteChannel_ToneTxRxMismatchRefused pins the one rung this row adds
 // beyond every sibling package's ladder: one byte cannot carry two tones.
