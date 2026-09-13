@@ -24,6 +24,7 @@ var registerEntries = []string{
 	"AN MW SET CREATES AN ABSENT CHANNEL",
 	"THE FRAME ACCUMULATOR'S CAP AND RESYNC",
 	"THE DEFAULT IMAGE'S CONTENT IS INVENTED",
+	"AI-SET IS FIRE-AND-FORGET, AND THIS FAKE NEVER PUSHES AN UNSOLICITED AI BROADCAST",
 }
 
 // normalise strips Go comment markers and collapses every run of whitespace

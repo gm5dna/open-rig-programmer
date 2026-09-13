@@ -25,6 +25,7 @@ type Radio struct {
 	mu             sync.Mutex
 	slots          map[string]MemState
 	currentChannel string
+	ai             byte // '0' or '1'; OFF at construction, a MANUAL FACT (layout:213)
 }
 
 // New constructs a *Radio and starts its servicing goroutine. Without a
@@ -36,6 +37,11 @@ func New(opts ...Option) *Radio {
 		// The answer-only none form — doc.go's register entry THE "NO
 		// SELECTION YET" CHANNEL IS "118".
 		currentChannel: slotNoneWire,
+		// OFF at construction: New models a freshly-powered radio, and this
+		// radio's own manual says what that state is — "This parameter is
+		// set to '0' (OFF) automatically when the transceiver is turned
+		// 'OFF.'" (layout:213). A MANUAL FACT, not an assumption.
+		ai: '0',
 	}
 	for _, opt := range opts {
 		opt(r)
