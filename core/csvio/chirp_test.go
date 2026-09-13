@@ -1048,6 +1048,18 @@ func ts2000LikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ts2000xLikeCapabilities is the TS-2000X's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, second row) — same package, zero byte
+// difference from the TS-2000's, so this fixture exists only because
+// chirpFixtures needs one entry per registered model.
+func ts2000xLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS2000XModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS2000XModel, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2825,6 +2837,7 @@ func chirpFixtures() []spec.Capabilities {
 		// v1.7.0 Kenwood/Yaesu wave.
 		ftdx5000LikeCapabilities(),
 		ts2000LikeCapabilities(),
+		ts2000xLikeCapabilities(),
 	)
 }
 
