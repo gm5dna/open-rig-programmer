@@ -108,11 +108,12 @@ func fixture480() kw.Layout {
 
 // fixture570 is a TS-570-shaped row: RecordLen 28 (no tail past P8), a
 // document Book480/Book590 has never named, P2Unused and ToneModesTwo —
-// the exact shape that used to fault kwtest.Run three separate ways
+// the exact shape that used to fault kwtest.Run four separate ways
 // (checkLayoutSelfConsistency's Book switch and its unconditional
-// Byte28/3940/41 requirement, checkIdentity's Book switch, and
-// checkEmptyChannel's panic past a 28-byte frame). It is transcribed here
-// rather than imported from core/kw/ts570, on this file's own rule.
+// Byte28/3940/41 requirement, checkIdentity's Book switch,
+// checkEmptyChannel's panic past a 28-byte frame, and checkMemorySets'
+// hardcoded RecordLen/field comparisons). It is transcribed here rather
+// than imported from core/kw/ts570, on this file's own rule.
 func fixture570() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book570,
@@ -164,6 +165,7 @@ func TestRun_OverDisagreeingLayouts(t *testing.T) {
 		{"590SG (three slot classes, live filter byte)", fixture590SG()},
 		{"590S (the sibling: byte 28 either way, no extension slots)", fixture590S()},
 		{"480 (flat space, three hard-wired bytes, three tone modes)", fixture480()},
+		{"570 (RecordLen 28, no tail, Book570)", fixture570()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			kwtest.Run(t, tc.l)
@@ -231,38 +233,7 @@ func TestRun_ATinySlotSpaceStillSatisfiesEveryLeg(t *testing.T) {
 	}
 }
 
-// TestRun_OverBook570NoTailLayoutDoesNotPanic is the regression pin for
-// three bugs `reviews/driver-ts570.md`'s follow-up found by running
-// kwtest.Run over a real RecordLen:28, Book570 layout directly:
-// checkLayoutSelfConsistency and checkIdentity both switched on l.Book()
-// over exactly Book590/Book480 and faulted on any other book;
-// checkLayoutSelfConsistency also demanded Byte28/Byte3940/Byte41 set
-// unconditionally, which are legitimately Unset on a row with no tail;
-// and checkEmptyChannel indexed a fixed position 41 that does not exist
-// in a 28-byte frame, which is not a failed assertion but a genuine
-// PANIC ("index out of range").
-//
-// IT DOES NOT ASSERT rec.errors == 0, unlike its tiny-slot-space sibling
-// above, and that is deliberate rather than a lower bar: a separate,
-// already-documented and not-yet-fixed bug
-// (checkMemorySets hardcodes the package's RecordLen constant, 50,
-// rather than reading l.RecordLen()) still reports ordinary ERRORS for
-// any RecordLen:28 layout, ts570-shaped or this file's own fixture570
-// alike — ordinary errors, recovered by the recorder and counted, not a
-// panic. Conflating "no longer crashes" with "kwtest.Run fully passes
-// this row" would overclaim what this round fixed; recorder.run's own
-// re-panic-on-anything-but-Fatal is what still catches a REGRESSION of
-// any of the three fixed bugs, or a new one, as a hard test failure.
-func TestRun_OverBook570NoTailLayoutDoesNotPanic(t *testing.T) {
-	rec := &recorder{}
-	rec.run(func() { kwtest.Run(rec, fixture570()) })
-	if rec.fatal {
-		t.Error("kwtest.Run reported a Fatal for a well-formed Book570/RecordLen:28 layout")
-	}
-	t.Logf("rec.errors = %d (checkMemorySets's own separate RecordLen(50) hardcode is expected to contribute some; see reviews/lift-K.md)", rec.errors)
-}
-
-// TestRecorderSeesOrdinaryFailures keeps the two tests above honest: the
+// TestRecorderSeesOrdinaryFailures keeps the test above honest: the
 // recorder must be capable of observing a plain Errorf, or "rec.errors == 0"
 // would prove nothing.
 func TestRecorderSeesOrdinaryFailures(t *testing.T) {

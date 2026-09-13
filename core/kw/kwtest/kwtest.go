@@ -580,6 +580,19 @@ func (r *run) checkMemorySets() {
 	r.t.Helper()
 	l := r.l
 
+	// hasTail mirrors core/kw's own RecordLen lift (see
+	// checkLayoutSelfConsistency's and checkEmptyChannel's matching
+	// comments): a row whose RecordLen is anything but the family's full
+	// 50 has no byte 28, no bytes 39-40, no byte 41, no P10/P12/P13 and
+	// no P16 at all, so none of Byte28/Byte3940/Byte41/DCSCode/Shift/
+	// OffsetHz/CTCSSIndex/Name survives a build -> parse round trip on
+	// such a row — there is nothing on the wire to carry them back.
+	// Comparing them unconditionally, and demanding exactly kw.RecordLen
+	// (50) bytes regardless of this layout's own width, is what used to
+	// fault every sampled slot on a RecordLen:28 row.
+	hasTail := l.RecordLen() == kw.RecordLen
+	recordLen := int(l.RecordLen())
+
 	// The witness slot the matcher legs below correlate AGAINST: any slot
 	// of this row's own space that is not the one being answered.
 	witness := r.firstMemorySlot()
@@ -593,25 +606,30 @@ func (r *run) checkMemorySets() {
 		}
 		frame := cmd.Bytes()
 		r.checkFrame("MW set", frame)
-		if len(frame) != kw.RecordLen {
-			r.t.Errorf("%s: BuildMWSet produced %d bytes, want exactly %d — the short form of 590:1579-1581 ERASES the channel", r.name(), len(frame), kw.RecordLen)
+		if len(frame) != recordLen {
+			r.t.Errorf("%s: BuildMWSet produced %d bytes, want exactly %d (this row's own RecordLen) — the short form of 590:1579-1581 ERASES the channel", r.name(), len(frame), recordLen)
 		}
 
-		// The same fifty bytes under the MR prefix are the ANSWER, which is
+		// The same bytes under the MR prefix are the ANSWER, which is
 		// what a radio sends; decoding it back must reproduce the record.
 		answer := append([]byte{}, frame...)
 		answer[0], answer[1] = 'M', 'R'
 		got, err := l.ParseMRAnswer(answer)
 		if err != nil {
-			r.t.Errorf("%s: ParseMRAnswer refused the fifty bytes this layout's own MW builder produced (%q): %v", r.name(), answer, err)
+			r.t.Errorf("%s: ParseMRAnswer refused the bytes this layout's own MW builder produced (%q): %v", r.name(), answer, err)
 			continue
 		}
-		if got.FreqHz != rec.FreqHz || got.Mode != rec.Mode || got.Name != rec.Name ||
-			got.Byte19 != rec.Byte19 || got.Byte28 != rec.Byte28 || got.Byte41 != rec.Byte41 ||
-			got.Byte3940 != rec.Byte3940 || got.ToneMode != rec.ToneMode ||
-			got.ToneIndex != rec.ToneIndex || got.CTCSSIndex != rec.CTCSSIndex ||
-			got.DCSCode != rec.DCSCode || got.Shift != rec.Shift || got.OffsetHz != rec.OffsetHz ||
-			got.Slot.Number() != s.Number() || got.Slot.Class() != s.Class() || got.Slot.Half() != s.Half() {
+		mismatch := got.FreqHz != rec.FreqHz || got.Mode != rec.Mode ||
+			got.Byte19 != rec.Byte19 || got.ToneMode != rec.ToneMode ||
+			got.ToneIndex != rec.ToneIndex ||
+			got.Slot.Number() != s.Number() || got.Slot.Class() != s.Class() || got.Slot.Half() != s.Half()
+		if hasTail {
+			mismatch = mismatch ||
+				got.Name != rec.Name || got.Byte28 != rec.Byte28 || got.Byte41 != rec.Byte41 ||
+				got.Byte3940 != rec.Byte3940 || got.CTCSSIndex != rec.CTCSSIndex ||
+				got.DCSCode != rec.DCSCode || got.Shift != rec.Shift || got.OffsetHz != rec.OffsetHz
+		}
+		if mismatch {
 			r.t.Errorf("%s: a record did not survive build -> parse for %v.\n  sent %+v\n  back %+v", r.name(), s, rec, got)
 			continue
 		}
@@ -619,7 +637,7 @@ func (r *run) checkMemorySets() {
 			r.t.Errorf("%s: a populated record for %v came back as the empty channel of 590:1492-1493", r.name(), s)
 		}
 		r.roundTrips++
-		r.refuse("answer frame", "a 50-byte MR ANSWER is never a legal outbound command — MR has no Set on either radio (480:911, erratum E17)", answer)
+		r.refuse("answer frame", "an MR ANSWER is never a legal outbound command — MR has no Set on either radio (480:911, erratum E17)", answer)
 
 		// THE ANSWER-TO-READ CORRELATION, which for MR is the matcher's
 		// and no caller's. Every memory answer is fifty bytes and starts
