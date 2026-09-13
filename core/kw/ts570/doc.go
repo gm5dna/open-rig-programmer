@@ -69,24 +69,30 @@
 // that also answer a second frame, not a second SlotScan bank. All three
 // rows declare the identical space.
 //
-// # The two named gaps this package inherits and routes around
+// # The lift-K gaps this package met, and the one that remains
 //
-// Both are Lift K's, not this package's, and neither is fixed here — see
-// core/driver/ts570's own doc comment and reviews/driver-ts570.md for the
-// routing:
+// core/kw/errors.go's newStreamError, core/kw's isEmptyWindow and
+// core/kw.BuildMWSet's own P9-span handling were all fixed for this row's
+// shape in the Lift K follow-up (commit e7515d0, 13/09/2026): Book570 now
+// carries real "E;"/"O;" stream-error citations (docs cited as
+// ts570:LINE), a vacant TS-570 answer parses as Record.Empty directly, and
+// a 28-byte MW frame passes its own outbound gate. None of that is this
+// package's own code; it is recorded here because this package's own
+// doc comment used to describe all three as open gaps, and the history is
+// worth keeping legible.
 //
-//   - core/kw/errors.go's newStreamError has no transcribed "E;"/"O;"
-//     citation for Book570 (S2/S3's evidence stops at the command-table
-//     pages) and panics if ever asked for one; this row's driver never
-//     reaches a live session that could ask it.
-//   - core/kw/kwtest's conformance suite hardcodes the family's full
-//     50-byte RecordLen in two checks (checkMemorySets' width assertion
-//     and checkGateRefusesAMutatedPrintedFixedByte's non-empty
-//     PrintedFixed requirement) and was not updated for Lift K's RecordLen
-//     axis in either place; both fail unconditionally against this row's
-//     genuinely 28-byte, no-tail layout regardless of this package's own
-//     correctness. Documented and skipped in layout_test.go, not
-//     silenced.
+// core/kw/kwtest's conformance suite still has THREE further gaps that
+// commit did not touch — its own scope was the TS-2000's all-live-axis
+// shape and the two fixes above, not this row's Book570/no-tail shape.
+// checkLayoutSelfConsistency and checkIdentity both switch on l.Book()
+// over exactly Book590/Book480 and fault on any other book, and the
+// former also demands Byte28()/Byte3940()/Byte41() be set
+// unconditionally — all three are legitimately Unset on a no-tail layout.
+// checkEmptyChannel indexes past a 28-byte frame's last valid position, a
+// genuine panic rather than a failed assertion. None is fixable from this
+// package; core/kw/ts570/layout_test.go's runConformance documents and
+// skips rather than silences or crashes — see reviews/driver-ts570.md's
+// "## Follow-up" section for the full account.
 //
 // # EX/menu inventory is out of scope
 //

@@ -55,22 +55,6 @@ func parseSlotID(id string) (int, error) {
 	return int(id[0]-'0')*10 + int(id[1]-'0'), nil
 }
 
-// isVacantAnswer reports whether frame is this row's own documented
-// vacant-channel shape: P4 through P8 (positions 7-22, 0-indexed 6:22) all
-// '0'. See ReadChannel's own doc comment for the citation and for why this
-// restates core/kw's isEmptyWindow rather than relying on it.
-func isVacantAnswer(frame []byte) bool {
-	if len(frame) < 22 {
-		return false
-	}
-	for _, b := range frame[6:22] {
-		if b != '0' {
-			return false
-		}
-	}
-	return true
-}
-
 func (s *Session) bankFor(id string) (spec.Bank, bool) {
 	bankID, ok := s.caps.BankOf(id)
 	if !ok {
@@ -104,11 +88,14 @@ func (s *Session) mrSpec(slot kw.Slot) transport.CommandSpec {
 
 // ReadChannel implements driver.Session: ONE MR frame per slot.
 //
-// AN EMPTY CHANNEL IS A18a, NOT A FAILURE: an MR answer whose P4-P27 are
-// all zero is reported as codeplug.Channel{Slot: id} with nil Data — the
-// same structural rule every registered Kenwood row applies
-// (590:1492-1493, and this row's own record shares positions 1-22 with
-// that grid field for field, matrix §1.4).
+// AN EMPTY CHANNEL IS NOT A FAILURE: an MR answer in this row's own
+// documented vacant shape — P4 through P8 all zero, the channel number
+// preserved ("For a vacant channel, the Answer command sends '0' for all
+// parameters except the memory channel number.", manual layout lines
+// ~5926-5928) — is reported as codeplug.Channel{Slot: id} with nil Data.
+// core/kw.Layout.ParseMRAnswer sets Record.Empty for this shape itself
+// (core/kw's isEmptyWindow became width-aware in the Lift K follow-up,
+// commit e7515d0); this package no longer restates the shape locally.
 //
 // A "?;" IS A DEFINITIVE REJECTION and a timeout is the typed
 // kw.TimeoutError — neither is "absent" (decision 5, applied identically
@@ -141,25 +128,6 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 		return codeplug.Channel{}, fmt.Errorf("ts570: ReadChannel %s: %w", id, wireFailure(s.layout, "MR", err))
 	}
 
-	// THIS ROW'S OWN VACANT-CHANNEL SHAPE, CHECKED BEFORE ParseMRAnswer,
-	// AND ROUTED AROUND A core/kw GAP RATHER THAN A DEFECT OF ITS OWN. The
-	// MR chart's own note (manual layout lines ~5926-5928, printed page
-	// 78, the same page as the byte diagram matrix §1.2 cites as PDF
-	// p.84): "For a vacant channel, the Answer command sends '0' for all
-	// parameters except the memory channel number." — P4 through P8,
-	// positions 7-22, all zero. core/kw's shared isEmptyWindow (record.go)
-	// tests positions 7-41 unconditionally and refuses to fire at all on
-	// any frame shorter than that window (`len(frame) <= recEmptyHiOff`),
-	// so it can NEVER recognise this row's genuinely 28-byte vacant answer
-	// — ParseMRAnswer would instead refuse the '0' mode nibble as an
-	// unnamed mode. isVacantAnswer restates the DOCUMENTED shape
-	// independently of that shared helper, entirely within this package,
-	// so a never-written TS-570 channel still reads as an empty
-	// codeplug.Channel rather than failing the whole read.
-	if isVacantAnswer(frame) {
-		return codeplug.Channel{Slot: id}, nil
-	}
-
 	rec, err := s.layout.ParseMRAnswer(frame)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ts570: ReadChannel %s: %w", id, err)
@@ -168,10 +136,6 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 		return codeplug.Channel{}, &AnswerMismatchError{Model: "ts570", Requested: id, Answered: slotID(got)}
 	}
 	if rec.Empty {
-		// UNREACHABLE TODAY, on isVacantAnswer's own doc comment above:
-		// core/kw's isEmptyWindow never sets this on a 28-byte frame.
-		// Kept so that the day core/kw's window becomes RecordLen-aware
-		// this branch is already correct rather than newly needed.
 		return codeplug.Channel{Slot: id}, nil
 	}
 

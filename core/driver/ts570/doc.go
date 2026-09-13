@@ -34,90 +34,41 @@
 // actual TS-570DG, because this document gives it nothing to tell them
 // apart with. That is a fact about the evidence, not a bug in Open.
 //
-// # THE FOUR core/kw GAPS THIS ROW MEETS, RATHER THAN FIXES
+// # THE core/kw GAPS THIS ROW MET — CLOSED BY LIFT K's FOLLOW-UP
 //
-// All four are Lift K's, not this package's own: RecordLen became a
-// per-layout axis (core/kw/layout.go) but three consumers elsewhere in
-// core/kw were not updated for a value narrower than the family's 50-byte
-// grid. Fixing any of them means editing core/kw, which this milestone
-// reserves to one cited exception (errors.go's Book570/Book870S
-// stream-error entries) that this package does not use. Three are routed
-// around entirely within this package; the fourth cannot be, and is
-// recorded rather than hidden:
+// core/kw's Lift K follow-up (commit e7515d0, 13/09/2026, in this same
+// worktree) closed every gap this section used to describe as unroutable
+// or hand-worked-around:
 //
-//   - core/kw/errors.go's newStreamError PANICS if ever asked for a
-//     Book570 "E;"/"O;" cause, because neither S2 nor S3's evidence
-//     transcribes one. This driver's Open and every session method build
-//     ordinary frames through the shared framing adapter exactly as every
-//     other Kenwood row does — there is no separate code path here that
-//     avoids IsFatal — so the honest statement is the one lift K's own
-//     report already makes: no TS-570 has ever been on a real port, this
-//     row is a paper registration, and the panicking branch is therefore
-//     never reached in practice. It would first be reached the day a real
-//     TS-570 is connected and its own stream sends a genuine "E;"/"O;" —
-//     at which point the fix is a citation into core/kw/errors.go, not a
-//     change here.
-//   - core/kw/kwtest's conformance suite (checkMemorySets,
-//     checkGateRefusesAMutatedPrintedFixedByte) hardcodes the family's
-//     full 50-byte RecordLen and a non-empty PrintedFixed set, neither of
-//     which this row's genuinely 28-byte, no-tail layout has. See
-//     core/kw/ts570/layout_test.go's runConformance and
-//     reviews/driver-ts570.md.
-//   - core/kw/record.go's isEmptyWindow tests positions 7-41 and refuses
-//     to fire at all on a frame shorter than that window
-//     (`len(frame) <= recEmptyHiOff`), so it can never recognise this
-//     row's own genuinely 28-byte vacant-channel answer. THIS ONE IS
-//     ROUTED AROUND, NOT MERELY DOCUMENTED: the MR chart's own note
-//     ("For a vacant channel, the Answer command sends '0' for all
-//     parameters except the memory channel number.", manual layout lines
-//     ~5926-5928, the same printed page as the byte diagram, PDF p.84)
-//     gives this row its OWN vacant shape — P4 through P8 all zero — and
-//     read.go's isVacantAnswer tests it directly against the raw frame,
-//     before ParseMRAnswer would otherwise refuse the '0' mode nibble.
-//     Every real reason a never-written TS-570 channel would fail to read
-//     is closed by this package alone.
+//   - Book570 now carries real "E;"/"O;" stream-error citations
+//     (bookCitations, newStreamError — cited as ts570:LINE, read from
+//     this document's own full text rather than the command-table-only
+//     evidence this milestone's brief originally had). A live session for
+//     any TS-570 row is therefore ordinary now, on exactly the same
+//     footing as ts590's: this driver's Open already built framing the
+//     normal way (kw.NewFramingFor(l)) and needed no change.
+//   - core/kw.BuildMWSet now fills this row's P9 "NOT USED" span
+//     (positions 23-27) with the family's own '0' filler on the
+//     hasTail=false path, so its output passes its own AllowedCommand —
+//     write.go's WriteChannel sends the built frame unchanged and
+//     TestWriteChannel_RoundTrips proves the round trip.
+//   - core/kw's isEmptyWindow is now width-aware — P4 through P8 on a
+//     no-tail row, citing this document's own vacant-channel note
+//     directly — so core/kw.Layout.ParseMRAnswer sets Record.Empty for
+//     this row's vacant shape itself; read.go no longer restates it.
 //
-// # THE WRITE PATH CANNOT PASS ITS OWN GATE TODAY, AND THIS ONE CANNOT BE
-// ROUTED AROUND
-//
-// core/kw.BuildMWSet allocates `make([]byte, l.recordLen)` and, on the
-// hasTail-false path this row's 28-byte RecordLen takes, never writes
-// positions 23-27 (the P9 "NOT USED" span, matrix §1.2) before the
-// terminator — they are left at Go's zero byte, 0x00, never the family's
-// own '0' filler (the byte core/kw's P2Unused slotWire case already uses
-// one position to the west, for exactly this row). A 0x00 byte fails the
-// outbound envelope's printable-ASCII rule, so BuildMWSet's OWN OUTPUT
-// FOR THIS ROW IS REFUSED BY ITS OWN GATE, unconditionally, for every
-// record this row can build.
-//
-// THIS IS NOT ROUTABLE AROUND FROM A DRIVER PACKAGE, and write.go's own
-// doc comment records why a hand-patched frame was tried and abandoned
-// during this package's development: core/kw.Layout.AllowedCommand's
-// validMWCommand re-parses whatever frame it is offered and then requires
-// BYTE-FOR-BYTE EQUALITY with BuildMWSet's own rebuild of it — which
-// carries the identical zero bytes. Correcting the span therefore makes
-// the frame pass the envelope and fail the round-trip check instead; no
-// 28-byte MW frame satisfies both checks at once as core/kw stands today.
-// Bypassing AllowedCommand by calling kw.NewFraming directly, or by
-// hand-building a frame outside BuildMWSet's own validated output and
-// sending it past the gate, are both closed: the former is the exact
-// misuse internal/guards.TestKenwoodDriversUseNewFramingFor exists to
-// catch, and the latter would mean this package asserting a frame shape
-// no builder in core/kw endorses, which is precisely the invention this
-// whole codec is built to refuse.
-//
-// THE CONSEQUENCE: Session.WriteChannel reaches this ladder's final rung
-// for every channel, on every profile, and is refused there by the
-// transport engine rather than by anything this package decided.
-// TestWriteChannel_CurrentlyRefusedByCoreKWsOwnGate pins the CURRENT,
-// fully reproducible outcome precisely so a future core/kw fix (filling
-// the P9 span in BuildMWSet the way P2Unused already fills its own byte)
-// breaks that test loudly rather than leaving a silently-still-broken
-// write path uncaught. Capabilities still grades frequency, mode,
-// scan_skip, tone_mode, tone_tx and tone_rx Sup/Sup (caps.go): that
-// grading describes what the DOCUMENT'S wire shape supports, which this
-// gap does not change, on the same convention the erase citation below
-// keeps separate from what today's codec can build.
+// core/kw/kwtest's conformance suite still has three further gaps that
+// commit did not touch (its own scope was the TS-2000's all-live-axis
+// shape and the fixes above): checkLayoutSelfConsistency and checkIdentity
+// both switch on l.Book() over exactly Book590/Book480 and fault on any
+// other book, checkLayoutSelfConsistency also demands
+// Byte28/Byte3940/Byte41 be set unconditionally (all three legitimately
+// Unset on a no-tail layout), and checkEmptyChannel indexes past a
+// 28-byte frame's last valid position — a panic, not a failed assertion.
+// None is fixable from this package; core/kw/ts570/layout_test.go's
+// runConformance documents and skips rather than crashing the build gate
+// — see reviews/driver-ts570.md's "## Follow-up" section for the full
+// account of what changed and what remains.
 //
 // # ERASE IS DOCUMENTED, AND STILL NOT BUILT
 //

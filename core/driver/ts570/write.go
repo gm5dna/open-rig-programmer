@@ -251,36 +251,17 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, err
 	}
 
-	// A core/kw GAP THIS PACKAGE CANNOT ROUTE AROUND, CHECKED HERE SO THE
-	// FAILURE NAMES ITSELF rather than surfacing as a bare transport
-	// error: see doc.go's "The write path cannot pass its own gate today"
-	// for the full citation. BuildMWSet's own output for this row never
-	// passes its own AllowedCommand, for any record it can build, so
-	// asking here — before any wire traffic — reports the true cause
-	// instead of a "command failed AllowedCommand" string a caller has no
-	// way to attribute to a known, cited limitation.
-	if !s.layout.AllowedCommand(cmd.Bytes()) {
-		return res, fmt.Errorf("ts570: WriteChannel %s: %w: core/kw.BuildMWSet's own output for this row does not pass core/kw.Layout.AllowedCommand — a known core/kw gap (doc.go's \"The write path cannot pass its own gate today\"), not a decision this driver made; no channel write can succeed on any TS-570 row until core/kw/builders.go fills the P9 span this row's 28-byte record leaves unwritten", ch.Slot, driver.ErrWriteRefused)
-	}
-
 	// THE step list, declared in full HERE: after the frame provably
 	// exists, before it goes near the wire. ONE element — this row's write
 	// choreography IS one frame.
 	res.Steps = []driver.WriteStep{{Command: "MW"}}
 	const mwStep = 0
 
-	// UNREACHABLE TODAY (the gate check above always refuses first), kept
-	// so this is the whole choreography the day core/kw's gap lifts.
-	// cmd.Bytes() is sent UNCHANGED: a hand-patched frame was tried and
-	// rejected during this package's own development, for a reason worth
-	// recording rather than hiding behind a silently "fixed" frame —
-	// AllowedCommand's validMWCommand independently re-parses and
-	// RE-BUILDS the frame and then requires byte-for-byte equality with
-	// that rebuild — which itself contains the same zero bytes. No
-	// 28-byte MW frame can satisfy both checks at once as core/kw stands
-	// today, so this call is EXPECTED TO FAIL on every profile until
-	// core/kw/builders.go is fixed to fill that span, which is out of
-	// this package's own directories.
+	// core/kw's Lift K follow-up (commit e7515d0) fills this row's P9
+	// "NOT USED" span (positions 23-27) with the family's own '0' filler
+	// on the hasTail=false path, so BuildMWSet's output now passes its
+	// own AllowedCommand — see doc.go's former "the write path cannot
+	// pass its own gate today" section, now closed, for the history.
 	if _, err := s.eng.Do(ctx, cmd, mwSetSpec()); err != nil {
 		// A "?;" IS ATTRIBUTABLE (the frame provably went out and the
 		// radio provably refused it); any other transport failure is not,
