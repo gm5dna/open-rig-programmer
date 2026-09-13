@@ -147,6 +147,20 @@ stays behind the opt-in consent route.
 Evidence: `core/driver/ftdx5000/doc.go`; the manual is the Yaesu CAT
 Operation Reference Manual, revision 1907-D.
 
+### FT-2000 and FT-2000D (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTdx5000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. The CTCSS tone is a live
+tone-table index and is read and written. One SERIES manual documents
+both the FT-2000 and the FT-2000D; this program tells them apart only by
+which one you chose when you connected. No radio of this family has ever
+answered a frame from this project, so every write stays behind the
+opt-in consent route.
+
+Evidence: `core/driver/ft2000/doc.go`; the manual is the Yaesu CAT
+Operation Reference Manual, revision EH025H124.
+
 ## Icom
 
 ### Shared by every Icom model
@@ -673,3 +687,4 @@ by revision in the code that transcribes it.
 | TS-870S | Kenwood PC Control Command reference B62-1536-00, via the rigpix.com mirror (12/09/2026 provenance widening) |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |
 | FTdx5000 | Yaesu CAT Operation Reference Manual, revision 1907-D |
+| FT-2000, FT-2000D | Yaesu CAT Operation Reference Manual, revision EH025H124 |

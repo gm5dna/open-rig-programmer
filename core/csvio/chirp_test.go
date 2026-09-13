@@ -1104,6 +1104,16 @@ func ts870sLikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ft2000LikeCapabilities returns the FT-2000's own REGISTERED capabilities
+// verbatim (v1.7.0 Kenwood/Yaesu wave, eighth row).
+func ft2000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FT2000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FT2000Model, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2886,6 +2896,7 @@ func chirpFixtures() []spec.Capabilities {
 		ts570dLikeCapabilities(),
 		ts570sLikeCapabilities(),
 		ts870sLikeCapabilities(),
+		ft2000LikeCapabilities(),
 	)
 }
 

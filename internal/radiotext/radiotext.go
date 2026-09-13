@@ -2249,6 +2249,24 @@ var ts870sText = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build for the TS-870S. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
 }
 
+// ft2000Text is the FT-2000's entry — v1.7.0 Kenwood/Yaesu wave, eighth
+// row, first of two sharing core/driver/ft2000 (one SERIES manual, the
+// ftdx101 shape).
+//
+// NOTAG: no tag/name command anywhere in the 20-page manual. The CTCSS
+// tone IS a live, mapped tone-table index (read and written), unlike
+// every registered 9-digit-family dialect's fixed "00". No FT-2000 has
+// ever answered a frame from this project (writeTrialsComplete false), so
+// every write stays behind the opt-in consent route.
+var ft2000Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-2000: no builder for one exists, and no FT-2000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "Tone is read and written for the FT-2000 as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written over CAT for the FT-2000, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000 — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2309,6 +2327,8 @@ var texts = map[string]Text{
 	"TS-570S": ts570sText,
 	// v1.7.0 Kenwood/Yaesu wave, seventh row.
 	"TS-870S": ts870sText,
+	// v1.7.0 Kenwood/Yaesu wave, eighth row.
+	"FT-2000": ft2000Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

@@ -197,6 +197,8 @@ var yaesuModels = map[string]bool{
 	// too, so its own prose legitimately says "CAT" and the vocabulary
 	// check must skip it, on the FT-891/FT-991A footing above.
 	"FTdx5000": true,
+	// The FT-2000 (v1.7.0 Kenwood/Yaesu wave, eighth row): same reason.
+	"FT-2000": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -367,6 +369,9 @@ var ownParticulars = map[string][]string{
 	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare name, on the TS-890S/
 	// TS-990S footing.
 	"TS-870S": {"TS-870S"},
+	// v1.7.0 Kenwood/Yaesu wave, eighth row: bare name, on the FT-891/
+	// FT-991A footing.
+	"FT-2000": {"FT-2000"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2604,4 +2609,27 @@ func TestRadiotext_TS870SVerbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "TS-870S", got)
+}
+
+// TestRadiotext_FT2000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// eighth row's prose byte-for-byte.
+func TestRadiotext_FT2000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-2000: no builder for one exists, and no FT-2000 has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the FT-2000 as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT for the FT-2000, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000 — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+	}
+
+	got, ok := radiotext.For("FT-2000")
+	if !ok {
+		t.Fatal(`For("FT-2000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-2000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-2000", got)
 }
