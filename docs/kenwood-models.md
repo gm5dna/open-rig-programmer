@@ -8,21 +8,37 @@ reviewers and contributors.
 
 ## The rows built, and which are selectable
 
-The **TS-590S**, the **TS-590SG**, the **TS-890S** and the **TS-990S**
-are in the model list. The **TS-480** is not, although its driver is
-written, tested and shipped in the binary — see *The TS-480 is built and
-not registered* below, which is the longest entry on this page because
-an absence needs more explaining than a presence.
+The **TS-590S**, the **TS-590SG**, the **TS-890S**, the **TS-990S** and the
+**TS-2000**/**TS-2000X**/**TS-B2000** family are in the model list. The
+**TS-480** is not, although its driver is written, tested and shipped in
+the binary — see *The TS-480 is built and not registered* below, which is
+the longest entry on this page because an absence needs more explaining
+than a presence.
 
 These radios talk a third wire protocol: neither Yaesu's CAT nor Icom's
 CI-V, but Kenwood's own semicolon-terminated PC control commands. The
 envelope codec is `core/kw`; the two 590 layouts are `core/kw/ts590`, the
-TS-480's is `core/kw/ts480`, and the 890S's and 990S's are both in
-`core/kw/ma` — one package holding two layouts, two hand-written record
-codecs and its own outbound gate. The drivers are `core/driver/ts590`
-(both 590 rows, one package, a REQUIRED row argument),
-`core/driver/ts480`, and `core/driver/ts890` and `core/driver/ts990`, one
-package each.
+TS-480's is `core/kw/ts480`, the TS-2000 family's is `core/kw/ts2000` (one
+50-byte record, zero byte difference across all three rows), and the 890S's
+and 990S's are both in `core/kw/ma` — one package holding two layouts, two
+hand-written record codecs and its own outbound gate. The drivers are
+`core/driver/ts590` (both 590 rows, one package, a REQUIRED row argument),
+`core/driver/ts480`, `core/driver/ts890` and `core/driver/ts990` (one
+package each), and `core/driver/ts2000` (one package, three constructors —
+`NewTS2000`/`NewTS2000X`/`NewTSB2000` — no bare `New`).
+
+**The TS-2000 family (v1.7.0 Kenwood/Yaesu wave).** TAGGED — the wave's
+only tagged package, TagLen 8 — with tone and scan skip both reachable, on
+the TS-590 pair's footing. CATID `"019"` is MANUAL-EVIDENCED for the
+TS-2000 alone; the other two rows share it by ASSUMPTION, so this driver's
+probe cannot distinguish a TS-2000X or TS-B2000 from a TS-2000 by wire
+identity — only by which constructor the caller chose. Write posture is
+"write existing": a pre-write read preserves four raw values (DCS code,
+REVERSE, tuning-step index, Memory Group) this milestone models no
+`spec.Field` for, rather than modelling a field for each.
+`writeTrialsComplete` is false for all three rows: no TS-2000 of any row
+has ever answered a frame from this project, so every write stays behind
+the opt-in consent route.
 
 **Why the second pair gets two driver packages where the first pair
 shares one.** The 590 pair's two radios share a 50-byte memory record, so

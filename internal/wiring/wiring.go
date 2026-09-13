@@ -57,6 +57,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
@@ -622,6 +623,32 @@ const (
 	TS990SModel = "TS-990S"
 )
 
+// TS2000Model names the TS-2000's realDrivers/fakeDrivers key, which must
+// equal ts2000.NewTS2000(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, FIRST ROW OF THREE over one driver package
+// (core/driver/ts2000, NewTS2000/NewTS2000X/NewTSB2000 — no bare New, the
+// IC-7851 shape): the TS-2000, TS-2000X and TS-B2000 share one 50-byte
+// MR/MW record with ZERO byte difference (matrix §1-§2), so ONE package
+// serves all three registry rows.
+//
+// TAGGED, unlike every other row this wave registers: TagLen 8 (P16, 8
+// bytes at record positions 42-49, matrix §4) — the wave's only tagged
+// package. CATID "019" is MANUAL-EVIDENCED for the TS-2000 alone; the
+// other two rows share it by ASSUMPTION (driver report), so this driver's
+// probe cannot distinguish a TS-2000X or TS-B2000 from a TS-2000 by wire
+// identity — only by which constructor the caller chose.
+//
+// WRITE POSTURE IS "WRITE EXISTING", not the TS-480's blanket refusal: a
+// pre-write MR read preserves four raw values this milestone models no
+// spec.Field for (P10 DCS, P11 REVERSE, P14 tuning-step index, P15 Memory
+// Group) — core/driver/ts2000/write.go's own doc comment.
+//
+// IMPLEMENTS driver.SerialFramingReporter, STOPBITS 1
+// (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
+const TS2000Model = "TS-2000"
+
 // FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
 // must equal ftdx5000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel.
@@ -984,6 +1011,15 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites())
 		}
 		return ftdx5000.New(ftdx5000.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
+	// argument (options only — the ic7851 shape), so the consent arm is
+	// WithConsentedUnverifiedWrites rather than a second positional value.
+	TS2000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ts2000.NewTS2000(ts2000.WithConsentedUnverifiedWrites())
+		}
+		return ts2000.NewTS2000()
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

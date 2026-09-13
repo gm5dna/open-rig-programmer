@@ -29,6 +29,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
@@ -54,6 +55,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic9700"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeicr8600"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
+	"github.com/gm5dna/open-rig-programmer/internal/fakets2000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets590"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets890"
 	"github.com/gm5dna/open-rig-programmer/internal/fakets990"
@@ -450,6 +452,18 @@ var (
 	TS990SFakeSessionOpts []fakets990.Option
 )
 
+// TS2000FakeSessionOpts is the TS-2000 family's own option source: extra
+// fakets2000.Option values applied, on top of the always-empty production
+// default, to the shared fake rig on every OpenFakeSessionFor call. ONE
+// variable for THREE registry rows — internal/fakets2000's New takes no row
+// argument at all (WithModelName is the option form, per fake.md), so there
+// is no per-row variable to keep separate the way the 590 pair's are.
+//
+// A test that sets this MUST restore the previous value (e.g. via
+// t.Cleanup) — shared, unsynchronised package state, acceptable only
+// because no test using it calls t.Parallel().
+var TS2000FakeSessionOpts []fakets2000.Option
+
 // FTdx5000FakeSessionOpts is the FTdx5000's own option source, on the same
 // terms as every single-row model's above — one row, one package, one
 // simulator.
@@ -638,6 +652,9 @@ var (
 	// fakeRadio as written and neither needs an adapter.
 	_ fakeRadio = (*fakets890.Radio)(nil)
 	_ fakeRadio = (*fakets990.Radio)(nil)
+	// v1.7.0 Kenwood/Yaesu wave, first row: fakets2000's Port() already
+	// returns io.ReadWriteCloser, so no adapter is needed.
+	_ fakeRadio = (*fakets2000.Radio)(nil)
 	// v1.7.0 Kenwood/Yaesu wave, tenth row: fakeftdx5000's Port() already
 	// returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeftdx5000.Radio)(nil)
@@ -1155,6 +1172,12 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	FTdx5000Model: {
 		newDriver: func() driver.Driver { return ftdx5000.New(ftdx5000.Simulated) },
 		newRadio:  func() fakeRadio { return fakeftdx5000.New(FTdx5000FakeSessionOpts...) },
+	},
+	// v1.7.0 Kenwood/Yaesu wave, first row: fakets2000's Port() is already
+	// io.ReadWriteCloser, so no adapter is needed.
+	TS2000Model: {
+		newDriver: func() driver.Driver { return ts2000.NewTS2000(ts2000.WithSimulatedProfile()) },
+		newRadio:  func() fakeRadio { return fakets2000.New(TS2000FakeSessionOpts...) },
 	},
 	// The IC-7800 (v1.7.0 Icom wave's first registration): ONE row, ONE
 	// driver package, ONE simulator, on the IC-7610's footing.

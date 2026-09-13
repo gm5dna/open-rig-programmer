@@ -1033,6 +1033,21 @@ func ftdx5000LikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ts2000LikeCapabilities returns the TS-2000's own REGISTERED capabilities
+// verbatim (v1.7.0 Kenwood/Yaesu wave, first row) — see
+// ic7200LikeCapabilities' own doc comment for why this is a
+// wiring.StaticCapabilities call rather than a hand-written fixture. Its
+// scan_skip IS reachable (byte 19, the family's channel-lockout flag), so
+// this fixture goes straight into chirpFixtures rather than
+// unreachableScanSkipCapabilities, on the TS-590 pair's footing.
+func ts2000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS2000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS2000Model, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2809,6 +2824,7 @@ func chirpFixtures() []spec.Capabilities {
 		ic7200LikeCapabilities(),
 		// v1.7.0 Kenwood/Yaesu wave.
 		ftdx5000LikeCapabilities(),
+		ts2000LikeCapabilities(),
 	)
 }
 
