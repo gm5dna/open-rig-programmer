@@ -9,7 +9,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
-// Radio is a simulated FTDX1200: an in-memory duplex pipe presenting the
+// Radio is a simulated FTdx1200: an in-memory duplex pipe presenting the
 // host end via Port(), serviced from the Radio's own goroutine using this
 // package's independent parser (parser.go). A Radio is safe for concurrent
 // use: its inspection methods and Close may all be called from goroutines

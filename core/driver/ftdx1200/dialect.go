@@ -4,7 +4,7 @@ package ftdx1200
 
 import "github.com/gm5dna/open-rig-programmer/core/cat"
 
-// modeNames is the FTDX1200's P6 mode table, transcribed from the MW-Set
+// modeNames is the FTdx1200's P6 mode table, transcribed from the MW-Set
 // and MR-Answer legends (matrix §1.2, ftdx1200_layout.txt:900-902,
 // :873-875 — the two agree word for word, as does the live MD command's
 // own legend, matrix §1.2): twelve print positions, ELEVEN real names —
@@ -33,7 +33,7 @@ var modeNames = map[cat.Mode]string{
 	cat.Mode('C'): "DATA-USB",
 }
 
-// dialect is the FTDX1200, built once at init and validated by
+// dialect is the FTdx1200, built once at init and validated by
 // cat.MustNewDialect. Built INLINE (doc.go explains why no
 // core/cat/ftdx1200 subpackage exists).
 //
@@ -119,5 +119,5 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	MemoryP9: cat.P9Fixed00,
 })
 
-// Dialect returns the FTDX1200's cat.Dialect.
+// Dialect returns the FTdx1200's cat.Dialect.
 func Dialect() cat.Dialect { return dialect }

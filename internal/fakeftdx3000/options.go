@@ -8,7 +8,7 @@ import "time"
 type Option func(*Radio)
 
 // catID is the one and only ID answer this package's single row gives,
-// "P1 0462: FTDX3000" (layout:759) — no WithModelName option exists,
+// "P1 0462: FTdx3000" (layout:759) — no WithModelName option exists,
 // unlike internal/fakeft2000's two-row shape, because the manual states
 // exactly one row (doc.go).
 const catID = "0462"

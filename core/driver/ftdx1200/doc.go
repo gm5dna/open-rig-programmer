@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package ftdx1200 is the Yaesu FTDX1200 driver: one row, bare New (matrix
+// Package ftdx1200 is the Yaesu FTdx1200 driver: one row, bare New (matrix
 // §5's two-package verdict against ftdx3000), built on an INLINE
 // cat.DialectConfig (dialect.go) rather than a core/cat/ftdx1200
 // subpackage.
 //
-// NO FTDX1200 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT. Every byte
-// here came from the FTDX1200 CAT Operation Manual (revision 1507-E0)
+// NO FTdx1200 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT. Every byte
+// here came from the FTdx1200 CAT Operation Manual (revision 1507-E0)
 // through docs/superpowers/ftdx1200-capability-matrix.md, and from
 // nothing else.
 //

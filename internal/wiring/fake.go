@@ -530,12 +530,12 @@ var FTdx9000FakeSessionOpts []fakeftdx9000.Option
 // simulator.
 var FT950FakeSessionOpts []fakeft950.Option
 
-// FTdx3000FakeSessionOpts is the FTDX3000's own option source, on the
+// FTdx3000FakeSessionOpts is the FTdx3000's own option source, on the
 // same terms as every single-row model's above — one row, one package,
 // one simulator.
 var FTdx3000FakeSessionOpts []fakeftdx3000.Option
 
-// FTdx1200FakeSessionOpts is the FTDX1200's own option source, on the
+// FTdx1200FakeSessionOpts is the FTdx1200's own option source, on the
 // same terms as every single-row model's above — one row, one package,
 // one simulator.
 var FTdx1200FakeSessionOpts []fakeftdx1200.Option

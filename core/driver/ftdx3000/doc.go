@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package ftdx3000 is the Yaesu FTDX3000 driver: one row, bare New (matrix
+// Package ftdx3000 is the Yaesu FTdx3000 driver: one row, bare New (matrix
 // §5's two-package verdict against ftdx1200), built on an INLINE
 // cat.DialectConfig (dialect.go) rather than a core/cat/ftdx3000
 // subpackage — the v1.7.0 Kenwood/Yaesu wave brief's own instruction for
 // this family.
 //
-// NO FTDX3000 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT. Every byte
-// here came from the FTDX3000 CAT Operation Manual (revision 2006-D)
+// NO FTdx3000 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT. Every byte
+// here came from the FTdx3000 CAT Operation Manual (revision 2006-D)
 // through docs/superpowers/ftdx3000-capability-matrix.md, and from
 // nothing else.
 //

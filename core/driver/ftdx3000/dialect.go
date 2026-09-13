@@ -4,7 +4,7 @@ package ftdx3000
 
 import "github.com/gm5dna/open-rig-programmer/core/cat"
 
-// modeNames is the FTDX3000's P6 mode table, transcribed from the MW-Set
+// modeNames is the FTdx3000's P6 mode table, transcribed from the MW-Set
 // and MR-Answer legends (matrix §1.2, ftdx3000_layout.txt:920-926,
 // :950-952 — the two agree word for word): twelve names, '1'-'C', no
 // D/E/F. The manual's own D (AM-N) exists ONLY on the separate live MD
@@ -40,12 +40,12 @@ var modeNames = map[cat.Mode]string{
 	// deliberately absent here.
 }
 
-// dialect is the FTDX3000, built once at init and validated by
+// dialect is the FTdx3000, built once at init and validated by
 // cat.MustNewDialect. Built INLINE (doc.go explains why no
 // core/cat/ftdx3000 subpackage exists), following the v1.7.0 Yaesu-four
 // brief's own instruction for this family shape.
 var dialect = cat.MustNewDialect(cat.DialectConfig{
-	// ID's own P1 legend, "P1 0462: FTDX3000" (matrix §2.2, layout:759).
+	// ID's own P1 legend, "P1 0462: FTdx3000" (matrix §2.2, layout:759).
 	CATID:     "0462",
 	ModeNames: modeNames,
 	Slots: cat.SlotSpace{
@@ -130,7 +130,7 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	MemoryP9: cat.P9ToneIndexReadOnly,
 })
 
-// Dialect returns the FTDX3000's cat.Dialect.
+// Dialect returns the FTdx3000's cat.Dialect.
 //
 // A function over an exported var so the package-held value cannot be
 // reassigned by a consumer — every registered single-row Yaesu sibling's

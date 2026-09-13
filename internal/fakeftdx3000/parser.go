@@ -3,7 +3,7 @@
 package fakeftdx3000
 
 // This file is fakeftdx3000's own, independent byte-level CAT parser and
-// reply builder. It is derived from the FTDX3000 CAT OPERATION MANUAL's
+// reply builder. It is derived from the FTdx3000 CAT OPERATION MANUAL's
 // own Control Command Table (revision 2006-D) and from
 // docs/superpowers/ftdx3000-capability-matrix.md — NOT from core/cat or
 // core/driver/ftdx3000 (doc.go, THE HARD RULE). The manual is gitignored

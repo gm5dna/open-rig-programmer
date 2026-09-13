@@ -2332,7 +2332,7 @@ var ft950Text = Text{
 	ProbeFirmwareNote: "The FT-950 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
-// ftdx3000Text is the FTDX3000's entry — v1.8.0 Yaesu trio, first row,
+// ftdx3000Text is the FTdx3000's entry — v1.8.0 Yaesu trio, first row,
 // bare New (single row, own document, INLINE dialect).
 //
 // NOTAG. CTCSS tone is a live, mapped tone-table index on READ but
@@ -2340,19 +2340,19 @@ var ft950Text = Text{
 // new P9ToneIndexReadOnly policy): a read-modify-write silently loses it.
 // AM-N is excluded from the write-capable Mode enum, ASSUMED (the memory
 // record's own legend stops at 'C'; 'D' exists only on the live MD
-// command). No FTDX3000 has ever answered a frame from this project
+// command). No FTdx3000 has ever answered a frame from this project
 // (writeTrialsComplete false), so every write stays behind the opt-in
 // consent route.
 var ftdx3000Text = Text{
-	EraseProcedure: "This program sends no memory-clear frame for the FTDX3000: no builder for one exists, and no FTDX3000 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
-	GridLegendNote: "The FTDX3000's tone is read as a live CTCSS-tone index but cannot be written back over CAT at all — its memory-write frame prints that field fixed, so a read-modify-write silently loses it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. AM-N is excluded from the modes this build will write: it appears only on this radio's live mode command, never on its memory-read or memory-write legend.",
+	EraseProcedure: "This program sends no memory-clear frame for the FTdx3000: no builder for one exists, and no FTdx3000 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FTdx3000's tone is read as a live CTCSS-tone index but cannot be written back over CAT at all — its memory-write frame prints that field fixed, so a read-modify-write silently loses it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. AM-N is excluded from the modes this build will write: it appears only on this radio's live mode command, never on its memory-read or memory-write legend.",
 	PreservationTooltips: PreservationTooltips{
-		Tone: "read as a live CTCSS-tone index for the FTDX3000, but this radio's own memory-write frame cannot carry a tone at all — a rewrite always loses it, not merely an untested one",
+		Tone: "read as a live CTCSS-tone index for the FTdx3000, but this radio's own memory-write frame cannot carry a tone at all — a rewrite always loses it, not merely an untested one",
 	},
-	ProbeFirmwareNote: "The FTDX3000 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	ProbeFirmwareNote: "The FTdx3000 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
-// ftdx1200Text is the FTDX1200's entry — v1.8.0 Yaesu trio, second row,
+// ftdx1200Text is the FTdx1200's entry — v1.8.0 Yaesu trio, second row,
 // bare New (single row, own document, INLINE dialect, TWO packages
 // against ftdx3000).
 //
@@ -2362,16 +2362,16 @@ var ftdx3000Text = Text{
 // genuine hole at 'A' (printed "----" on every command carrying it, live
 // or stored), with no 'D' anywhere. This radio answers with ONE of TWO
 // CAT IDs, "0582" (FFT-1 fitted) or "0583" (not fitted) — one product,
-// not two rows. No FTDX1200 has ever answered a frame from this project
+// not two rows. No FTdx1200 has ever answered a frame from this project
 // (writeTrialsComplete false), so every write stays behind the opt-in
 // consent route.
 var ftdx1200Text = Text{
-	EraseProcedure: "This program sends no memory-clear frame for the FTDX1200: no builder for one exists, and no FTDX1200 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
-	GridLegendNote: "The FTDX1200 has no CTCSS tone route over CAT at all: its memory frames print the tone field fixed on both read and write, so this build neither reads nor writes it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. This radio identifies with either of two CAT IDs depending on whether its optional FFT-1 board is fitted — both are accepted as the same radio.",
+	EraseProcedure: "This program sends no memory-clear frame for the FTdx1200: no builder for one exists, and no FTdx1200 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FTdx1200 has no CTCSS tone route over CAT at all: its memory frames print the tone field fixed on both read and write, so this build neither reads nor writes it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. This radio identifies with either of two CAT IDs depending on whether its optional FFT-1 board is fitted — both are accepted as the same radio.",
 	PreservationTooltips: PreservationTooltips{
-		Tone: "not read or written over CAT for the FTDX1200 — its own memory frames print the tone field fixed on both read and write",
+		Tone: "not read or written over CAT for the FTdx1200 — its own memory frames print the tone field fixed on both read and write",
 	},
-	ProbeFirmwareNote: "The FTDX1200 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	ProbeFirmwareNote: "The FTdx1200 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
 // ft450dText is the FT-450D's entry — v1.8.0 Yaesu trio, third and last
@@ -2469,9 +2469,9 @@ var texts = map[string]Text{
 	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row.
 	"FT-950": ft950Text,
 	// v1.8.0 Yaesu trio, first row.
-	"FTDX3000": ftdx3000Text,
+	"FTdx3000": ftdx3000Text,
 	// v1.8.0 Yaesu trio, second row.
-	"FTDX1200": ftdx1200Text,
+	"FTdx1200": ftdx1200Text,
 	// v1.8.0 Yaesu trio, third and last row.
 	"FT-450D": ft450dText,
 }

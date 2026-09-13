@@ -393,14 +393,14 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// bare New takes the profile as its first argument, one package,
 		// one simulator, no sibling.
 		{"ft950", "Simulated", "fakeft950.New", "internal/fakeft950", []string{"FT-950"}},
-		// The FTDX3000 (v1.8.0 Yaesu trio, first row): bare New takes the
+		// The FTdx3000 (v1.8.0 Yaesu trio, first row): bare New takes the
 		// profile as its first argument, one package, one simulator, no
 		// sibling.
-		{"ftdx3000", "Simulated", "fakeftdx3000.New", "internal/fakeftdx3000", []string{"FTDX3000"}},
-		// The FTDX1200 (v1.8.0 Yaesu trio, second row): bare New takes the
+		{"ftdx3000", "Simulated", "fakeftdx3000.New", "internal/fakeftdx3000", []string{"FTdx3000"}},
+		// The FTdx1200 (v1.8.0 Yaesu trio, second row): bare New takes the
 		// profile as its first argument, one package, one simulator, no
 		// sibling.
-		{"ftdx1200", "Simulated", "fakeftdx1200.New", "internal/fakeftdx1200", []string{"FTDX1200"}},
+		{"ftdx1200", "Simulated", "fakeftdx1200.New", "internal/fakeftdx1200", []string{"FTdx1200"}},
 		// The FT-450D (v1.8.0 Yaesu trio, third and last row): bare New
 		// takes the profile as its first argument, one package, one
 		// simulator, no sibling.

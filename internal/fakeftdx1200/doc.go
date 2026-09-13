@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package fakeftdx1200 is an independent, stdlib-only FTDX1200 CAT simulator:
+// Package fakeftdx1200 is an independent, stdlib-only FTdx1200 CAT simulator:
 // the test double the transport engine, core/driver/ftdx1200, the CLI's
 // --fake mode and the GUI's demo mode run against, the role internal/fakeradio
 // plays for the FT-710 and internal/fakeft2000 for the FT-2000 family.
 //
-// ONE ROW, TWO CATIDs. The FTDX1200 is a single radio whose ID answer depends
-// on whether the optional FFT-1 board is fitted: "P1 0582: FTDX1200 (optional
-// FFT-1 is installed) / 0583: FTDX1200 (optional FFT-1 is not installed)"
+// ONE ROW, TWO CATIDs. The FTdx1200 is a single radio whose ID answer depends
+// on whether the optional FFT-1 board is fitted: "P1 0582: FTdx1200 (optional
+// FFT-1 is installed) / 0583: FTdx1200 (optional FFT-1 is not installed)"
 // (docs/superpowers/ftdx1200-capability-matrix.md §2.2, manual layout:727-733).
 // This is NOT a two-row situation like FT-2000/FT-2000D (two model names,
 // two constructors' worth of everything else too) — every other byte,
@@ -70,7 +70,7 @@
 package fakeftdx1200
 
 // writeTrialsComplete records this package's one honest status line: NO
-// FTDX1200 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT, AND NONE IS
+// FTdx1200 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT, AND NONE IS
 // AVAILABLE TO IT (the capability matrix's own opening sentence). Every
 // place below marked ASSUMED is a place this fake had to decide something
 // the matrix does not settle, and none of them has been lifted by a real

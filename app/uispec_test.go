@@ -859,7 +859,7 @@ var ftdx5000CoreSix = []spec.Field{
 	spec.FieldShift, spec.FieldCTCSSState, spec.FieldCTCSSTone,
 }
 
-// ftdx1200CoreFive is the core set both of the FTDX1200's banks derive, on
+// ftdx1200CoreFive is the core set both of the FTdx1200's banks derive, on
 // every profile (core/driver/ftdx1200/caps.go's bankFields, shared by MEM
 // and PMS): frequency, mode, clarifier, shift and ctcss_state. FIVE, not
 // ftdx5000CoreSix's six: FieldCTCSSTone is the zero FieldSupport
@@ -1430,14 +1430,14 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row):
 		// shares ftdx5000CoreSix's exact composition.
 		"FT-950": ftdx5000CoreSix,
-		// The FTDX3000 (v1.8.0 Yaesu trio, first row): shares
+		// The FTdx3000 (v1.8.0 Yaesu trio, first row): shares
 		// ftdx5000CoreSix's exact composition — its FieldCTCSSTone is
 		// {Read: rw.Read, Write: Unsupported}, non-zero on every profile,
 		// so it stays a core field despite the write side being fixed.
-		"FTDX3000": ftdx5000CoreSix,
-		// The FTDX1200 (v1.8.0 Yaesu trio, second row): FIVE fields, not
+		"FTdx3000": ftdx5000CoreSix,
+		// The FTdx1200 (v1.8.0 Yaesu trio, second row): FIVE fields, not
 		// ftdx5000CoreSix's six — see ftdx1200CoreFive's own doc comment.
-		"FTDX1200": ftdx1200CoreFive,
+		"FTdx1200": ftdx1200CoreFive,
 		// The FT-450D (v1.8.0 Yaesu trio, third and last row): shares
 		// ftdx5000CoreSix's exact composition — the PMS bank's fields are
 		// Write: Unsupported but Read stays rw.Read, non-zero on every

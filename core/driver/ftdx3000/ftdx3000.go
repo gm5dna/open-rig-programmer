@@ -14,9 +14,9 @@ import (
 )
 
 // modelName is this package's registry-key spelling of the manual's own
-// "FTDX3000" (matrix §2.1, ID legend layout:759) — a CHOICE over a
+// "FTdx3000" (matrix §2.1, ID legend layout:759) — a CHOICE over a
 // MANUAL-EVIDENCED fact.
-const modelName = "FTDX3000"
+const modelName = "FTdx3000"
 
 // catID is this dialect's CAT ID, sourced from the dialect rather than
 // restated: one place this string exists, and the value the ID probe
@@ -62,11 +62,11 @@ func WithConsentedUnverifiedWrites() Option {
 	return func(d *ftdx3000Driver) { d.Consented = true }
 }
 
-// New builds the FTDX3000 driver for profile. ONE row, bare New (matrix
+// New builds the FTdx3000 driver for profile. ONE row, bare New (matrix
 // §5's own two-package verdict against ftdx1200 leaves this package with
 // nothing to disambiguate). RealHardware — the zero value — selects the
 // all-Unverified capability set while writeTrialsComplete is false:
-// NO FTDX3000 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT. Any
+// NO FTdx3000 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT. Any
 // unrecognised Profile value deliberately selects the same fail-safe.
 func New(profile Profile, opts ...Option) driver.Driver {
 	d := &ftdx3000Driver{Base: driver.Base{Profile: profile}, dialect: dialect}
@@ -76,7 +76,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 	return d
 }
 
-// ftdx3000Driver implements driver.Driver for the Yaesu FTDX3000.
+// ftdx3000Driver implements driver.Driver for the Yaesu FTdx3000.
 type ftdx3000Driver struct {
 	driver.Base
 	dialect         cat.Dialect
@@ -102,7 +102,7 @@ func (d *ftdx3000Driver) Capabilities() spec.Capabilities {
 
 // Open implements driver.Driver: it builds a transport.Engine over port,
 // establishes the session (AI0 init + drain-to-quiet), probes ID, and
-// verifies this really is an FTDX3000 (a typed *driver.WrongRadioError
+// verifies this really is an FTdx3000 (a typed *driver.WrongRadioError
 // otherwise). No discovery phase: this radio has no 60m or EMG bank at
 // all (dialect.go), so Session.Capabilities is exactly the static
 // baseline.
@@ -136,7 +136,7 @@ func (d *ftdx3000Driver) open(ctx context.Context, eng *transport.Engine, id dri
 	}, nil
 }
 
-// Session is the FTDX3000's driver.Session: one open, identity-verified
+// Session is the FTdx3000's driver.Session: one open, identity-verified
 // connection. Safe for concurrent use — transport.Engine serialises every
 // individual exchange, and everything else here is immutable after Open.
 //

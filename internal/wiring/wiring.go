@@ -776,10 +776,10 @@ const FTdx9000Model = "FTdx9000"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT950Model = "FT-950"
 
-// FTdx3000Model names the FTDX3000's realDrivers/fakeDrivers key, which
+// FTdx3000Model names the FTdx3000's realDrivers/fakeDrivers key, which
 // must equal ftdx3000.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel. The registry key is
-// "FTDX3000" (all-caps), the manual's own printed spelling
+// "FTdx3000" (all-caps), the manual's own printed spelling
 // (core/driver/ftdx3000/ftdx3000.go's modelName comment) — a deliberate
 // departure from this file's usual "FTdxNNNN" casing for the earlier rows.
 //
@@ -792,12 +792,12 @@ const FT950Model = "FT-950"
 // Mode enum, ASSUMED (ceiling 'C', not the live MD command's 'D').
 //
 // NO driver.SerialFramingReporter, like every other Yaesu row.
-const FTdx3000Model = "FTDX3000"
+const FTdx3000Model = "FTdx3000"
 
-// FTdx1200Model names the FTDX1200's realDrivers/fakeDrivers key, which
+// FTdx1200Model names the FTdx1200's realDrivers/fakeDrivers key, which
 // must equal ftdx1200.New(...).Model() — pinned, like every other constant
 // above, by TestDriverTableKeysMatchDriverModel. The registry key is
-// "FTDX1200" (all-caps), on FTdx3000Model's own footing.
+// "FTdx1200" (all-caps), on FTdx3000Model's own footing.
 //
 // v1.8.0 YAESU TRIO, SECOND ROW: bare New (single row, own document,
 // INLINE dialect — TWO packages, not one, per the matrix's own verdict
@@ -810,7 +810,7 @@ const FTdx3000Model = "FTDX3000"
 // printed-fixed on both read and write.
 //
 // NO driver.SerialFramingReporter, like every other Yaesu row.
-const FTdx1200Model = "FTDX1200"
+const FTdx1200Model = "FTdx1200"
 
 // FT450DModel names the FT-450D's realDrivers/fakeDrivers key, which must
 // equal ft450d.New(...).Model() — pinned, like every other constant above,

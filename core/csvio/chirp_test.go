@@ -1260,7 +1260,7 @@ func ftdx9000LikeCapabilities() spec.Capabilities {
 	return caps
 }
 
-// ftdx3000LikeCapabilities is the FTDX3000's own REGISTERED capabilities
+// ftdx3000LikeCapabilities is the FTdx3000's own REGISTERED capabilities
 // (v1.8.0 Yaesu trio, first row).
 func ftdx3000LikeCapabilities() spec.Capabilities {
 	caps, err := wiring.StaticCapabilities(wiring.FTdx3000Model)
@@ -1270,7 +1270,7 @@ func ftdx3000LikeCapabilities() spec.Capabilities {
 	return caps
 }
 
-// ftdx1200LikeCapabilities is the FTDX1200's own REGISTERED capabilities
+// ftdx1200LikeCapabilities is the FTdx1200's own REGISTERED capabilities
 // (v1.8.0 Yaesu trio, second row).
 func ftdx1200LikeCapabilities() spec.Capabilities {
 	caps, err := wiring.StaticCapabilities(wiring.FTdx1200Model)

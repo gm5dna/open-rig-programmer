@@ -190,7 +190,7 @@ opt-in consent route.
 Evidence: `core/driver/ft950/doc.go`; the manual is the Yaesu CAT
 Operation Reference Manual, revision EC030H120.
 
-### FTDX3000 (opt-in)
+### FTdx3000 (opt-in)
 
 Read and write the memory and PMS channels, on the same 27-byte record
 shape as the FTdx5000. This radio has no tag/name command anywhere in its
@@ -199,26 +199,26 @@ tone-table index on READ but is printed FIXED on the memory-write frame,
 so it is read-only over CAT: a read-modify-write silently loses it. AM-N
 (the manual's own mode 'D') is ASSUMED excluded from the modes this
 programme will write — it is printed only on the live mode command, never
-on the memory-read or memory-write legend. No FTDX3000 has ever answered
+on the memory-read or memory-write legend. No FTdx3000 has ever answered
 a frame from this project, so every write stays behind the opt-in consent
 route.
 
-Evidence: `core/driver/ftdx3000/doc.go`; the manual is the Yaesu FTDX3000
+Evidence: `core/driver/ftdx3000/doc.go`; the manual is the Yaesu FTdx3000
 CAT Operation Manual, revision 2006-D.
 
-### FTDX1200 (opt-in)
+### FTdx1200 (opt-in)
 
 Read and write the memory and PMS channels, on the same 27-byte record
-shape as the FTDX3000. This radio has no tag/name command anywhere in its
+shape as the FTdx3000. This radio has no tag/name command anywhere in its
 manual, so no Tag column is shown for it. There is no CTCSS tone route
 over CAT at all: the tone field is printed fixed on both the read and
 write frames, so this build neither reads nor writes it. This radio
 identifies with either of two CAT IDs, "0582" or "0583", depending on
 whether its optional FFT-1 board is fitted — both answers are accepted
-as the same radio. No FTDX1200 has ever answered a frame from this
+as the same radio. No FTdx1200 has ever answered a frame from this
 project, so every write stays behind the opt-in consent route.
 
-Evidence: `core/driver/ftdx1200/doc.go`; the manual is the Yaesu FTDX1200
+Evidence: `core/driver/ftdx1200/doc.go`; the manual is the Yaesu FTdx1200
 CAT Operation Manual, revision 1507-E0.
 
 ### FT-450D (opt-in) — SAFE SHAPE (agreed 13/09/2026)
@@ -793,6 +793,6 @@ by revision in the code that transcribes it.
 | FT-2000, FT-2000D | Yaesu CAT Operation Reference Manual, revision EH025H124 |
 | FTdx9000 | Yaesu CAT Operation Reference Manual, revision EH010H121 |
 | FT-950 | Yaesu CAT Operation Reference Manual, revision EC030H120 |
-| FTDX3000 | Yaesu FTDX3000 CAT Operation Manual, revision 2006-D |
-| FTDX1200 | Yaesu FTDX1200 CAT Operation Manual, revision 1507-E0 |
+| FTdx3000 | Yaesu FTdx3000 CAT Operation Manual, revision 2006-D |
+| FTdx1200 | Yaesu FTdx1200 CAT Operation Manual, revision 1507-E0 |
 | FT-450D | Yaesu FT-450D CAT Operation Reference Book, revision 1710-B; Operating Manual, revision 1901L-LS-1 |

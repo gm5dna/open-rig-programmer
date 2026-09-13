@@ -219,7 +219,7 @@ func (d Dialect) validateSetFields(m MemoryData, prefix string, slotOK func(Slot
 	// P9, BY THIS DIALECT'S OWN READING, copied verbatim from P5's shape
 	// above: NewDialect's V18 already keeps every registered dialect from
 	// reaching the default case. P9ToneIndexReadOnly joins P9Fixed00 here
-	// deliberately — the FTDX3000's P9 is live on READ but printed-fixed
+	// deliberately — the FTdx3000's P9 is live on READ but printed-fixed
 	// "00" on WRITE (dialectconfig.go's MemoryP9Policy doc comment), so the
 	// write-direction refusal is identical to the fully-fixed radios'; only
 	// parseMemoryFields' read side treats the two policies differently.

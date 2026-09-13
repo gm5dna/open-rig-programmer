@@ -55,9 +55,9 @@ func (r *Radio) SlotState(slot string) (MemState, bool) {
 }
 
 // Model returns the constant row name this Radio answers ID under
-// ("FTDX1200") — there is only one row (doc.go).
+// ("FTdx1200") — there is only one row (doc.go).
 func (r *Radio) Model() string {
-	return "FTDX1200"
+	return "FTdx1200"
 }
 
 // CATID returns the 4-digit ID answer this Radio currently gives ("0582" or
