@@ -116,6 +116,33 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 			CTCSS:     ctcss,
 			CTCSSTone: codeplug.ToneField{State: codeplug.Known, Value: tone},
 			Shift:     shift,
+			// NoTag: no tag exists to read (Tag stays "").
+			TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
+
+			// The Icom-tier fields (design D4/D8): UNAVAILABLE — the
+			// 27-byte record carries none of them, and caps.go's banks
+			// list none of these spec.Fields either. Stated explicitly, not
+			// left at the Go zero (Absent): wiring's read invariant
+			// requires a fresh read to state Known/Unknown/Unavailable for
+			// every field, per ftdx5000's identical read (same family).
+			TxFreqHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			Duplex:              codeplug.StringField{State: codeplug.Unavailable},
+			OffsetHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			ToneMode:            codeplug.StringField{State: codeplug.Unavailable},
+			ToneTx:              codeplug.ToneField{State: codeplug.Unavailable},
+			ToneRx:              codeplug.ToneField{State: codeplug.Unavailable},
+			DTCSCode:            codeplug.IntField{State: codeplug.Unavailable},
+			DTCSPolarity:        codeplug.StringField{State: codeplug.Unavailable},
+			Filter:              codeplug.StringField{State: codeplug.Unavailable},
+			DataMode:            codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+			ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+			AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+			Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+			Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+			IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 		},
 	}, nil
 }
