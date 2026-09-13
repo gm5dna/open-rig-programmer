@@ -40,6 +40,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts480"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
@@ -270,6 +271,9 @@ var fakePackageForModel = map[string]string{
 	// The v1.7.0 Icom wave's sixth and last registration, on the same
 	// footing.
 	IC7200Model: "internal/fakeic7200",
+	// v1.7.0 Kenwood/Yaesu wave, first row: internal/fakets2000 serves all
+	// three TS-2000 rows through WithModelName, not a per-row constructor.
+	TS2000Model: "internal/fakets2000",
 	// v1.7.0 Kenwood/Yaesu wave, tenth row: one simulator package to
 	// itself.
 	FTdx5000Model: "internal/fakeftdx5000",
@@ -1545,7 +1549,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1709,7 +1713,10 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	if IC7200Model != "IC-7200" {
 		t.Errorf("IC7200Model = %q, want \"IC-7200\"", IC7200Model)
 	}
-	// v1.7.0 Kenwood/Yaesu wave, seventh row.
+	// v1.7.0 Kenwood/Yaesu wave, first row.
+	if TS2000Model != "TS-2000" {
+		t.Errorf("TS2000Model = %q, want \"TS-2000\"", TS2000Model)
+	}
 	// v1.7.0 Kenwood/Yaesu wave, tenth row.
 	if FTdx5000Model != "FTdx5000" {
 		t.Errorf("FTdx5000Model = %q, want \"FTdx5000\"", FTdx5000Model)
@@ -2298,7 +2305,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2571,6 +2578,12 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: FTdx5000Model, want: func() driver.Driver { return ftdx5000.New(ftdx5000.RealHardware) }, wantConsent: func() driver.Driver {
 			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites())
 		}},
+		// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
+		// argument, so the consent arm is WithConsentedUnverifiedWrites
+		// alone rather than a second positional value.
+		{model: TS2000Model, want: func() driver.Driver { return ts2000.NewTS2000() }, wantConsent: func() driver.Driver {
+			return ts2000.NewTS2000(ts2000.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -2810,6 +2823,10 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// writeTrialsComplete (core/driver/ftdx5000/caps.go) is FALSE, so
 		// its RealHardware profile carries a write-side Unverified field.
 		FTdx5000Model: true,
+		// The TS-2000 (v1.7.0 Kenwood/Yaesu wave, first row).
+		// writeTrialsComplete (core/driver/ts2000/caps.go) is FALSE, so its
+		// RealHardware profile carries a write-side Unverified field.
+		TS2000Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -3086,6 +3103,10 @@ func TestStopBitsFor_EveryKenwoodDriverReportsOne(t *testing.T) {
 		// still never be asked.
 		{"TS-890S (registered)", mustRealDriver(t, TS890SModel)},
 		{"TS-990S (registered)", mustRealDriver(t, TS990SModel)},
+		// v1.7.0 Kenwood/Yaesu wave, first row: this document prints the
+		// framing outright too (matrix §4), so this row reports 1 on the
+		// same footing as every Kenwood row above it.
+		{"TS-2000 (registered)", mustRealDriver(t, TS2000Model)},
 		// The UNREGISTERED TS-480, constructed directly: there is no
 		// registry key to look it up by, by design.
 		{"TS-480 (built, unregistered — plan P3)", ts480.New(ts480.RealHardware)},
@@ -3216,7 +3237,7 @@ var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, 
 // the two above them and both covered by the same seam pin. The list grew
 // by two names and by nothing else — see wantIdentityWidth below, which
 // this pair leaves UNCHANGED.
-var kenwoodModels = []string{TS590SModel, TS590SGModel, TS890SModel, TS990SModel}
+var kenwoodModels = []string{TS590SModel, TS590SGModel, TS890SModel, TS990SModel, TS2000Model}
 
 // TestMakerModelListsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1

@@ -346,6 +346,9 @@ var ownParticulars = map[string][]string{
 	// an Icom family) and no hardware finding to guard, on the FT-891/
 	// FT-991A footing.
 	"FTdx5000": {"FTdx5000"},
+	// v1.7.0 Kenwood/Yaesu wave, first row: bare name, no address hex (not
+	// a CI-V family) and no hardware finding to guard.
+	"TS-2000": {"TS-2000"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2439,4 +2442,28 @@ func TestRadiotext_FTdx5000Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FTdx5000", got)
+}
+
+// TestRadiotext_TS2000Verbatim pins the v1.7.0 Kenwood/Yaesu wave's first
+// row's prose byte-for-byte.
+func TestRadiotext_TS2000Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the TS-2000, TS-2000X or TS-B2000: no builder for one exists, and no radio of this family has ever confirmed what a clear command does over this interface. Follow the memory-channel clear procedure in the radio's own instruction manual instead.",
+		GridLegendNote: "Tone and Scan Skip ARE read and written for this radio, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a channel-lockout flag and a tone mode with separate transmit and receive tone numbers, at printed positions this build's own 39-entry chart matches. A channel is written back once its transmit frequency, DCS code, REVERSE state and memory group are read from the radio first — this build preserves those raw values across a write rather than modelling a field for each.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's interface, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's interface, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for this radio. Its opening speed of 9600 is ASSUMED, not read off the radio: no document held here prints a factory value, and a wrong speed is not a safe one but an unreachable radio — the symptom is a timeout indistinguishable from a dead port or a bad cable. This build offers no way to open at another speed and does not probe the port at several speeds to find out.",
+	}
+
+	got, ok := radiotext.For("TS-2000")
+	if !ok {
+		t.Fatal(`For("TS-2000") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-2000\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-2000", got)
 }

@@ -29,6 +29,7 @@ radio, and every write is previewed, snapshotted and read back.
 | **IC-R8600** (a receiver) | ✅ | ⚠️ opt-in |
 | **TS-590S**, **TS-590SG** | ✅ | ⚠️ opt-in |
 | **TS-890S**, **TS-990S** | ✅ | ⚠️ opt-in, existing channels only |
+| **TS-2000**, **TS-2000X**, **TS-B2000** | ✅ | ⚠️ opt-in |
 
 Per-radio detail, including where the program is guessing, is in
 [docs/radio-notes.md](docs/radio-notes.md).

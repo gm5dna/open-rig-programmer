@@ -859,6 +859,24 @@ var ftdx5000CoreSix = []spec.Field{
 	spec.FieldShift, spec.FieldCTCSSState, spec.FieldCTCSSTone,
 }
 
+// ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
+// derives, on every profile — MEM and SCAN alike
+// (core/driver/ts2000/caps.go's bankFields, applied identically to both
+// banks): frequency, mode, scan_skip and tag. ONE variable for all three
+// registered rows, since the three share one driver package with zero
+// byte difference between them (matrix §1-§2) — there is no per-row
+// divergence for a separate variable to guard against, unlike the TS-590
+// pair's.
+//
+// FOUR, not the candidate universe's nine: this record maps tone as
+// tone_mode/tone_tx/tone_rx (byte position 20 and the 39-entry chart),
+// which is not a bankCoreCandidates member, and it maps duplex/offset
+// rather than the clarifier/shift/ctcss_state/ctcss_tone vocabulary — so
+// those candidates stay the zero FieldSupport here too.
+var ts2000CoreFour = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldScanSkip, spec.FieldTag,
+}
+
 // The tier-field sets Tier 6's second pair derives — ONE PER ROW, where the
 // TS-590 pair needs two each: these radios publish one bank apiece (plan
 // decision P11), so there is no second bank to disagree with.
@@ -1342,6 +1360,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		"IC-7200": ic7200CoreTwo,
 		// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row).
 		"FTdx5000": ftdx5000CoreSix,
+		// The TS-2000, TS-2000X and TS-B2000 (v1.7.0 Kenwood/Yaesu wave,
+		// first row): one shared variable for all three, since the package
+		// is byte-identical across its rows — see ts2000CoreFour's own doc
+		// comment.
+		"TS-2000": ts2000CoreFour,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

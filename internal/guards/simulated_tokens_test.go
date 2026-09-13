@@ -359,6 +359,17 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// takes the profile as its first argument, one package, one
 		// simulator, no sibling.
 		{"ftdx5000", "Simulated", "fakeftdx5000.New", "internal/fakeftdx5000", []string{"FTdx5000"}},
+		// The TS-2000 family (v1.7.0 Kenwood/Yaesu wave, first row of
+		// three): core/driver/ts2000 has NO Profile positional argument at
+		// all (NewTS2000/NewTS2000X/NewTSB2000 take opts ...Option only),
+		// so there is no bare "ts2000.Simulated" selector for this guard to
+		// find anywhere — the token column names WithSimulatedProfile
+		// instead, the option function fake.go calls to select the fake
+		// capability arm. The mechanism is generic over any selector name,
+		// not just a constant (fileHasSelector matches any <recv>.<sel>),
+		// so this is the same confinement check on this package's own
+		// shape. ONE row for THREE registered models.
+		{"ts2000", "WithSimulatedProfile", "fakets2000.New", "internal/fakets2000", []string{"TS-2000"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

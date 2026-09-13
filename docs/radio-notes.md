@@ -578,6 +578,22 @@ so the absence is a decision rather than an oversight.
 
 Evidence: `docs/kenwood-models.md`.
 
+### TS-2000, TS-2000X and TS-B2000 (opt-in)
+
+Read and write the memory and scan-edge channels. Tone and scan skip ARE
+read and written, unlike the Yaesu radios this programme also supports:
+its 50-byte memory record carries a channel-lockout flag and a tone mode
+with separate transmit and receive tone numbers. This radio has an
+8-character channel name, so a Tag column is shown for it — the only row
+in this wave that has one. A channel is written back once its transmit
+frequency, DCS code, REVERSE state and memory group are read from the
+radio first. The TS-2000X and TS-B2000 answer identically to the TS-2000
+over the wire; this program tells them apart only by which one you chose
+when you connected. No radio of this family has ever answered a frame
+from this project, so every write stays behind the opt-in consent route.
+
+Evidence: `docs/kenwood-models.md`.
+
 ### TS-480 (built, not selectable)
 
 The TS-480's driver exists in this program and the radio is **not in the
@@ -629,5 +645,6 @@ by revision in the code that transcribes it.
 | IC-9100 | Icom CI-V Reference Guide |
 | IC-7200 | Icom Advanced Instructions manual (no separate CI-V Reference Guide) |
 | TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
+| TS-2000, TS-2000X, TS-B2000 | Kenwood PC Control Command reference (TS-2000 series) |
 | TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |
 | FTdx5000 | Yaesu CAT Operation Reference Manual, revision 1907-D |
