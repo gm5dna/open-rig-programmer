@@ -353,7 +353,7 @@
 
 	.btn-primary {
 		background: var(--colour-accent);
-		color: #241605;
+		color: var(--colour-on-accent);
 	}
 
 	.btn-primary:hover:not(:disabled) {
@@ -377,7 +377,7 @@
 	}
 
 	.btn-demo:hover:not(:disabled) {
-		background: rgba(180, 140, 242, 0.12);
+		background: color-mix(in srgb, var(--colour-demo) 12%, transparent);
 	}
 
 	.badge-slot {
@@ -478,8 +478,8 @@
 		border: 1px dashed var(--colour-demo);
 		background-image: repeating-linear-gradient(
 			135deg,
-			rgba(180, 140, 242, 0.08) 0,
-			rgba(180, 140, 242, 0.08) 6px,
+			color-mix(in srgb, var(--colour-demo) 8%, transparent) 0,
+			color-mix(in srgb, var(--colour-demo) 8%, transparent) 6px,
 			transparent 6px,
 			transparent 12px
 		);
