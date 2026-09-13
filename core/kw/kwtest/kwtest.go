@@ -863,7 +863,20 @@ func (r *run) checkNonVacuity() {
 	if r.roundTrips == 0 {
 		r.t.Errorf("%s: no record survived a build -> parse round trip, so the codec was never exercised in both directions", r.name())
 	}
-	for _, kind := range []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "a mutated printed-fixed byte", "an empty record", "an EX read past the row's printed menu domain", "an EX answer past the row's printed menu domain", "another channel's MR answer", "an empty channel whose P16 is not blank"} {
+	kinds := []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "an empty record", "an EX read past the row's printed menu domain", "an EX answer past the row's printed menu domain", "another channel's MR answer", "an empty channel whose P16 is not blank"}
+	// "A MUTATED PRINTED-FIXED BYTE" IS REQUIRED ONLY OF A ROW THAT HAS ONE
+	// TO MUTATE. checkGateRefusesAMutatedPrintedFixedByte's own mutation
+	// loop is empty for a row with no hard-wired byte at all (every
+	// cross-checked position traded for a live axis — core/kw/ts2000's
+	// `PrintedFixed: nil`), so this refusal kind is not merely unseen
+	// there, it is STRUCTURALLY IMPOSSIBLE: demanding it unconditionally
+	// would fail a well-formed conformance run for a fact about the RADIO,
+	// not a gap in the walk. checkLayoutSelfConsistency's own comment
+	// records the same retired invariant.
+	if len(r.l.PrintedFixed()) > 0 {
+		kinds = append(kinds, "a mutated printed-fixed byte")
+	}
+	for _, kind := range kinds {
 		if r.refusals[kind] == 0 {
 			r.t.Errorf("%s: no refusal of kind %q was ever SEEN — a silent skip and an enforced rule are indistinguishable without this count", r.name(), kind)
 		}
