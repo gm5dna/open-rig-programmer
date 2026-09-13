@@ -179,10 +179,20 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 	// carries under a window it has already decided is empty. A frame that
 	// is empty and named at once is not a shape either book describes, and
 	// the name is the field a driver would write back.
-	// TestParseMRAnswer_TheEmptyWindowRequiresABlankP16 pins both rows.
-	if isEmptyWindow(frame) {
-		if got := string(frame[recNameOff : recNameOff+recNameLen]); got != emptyName {
-			return Record{}, newParseError(frame, "%s: P4-P15 are all zero, which is the empty channel of 590:1492-1493, but P16 is %q — the same sentence says P16 \"will be blank\", and A3 reads blank as %d spaces", what, got, recNameLen)
+	// A ROW WITH NO TAIL HAS NO P16 EITHER, so its vacant-channel shape is
+	// the TS-570's own note alone (emptyWindowHiNoTail's citation) and
+	// carries no name to check.
+	// TestParseMRAnswer_TheEmptyWindowRequiresABlankP16 pins both 50-byte
+	// rows.
+	emptyHi := recEmptyHiOff
+	if !hasTail {
+		emptyHi = emptyWindowHiNoTail
+	}
+	if isEmptyWindow(frame, emptyHi) {
+		if hasTail {
+			if got := string(frame[recNameOff : recNameOff+recNameLen]); got != emptyName {
+				return Record{}, newParseError(frame, "%s: P4-P15 are all zero, which is the empty channel of 590:1492-1493, but P16 is %q — the same sentence says P16 \"will be blank\", and A3 reads blank as %d spaces", what, got, recNameLen)
+			}
 		}
 		rec.Empty = true
 		return rec, nil

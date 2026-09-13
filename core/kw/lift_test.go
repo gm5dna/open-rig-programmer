@@ -237,3 +237,119 @@ func TestLift_Layout870_RoundTrips(t *testing.T) {
 		t.Error("ParseMRAnswer accepted a 50-byte frame on a Layout870")
 	}
 }
+
+// --- Lift K follow-up (13/09/2026): four gaps the Phase 3 drivers hit. ---
+
+// TestLift_Followup_BuildMWSetFillsTheUnusedSpanOnA28ByteRow closes gap 3:
+// a RecordLen:28 row's positions 23-27 (P9, "NOT USED" —
+// evidence/ts570d-transcription.csv) used to stay Go's zero byte, which
+// failed the outbound envelope's printable-ASCII rule and validMWCommand's
+// own rebuild-and-compare gate — no 28-byte MW frame was admissible at
+// all. BuildMWSet now fills them with '0', the same filler P2Unused
+// already writes one byte to the west.
+func TestLift_Followup_BuildMWSetFillsTheUnusedSpanOnA28ByteRow(t *testing.T) {
+	l := ts570LikeLayout(t)
+	slot, err := l.NewSlot(42, ScanHalfNone)
+	if err != nil {
+		t.Fatalf("NewSlot: %v", err)
+	}
+	cmd, err := l.BuildMWSet(Record{
+		Slot: slot, FreqHz: 14230000, Mode: ModeCW, Byte19: '0', ToneMode: ToneModeTone,
+	})
+	if err != nil {
+		t.Fatalf("BuildMWSet: %v", err)
+	}
+	frame := cmd.Bytes()
+	for i := 22; i < 27; i++ {
+		if frame[i] != '0' {
+			t.Errorf("frame[%d] (position %d, P9 'NOT USED') = %q, want '0'", i, i+1, frame[i])
+		}
+	}
+	if !envelopeAllows(frame) {
+		t.Error("the built frame fails the outbound envelope (a non-printable byte in the unused span)")
+	}
+	if !l.AllowedCommand(frame) {
+		t.Error("the gate refused a frame this layout's own BuildMWSet produced — validMWCommand's rebuild-and-compare must round-trip through the same filler")
+	}
+}
+
+// TestLift_Followup_VacantChannelOnA28ByteRow closes gap 4:
+// core/kw.isEmptyWindow used to test positions 7-41 unconditionally and so
+// could never fire on a 28-byte frame; it is now width-aware, using the
+// TS-570's own documented vacant-channel shape (P4 through P8 all zero,
+// manual lines 5931-5934) on a row with no tail.
+func TestLift_Followup_VacantChannelOnA28ByteRow(t *testing.T) {
+	l := ts570LikeLayout(t)
+	// prefix(2) P1(1) P2(1, unasserted) P3(2, channel) P4(11, freq)
+	// P5(1, mode) P6(1, lockout) P7(1, tone mode) P8(2, tone index)
+	// unused span(5) terminator(1) = 28, the shape the manual's own note
+	// describes: all parameters zero except the channel number.
+	frame := []byte("MR" + "0" + "0" + "07" + "00000000000" + "0" + "0" + "0" + "00" + "00000" + ";")
+	if len(frame) != 28 {
+		t.Fatalf("test frame is %d bytes, want 28 (fix the literal above)", len(frame))
+	}
+	rec, err := l.ParseMRAnswer(frame)
+	if err != nil {
+		t.Fatalf("ParseMRAnswer(vacant 28-byte frame): %v", err)
+	}
+	if !rec.Empty {
+		t.Errorf("a vacant TS-570-shaped channel did not come back Empty: %+v", rec)
+	}
+}
+
+// TestLift_Followup_Layout870FramingAcceptsSelfBuiltMWAndRefusesJunk closes
+// gap 2's second half: kw.NewFramingFor only ever accepted a kw.Layout, so
+// no TS-870S driver could open a live session at all
+// (reviews/driver-ts870s.md: "Session.Open ... always refuses"). This is
+// NewFramingFor870, using Layout870's own one-grammar AllowedCommand.
+func TestLift_Followup_Layout870FramingAcceptsSelfBuiltMWAndRefusesJunk(t *testing.T) {
+	l, err := NewLayout870(Layout870Config{
+		Model: "LIFT-TS870S-FRAMING", MaxEXAddress: 60,
+		ModeNames: modeNames480(), ChannelLo: 0, ChannelHi: 99,
+	})
+	if err != nil {
+		t.Fatalf("NewLayout870: %v", err)
+	}
+	fr, err := NewFramingFor870(l)
+	if err != nil {
+		t.Fatalf("NewFramingFor870: %v", err)
+	}
+	cmd, err := l.BuildMWSet(Record870{Channel: 5, FreqHz: 7100000, Mode: ModeLSB, Lockout: '0', ToneMode: ToneModeOff})
+	if err != nil {
+		t.Fatalf("BuildMWSet: %v", err)
+	}
+	if !fr.Allow(cmd.Bytes()) {
+		t.Error("the framing refused a frame this layout's own BuildMWSet produced")
+	}
+	junk := append([]byte(nil), cmd.Bytes()...)
+	junk[len(junk)-1] = '0' // mutate the terminator
+	if fr.Allow(junk) {
+		t.Error("the framing admitted a frame with no terminator")
+	}
+	if _, err := NewFramingFor870(Layout870{}); err == nil {
+		t.Error("NewFramingFor870 accepted an unconfigured Layout870")
+	}
+}
+
+// TestLift_Followup_Book570AndBook870SStreamErrorsCiteRealLines closes gap
+// 2's first half: newStreamError used to panic on Book570/Book870S (no
+// citation existed in the command-table-only evidence this lift
+// originally had). Both documents' own full manual text supplied a real
+// one (ts570_manual_00_layout.txt:5170-5175,
+// ts870s_manual_mirror_layout.txt:8445-8450); neither book is invented.
+func TestLift_Followup_Book570AndBook870SStreamErrorsCiteRealLines(t *testing.T) {
+	for _, tc := range []struct {
+		book  Book
+		token string
+	}{
+		{Book570, communicationErrorFrame},
+		{Book570, receiveOverrunFrame},
+		{Book870S, communicationErrorFrame},
+		{Book870S, receiveOverrunFrame},
+	} {
+		got := newStreamError(tc.token, tc.book)
+		if got.Cause == "" || got.Citation == "" {
+			t.Errorf("newStreamError(%q, %v) = %+v, want a non-empty Cause and Citation", tc.token, tc.book, got)
+		}
+	}
+}

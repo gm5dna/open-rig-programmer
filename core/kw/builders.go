@@ -188,6 +188,22 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 		// command (480:785-787), and the lift is a write-then-read on each
 		// registry row.
 		copy(frame[recNameOff:], fmt.Sprintf("%-*s", recNameLen, rec.Name))
+	} else {
+		// The TS-570's own "P9: NOT USED" span — positions 23-27, five
+		// bytes this row's own document assigns no meaning to at all
+		// (evidence/ts570d-transcription.csv: "unused_filler"; the MR/MW
+		// diagrams print no field there, only the terminator at position
+		// 28). A frame that left them Go's zero byte failed the outbound
+		// envelope's printable-ASCII rule (envelopeAllows, framing.go) and
+		// validMWCommand's own rebuild-and-compare gate (allowlist.go),
+		// so no 28-byte MW frame existed at all until this filled them.
+		// '0' is the SAME filler P2Unused already writes one byte to the
+		// west (slotWire) — ASSUMED rather than printed, since no book
+		// says what a Set should carry where none prints a meaning, and
+		// '0' is this family's own established choice for such a byte.
+		for i := recToneOff + recToneDigits; i < int(l.recordLen)-1; i++ {
+			frame[i] = '0'
+		}
 	}
 	frame[l.recordLen-1] = ';'
 

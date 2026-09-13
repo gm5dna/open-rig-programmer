@@ -413,20 +413,38 @@ type Record struct {
 // sentence and a second copy of either would be one edit from disagreeing.
 const emptyName = "        " // recNameLen spaces
 
-// isEmptyWindow reports whether every byte of P4-P15 in frame is '0', which
-// is the empty-channel test of 590:1492-1493 (A18a). It is HALF the
-// sentence: the other half is P16, which parseRecordFrame requires to be
-// emptyName.
-func isEmptyWindow(frame []byte) bool {
-	// A frame shorter than the window it tests (the TS-570's 28 bytes,
-	// against a window that runs to byte 41) has no P15 to be part of an
-	// "all zero" reading at all, so it is not this shape — see the
-	// RecordLen lift's hasTail in parse.go for the citation that this row
-	// has no such byte.
-	if len(frame) <= recEmptyHiOff {
+// emptyWindowHiNoTail is the vacant-window's upper bound (0-indexed) on a
+// row with no tail past P8 — the TS-570's own note, printed on the MR
+// chart: "For a vacant channel, the Answer command sends '0' for all
+// parameters except the memory channel number" (ts570 manual, lines
+// 5931-5934 of docs/fixtures-private/manuals/ts570_manual_00_layout.txt).
+// P1 and P3 (the slot itself) are excluded, exactly as the family's own
+// window excludes them; P2 does not exist on this row at all (P2Unused).
+// That leaves P4 through P8 — freq, mode, lockout, tone mode, tone
+// number — the whole of what a RecordLen:28 row has past the slot.
+const emptyWindowHiNoTail = recToneOff + recToneDigits - 1
+
+// isEmptyWindow reports whether every byte of frame from P4 through hi
+// (0-indexed, inclusive) is '0' — the empty-channel test of 590:1492-1493
+// (A18a) generalised to whichever upper bound this row's own vacant-answer
+// shape has: byte 41 (P15) on the family's full 50-byte grid, byte 22 (P8)
+// on the TS-570's 28-byte one (emptyWindowHiNoTail). It is HALF the
+// sentence on a 50-byte row: the other half is P16, which parseRecordFrame
+// requires to be emptyName there and does not require at all on a row with
+// no P16 (RecordLen != RecordLen means NoTag on every row this lift
+// describes).
+//
+// hi IS A DISCRETE SHAPE, NOT AN ARITHMETIC THRESHOLD OF RecordLen — the
+// same reasoning hasTail (parse.go) already rests on: a family with a
+// THIRD width would need a third case here, not a formula extrapolated
+// from the two this lift knows.
+func isEmptyWindow(frame []byte, hi int) bool {
+	// A frame shorter than the window it tests has no byte at hi to be
+	// part of an "all zero" reading at all, so it is not this shape.
+	if len(frame) <= hi {
 		return false
 	}
-	for _, b := range frame[recEmptyLoOff : recEmptyHiOff+1] {
+	for _, b := range frame[recEmptyLoOff : hi+1] {
 		if b != '0' {
 			return false
 		}

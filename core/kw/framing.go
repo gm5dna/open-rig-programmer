@@ -69,15 +69,14 @@ const (
 	// rather than merely stop early), so its channel is core/kw's own
 	// Layout870 rather than a kw.Layout.
 	//
-	// NEITHER NEW BOOK HAS A TRANSCRIBED STREAM-ERROR TABLE YET. S2/S3's
-	// evidence for both stops at the command-table pages (the byte-diagram
-	// and Parameter Table pages this lift's RecordLen/field axes needed);
-	// neither the "?;" rejection causes, the "E;"/"O;" stream tokens, nor
-	// the transient-NAK warning has a citation for either document. See
-	// errors.go's newStreamError and bookCitations: a live NewFraming
-	// session for either book must not be wired up before a citation
-	// lands there — this lift only adds the two documents to the set a
-	// Layout/Layout870 may name, not to a working stream-error table.
+	// BOTH NEW BOOKS' STREAM-ERROR TABLES ARE NOW CITED. S2/S3's original
+	// evidence for both stopped at the command-table pages; the Lift K
+	// follow-up (13/09/2026) read each document's own full manual text
+	// instead and found the "?;"/"E;"/"O;" table for both (errors.go's
+	// bookCitations and newStreamError). Both agree with the TS-480's own
+	// wording on "O;" and print "E;" with one comma fewer than the
+	// original four's shared sentence — a genuine textual variant, not a
+	// transcription slip (commErrorCauseNoComma, errors.go).
 	Book870S
 )
 

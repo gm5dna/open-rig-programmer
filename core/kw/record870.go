@@ -2,7 +2,12 @@
 
 package kw
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/gm5dna/open-rig-programmer/core/transport"
+)
 
 // This file is the TS-870S's own second memory grid: 22 bytes, not a
 // shorter reading of the family's fifty, because P2 does not exist on this
@@ -135,6 +140,12 @@ func (l Layout870) Configured() bool { return l.modeNames != nil }
 
 // Model is this row's own name, as its refusals quote it.
 func (l Layout870) Model() string { return l.model }
+
+// Book is Book870S, always: unlike kw.Layout, which serves several rows
+// sharing one document, Layout870 exists for exactly one row, so there is
+// no axis for this to vary and no config field for it — see the type's own
+// doc comment for why this second record type carries no axes at all.
+func (l Layout870) Book() Book { return Book870S }
 
 // MaxEXAddress is the highest EX menu number this row's book prints.
 func (l Layout870) MaxEXAddress() uint8 { return l.maxEXAddress }
@@ -299,4 +310,47 @@ func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 		return Command{}, newParseError(frame, "MW set: built %d bytes, want exactly %d", len(frame), rec870Len)
 	}
 	return newCommand(frame), nil
+}
+
+// AllowedCommand admits an MW SET frame this layout's own builder would
+// have produced, byte for byte — validMWCommand's pattern (allowlist.go):
+// decode, re-validate every field, rebuild, and demand equality with what
+// came in.
+//
+// ONE GRAMMAR, NOT EIGHT, BECAUSE THAT IS ALL THIS TYPE BUILDS TODAY. Unlike
+// kw.Layout (ID, AI, FV/TY, MC, MR, MW, EX) or ma.Layout (seven grammars
+// across five opcodes), Layout870 has no BuildIDRead, no BuildMRRead, no MC
+// or EX support at all — record870.go is Lift K's proof that the 22-byte
+// grid can be described, not a finished driver codec. A future addition of
+// any of those builders must widen this method in the same commit, on the
+// standing rule that this is the last defence before bytes reach a
+// physical radio; until then, refusing everything but a self-produced MW
+// Set is the closed direction, not an oversight.
+func (l Layout870) AllowedCommand(frame []byte) bool {
+	if !l.Configured() {
+		return false
+	}
+	rec, err := l.parseRecordFrame870("MW", "MW set", frame)
+	if err != nil {
+		return false
+	}
+	cmd, err := l.BuildMWSet(rec)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(cmd.Bytes(), frame)
+}
+
+// NewFramingFor870 returns the transport.Framing for a CONFIGURED
+// Layout870: Book870S's own framing.NewFraming, gated by this layout's own
+// (currently one-grammar) AllowedCommand rather than kw.Layout's eight —
+// NewFramingFor's shape (allowlist.go), for the second record type. This
+// is the constructor a TS-870S driver calls; NewFramingFor itself only
+// accepts a kw.Layout and always refused this row (the Lift K follow-up
+// gap this function closes).
+func NewFramingFor870(l Layout870) (transport.Framing, error) {
+	if !l.Configured() {
+		return nil, fmt.Errorf("%w: the layout is unconfigured and describes no radio, so its outbound gate would speak for none", ErrLayoutInvalid)
+	}
+	return NewFramingWithGate(Book870S, l.AllowedCommand)
 }
