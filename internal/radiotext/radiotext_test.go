@@ -199,6 +199,8 @@ var yaesuModels = map[string]bool{
 	"FTdx5000": true,
 	// The FT-2000 (v1.7.0 Kenwood/Yaesu wave, eighth row): same reason.
 	"FT-2000": true,
+	// The FT-2000D (v1.7.0 Kenwood/Yaesu wave, ninth row): same reason.
+	"FT-2000D": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -372,6 +374,11 @@ var ownParticulars = map[string][]string{
 	// v1.7.0 Kenwood/Yaesu wave, eighth row: bare name, on the FT-891/
 	// FT-991A footing.
 	"FT-2000": {"FT-2000"},
+	// v1.7.0 Kenwood/Yaesu wave, ninth row: bare name. "FT-2000" IS a
+	// strict prefix of "FT-2000D" (the TS-2000/TS-2000X shape), and this
+	// entry's own prose names only "FT-2000D" throughout (radiotext.go's
+	// own doc comment), never the bare "FT-2000".
+	"FT-2000D": {"FT-2000D"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2632,4 +2639,27 @@ func TestRadiotext_FT2000Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FT-2000", got)
+}
+
+// TestRadiotext_FT2000DVerbatim pins the v1.7.0 Kenwood/Yaesu wave's
+// ninth row's prose byte-for-byte.
+func TestRadiotext_FT2000DVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-2000D: no builder for one exists, and no FT-2000D has ever confirmed what a clear command does over CAT. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "Tone is read and written for the FT-2000D as a live CTCSS-tone index — unlike every other registered CAT radio's fixed value — but this radio has no scan-skip position and no tag/name command anywhere in its manual, so no Tag column is shown for it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written over CAT for the FT-2000D, so nothing here is preserved: the 27-byte memory record carries a live CTCSS-tone index. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		ProbeFirmwareNote: "Firmware version has no query in this build for the FT-2000D — check the radio's display. Its default baud of 38400 is unverified against real hardware, on the tier's usual footing.",
+	}
+
+	got, ok := radiotext.For("FT-2000D")
+	if !ok {
+		t.Fatal(`For("FT-2000D") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-2000D\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-2000D", got)
 }

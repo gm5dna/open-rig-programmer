@@ -384,7 +384,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// two): core/driver/ft2000's NewFT2000/NewFT2000D each take the
 		// profile as their first argument, the ordinary shape. ONE row for
 		// TWO registered models (one constructor family, one fake).
-		{"ft2000", "Simulated", "fakeft2000.New", "internal/fakeft2000", []string{"FT-2000"}},
+		{"ft2000", "Simulated", "fakeft2000.New", "internal/fakeft2000", []string{"FT-2000", "FT-2000D"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site
