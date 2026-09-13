@@ -86,6 +86,11 @@ env:
 jobs:
   cli-darwin-universal:
     runs-on: macos-latest
+    # Present only on the upstream repo (a fork's secrets are empty
+    # strings) — every signing step below is gated on this, so a run
+    # with no cert builds and ships an unsigned binary unchanged.
+    env:
+      HAVE_CERT: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,6 +99,23 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Import signing certificate
+        if: env.HAVE_CERT == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -eu
+          KEYCHAIN_PW="$(openssl rand -hex 16)"
+          echo "$MACOS_CERT_P12_BASE64" | base64 -D -o cert.p12
+          security create-keychain -p "$KEYCHAIN_PW" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PW" build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s build.keychain login.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain
+          rm -f cert.p12
 
       - name: Build amd64 slice
         env:
@@ -118,6 +140,17 @@ jobs:
           echo "$archs" | grep -qw x86_64
           echo "$archs" | grep -qw arm64
 
+      # Codesign only — no notarisation. Gatekeeper's quarantine gate
+      # applies to quarantined app bundles and installer packages, not
+      # a bare binary a user runs from a terminal (spec §A2), so a CLI
+      # notarytool submission buys nothing here.
+      - name: Codesign the CLI binary
+        if: env.HAVE_CERT == 'true'
+        run: |
+          set -eu
+          codesign --force --options runtime --timestamp --sign "Developer ID Application: Stuart Henderson (9PFBWD9BNF)" dist/rigprog
+          codesign -dv --verbose=2 dist/rigprog
+
       - name: Verify the version stamp landed
         run: |
           set -eu
@@ -138,6 +171,10 @@ jobs:
           name: cli-darwin-universal
           path: rigprog-${{ env.VERSION }}-darwin-universal.tar.gz
           if-no-files-found: error
+
+      - name: Delete signing keychain
+        if: always() && env.HAVE_CERT == 'true'
+        run: security delete-keychain build.keychain
 
   cli-linux:
     runs-on: ubuntu-latest
@@ -188,6 +225,12 @@ jobs:
 
   gui-darwin-universal:
     runs-on: macos-latest
+    # Present only on the upstream repo (a fork's secrets are empty
+    # strings) — every signing/notarising step below is gated on this,
+    # so a run with no cert falls through to today's ad-hoc path
+    # unchanged.
+    env:
+      HAVE_CERT: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -207,6 +250,23 @@ jobs:
 
       - name: Install Wails CLI
         run: go install "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
+
+      - name: Import signing certificate
+        if: env.HAVE_CERT == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -eu
+          KEYCHAIN_PW="$(openssl rand -hex 16)"
+          echo "$MACOS_CERT_P12_BASE64" | base64 -D -o cert.p12
+          security create-keychain -p "$KEYCHAIN_PW" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PW" build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -d user -s build.keychain login.keychain
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain
+          rm -f cert.p12
 
       - name: wails build (darwin/universal)
         working-directory: app
@@ -271,15 +331,57 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist"
 
       - name: Ad-hoc codesign
+        if: env.HAVE_CERT != 'true'
         working-directory: app
         run: |
           xattr -cr "build/bin/Open Rig Programmer.app"
           codesign --force --deep -s - "build/bin/Open Rig Programmer.app"
           codesign -dv --verbose=2 "build/bin/Open Rig Programmer.app"
 
+      - name: Developer ID codesign
+        if: env.HAVE_CERT == 'true'
+        working-directory: app
+        run: |
+          set -eu
+          xattr -cr "build/bin/Open Rig Programmer.app"
+          codesign --force --deep --options runtime --timestamp --sign "Developer ID Application: Stuart Henderson (9PFBWD9BNF)" "build/bin/Open Rig Programmer.app"
+          codesign -dv --verbose=2 "build/bin/Open Rig Programmer.app"
+
       - name: Zip the .app
         working-directory: app/build/bin
         run: zip -r -y "../../../open-rig-programmer-${VERSION}-darwin-universal.app.zip" "Open Rig Programmer.app"
+
+      # Staple the notarisation ticket to the .app itself (not the
+      # zip — Apple's own guidance), then re-zip so the artefact
+      # uploaded below carries the stapled bundle. `spctl`/`codesign`
+      # at the end land the acceptance evidence in the CI log (spec
+      # §A3); a fresh unzip-and-double-click Gatekeeper test still
+      # needs a human (real-machine step, not provable in CI).
+      - name: Notarise the app
+        if: env.HAVE_CERT == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -eu
+          zip="open-rig-programmer-${VERSION}-darwin-universal.app.zip"
+          app="app/build/bin/Open Rig Programmer.app"
+          submission="$(xcrun notarytool submit "$zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait --output-format json)"
+          echo "$submission"
+          id="$(echo "$submission" | jq -r '.id')"
+          status="$(echo "$submission" | jq -r '.status')"
+          echo "notarytool submission ${id}: ${status}"
+          if [ "$status" != "Accepted" ]; then
+            xcrun notarytool log "$id" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          rm -f "$zip"
+          (cd app/build/bin && ditto -c -k --keepParent "Open Rig Programmer.app" "../../../${zip}")
+          spctl -a -vv -t exec "$app"
+          codesign -dv --verbose=2 "$app"
 
       - name: Upload artefact
         uses: actions/upload-artifact@v4
@@ -287,6 +389,10 @@ jobs:
           name: gui-darwin-universal
           path: open-rig-programmer-${{ env.VERSION }}-darwin-universal.app.zip
           if-no-files-found: error
+
+      - name: Delete signing keychain
+        if: always() && env.HAVE_CERT == 'true'
+        run: security delete-keychain build.keychain
 
   gui-linux:
     strategy:
