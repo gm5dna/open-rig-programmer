@@ -189,6 +189,19 @@ const writeTrialsComplete = false
 //     model or padded to make a test pass.
 //     (image.go: DefaultImage)
 //
+//  10. AUTOMATIC-INFORMATION SUPPRESSION. This fake never PUSHES anything
+//     unsolicited, whatever AI is set to. Neither book documents what an
+//     AI-ON FT-2000 or FT-2000D actually sends, when, or in what order — "AI
+//     AUTO INFORMATION" appears only in the 90-command index and its own
+//     four-frame block (layout:201-206), never in a worked example — and no
+//     FT-2000 of either row has been observed by this project. Modelling
+//     silence is the honest default, not a claim that either radio is
+//     silent: core/transport.Engine's drain-to-quiet discipline is already
+//     exercised against internal/fakeradio, whose own AI-flood facts are the
+//     FT-710's, and no FT-2000 test in this project's plan exercises the
+//     engine against a talking radio.
+//     (parser.go: handleAI; fakeft2000.go: New, handleEvent)
+//
 // # What is NOT in this register, and why
 //
 // THE "?;" CONVENTION ITSELF, AND SILENCE ON AN ACCEPTED SET. Neither book

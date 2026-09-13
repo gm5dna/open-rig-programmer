@@ -28,6 +28,11 @@ type Radio struct {
 	currentChannel string
 	model          string
 	catID          string
+	// ai is P1 of the AI command, '0' or '1'. "This parameter is set to '0'
+	// (OFF) automatically when the transceiver is turned 'OFF'"
+	// (layout:204) — a MANUAL FACT, not an assumption, and the reason New
+	// starts it at '0' rather than at a chosen default.
+	ai byte
 }
 
 // New constructs a *Radio and starts its servicing goroutine. Without a
@@ -42,6 +47,9 @@ func New(opts ...Option) *Radio {
 		currentChannel: slotNoneWire,
 		model:          "FT-2000",
 		catID:          modelCATID["FT-2000"],
+		// OFF at construction — a MANUAL FACT (layout:204), not a chosen
+		// default. See the Radio.ai field doc.
+		ai: '0',
 	}
 	for _, opt := range opts {
 		opt(r)

@@ -318,6 +318,46 @@ func TestCommandNamesAreAcceptedInEitherCase(t *testing.T) {
 	}
 }
 
+func TestHandleAI_DefaultsOffAndRoundTrips(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if reply, want := send(r, "AI;"), []byte("AI0;"); !bytes.Equal(reply, want) {
+		t.Errorf("AI read at construction = %q, want %q — off by manual fact (layout:204)", reply, want)
+	}
+	if reply := send(r, "AI1;"); reply != nil {
+		t.Fatalf("AI1; (accepted Set) replied %q, want silence", reply)
+	}
+	if reply, want := send(r, "AI;"), []byte("AI1;"); !bytes.Equal(reply, want) {
+		t.Errorf("AI read after AI1; = %q, want %q", reply, want)
+	}
+}
+
+func TestHandleAI_MalformedIsRejected(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if reply := send(r, "AI9;"); !bytes.Equal(reply, rejection) {
+		t.Errorf("AI9; (outside the {0,1} legend): reply = %q, want %q", reply, rejection)
+	}
+	if reply := send(r, "AI01;"); !bytes.Equal(reply, rejection) {
+		t.Errorf("a 2-byte AI body: reply = %q, want %q", reply, rejection)
+	}
+}
+
+// TestHandleAI_IsOnEngineInitsCriticalPath pins the exact reason this
+// command exists in this package at all: core/transport.Engine.Init opens
+// every CAT session with an unconditional "AI0;" ClassWrite. Before this
+// fake modelled AI, that write fell through handleFrame's default case to
+// "?;", which Engine.Do reads as a rejection and Init fails outright —
+// wiring.OpenFakeSessionFor could open neither FT-2000 row. This test pins
+// the frame Init actually sends, independent of the transport package.
+func TestHandleAI_IsOnEngineInitsCriticalPath(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if reply := send(r, "AI0;"); reply != nil {
+		t.Fatalf(`Engine.Init's own "AI0;" replied %q, want silence (a "?;" here fails every fake session open)`, reply)
+	}
+}
+
 func TestUnknownCommandIsRejected(t *testing.T) {
 	r := New()
 	defer r.Close()

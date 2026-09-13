@@ -24,6 +24,7 @@ var registerEntries = []string{
 	"AN MW SET CREATES AN ABSENT CHANNEL",
 	"THE FRAME ACCUMULATOR'S CAP AND RESYNC",
 	"THE DEFAULT IMAGE'S CONTENT IS INVENTED",
+	"AUTOMATIC-INFORMATION SUPPRESSION",
 }
 
 // normalise strips Go comment markers and collapses every run of whitespace
