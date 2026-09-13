@@ -298,9 +298,14 @@ func (r *run) checkLayoutSelfConsistency() {
 	if len(l.Slots()) == 0 {
 		r.t.Fatalf("%s: the slot space is empty, so no channel could be read or written", r.name())
 	}
-	if len(l.PrintedFixed()) == 0 {
-		r.t.Errorf("%s: the printed-fixed byte set is empty, and both books hard-wire P10, P12 and P13", r.name())
-	}
+	// AN EMPTY SET IS NO LONGER A FAULT, since the TS-2000 lift (core/kw's
+	// P10Policy/P12Policy/P13Policy plus Byte28Reverse/Byte41MemoryGroup):
+	// a row that carries all six cross-checked positions live has nothing
+	// to hard-wire at all — core/kw/ts2000/layout.go's own `PrintedFixed:
+	// nil`. What NewLayout still enforces is the crossCheck consistency
+	// between each axis and the set, which this suite's other legs
+	// exercise through BuildMWSet/ParseMRAnswer; there is no longer a
+	// standalone "the set must be non-empty" invariant to pin here.
 
 	// The accessors must COPY. A layout a model package minted at
 	// initialisation and handed out must not be editable by whoever holds
@@ -563,6 +568,7 @@ func (r *run) checkMemorySets() {
 			got.Byte19 != rec.Byte19 || got.Byte28 != rec.Byte28 || got.Byte41 != rec.Byte41 ||
 			got.Byte3940 != rec.Byte3940 || got.ToneMode != rec.ToneMode ||
 			got.ToneIndex != rec.ToneIndex || got.CTCSSIndex != rec.CTCSSIndex ||
+			got.DCSCode != rec.DCSCode || got.Shift != rec.Shift || got.OffsetHz != rec.OffsetHz ||
 			got.Slot.Number() != s.Number() || got.Slot.Class() != s.Class() || got.Slot.Half() != s.Half() {
 			r.t.Errorf("%s: a record did not survive build -> parse for %v.\n  sent %+v\n  back %+v", r.name(), s, rec, got)
 			continue
@@ -816,11 +822,12 @@ func (r *run) checkGateRefusesAMutatedPrintedFixedByte() {
 		return
 	}
 
+	// A row with no printed-fixed byte at all — every cross-checked
+	// position traded for a live axis, core/kw/ts2000's own shape — has
+	// nothing for this leg to mutate; that is not a fault (see
+	// checkLayoutSelfConsistency's own comment), so the loop below is
+	// simply empty and only the terminator leg beneath it runs.
 	fixed := r.l.PrintedFixed()
-	if len(fixed) == 0 {
-		r.t.Errorf("%s: no printed-fixed byte to mutate", r.name())
-		return
-	}
 	for _, ff := range fixed {
 		for off := ff.Pos - 1; off < ff.Pos-1+len(ff.Printed); off++ {
 			mutated := append([]byte{}, good...)
@@ -962,12 +969,21 @@ func (r *run) highestSlot() int {
 // 14.250 MHz, the row's own first mode by nibble, no tone, and the quiet
 // printed value in every raw byte.
 //
-// EVERY RAW BYTE IS '0' OR "00", WHICH IS LEGAL UNDER BOTH READINGS OF EACH
-// AXIS — byte 19 is the data mode on the 590 pair and the lockout on the 480
-// and '0' is a printed value of both; byte 28 is FILTER A or a hard-wired
-// constant; bytes 39-40 are "FM Normal" or ST step index 0; byte 41 is the
-// lockout or a constant. So one record serves every row without this suite
-// branching on an axis, and it therefore cannot silently stop exercising one.
+// EVERY RAW BYTE IS '0'/"00"/ZERO, WHICH IS LEGAL UNDER BOTH READINGS OF
+// EACH AXIS — byte 19 is the data mode on the 590 pair and the lockout on
+// the 480 and '0' is a printed value of both; byte 28 is FILTER A, a live
+// REVERSE status, or a hard-wired constant, all of which admit '0'; bytes
+// 39-40 are "FM Normal" or ST step index 0; byte 41 is the lockout, a live
+// Memory Group (0-9, and 0 is a real group), or a constant. P10's DCS code
+// and P13's offset frequency are both a printed "all zero" under
+// P10FixedZero/P13FixedZero and a perfectly ordinary value (no DCS, no
+// offset) under P10DCSCode/P13OffsetLive, so Record's own zero values for
+// DCSCode/OffsetHz need no explicit field here. P12's Shift is the one
+// exception: Go's zero byte is 0x00, not the ASCII '0' every reading of
+// P12 requires (P12FixedZero's constant AND P12ShiftLive's Simplex), so it
+// is the one raw byte this record sets explicitly for a reason. One record
+// serves every row without this suite branching on an axis, and it
+// therefore cannot silently stop exercising one.
 func (r *run) conformanceRecord(s kw.Slot) kw.Record {
 	r.t.Helper()
 	return kw.Record{
@@ -979,6 +995,7 @@ func (r *run) conformanceRecord(s kw.Slot) kw.Record {
 		Byte28:   '0',
 		Byte3940: "00",
 		Byte41:   '0',
+		Shift:    '0',
 		Name:     "KWTEST",
 	}
 }

@@ -79,10 +79,10 @@ func layout590S() Layout {
 		P12:       P12FixedZero,
 		P13:       P13FixedZero,
 		P2:        P2HundredsDigit,
-		Byte19:   Byte19DataMode,
-		Byte28:   Byte28FilterEither, // "always \"0\"" in firmware 1.xx (590:1478; E7)
-		Byte3940: Byte3940FMNarrowFlag,
-		Byte41:   Byte41Lockout,
+		Byte19:    Byte19DataMode,
+		Byte28:    Byte28FilterEither, // "always \"0\"" in firmware 1.xx (590:1478; E7)
+		Byte3940:  Byte3940FMNarrowFlag,
+		Byte41:    Byte41Lockout,
 
 		ToneModes: ToneModesFour,
 		// "000 ~ 087: Menu number (TS-590S)" (590:543), the line above the
