@@ -897,9 +897,10 @@ func ftdx101LikeCapabilities(model, catID string) spec.Capabilities {
 // RENAMED AT TIER 6, AND THE OLD NAME WAS A CLAIM THIS FUNCTION NEVER MADE
 // GOOD. It was registeredRadioCapabilities, documented as "one fixture per
 // model registered in internal/wiring's driver tables"; it has in fact never
-// held more than the Yaesu rows, and the eleven Icom models registered
-// between M9d-2 and Tier 4b have no CHIRP fixture in this file at all.
-// chirpFixtures below is what now carries the whole set this file DOES cover,
+// held more than the Yaesu rows — the eleven Icom models registered between
+// M9d-2 and Tier 4b went straight into chirpFixtures instead (v1.7.1 closed
+// that gap; see chirpFixtureExceptions). chirpFixtures below is what now
+// carries the whole set this file DOES cover,
 // and TestChirpFixtures_CoverEveryRegisteredModel is what measures it against
 // the registry.
 //
@@ -944,13 +945,12 @@ func unreachableScanSkipCapabilities() []spec.Capabilities {
 // hand-written literal shadowing its driver.
 //
 // THAT IS DELIBERATE, not a shortcut this file's own convention argues
-// against: the debt-ledger comment on chirpFixtureExceptions above warns
-// against "writing eleven radios' worth of UNEVIDENCED capability data",
-// and a hand-invented literal here would be exactly that — a second,
-// independently-typed claim about a radio this package has already
-// registered capabilities for. Reading the real, registered value instead
-// is the more evidenced choice, and it cannot drift from the driver the
-// way a hand-copied literal could.
+// against: a hand-invented literal here would be exactly the unevidenced
+// claim about a radio this package has already registered capabilities
+// for that the (now-closed, see icr8600LikeCapabilities and its siblings)
+// chirpFixtureExceptions debt existed to avoid. Reading the real,
+// registered value instead is the more evidenced choice, and it cannot
+// drift from the driver the way a hand-copied literal could.
 //
 // NOT IN unreachableScanSkipCapabilities(), deliberately: that function's
 // OTHER two callers (TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord in
@@ -1013,6 +1013,120 @@ func ic7200LikeCapabilities() spec.Capabilities {
 	caps, err := wiring.StaticCapabilities(wiring.IC7200Model)
 	if err != nil {
 		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7200Model, err))
+	}
+	return caps
+}
+
+// ic7610LikeCapabilities is the IC-7610's own REGISTERED capabilities,
+// closing the chirpFixtureExceptions debt (v1.7.1, spec.md §B) — see
+// ic7200LikeCapabilities' own doc comment for why this is a
+// wiring.StaticCapabilities call rather than a hand-written fixture, and
+// why these eleven go into chirpFixtures only, not
+// unreachableScanSkipCapabilities.
+func ic7610LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7610Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7610Model, err))
+	}
+	return caps
+}
+
+// ic7300LikeCapabilities is the IC-7300's own REGISTERED capabilities,
+// same debt-closing footing as ic7610LikeCapabilities.
+func ic7300LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7300Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7300Model, err))
+	}
+	return caps
+}
+
+// ic7300mk2LikeCapabilities is the IC-7300MK2's own REGISTERED
+// capabilities, same footing as ic7610LikeCapabilities.
+func ic7300mk2LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7300MK2Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7300MK2Model, err))
+	}
+	return caps
+}
+
+// ic705LikeCapabilities is the IC-705's own REGISTERED capabilities, same
+// footing as ic7610LikeCapabilities.
+func ic705LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC705Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC705Model, err))
+	}
+	return caps
+}
+
+// ic9700LikeCapabilities is the IC-9700's own REGISTERED capabilities,
+// same footing as ic7610LikeCapabilities.
+func ic9700LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC9700Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC9700Model, err))
+	}
+	return caps
+}
+
+// ic905LikeCapabilities is the IC-905's own REGISTERED capabilities, same
+// footing as ic7610LikeCapabilities.
+func ic905LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC905Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC905Model, err))
+	}
+	return caps
+}
+
+// ic7851LikeCapabilities is the IC-7851's own REGISTERED capabilities,
+// same footing as ic7610LikeCapabilities.
+func ic7851LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7851Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7851Model, err))
+	}
+	return caps
+}
+
+// ic7850LikeCapabilities is the IC-7850's own REGISTERED capabilities,
+// same footing as ic7610LikeCapabilities.
+func ic7850LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7850Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7850Model, err))
+	}
+	return caps
+}
+
+// ic7760LikeCapabilities is the IC-7760's own REGISTERED capabilities,
+// same footing as ic7610LikeCapabilities.
+func ic7760LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7760Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7760Model, err))
+	}
+	return caps
+}
+
+// ic7100LikeCapabilities is the IC-7100's own REGISTERED capabilities,
+// same footing as ic7610LikeCapabilities.
+func ic7100LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.IC7100Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.IC7100Model, err))
+	}
+	return caps
+}
+
+// icr8600LikeCapabilities is the IC-R8600's own REGISTERED capabilities,
+// same footing as ic7610LikeCapabilities.
+func icr8600LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.ICR8600Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.ICR8600Model, err))
 	}
 	return caps
 }
@@ -2943,36 +3057,37 @@ func chirpFixtures() []spec.Capabilities {
 		ft2000dLikeCapabilities(),
 		ftdx9000LikeCapabilities(),
 		ft950LikeCapabilities(),
+		// The eleven pre-v1.7.0 Icom models chirpFixtureExceptions used to
+		// name — debt closed in v1.7.1 (spec.md §B).
+		ic7610LikeCapabilities(),
+		ic7300LikeCapabilities(),
+		ic7300mk2LikeCapabilities(),
+		ic705LikeCapabilities(),
+		ic9700LikeCapabilities(),
+		ic905LikeCapabilities(),
+		ic7851LikeCapabilities(),
+		ic7850LikeCapabilities(),
+		ic7760LikeCapabilities(),
+		ic7100LikeCapabilities(),
+		icr8600LikeCapabilities(),
 	)
 }
 
 // chirpFixtureExceptions names every registered model that has NO CHIRP
 // capability fixture in this file, and it is a DEBT LEDGER rather than a
-// policy: eleven Icom models were registered between M9d-2 and Tier 4b
-// without one, and this milestone neither created that gap nor is the right
-// place to close it.
-//
-// THE PLAN ASKED FOR AN EMPTY EXCEPTION SET (Codex re-review MED-1b) AND
-// THAT IS NOT REACHABLE FROM THIS TASK. Closing the gap means inventing
-// eleven Icom fixtures — a Modes list and a per-bank field map per radio,
-// each a claim about a radio this milestone has read nothing about — and
-// enrolling all eleven in TestImportCHIRP_ScanSkipIsCapabilityAware, whose
-// per-row loss-entry assertions would then be running against fixture content
-// nobody had checked against those drivers. Writing eleven radios' worth of
-// unevidenced capability data to satisfy a completeness check would be the
-// exact failure this project's evidence rules exist to prevent, so the check
-// lands with the gap NAMED instead of hidden. The exception list is pinned to
-// exactly these eleven and may only SHRINK.
+// policy. It held the eleven Icom models registered between M9d-2 and Tier
+// 4b until v1.7.1 (spec.md §B), which read wiring.StaticCapabilities for
+// each — see icr8600LikeCapabilities and its siblings — and closed the gap
+// the same way the v1.7.0 wave's six did. The list is now empty and may
+// only stay that way or shrink further: a newly registered model earns a
+// fixture, never an entry here.
 //
 // WHAT THE CHECK STILL BUYS, WHICH IS THE WHOLE POINT OF LANDING IT (plan
 // decision P3, row 9 of the ten-edit list): the TS-480 is not on this list,
 // so the day its row registers without a fixture here, this check FAILS —
 // which is what makes edit 9 loud where it was silent. So does any future
 // registration.
-var chirpFixtureExceptions = []string{
-	"IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905",
-	"IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600",
-}
+var chirpFixtureExceptions = []string{}
 
 // TestChirpFixtures_CoverEveryRegisteredModel is the GENERAL CHIRP
 // completeness check (Codex HIGH 3, tightened at Codex re-review MED-1b),
@@ -3040,10 +3155,12 @@ func TestChirpFixtures_CoverEveryRegisteredModel(t *testing.T) {
 	}
 
 	// THE LEDGER MAY ONLY SHRINK, and the freeze is a COUNT here rather than
-	// a second copy of the eleven names (Opus review of Tier 6 task 18,
+	// a second copy of the exception names (Opus review of Tier 6 task 18,
 	// LOW-2: the old wantExceptions literal sat twenty lines from the list it
 	// claimed to pin, so the "frozen" assertion compared the list against a
-	// copy of itself and both halves were one edit apart).
+	// copy of itself and both halves were one edit apart). v1.7.1 closed the
+	// debt this counted (spec.md §B): the eleven inherited exceptions each
+	// got a fixture, so the cap is now 0 and chirpFixtureExceptions is empty.
 	//
 	// A COUNT IS ENOUGH BECAUSE MEMBERSHIP IS ALREADY PINNED AGAINST
 	// internal/wiring, by the two loops above and not by any literal here: a
@@ -3054,7 +3171,7 @@ func TestChirpFixtures_CoverEveryRegisteredModel(t *testing.T) {
 	//
 	// RED-PROVED (recorded, not re-run by CI): prepending "FT-891" — which
 	// has a fixture — fails both this cap and the have && excepted branch.
-	const inheritedExceptions = 11
+	const inheritedExceptions = 0
 	if len(chirpFixtureExceptions) > inheritedExceptions {
 		t.Errorf("chirpFixtureExceptions has %d entries, want at most the %d it inherited (%v) — a newly registered model earns a FIXTURE, never an exception", len(chirpFixtureExceptions), inheritedExceptions, chirpFixtureExceptions)
 	}
