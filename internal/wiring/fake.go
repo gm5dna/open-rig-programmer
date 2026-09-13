@@ -15,6 +15,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx1200"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx3000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
@@ -45,6 +46,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft950"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft991a"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx1200"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx3000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx5000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx9000"
@@ -531,6 +533,11 @@ var FT950FakeSessionOpts []fakeft950.Option
 // one simulator.
 var FTdx3000FakeSessionOpts []fakeftdx3000.Option
 
+// FTdx1200FakeSessionOpts is the FTDX1200's own option source, on the
+// same terms as every single-row model's above — one row, one package,
+// one simulator.
+var FTdx1200FakeSessionOpts []fakeftdx1200.Option
+
 // IC7800FakeSessionOpts is the IC-7800's own option source, on the same
 // terms as every other model's own variable above: internal/fakeic7800
 // simulates the IC-7800 specifically, its Option is a
@@ -739,6 +746,9 @@ var (
 	// v1.8.0 Yaesu trio, first row: fakeftdx3000's Port() already returns
 	// io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeftdx3000.Radio)(nil)
+	// v1.8.0 Yaesu trio, second row: fakeftdx1200's Port() already
+	// returns io.ReadWriteCloser, so no adapter is needed.
+	_ fakeRadio = (*fakeftdx1200.Radio)(nil)
 	// The IC-7800's (v1.7.0 Icom wave) — via ic7800FakeAdapter, like the
 	// IC-7610's and unlike the four directly-satisfying Icom simulators:
 	// internal/fakeic7800's Port() returns net.Conn.
@@ -1278,6 +1288,11 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	FTdx3000Model: {
 		newDriver: func() driver.Driver { return ftdx3000.New(ftdx3000.Simulated) },
 		newRadio:  func() fakeRadio { return fakeftdx3000.New(FTdx3000FakeSessionOpts...) },
+	},
+	// v1.8.0 Yaesu trio, second row: bare New, no adapter needed.
+	FTdx1200Model: {
+		newDriver: func() driver.Driver { return ftdx1200.New(ftdx1200.Simulated) },
+		newRadio:  func() fakeRadio { return fakeftdx1200.New(FTdx1200FakeSessionOpts...) },
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: fakets2000's Port() is already
 	// io.ReadWriteCloser, so no adapter is needed.

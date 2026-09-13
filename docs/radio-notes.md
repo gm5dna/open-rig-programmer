@@ -206,6 +206,21 @@ route.
 Evidence: `core/driver/ftdx3000/doc.go`; the manual is the Yaesu FTDX3000
 CAT Operation Manual, revision 2006-D.
 
+### FTDX1200 (opt-in)
+
+Read and write the memory and PMS channels, on the same 27-byte record
+shape as the FTDX3000. This radio has no tag/name command anywhere in its
+manual, so no Tag column is shown for it. There is no CTCSS tone route
+over CAT at all: the tone field is printed fixed on both the read and
+write frames, so this build neither reads nor writes it. This radio
+identifies with either of two CAT IDs, "0582" or "0583", depending on
+whether its optional FFT-1 board is fitted — both answers are accepted
+as the same radio. No FTDX1200 has ever answered a frame from this
+project, so every write stays behind the opt-in consent route.
+
+Evidence: `core/driver/ftdx1200/doc.go`; the manual is the Yaesu FTDX1200
+CAT Operation Manual, revision 1507-E0.
+
 ## Icom
 
 ### Shared by every Icom model
@@ -743,3 +758,4 @@ by revision in the code that transcribes it.
 | FTdx9000 | Yaesu CAT Operation Reference Manual, revision EH010H121 |
 | FT-950 | Yaesu CAT Operation Reference Manual, revision EC030H120 |
 | FTDX3000 | Yaesu FTDX3000 CAT Operation Manual, revision 2006-D |
+| FTDX1200 | Yaesu FTDX1200 CAT Operation Manual, revision 1507-E0 |

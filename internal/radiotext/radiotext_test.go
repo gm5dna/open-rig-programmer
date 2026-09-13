@@ -208,6 +208,8 @@ var yaesuModels = map[string]bool{
 	"FT-950": true,
 	// The FTDX3000 (v1.8.0 Yaesu trio, first row): same reason.
 	"FTDX3000": true,
+	// The FTDX1200 (v1.8.0 Yaesu trio, second row): same reason.
+	"FTDX1200": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -398,6 +400,8 @@ var ownParticulars = map[string][]string{
 	"FT-950": {"FT-950"},
 	// v1.8.0 Yaesu trio, first row: bare name (registry key, all-caps).
 	"FTDX3000": {"FTDX3000"},
+	// v1.8.0 Yaesu trio, second row: bare name (registry key, all-caps).
+	"FTDX1200": {"FTDX1200"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2775,4 +2779,27 @@ func TestRadiotext_FTDX3000Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FTDX3000", got)
+}
+
+// TestRadiotext_FTDX1200Verbatim pins the v1.8.0 Yaesu trio's second row's
+// prose byte-for-byte.
+func TestRadiotext_FTDX1200Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTDX1200: no builder for one exists, and no FTDX1200 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FTDX1200 has no CTCSS tone route over CAT at all: its memory frames print the tone field fixed on both read and write, so this build neither reads nor writes it. There is no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. This radio identifies with either of two CAT IDs depending on whether its optional FFT-1 board is fitted — both are accepted as the same radio.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "not read or written over CAT for the FTDX1200 — its own memory frames print the tone field fixed on both read and write",
+		},
+		ProbeFirmwareNote: "The FTDX1200 has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FTDX1200")
+	if !ok {
+		t.Fatal(`For("FTDX1200") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTDX1200\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTDX1200", got)
 }

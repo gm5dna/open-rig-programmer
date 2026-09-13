@@ -26,6 +26,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx1200"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx3000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
@@ -310,6 +311,8 @@ var fakePackageForModel = map[string]string{
 	FT950Model: "internal/fakeft950",
 	// v1.8.0 Yaesu trio, first row: one simulator package to itself.
 	FTdx3000Model: "internal/fakeftdx3000",
+	// v1.8.0 Yaesu trio, second row: one simulator package to itself.
+	FTdx1200Model: "internal/fakeftdx1200",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -1584,7 +1587,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S", "TS-870S", "FT-2000", "FT-2000D", "FTdx9000", "FT-950", "TS-570DG", "FTDX3000"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S", "TS-870S", "FT-2000", "FT-2000D", "FTdx9000", "FT-950", "TS-570DG", "FTDX3000", "FTDX1200"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1799,6 +1802,10 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// v1.8.0 Yaesu trio, first row.
 	if FTdx3000Model != "FTDX3000" {
 		t.Errorf("FTdx3000Model = %q, want \"FTDX3000\"", FTdx3000Model)
+	}
+	// v1.8.0 Yaesu trio, second row.
+	if FTdx1200Model != "FTDX1200" {
+		t.Errorf("FTdx1200Model = %q, want \"FTDX1200\"", FTdx1200Model)
 	}
 }
 
@@ -2384,7 +2391,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, TS570DGModel, FTdx3000Model}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, TS570DGModel, FTdx3000Model, FTdx1200Model}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2713,6 +2720,11 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: FTdx3000Model, want: func() driver.Driver { return ftdx3000.New(ftdx3000.RealHardware) }, wantConsent: func() driver.Driver {
 			return ftdx3000.New(ftdx3000.RealHardware, ftdx3000.WithConsentedUnverifiedWrites())
 		}},
+		// v1.8.0 Yaesu trio, second row: bare New takes the profile as its
+		// first argument.
+		{model: FTdx1200Model, want: func() driver.Driver { return ftdx1200.New(ftdx1200.RealHardware) }, wantConsent: func() driver.Driver {
+			return ftdx1200.New(ftdx1200.RealHardware, ftdx1200.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -2996,6 +3008,10 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// writeTrialsComplete (core/driver/ftdx3000/caps.go) is FALSE, so
 		// its RealHardware profile carries a write-side Unverified field.
 		FTdx3000Model: true,
+		// The FTDX1200 (v1.8.0 Yaesu trio, second row).
+		// writeTrialsComplete (core/driver/ftdx1200/caps.go) is FALSE, so
+		// its RealHardware profile carries a write-side Unverified field.
+		FTdx1200Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -3367,7 +3383,7 @@ func mustRealDriver(t *testing.T, model string) driver.Driver {
 // populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member CTCSSStates is
 // not a membership question: this list is about the maker, and the
 // vocabulary's width belongs to the tests that read it.
-var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel, FTdx5000Model, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, FTdx3000Model}
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel, FTdx5000Model, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, FTdx3000Model, FTdx1200Model}
 
 // icomModels names every registered Icom model, on the same by-name
 // footing as yaesuModels — ELEVEN rows now (the IC-7610, the IC-7300 pair
