@@ -39,6 +39,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
@@ -751,6 +752,18 @@ const FTdx5000Model = "FTdx5000"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FTdx9000Model = "FTdx9000"
 
+// FT950Model names the FT-950's realDrivers/fakeDrivers key, which must
+// equal ft950.New(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, TWELFTH AND LAST ROW: bare New (single row,
+// own document). 27-byte MR/MW frame, 8-digit FreqHz, one extra regular
+// channel (MemoryLo 000, not 001, unlike every sibling in this family).
+// NOTAG. CATID "0310" (matrix).
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT950Model = "FT-950"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1107,6 +1120,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ftdx9000.New(ftdx9000.RealHardware, ftdx9000.WithConsentedUnverifiedWrites())
 		}
 		return ftdx9000.New(ftdx9000.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: bare New takes the
+	// profile as its first argument.
+	FT950Model: func(consent bool) driver.Driver {
+		if consent {
+			return ft950.New(ft950.RealHardware, ft950.WithConsentedUnverifiedWrites())
+		}
+		return ft950.New(ft950.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is
