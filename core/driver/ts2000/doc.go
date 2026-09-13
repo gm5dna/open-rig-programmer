@@ -14,15 +14,18 @@
 // and the matrix, and RealHardware sessions get the all-Unverified
 // CapabilitiesUnverified profile while writeTrialsComplete is false.
 //
-// WRITE POSTURE: every channel write is refused (write.go). The record
-// carries three raw bytes on every write with no honest value this
-// milestone can supply — REVERSE (P11, no spec.Field), the tuning-step
-// index (P14, excluded from vocabulary by spec §6 Q4) and Memory Group
-// (P15, no spec.Field) — so no MW Set of any kind is ever built. This is
-// the core/driver/ts480 shape, not a weaker one: that row's own A22 is a
-// DIFFERENT cause (a single mode-conditional step legend) than this row's
-// THREE, and this package mints its own register citation
-// (registerP14, write.go) rather than reusing "A22" across documents.
+// WRITE POSTURE: "write existing" (spec.md's own row for this package),
+// the core/driver/ts890/ts990 READ-THEN-WRITE shape, not the TS-480's
+// blanket A22 refusal. WriteChannel performs one pre-write MR read and
+// PRESERVES four raw values this milestone models no spec.Field for — P10
+// (DCS code), P11 (REVERSE) and P15 (Memory Group), always, and P14 (the
+// tuning-step index) only when the write does not cross its mode-
+// conditional legend boundary (SSB/CW/FSK vs AM/FM, ts2000:11508-11521) —
+// write.go's own doc comment has the full byte-level reasoning. Two new
+// refusals besides the family's usual ladder: registerCreate (the
+// pre-write read shows the slot unassigned; this programme does not
+// create channels) and registerP14Family (the write's mode and the
+// pre-write read's mode fall in different P14 legend families).
 //
 // READ SURFACE: nine spec.Fields (frequency, mode, tag, scan_skip,
 // tone_mode, duplex, offset, tone_tx, tone_rx) — wider than the TS-480's

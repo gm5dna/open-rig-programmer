@@ -48,9 +48,9 @@ func TestParseSlotID(t *testing.T) {
 }
 
 // memoryFrame builds a valid 50-byte MR answer frame through the codec's
-// own BuildMWSet (core/kw is under no per-package write restriction; only
-// THIS package's write.go refuses to build one) and relabels it "MR" — the
-// core/driver/ts590 test-fixture shape.
+// own BuildMWSet and relabels it "MR" — the core/driver/ts590 test-fixture
+// shape, used here to script the responding radio's ANSWERS rather than to
+// exercise this package's own write path (write_test.go does that).
 func memoryFrame(t *testing.T, l kw.Layout, rec kw.Record) string {
 	t.Helper()
 	cmd, err := l.BuildMWSet(rec)

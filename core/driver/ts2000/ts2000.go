@@ -30,12 +30,12 @@ var (
 type Option func(*ts2000Driver)
 
 // WithConsentedUnverifiedWrites records the user's consent to writing this
-// row's Unverified fields, on core/driver/ts480's terms exactly. ON THIS
-// PACKAGE IT REACHES NOTHING EITHER: write.go refuses every channel write
-// before any frame is built (three raw bytes with no honest value), so a
-// consented session passes the capability gate and meets that refusal one
-// rung lower — which is the point, not a waste: without the option there
-// would be no way to reach the refusal on a RealHardware session at all.
+// row's Unverified fields. UNLIKE core/driver/ts480, THIS REACHES REAL
+// WRITES: write.go's "write existing" ladder builds and sends an MW Set
+// once a session is consented, preserving the raw bytes it does not
+// model (write.go's own doc comment) — this option is what lets a
+// RealHardware session pass the capability gate to reach that ladder at
+// all.
 func WithConsentedUnverifiedWrites() Option {
 	return func(d *ts2000Driver) { d.Consented = true }
 }

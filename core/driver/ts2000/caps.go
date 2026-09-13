@@ -76,12 +76,13 @@ const (
 // been asked anything by this project (matrix, line 8: "NO
 // TS-2000/2000X/B2000 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT").
 //
-// ON THIS PACKAGE IT IS THE SECOND OF TWO GUARDS, THE TS-480 SHAPE EXACTLY:
-// write.go refuses every channel write outright (see its own doc comment
-// for the three raw bytes this record has no honest value for), and this
-// row is additionally unregistered until Phase 4. Flipping this constant
-// alone changes nothing, which is the correct relationship and not a
-// redundancy.
+// ON A REAL RADIO IT IS THE ONLY GUARD, UNLIKE THE TS-480'S TWO: this row's
+// write.go DOES build and send MW frames once a session is consented (or
+// Simulated) — the "write existing" ladder, preserving what it does not
+// model (write.go's own doc comment) — so with writeTrialsComplete false
+// it is this constant alone that keeps an unconsented RealHardware
+// session's writes all-Unverified and therefore unwritable. This row is
+// additionally unregistered until Phase 4.
 const writeTrialsComplete = false
 
 // memBankLabel and scanBankLabel are the two banks' display labels, minted
@@ -153,11 +154,11 @@ func scanSlots(l kw.Layout) []string {
 // "01~39" while CN's (P9, tone_rx) prints "01~38" (matrix §2's P9 row cites
 // "See CN command"; the matrix's CTCSSToneRange entry cites CN's own
 // "01~38... refer to page 35", ts2000:9930 region) — so 1750 Hz (index 38,
-// zero-based) is a value TN can carry and CN cannot. THE CONSEQUENCE IS
-// MOOT ON THIS ROW: write.go refuses every channel write outright (three
-// raw bytes with no honest value), so no Known tone_rx of 1750 Hz can ever
-// reach a wire write to misrepresent — unlike the 590 pair, this package
-// needs no runtime refusal for it, only this note.
+// zero-based) is a value TN can carry and CN cannot. write.go's own
+// candidate() enforces this on the write path (a Known tone_rx of 1750 Hz
+// is refused), the same runtime rung the 590 pair's own M-E1 needs — this
+// row's writes are no longer refused unconditionally, so the note alone
+// would no longer be enough.
 //
 // TRANSCRIBED DIRECTLY FROM THE CHART, NOT COPIED FROM THE MATRIX'S OWN
 // INLINE LISTING: the matrix's §4 CTCSSTones cell (as written) omits
@@ -337,9 +338,10 @@ func CapabilitiesUnverified(p modelParams) spec.Capabilities {
 // CapabilitiesSimulated is this row's internal/fake-backed profile (CLI
 // --fake, GUI demo): Read AND Write Supported for the nine fields the
 // record expresses on this row. It never claims anything about a real
-// TS-2000/2000X/B2000, and write.go refuses every write on every profile
-// regardless (three raw bytes with no honest value) — the same relationship
-// core/driver/ts480's own A22 has to its Simulated profile.
+// TS-2000/2000X/B2000 — write.go's own "write existing" ladder is what
+// actually builds and sends an MW Set once a session passes this gate
+// (consented, or Simulated), preserving the four raw values no
+// spec.Field models (write.go's own doc comment).
 func CapabilitiesSimulated(p modelParams) spec.Capabilities {
 	return baseCapabilities(p, spec.FieldSupport{Read: spec.Supported, Write: spec.Supported})
 }
