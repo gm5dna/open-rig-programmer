@@ -37,12 +37,15 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx1200"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx3000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
@@ -773,6 +776,61 @@ const FTdx9000Model = "FTdx9000"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT950Model = "FT-950"
 
+// FTdx3000Model names the FTdx3000's realDrivers/fakeDrivers key, which
+// must equal ftdx3000.New(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel. The registry key is
+// "FTdx3000" (all-caps), the manual's own printed spelling
+// (core/driver/ftdx3000/ftdx3000.go's modelName comment) — a deliberate
+// departure from this file's usual "FTdxNNNN" casing for the earlier rows.
+//
+// v1.8.0 YAESU TRIO, FIRST ROW: bare New (single row, own document, INLINE
+// dialect — matrix's own two-package verdict against ftdx1200). 27-byte
+// MR/MW frame, 8-digit FreqHz (Lift Y), numeric PMS 100-117. NOTAG. CATID
+// "0462" (matrix). CTCSSTone is LIVE on read but printed-fixed on write
+// (core/cat's new P9ToneIndexReadOnly policy) — read-only over CAT, unlike
+// every other mapped-tone Yaesu row. AM-N excluded from the write-capable
+// Mode enum, ASSUMED (ceiling 'C', not the live MD command's 'D').
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTdx3000Model = "FTdx3000"
+
+// FTdx1200Model names the FTdx1200's realDrivers/fakeDrivers key, which
+// must equal ftdx1200.New(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel. The registry key is
+// "FTdx1200" (all-caps), on FTdx3000Model's own footing.
+//
+// v1.8.0 YAESU TRIO, SECOND ROW: bare New (single row, own document,
+// INLINE dialect — TWO packages, not one, per the matrix's own verdict
+// against ftdx3000: a genuine Mode-domain hole at 'A' and a differently
+// zeroed FieldCTCSSTone). 27-byte MR/MW frame, 8-digit FreqHz, numeric PMS
+// 100-117, identical shape to FTdx3000Model otherwise. NOTAG. Option-split
+// CATID: identify() accepts EITHER "0582" (FFT-1 fitted, this dialect's own
+// canonical value) or "0583" (not fitted) — one product, one row.
+// FieldCTCSSTone is the zero FieldSupport, unconditionally: P9 is
+// printed-fixed on both read and write.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTdx1200Model = "FTdx1200"
+
+// FT450DModel names the FT-450D's realDrivers/fakeDrivers key, which must
+// equal ft450d.New(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.8.0 YAESU TRIO, THIRD AND LAST ROW: bare New (single row, own
+// document, INLINE dialect). 27-byte MR/MW frame, 8-digit FreqHz. NOTAG
+// (front-panel-only 7-character tag, no CAT text route). CATID "0244"
+// (matrix). CTCSSTone is LIVE and mapped on read AND write. TWO STATIC
+// BANKS WITH GENUINELY DIFFERENT WRITE POSTURE — the roadmap's SAFE SHAPE
+// ruling (radio-roadmap.md, RELEASE PATH RULING 13/09/2026): MEM
+// (001-500) read/write; PMS (501-504, numeric) READ-ONLY unconditionally,
+// on both profiles, immune to WithConsentedUnverifiedWrites, until an
+// owner probe shows a PMS write succeeding on real hardware. 505-510 (60 m
+// + Alaska Emergency) is not in the dialect at all: SixtyLo/SixtyHi = 0,
+// the pre-existing "feature absent" state.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT450DModel = "FT-450D"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1137,6 +1195,30 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft950.New(ft950.RealHardware, ft950.WithConsentedUnverifiedWrites())
 		}
 		return ft950.New(ft950.RealHardware)
+	},
+	// v1.8.0 Yaesu trio, first row: bare New takes the profile as its
+	// first argument.
+	FTdx3000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx3000.New(ftdx3000.RealHardware, ftdx3000.WithConsentedUnverifiedWrites())
+		}
+		return ftdx3000.New(ftdx3000.RealHardware)
+	},
+	// v1.8.0 Yaesu trio, second row: bare New takes the profile as its
+	// first argument.
+	FTdx1200Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx1200.New(ftdx1200.RealHardware, ftdx1200.WithConsentedUnverifiedWrites())
+		}
+		return ftdx1200.New(ftdx1200.RealHardware)
+	},
+	// v1.8.0 Yaesu trio, third and last row: bare New takes the profile as
+	// its first argument.
+	FT450DModel: func(consent bool) driver.Driver {
+		if consent {
+			return ft450d.New(ft450d.RealHardware, ft450d.WithConsentedUnverifiedWrites())
+		}
+		return ft450d.New(ft450d.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is

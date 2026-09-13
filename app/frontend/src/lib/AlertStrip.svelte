@@ -53,7 +53,7 @@
 	}
 
 	.alert-info {
-		background: rgba(67, 209, 176, 0.12);
+		background: color-mix(in srgb, var(--colour-good) 12%, transparent);
 		border-left-color: var(--colour-good);
 	}
 
@@ -79,6 +79,6 @@
 
 	.alert-dismiss:hover {
 		color: var(--colour-text);
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--colour-hover-overlay);
 	}
 </style>

@@ -15,6 +15,28 @@ import '@testing-library/jest-dom/vitest'
 // synthetic keydown and reproduces exactly what a trusted Escape press
 // does — letting Modal.svelte's own oncancel handler (the one thing
 // production relies on) run identically under test.
+// Node 22+'s own experimental global Web Storage shadows happy-dom's
+// working implementation (it wins the property, then throws/warns and
+// returns undefined without --localstorage-file) — breaks any test that
+// touches window.localStorage regardless of what it's testing. Swap in a
+// plain in-memory Storage stand-in whenever the real thing isn't usable.
+try {
+	window.localStorage.setItem('__vitest_probe__', '1')
+	window.localStorage.removeItem('__vitest_probe__')
+} catch {
+	/** @type {Map<string, string>} */
+	const store = new Map()
+	Object.defineProperty(window, 'localStorage', {
+		configurable: true,
+		value: {
+			getItem: (k) => (store.has(k) ? store.get(k) : null),
+			setItem: (k, v) => void store.set(k, String(v)),
+			removeItem: (k) => void store.delete(k),
+			clear: () => store.clear(),
+		},
+	})
+}
+
 document.addEventListener('keydown', (e) => {
 	if (e.key !== 'Escape') return
 	const dialog = document.querySelector('dialog[open]')
