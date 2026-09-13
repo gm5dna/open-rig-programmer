@@ -192,6 +192,17 @@ const writeTrialsComplete = false
 //     model or padded to make a test pass.
 //     (image.go: DefaultImage)
 //
+//  10. AI-SET IS FIRE-AND-FORGET, AND THIS FAKE NEVER PUSHES AN UNSOLICITED
+//     AI BROADCAST. The manual prints AI's Set/Read/Answer shape (P1 "0:
+//     Auto Information OFF / 1: Auto Information ON", layout:212-218) but
+//     says nothing about whether or when the radio pushes an unsolicited
+//     frame while AI is ON; no FT-950 has had that behaviour observed, and
+//     core/transport.Engine.Init opens every session with an AI-off Set
+//     regardless, so this fake's own choice — silence, always — is on the
+//     critical path of every fake session without asserting a broadcast
+//     fact either way.
+//     (parser.go: handleAI)
+//
 // # What is NOT in this register, and why
 //
 // THE "?;" CONVENTION ITSELF, AND SILENCE ON AN ACCEPTED SET. The manual

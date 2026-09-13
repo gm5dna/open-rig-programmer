@@ -428,6 +428,45 @@ func (r *Radio) handleID(body []byte) []byte {
 	return buildIDAnswer()
 }
 
+// --- AI: AUTO INFORMATION (availability "O O O X", layout:132; block
+// layout:212-218) ---
+//
+// Set and Answer are 4 bytes ("AI" + P1 + ';'), P1 "0: Auto Information OFF
+// / 1: Auto Information ON"; Read is "AI;". AI-set is fire-and-forget. This
+// fake never PUSHES anything unsolicited whatever AI is set to: no FT-950
+// has ever had its AI-flood behaviour observed, and the engine's
+// drain-to-quiet discipline is already exercised against fakeradio, whose
+// own AI-flood facts are the FT-710's. THAT SUPPRESSION IS AN ASSUMPTION —
+// doc.go's register entry AI-SET IS FIRE-AND-FORGET, AND THIS FAKE NEVER
+// PUSHES AN UNSOLICITED AI BROADCAST. It is modelling silence as the
+// honest default, not a claim that this radio is silent.
+//
+// core/transport.Engine.Init opens every session with an AI-off Set, so
+// this handler's silent-accept path is on the critical path of every fake
+// session (registration.md's FT-950 finding: without an AI case, the
+// dispatcher's "?;" default answered AI0; with a NAK and Init failed).
+
+func buildAIAnswer(ai byte) []byte { return []byte{'A', 'I', ai, ';'} }
+
+func (r *Radio) handleAI(body []byte) []byte {
+	switch len(body) {
+	case 0:
+		r.mu.Lock()
+		ai := r.ai
+		r.mu.Unlock()
+		return buildAIAnswer(ai)
+	case 1:
+		if !validBoolFlagByte(body[0]) {
+			return rejection
+		}
+		r.mu.Lock()
+		r.ai = body[0]
+		r.mu.Unlock()
+		return nil // fire-and-forget success
+	}
+	return rejection
+}
+
 // --- Top-level dispatch ---
 
 // upperASCII folds the two ASCII bytes of a command name to upper case and
@@ -465,6 +504,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	switch cmd {
 	case [2]byte{'I', 'D'}:
 		return r.handleID(rest)
+	case [2]byte{'A', 'I'}:
+		return r.handleAI(rest)
 	case [2]byte{'M', 'W'}:
 		return r.handleMW(rest)
 	case [2]byte{'M', 'R'}:

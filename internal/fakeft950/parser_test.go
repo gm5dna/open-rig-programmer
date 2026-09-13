@@ -273,6 +273,44 @@ func TestHandleMC_ReadBeforeAnySetAnswersTheNoneForm(t *testing.T) {
 	}
 }
 
+func TestHandleAI_DefaultsToOffAndSetIsSilent(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if reply, want := send(r, "AI;"), []byte("AI0;"); !bytes.Equal(reply, want) {
+		t.Errorf("AI read at construction = %q, want %q (OFF, a manual fact)", reply, want)
+	}
+	if reply := send(r, "AI1;"); reply != nil {
+		t.Fatalf("AI Set replied %q, want silence (fire-and-forget)", reply)
+	}
+	if reply, want := send(r, "AI;"), []byte("AI1;"); !bytes.Equal(reply, want) {
+		t.Errorf("AI read after Set = %q, want %q", reply, want)
+	}
+}
+
+func TestHandleAI_MalformedSetIsRejected(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if reply := send(r, "AI2;"); !bytes.Equal(reply, rejection) {
+		t.Errorf("AI2 (outside the {0,1} legend): reply = %q, want %q", reply, rejection)
+	}
+}
+
+// TestEngineInitSequence_AIThenID reproduces core/transport.Engine.Init's
+// critical-path sequence (registration.md's FT-950 finding): AI0; sent as a
+// Set and expected to be answered with silence, then ID; read normally.
+// Before this fake had an AI case, the dispatcher's "?;" default answered
+// AI0; with a NAK and every fake session's Init failed outright.
+func TestEngineInitSequence_AIThenID(t *testing.T) {
+	r := New()
+	defer r.Close()
+	if reply := send(r, "AI0;"); reply != nil {
+		t.Fatalf("AI0; (Engine.Init's own Set) replied %q, want silence", reply)
+	}
+	if reply, want := send(r, "ID;"), []byte("ID0310;"); !bytes.Equal(reply, want) {
+		t.Errorf("ID; after AI0; = %q, want %q", reply, want)
+	}
+}
+
 func TestHandleID_IsFixed(t *testing.T) {
 	r := New()
 	defer r.Close()
