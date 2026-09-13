@@ -790,12 +790,25 @@ func validateToneStates(cfg DialectConfig) error {
 // It runs appended, after V16, for V16's reason: nothing else in this
 // list consults these two fields, so its position carries no diagnostic
 // weight and appending keeps the existing rules' order untouched.
+//
+// Codex close-review finding P2: the two fields must also agree WITH EACH
+// OTHER, not merely each be nonzero. Every offset the mem*Off method chain
+// computes (memdata.go) is anchored to MemoryFreqDigits alone, so a config
+// declaring MemoryFrameLen 27 with MemoryFreqDigits 9 (say) would have
+// BuildMWSet index a 27-byte frame at the 28-byte offsets that digit width
+// implies — one byte past the end, a panic rather than a build or a
+// refusal. memoryFrameLenFor computes the ONE length MemoryFreqDigits
+// implies, from the same offset chain, so this check cannot itself drift
+// from what the codec actually does with these two fields.
 func validateMemoryFrameShape(cfg DialectConfig) error {
 	if cfg.MemoryFrameLen == 0 {
 		return fmt.Errorf("cat: MemoryFrameLen is 0 — declare the MR-answer/MW-set frame's fixed length explicitly (28 bytes for the registered 9-digit-frequency family, 27 for the 8-digit one)")
 	}
 	if cfg.MemoryFreqDigits == 0 {
 		return fmt.Errorf("cat: MemoryFreqDigits is 0 — declare the P2 frequency field's digit width explicitly (9 for the registered family, 8 for the 27-byte one)")
+	}
+	if want := memoryFrameLenFor(cfg.MemoryFreqDigits); int(cfg.MemoryFrameLen) != want {
+		return fmt.Errorf("cat: MemoryFrameLen %d does not match MemoryFreqDigits %d — a %d-digit P2 field implies a %d-byte frame (28/9 and 27/8 are the only pairs any registered or ft2000-family dialect uses today), and a mismatched pair indexes this codec's own frame at the wrong offsets", cfg.MemoryFrameLen, cfg.MemoryFreqDigits, cfg.MemoryFreqDigits, want)
 	}
 	return nil
 }

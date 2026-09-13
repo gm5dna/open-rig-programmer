@@ -54,7 +54,9 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 //   - a ClarHz that violates THIS DIALECT'S clarifier policy
 //     (Dialect.clar): not a multiple of its step, or beyond its range.
 //     The FT-710's own policy is 10 Hz steps to +-9990 Hz;
-//   - a FreqHz that needs more than 9 digits, or is zero.
+//   - a FreqHz that needs more digits than THIS DIALECT'S OWN P2 field
+//     (d.memoryFreqDigits: 9 for the registered family, 8 for ft2000's),
+//     or is zero.
 //
 // This is shared, unchanged, between BuildMWSet (validating a
 // caller-constructed MemoryData, which may be entirely forged) and
@@ -180,8 +182,14 @@ func (d Dialect) validateSetFields(m MemoryData, prefix string, slotOK func(Slot
 		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), fmt.Sprintf("%s: ClarHz must be a multiple of %d Hz, magnitude <= %d", prefix, d.clar.StepHz, d.clar.MaxAbsHz))
 	}
 
-	if m.FreqHz == 0 || m.FreqHz > memFreqMax {
-		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), prefix+": FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
+	// FreqHz is bounded by THIS DIALECT'S OWN P2 digit width
+	// (d.memFreqDigitsMax, memdata.go), not the registered family's fixed
+	// 9 digits: Codex close-review finding P1 — a wider value would
+	// overflow encodeMemoryFields' fixed-width "%0*d" write into the
+	// clarifier sign byte that follows, corrupting the frame, since that
+	// function encodes and does not itself re-check width.
+	if freqMax := d.memFreqDigitsMax(); m.FreqHz == 0 || m.FreqHz > freqMax {
+		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), fmt.Sprintf("%s: FreqHz must be nonzero and fit in %d digits (<= %d)", prefix, d.memoryFreqDigits, freqMax))
 	}
 
 	// P5, BY THIS DIALECT'S OWN READING. Under P5Fixed byte 21 is printed

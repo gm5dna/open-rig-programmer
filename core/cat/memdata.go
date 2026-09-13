@@ -82,8 +82,60 @@ func (d Dialect) memP9Off() int       { return d.memCTCSSOff() + 1 }
 func (d Dialect) memShiftOff() int    { return d.memP9Off() + 2 }
 func (d Dialect) memTermOff() int     { return d.memShiftOff() + 1 }
 
-// memFreqMax is the largest FreqHz value that fits the 9-digit P2 field.
+// memoryFrameLenFor returns the MR-answer/MW-set frame length a P2 field
+// freqDigits digits wide IMPLIES: memTermOff()+1, computed on a throwaway
+// Dialect carrying only that one axis, so this is the SAME offset chain
+// above rather than a second, hand-derived formula that could drift from
+// it.
+//
+// Codex close-review finding P2: before this existed, V17
+// (dialectvalidate.go) checked MemoryFrameLen and MemoryFreqDigits each
+// against zero but never against EACH OTHER, so a config could declare an
+// unmatched pair (e.g. MemoryFrameLen 27 with MemoryFreqDigits 9) — every
+// mem*Off method above is anchored to memoryFreqDigits alone, so BuildMWSet
+// would then index a 27-byte frame at offsets computed for 9 digits, one
+// byte past the end, and panic rather than build or refuse.
+func memoryFrameLenFor(freqDigits uint8) int {
+	d := Dialect{memoryFreqDigits: freqDigits}
+	return d.memTermOff() + 1
+}
+
+// memFreqMax is the largest FreqHz value that fits the REGISTERED family's
+// 9-digit P2 field. Kept as the package-level ceiling MemoryFreqHz enforces
+// (a generic, pre-dialect conversion — see its own doc comment) and as the
+// widest bound any dialect's own field could ever need; the OUTBOUND WRITE
+// GATE (validateSetFields, mw.go) enforces the narrower, per-dialect bound
+// instead — see memFreqDigitsMax.
 const memFreqMax = 999_999_999
+
+// memFreqDigitsMax returns the largest FreqHz value THIS DIALECT'S OWN P2
+// field can hold: 10^memoryFreqDigits - 1. The registered family's 9-digit
+// field allows memFreqMax (999,999,999); the ft2000/ftdx9000 family's
+// 8-digit field allows one digit fewer, 99,999,999 (Lift Y's
+// MemoryFreqDigits axis).
+//
+// Codex close-review finding P1: encodeMemoryFields' "%0*d" verb pads to
+// AT LEAST memoryFreqDigits digits, never truncates — a FreqHz needing
+// more digits than this dialect's field would overflow into the clarifier
+// sign byte that follows, corrupting the frame rather than refusing it.
+// This bound is what validateSetFields (mw.go) checks BEFORE that encode
+// ever runs, so no caller can reach it with a value its own dialect's
+// field cannot hold.
+//
+// A memoryFreqDigits of 0 (only reachable via a hand-built Dialect that
+// bypasses NewDialect's V17, e.g. the zero Dialect) reports 0 rather than
+// underflowing the uint32 subtraction below — the same fail-closed shape
+// validClarHz's StepHz guard already has for its own zero axis.
+func (d Dialect) memFreqDigitsMax() uint32 {
+	if d.memoryFreqDigits == 0 {
+		return 0
+	}
+	max := uint32(1)
+	for i := uint8(0); i < d.memoryFreqDigits; i++ {
+		max *= 10
+	}
+	return max - 1
+}
 
 // MemoryData is the fully decoded content of an MR-answer or MW-set frame:
 // one memory/PMS/5xx/EMG channel's frequency, clarifier, mode and related
