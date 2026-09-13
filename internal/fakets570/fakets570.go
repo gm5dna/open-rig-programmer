@@ -81,6 +81,10 @@ type Radio struct {
 
 	mu      sync.Mutex
 	records map[recordKey]MemState
+	// ai is AI's own P1, '0'-'3' — the whole of this book's AI NUMBER legend
+	// (Parameter Table format 32). MANUAL-EVIDENCED at construction: "0" —
+	// "Switching the transceiver ON restores '0'." (AI command page).
+	ai byte
 }
 
 // New constructs a *Radio and starts its servicing goroutine. Without a
@@ -92,6 +96,7 @@ func New(opts ...Option) *Radio {
 		catID:        "017",
 		streamErrors: map[int]StreamError{},
 		records:      map[recordKey]MemState{},
+		ai:           aiOff,
 	}
 	for _, opt := range opts {
 		opt(r)

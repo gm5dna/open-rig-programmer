@@ -136,11 +136,26 @@
 //     unconditional — the ordinary reply to every malformed or unrecognised
 //     frame — and was never in question.
 //
+//  8. AI (AUTO INFORMATION) IS IMPLEMENTED — Set/Answer "A I P1 ;", Read
+//     "AI;", legend '0'-'3' (Parameter Table format 32) — because
+//     core/transport.Engine.Init opens every session with a fire-and-forget
+//     "AI0;" (internal/wiring.OpenFakeSessionFor's own critical path), and a
+//     fake with no AI handler answers "?;" to it, failing Open for all three
+//     rows. The power-on value, '0', is MANUAL-EVIDENCED ("Switching the
+//     transceiver ON restores '0'.", the AI command's own page) — not this
+//     entry's own assumption. What IS this fake's own choice: it never
+//     pushes anything unsolicited, whatever AI is set to (see "What this
+//     fake deliberately does NOT model" below).
+//
 // # What this fake deliberately does NOT model
 //
 // SATELLITE MEMORY, EX/MENU INVENTORY. Both are out of scope for this
 // package regardless of row (spec.md's open questions 1 and 2; matrix §7)
 // and are not simulated even as unsupported stubs.
+//
+// AN UNSOLICITED AI PUSH. Whatever AI is set to, this fake never sends
+// anything the host did not ask for — no periodic IF/Answer push, no front
+// panel driving one. Register entry 8.
 //
 // A FRONT PANEL. Nothing here models one.
 //

@@ -303,6 +303,54 @@ func (r *Radio) handleID(body []byte) []byte {
 	return []byte("ID" + r.catID + ";")
 }
 
+// --- AI: Auto Information ("A I P1 ;", Read "AI;") ---
+//
+// O O O O. Set and Answer are four bytes, "A I P1 ;"; Read is "AI;". This
+// radio's AI NUMBER legend (Parameter Table format 32) is four consecutive
+// values: "0: AI OFF" / "1: IF command outputs its Answer command
+// periodically." / "2: For parameter changes, the corresponding Answer
+// command is output." / "3: Both 1 and 2." The AI command block itself
+// states the power-on value: "Switching the transceiver ON restores '0'."
+// — MANUAL-EVIDENCED, not this fake's own assumption (contrast register
+// entry 2's zero-record reading, which IS unlifted).
+//
+// core/transport.Engine.Init opens every session with a fire-and-forget
+// "AI0;", so this handler's silent-accept path is on the critical path of
+// every fake session (internal/wiring.OpenFakeSessionFor).
+//
+// THIS FAKE NEVER PUSHES ANYTHING UNSOLICITED, whatever AI is set to — no
+// front panel and no periodic IF/Answer push are modelled, the same
+// deliberate gap the sibling Kenwood fakes' own AI handling states.
+
+// aiOff is the AI NUMBER legend's low end, "0: AI OFF" — the power-on value
+// this radio's own book prints.
+const aiOff = '0'
+
+// aiBothFormats is the legend's high end, "3: Both 1 and 2."
+const aiBothFormats = '3'
+
+// validAIByte admits the whole legend, '0'-'3'.
+func validAIByte(b byte) bool { return b >= aiOff && b <= aiBothFormats }
+
+func (r *Radio) handleAI(body []byte) []byte {
+	switch len(body) {
+	case 0:
+		r.mu.Lock()
+		ai := r.ai
+		r.mu.Unlock()
+		return []byte{'A', 'I', ai, ';'}
+	case 1:
+		if !validAIByte(body[0]) {
+			return rejection
+		}
+		r.mu.Lock()
+		r.ai = body[0]
+		r.mu.Unlock()
+		return nil // fire-and-forget success
+	}
+	return rejection
+}
+
 // --- Top-level dispatch ---
 
 func (r *Radio) handleFrame(frame []byte) []byte {
@@ -321,6 +369,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleMR(rest)
 	case [2]byte{'M', 'W'}:
 		return r.handleMW(rest)
+	case [2]byte{'A', 'I'}:
+		return r.handleAI(rest)
 	case [2]byte{'I', 'D'}:
 		return r.handleID(rest)
 	default:

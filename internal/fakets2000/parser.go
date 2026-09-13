@@ -457,6 +457,57 @@ func (r *Radio) handleID(body []byte) []byte {
 	return []byte(idAnswer)
 }
 
+// --- TY: the microprocessor firmware type, which is NOT a Set on this row
+// (ts2000:11678-11693) ---
+//
+// X O O X: the heading reads "Sets or reads the microprocessor fimware type."
+// (ts2000:11678, the manual's own "fimware" typo — the same slip the TS-480's
+// book makes, its own erratum E10) but the Set row's chart prints no content
+// at all under it (ts2000:11682, ruler only), exactly the TS-480's own
+// empty-Set-chart shape (480:1621, 1625); the chart wins, so this fake
+// refuses a TY Set — TestTY_HasNoSetDirection.
+//
+// core/driver/ts2000's own Open sends "TY;" unconditionally after "ID;"
+// (its own doc comment: "no radio has ever answered this probe") — this is
+// the wire-level fact `reviews/registration.md` found missing here, blocking
+// every OpenFakeSessionFor for this package.
+//
+// P1 IS TWO RESERVED BYTES (ts2000:11680, "Reserved", no legend at all) and
+// P2 IS THE VARIANT: "0: Overseas type / 1: Japanese 100 W type / 2: Japanese
+// 20 W type" (ts2000:11683-11685) — the driver's own report cites this same
+// range independently (its "book choice" note) for an unrelated reason
+// (picking Book480 for `Layout`), which is expected: both readings are of
+// one chart, not one borrowed from the other.
+
+// tyReservedLen is P1's width, counted off the answer row's position ruler
+// (ts2000:11691): two bytes.
+const tyReservedLen = 2
+
+// The shipped TY answer — doc.go's register entry 17. NEITHER BYTE IS A
+// CLAIM ABOUT ANY RADIO: no TS-2000/2000X/B2000 has answered this project.
+// P1 has no legend to borrow a "hard-wired" convention from (this row has NO
+// printed-fixed byte anywhere, matrix §2), so its two bytes are simply "00",
+// an invented placeholder; P2 takes the FIRST of the three printed variants,
+// "0: Overseas type" (ts2000:11683). Both are shared by all three rows —
+// doc.go's register entry 16, and the coordinator's own instruction for this
+// package: if the manual gives no separate TY answer for the X/B2000 rows,
+// answer the TS-2000 one and record it ASSUMED.
+const (
+	defaultTYReserved = "00"
+	defaultTYVariant  = '0'
+)
+
+func (r *Radio) handleTY(body []byte) []byte {
+	if len(body) != 0 {
+		return rejection
+	}
+	out := make([]byte, 0, 2+tyReservedLen+1+1)
+	out = append(out, 'T', 'Y')
+	out = append(out, defaultTYReserved...)
+	out = append(out, defaultTYVariant, ';')
+	return out
+}
+
 // --- AI: Auto Information (ts2000:9662-9675) ---
 //
 // O O O O. Set and Answer are four bytes, Read is "AI;". An AI Set is
@@ -531,6 +582,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	switch cmd {
 	case [2]byte{'I', 'D'}:
 		return r.handleID(rest)
+	case [2]byte{'T', 'Y'}:
+		return r.handleTY(rest)
 	case [2]byte{'A', 'I'}:
 		return r.handleAI(rest)
 	case [2]byte{'M', 'R'}:
