@@ -33,9 +33,12 @@ func kindPeerDialect(t *testing.T) Dialect {
 		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		// The whole point of this fixture.
-		MemoryP5:    P5TxClar,
-		ToneStates:  ToneStatesCTCSS,
-		MWWriteKind: KindPMS,
+		MemoryP5:         P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindPMS,
 	})
 	if err != nil {
 		t.Fatalf("building the kind peer: %v", err)

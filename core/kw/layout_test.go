@@ -26,12 +26,16 @@ func TestZeroLayout_FailsClosedOnEveryAxis(t *testing.T) {
 		want any
 	}{
 		{"Book", l.Book(), BookUnset},
+		{"RecordLen", l.RecordLen(), uint8(0)},
 		{"P2Policy", l.P2Policy(), P2Unset},
 		{"Byte19", l.Byte19(), Byte19Unset},
 		{"Byte28", l.Byte28(), Byte28Unset},
 		{"Byte3940", l.Byte3940(), Byte3940Unset},
 		{"Byte41", l.Byte41(), Byte41Unset},
 		{"ToneModes", l.ToneModes(), ToneModesUnset},
+		{"P10Policy", l.P10Policy(), P10Unset},
+		{"P12Policy", l.P12Policy(), P12Unset},
+		{"P13Policy", l.P13Policy(), P13Unset},
 	}
 	for _, a := range axes {
 		if a.got != a.want {
@@ -64,12 +68,16 @@ func TestNewLayout_RefusesAnUnsetAxis(t *testing.T) {
 	}{
 		{"book", func(c *LayoutConfig) { c.Book = BookUnset }, "Book"},
 		{"model", func(c *LayoutConfig) { c.Model = "" }, "Model"},
+		{"record length", func(c *LayoutConfig) { c.RecordLen = 0 }, "RecordLen"},
 		{"P2", func(c *LayoutConfig) { c.P2 = P2Unset }, "P2"},
 		{"byte 19", func(c *LayoutConfig) { c.Byte19 = Byte19Unset }, "byte 19"},
 		{"byte 28", func(c *LayoutConfig) { c.Byte28 = Byte28Unset }, "byte 28"},
 		{"bytes 39-40", func(c *LayoutConfig) { c.Byte3940 = Byte3940Unset }, "bytes 39-40"},
 		{"byte 41", func(c *LayoutConfig) { c.Byte41 = Byte41Unset }, "byte 41"},
 		{"tone modes", func(c *LayoutConfig) { c.ToneModes = ToneModesUnset }, "tone-mode"},
+		{"P10", func(c *LayoutConfig) { c.P10 = P10Unset }, "P10"},
+		{"P12", func(c *LayoutConfig) { c.P12 = P12Unset }, "P12"},
+		{"P13", func(c *LayoutConfig) { c.P13 = P13Unset }, "P13"},
 		{"EX menu domain", func(c *LayoutConfig) { c.MaxEXAddress = 0 }, "EX menu number"},
 		{"mode legend", func(c *LayoutConfig) { c.ModeNames = nil }, "mode legend"},
 		{"slot classes", func(c *LayoutConfig) { c.Slots = nil }, "slot"},
@@ -363,12 +371,16 @@ func validLayoutConfig() LayoutConfig {
 	return LayoutConfig{
 		Book:         Book590,
 		Model:        "TS-590SG",
+		RecordLen:    RecordLen,
 		P2:           P2HundredsDigit,
 		Byte19:       Byte19DataMode,
 		Byte28:       Byte28FilterLive,
 		Byte3940:     Byte3940FMNarrowFlag,
 		Byte41:       Byte41Lockout,
 		ToneModes:    ToneModesFour,
+		P10:          P10FixedZero,
+		P12:          P12FixedZero,
+		P13:          P13FixedZero,
 		MaxEXAddress: 99,
 		ModeNames:    modeNames590(),
 		Slots:        []SlotRange{{Class: SlotMemory, Lo: 0, Hi: 99}, {Class: SlotScan, Lo: 100, Hi: 109}},

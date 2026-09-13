@@ -7,10 +7,21 @@ import (
 	"strconv"
 )
 
-// memoryFrameLen is the fixed length of an MR-answer/MW-set frame: 28
-// bytes. Reference: "MR — MEMORY CHANNEL READ" position table, shared
-// byte-for-byte by MW's Set frame ("MW — ... Set frame: identical 28-byte
-// layout with MW").
+// memoryFrameLen is the fixed length of the REGISTERED family's
+// MR-answer/MW-set frame: 28 bytes, a 9-digit P2. Reference: "MR — MEMORY
+// CHANNEL READ" position table, shared byte-for-byte by MW's Set frame
+// ("MW — ... Set frame: identical 28-byte layout with MW").
+//
+// KEPT AS A PACKAGE CONSTANT for fixture code that addresses this one
+// canonical (28-byte, 9-digit) shape directly. Since the S1 lift, PRODUCTION
+// parsing/building/framing no longer consults it: mr.go's parseMemoryFrame
+// and mw.go's BuildMWSet read Dialect.memoryFrameLen instead, because the
+// ft2000 family's frame is 27 bytes (an 8-digit P2, DialectConfig.
+// MemoryFrameLen/MemoryFreqDigits) and a hardwired constant would size
+// every dialect's frame off the FT-710's own shape. Every registered
+// dialect declares MemoryFrameLen 28, so this constant and
+// Dialect.memoryFrameLen always agree for them, which is exactly why this
+// value still equals 28: nothing about a registered dialect's bytes moved.
 const memoryFrameLen = 28
 
 // Byte offsets (0-indexed) into a 28-byte MR-answer/MW-set frame, shared by
@@ -23,6 +34,18 @@ const memoryFrameLen = 28
 // after the block is the ';' terminator (memTermOffset); a frame form that
 // carries more after the block — the combined MT record, M9c-3 task 4 —
 // reuses these same offsets and puts its own bytes there instead.
+//
+// KEPT AS PACKAGE CONSTANTS for the same reason as memoryFrameLen above:
+// fixture code exercising only the registered (9-digit) shape still
+// addresses the field block at these fixed, familiar positions. Since the
+// S1 lift, PRODUCTION parsing/building consult the mem*Off METHODS below
+// instead, which derive every offset from THIS DIALECT'S OWN
+// memoryFreqDigits — memSlotOffset and memFreqOffset never move (P1 and P2
+// sit before the digit width that varies), but everything from P3 onward
+// SLIDES by however many bytes narrower or wider P2 is than 9 digits, a
+// pure position slide and not a reordering (ft2000 matrix §1.1). Under
+// memoryFreqDigits 9 — every registered dialect's own declared value — each
+// method returns exactly the constant of the same name.
 const (
 	memSlotOffset     = 2  // P1, positions 3-5, 3 bytes
 	memFreqOffset     = 5  // P2, positions 6-14, 9 bytes
@@ -40,12 +63,79 @@ const (
 
 // Field widths for the offsets above.
 const (
-	memFreqDigits    = 9
 	memClarMagDigits = 4
 )
 
-// memFreqMax is the largest FreqHz value that fits the 9-digit P2 field.
+// memClarSignOff, memClarMagOff, memRxClarOff, memTxClarOff, memModeOff,
+// memKindOff, memCTCSSOff, memP9Off, memShiftOff and memTermOff are THIS
+// DIALECT'S OWN offsets for the field block positions the same-named
+// constants above name for the registered (9-digit) shape. See this file's
+// offset-constants doc comment for why both exist.
+func (d Dialect) memClarSignOff() int { return memFreqOffset + int(d.memoryFreqDigits) }
+func (d Dialect) memClarMagOff() int  { return d.memClarSignOff() + 1 }
+func (d Dialect) memRxClarOff() int   { return d.memClarMagOff() + memClarMagDigits }
+func (d Dialect) memTxClarOff() int   { return d.memRxClarOff() + 1 }
+func (d Dialect) memModeOff() int     { return d.memTxClarOff() + 1 }
+func (d Dialect) memKindOff() int     { return d.memModeOff() + 1 }
+func (d Dialect) memCTCSSOff() int    { return d.memKindOff() + 1 }
+func (d Dialect) memP9Off() int       { return d.memCTCSSOff() + 1 }
+func (d Dialect) memShiftOff() int    { return d.memP9Off() + 2 }
+func (d Dialect) memTermOff() int     { return d.memShiftOff() + 1 }
+
+// memoryFrameLenFor returns the MR-answer/MW-set frame length a P2 field
+// freqDigits digits wide IMPLIES: memTermOff()+1, computed on a throwaway
+// Dialect carrying only that one axis, so this is the SAME offset chain
+// above rather than a second, hand-derived formula that could drift from
+// it.
+//
+// Codex close-review finding P2: before this existed, V17
+// (dialectvalidate.go) checked MemoryFrameLen and MemoryFreqDigits each
+// against zero but never against EACH OTHER, so a config could declare an
+// unmatched pair (e.g. MemoryFrameLen 27 with MemoryFreqDigits 9) — every
+// mem*Off method above is anchored to memoryFreqDigits alone, so BuildMWSet
+// would then index a 27-byte frame at offsets computed for 9 digits, one
+// byte past the end, and panic rather than build or refuse.
+func memoryFrameLenFor(freqDigits uint8) int {
+	d := Dialect{memoryFreqDigits: freqDigits}
+	return d.memTermOff() + 1
+}
+
+// memFreqMax is the largest FreqHz value that fits the REGISTERED family's
+// 9-digit P2 field. Kept as the package-level ceiling MemoryFreqHz enforces
+// (a generic, pre-dialect conversion — see its own doc comment) and as the
+// widest bound any dialect's own field could ever need; the OUTBOUND WRITE
+// GATE (validateSetFields, mw.go) enforces the narrower, per-dialect bound
+// instead — see memFreqDigitsMax.
 const memFreqMax = 999_999_999
+
+// memFreqDigitsMax returns the largest FreqHz value THIS DIALECT'S OWN P2
+// field can hold: 10^memoryFreqDigits - 1. The registered family's 9-digit
+// field allows memFreqMax (999,999,999); the ft2000/ftdx9000 family's
+// 8-digit field allows one digit fewer, 99,999,999 (Lift Y's
+// MemoryFreqDigits axis).
+//
+// Codex close-review finding P1: encodeMemoryFields' "%0*d" verb pads to
+// AT LEAST memoryFreqDigits digits, never truncates — a FreqHz needing
+// more digits than this dialect's field would overflow into the clarifier
+// sign byte that follows, corrupting the frame rather than refusing it.
+// This bound is what validateSetFields (mw.go) checks BEFORE that encode
+// ever runs, so no caller can reach it with a value its own dialect's
+// field cannot hold.
+//
+// A memoryFreqDigits of 0 (only reachable via a hand-built Dialect that
+// bypasses NewDialect's V17, e.g. the zero Dialect) reports 0 rather than
+// underflowing the uint32 subtraction below — the same fail-closed shape
+// validClarHz's StepHz guard already has for its own zero axis.
+func (d Dialect) memFreqDigitsMax() uint32 {
+	if d.memoryFreqDigits == 0 {
+		return 0
+	}
+	max := uint32(1)
+	for i := uint8(0); i < d.memoryFreqDigits; i++ {
+		max *= 10
+	}
+	return max - 1
+}
 
 // MemoryData is the fully decoded content of an MR-answer or MW-set frame:
 // one memory/PMS/5xx/EMG channel's frequency, clarifier, mode and related
@@ -103,7 +193,20 @@ type MemoryData struct {
 	Kind byte
 
 	CTCSS CTCSSState // Reference P8: "CTCSS: 0 off, 1 ENC/DEC, 2 ENC".
-	Shift Shift      // Reference P10: "shift: 0 simplex, 1 plus, 2 minus".
+
+	// ToneIndex is the raw P9 wire value UNDER THIS DIALECT'S OWN READING
+	// (MemoryP9Policy, dialectconfig.go). It carries no meaning under
+	// P9Fixed00 — every registered dialect's reading, where the two-byte
+	// field is printed-fixed "00" — the same "encodes, does not judge,
+	// except this one default" shape memoryP5 already has. Under
+	// P9ToneIndex (the ft2000 family) it is a two-digit index, 0-49, into
+	// the standard 50-entry CTCSS tone chart the manual reprints on MR/MT/
+	// MW/OI alike ("CTCSS Tone Chart", ft2000 matrix §1.3). This package
+	// only makes the value round-trip: mapping it to a spec.Field grading
+	// is a Phase-3 driver decision, not this lift's.
+	ToneIndex uint8
+
+	Shift Shift // Reference P10: "shift: 0 simplex, 1 plus, 2 minus".
 }
 
 // Kind byte values for MemoryData.Kind (reference P7).
@@ -421,20 +524,20 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: invalid slot field (P1)", wantPrefix))
 	}
 
-	freqField := frame[memFreqOffset : memFreqOffset+memFreqDigits]
+	freqField := frame[memFreqOffset : memFreqOffset+int(d.memoryFreqDigits)]
 	if !allDigits(freqField) {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: frequency field (P2) must be 9 digits", wantPrefix))
+		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: frequency field (P2) must be %d digits", wantPrefix, d.memoryFreqDigits))
 	}
 	freq, err := strconv.ParseUint(string(freqField), 10, 32)
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: frequency field (P2) out of range", wantPrefix))
 	}
 
-	sign := frame[memClarSignOffset]
+	sign := frame[d.memClarSignOff()]
 	if sign != '+' && sign != '-' {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier sign (P3) must be '+' or '-'", wantPrefix))
 	}
-	clarField := frame[memClarMagOffset : memClarMagOffset+memClarMagDigits]
+	clarField := frame[d.memClarMagOff() : d.memClarMagOff()+memClarMagDigits]
 	if !allDigits(clarField) {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier field (P3) must be 4 digits", wantPrefix))
 	}
@@ -450,7 +553,7 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier (P3) must be a multiple of %d Hz, magnitude <= %d", wantPrefix, d.clar.StepHz, d.clar.MaxAbsHz))
 	}
 
-	rxClar, err := parseBoolDigit(frame[memRxClarOffset])
+	rxClar, err := parseBoolDigit(frame[d.memRxClarOff()])
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: RX CLAR field (P4) must be '0' or '1'", wantPrefix))
 	}
@@ -471,12 +574,12 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 	var txClar bool
 	switch d.memoryP5 {
 	case P5Fixed:
-		if frame[memTxClarOffset] != '0' {
+		if frame[d.memTxClarOff()] != '0' {
 			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P5 (position 21) must be fixed '0' under %v — this dialect's manual prints the byte \"(Fixed)\", so it carries no TX clarifier state to decode", wantPrefix, d.memoryP5))
 		}
 	case P5TxClar:
 		var err error
-		txClar, err = parseBoolDigit(frame[memTxClarOffset])
+		txClar, err = parseBoolDigit(frame[d.memTxClarOff()])
 		if err != nil {
 			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: TX CLAR field (P5) must be '0' or '1'", wantPrefix))
 		}
@@ -484,12 +587,12 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag", wantPrefix))
 	}
 
-	mode, err := d.ParseMode(frame[memModeOffset])
+	mode, err := d.ParseMode(frame[d.memModeOff()])
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: mode field (P6) invalid", wantPrefix))
 	}
 
-	kind := frame[memKindOffset]
+	kind := frame[d.memKindOff()]
 	if !validKindByte(kind) {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: kind field (P7) must be one of '0','1','2','3','4','5'", wantPrefix))
 	}
@@ -498,30 +601,57 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 	// those plus the two DCS ones the FT-991A's legend prints. Through the
 	// RECEIVER, never the package function, which is the legacy three-state
 	// domain and is retained for its external callers only.
-	ctcss, err := d.ParseCTCSSState(frame[memCTCSSOffset])
+	ctcss, err := d.ParseCTCSSState(frame[d.memCTCSSOff()])
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: CTCSS field (P8) invalid", wantPrefix))
 	}
 
-	if string(frame[memP9Offset:memP9Offset+2]) != "00" {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 field must be fixed \"00\"", wantPrefix))
+	// P9, BY THIS DIALECT'S OWN READING (MemoryP9Policy, dialectconfig.go),
+	// copied verbatim from P5's shape above. Under P9Fixed00 the field is
+	// printed-fixed and a value other than "00" is an undocumented frame,
+	// refused rather than decoded. Under P9ToneIndex it is a two-digit
+	// index into the standard 50-entry CTCSS tone chart.
+	//
+	// A SWITCH, not an if/else with a wide else arm, for the same reason as
+	// P5's: NewDialect's V18 already refuses a zero MemoryP9Policy at
+	// construction, but the default branch below is what makes that hold
+	// even in the one place V18 cannot reach.
+	var toneIndex uint8
+	p9Field := frame[d.memP9Off() : d.memP9Off()+2]
+	switch d.memoryP9 {
+	case P9Fixed00:
+		if string(p9Field) != "00" {
+			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 field must be fixed \"00\" under %v", wantPrefix, d.memoryP9))
+		}
+	case P9ToneIndex:
+		if !allDigits(p9Field) {
+			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 field (tone index) must be 2 digits", wantPrefix))
+		}
+		idx, err := strconv.ParseUint(string(p9Field), 10, 8)
+		if err != nil || idx > 49 {
+			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 tone index must be 00-49", wantPrefix))
+		}
+		toneIndex = uint8(idx)
+	default:
+		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 (positions 25-26) policy unset — refusing to guess whether the field is fixed schema or a tone-table index", wantPrefix))
 	}
 
-	shift, err := ParseShift(frame[memShiftOffset])
+	shift, err := ParseShift(frame[d.memShiftOff()])
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: shift field (P10) invalid", wantPrefix))
 	}
 
 	return MemoryData{
-		Slot:   slot,
-		FreqHz: uint32(freq),
-		ClarHz: clar,
-		RxClar: rxClar,
-		TxClar: txClar,
-		Mode:   mode,
-		Kind:   kind,
-		CTCSS:  ctcss,
-		Shift:  shift,
+		Slot:      slot,
+		FreqHz:    uint32(freq),
+		ClarHz:    clar,
+		RxClar:    rxClar,
+		TxClar:    txClar,
+		Mode:      mode,
+		Kind:      kind,
+		CTCSS:     ctcss,
+		ToneIndex: toneIndex,
+		Shift:     shift,
 	}, nil
 }
 
@@ -560,7 +690,7 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 // TestMemoryP5_ZeroPolicyRefusesRatherThanDefaultingWide.
 func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) error {
 	copy(frame[memSlotOffset:], m.Slot.Wire())
-	copy(frame[memFreqOffset:], fmt.Sprintf("%0*d", memFreqDigits, m.FreqHz))
+	copy(frame[memFreqOffset:], fmt.Sprintf("%0*d", int(d.memoryFreqDigits), m.FreqHz))
 
 	clarMag := m.ClarHz
 	sign := byte('+')
@@ -568,10 +698,10 @@ func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) error {
 		sign = '-'
 		clarMag = -clarMag
 	}
-	frame[memClarSignOffset] = sign
-	copy(frame[memClarMagOffset:], fmt.Sprintf("%0*d", memClarMagDigits, clarMag))
+	frame[d.memClarSignOff()] = sign
+	copy(frame[d.memClarMagOff():], fmt.Sprintf("%0*d", memClarMagDigits, clarMag))
 
-	frame[memRxClarOffset] = boolDigit(m.RxClar)
+	frame[d.memRxClarOff()] = boolDigit(m.RxClar)
 	// P5. Under P5Fixed the byte is schema, not state, and both callers have
 	// already REFUSED a record carrying TxClar true (validateMWFields,
 	// validateCombinedMTFields) — so this is not a silent correction of a
@@ -585,17 +715,28 @@ func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) error {
 	// validateCombinedMTFields' own refusal.
 	switch d.memoryP5 {
 	case P5Fixed:
-		frame[memTxClarOffset] = '0'
+		frame[d.memTxClarOff()] = '0'
 	case P5TxClar:
-		frame[memTxClarOffset] = boolDigit(m.TxClar)
+		frame[d.memTxClarOff()] = boolDigit(m.TxClar)
 	default:
 		return newParseError(frame, "P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
 	}
-	frame[memModeOffset] = m.Mode.Wire()
-	frame[memKindOffset] = m.Kind
-	frame[memCTCSSOffset] = m.CTCSS.Wire()
-	copy(frame[memP9Offset:], "00")
-	frame[memShiftOffset] = m.Shift.Wire()
+	frame[d.memModeOff()] = m.Mode.Wire()
+	frame[d.memKindOff()] = m.Kind
+	frame[d.memCTCSSOff()] = m.CTCSS.Wire()
+	// P9, BY THIS DIALECT'S OWN READING, copied verbatim from P5's shape
+	// above: under P9Fixed00 the field is schema, and both callers have
+	// already REFUSED a record carrying a nonzero ToneIndex; under
+	// P9ToneIndex it is the two-digit tone-table index.
+	switch d.memoryP9 {
+	case P9Fixed00:
+		copy(frame[d.memP9Off():], "00")
+	case P9ToneIndex:
+		copy(frame[d.memP9Off():], fmt.Sprintf("%02d", m.ToneIndex))
+	default:
+		return newParseError(frame, "P9 (positions 25-26) policy unset — refusing to guess whether the field is fixed schema or a tone-table index")
+	}
+	frame[d.memShiftOff()] = m.Shift.Wire()
 	return nil
 }
 

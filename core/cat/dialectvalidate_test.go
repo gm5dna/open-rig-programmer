@@ -108,6 +108,10 @@ func validBaselineConfig() DialectConfig {
 		MemoryP5:      P5TxClar,
 		ToneStates:    ToneStatesCTCSS,
 		MWWriteKind:   KindMemory,
+
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
 	}
 }
 
@@ -224,6 +228,21 @@ func TestValidateDialectConfig_EveryClause(t *testing.T) {
 		{"V11 undocumented kind", func(c *DialectConfig) { c.MWWriteKind = 'X' }, "MWWriteKind"},
 		{"V11 zero byte", func(c *DialectConfig) { c.MWWriteKind = 0x00 }, "MWWriteKind"},
 		{"V11 KindPMS accepted", func(c *DialectConfig) { c.MWWriteKind = KindPMS }, ""},
+
+		// V17 — memory frame shape (S1 lift)
+		{"V17 zero MemoryFrameLen", func(c *DialectConfig) { c.MemoryFrameLen = 0 }, "MemoryFrameLen"},
+		{"V17 zero MemoryFreqDigits", func(c *DialectConfig) { c.MemoryFreqDigits = 0 }, "MemoryFreqDigits"},
+		{"V17 ft2000-shaped 27/8 accepted", func(c *DialectConfig) { c.MemoryFrameLen, c.MemoryFreqDigits = 27, 8 }, ""},
+		// Codex close-review finding P2: the pair must agree with EACH
+		// OTHER, not merely each be nonzero — a mismatched pair indexes
+		// this codec's own frame at the wrong offsets and would panic
+		// BuildMWSet rather than build or refuse.
+		{"V17 mismatched pair: 27-byte frame with 9-digit P2", func(c *DialectConfig) { c.MemoryFrameLen, c.MemoryFreqDigits = 27, 9 }, "does not match"},
+		{"V17 mismatched pair: 28-byte frame with 8-digit P2", func(c *DialectConfig) { c.MemoryFrameLen, c.MemoryFreqDigits = 28, 8 }, "does not match"},
+
+		// V18 — P9 policy (S1 lift)
+		{"V18 zero MemoryP9", func(c *DialectConfig) { c.MemoryP9 = 0 }, "MemoryP9"},
+		{"V18 P9ToneIndex accepted", func(c *DialectConfig) { c.MemoryP9 = P9ToneIndex }, ""},
 	}
 
 	for _, tc := range tests {

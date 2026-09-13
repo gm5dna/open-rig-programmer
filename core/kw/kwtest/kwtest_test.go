@@ -30,6 +30,10 @@ func fixture590SG() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book590,
 		Model:        "KWTEST-590SG",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2HundredsDigit,      // "refer to the MC command" (590:1539-1540)
 		Byte19:       kw.Byte19DataMode,       // P6, the data mode (590:1546-1548)
 		Byte28:       kw.Byte28FilterLive,     // P11, FILTER A/B (590:1560-1563)
@@ -55,6 +59,10 @@ func fixture590S() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book590,
 		Model:        "KWTEST-590S",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2HundredsDigit,
 		Byte19:       kw.Byte19DataMode,
 		Byte28:       kw.Byte28FilterEither,
@@ -77,6 +85,10 @@ func fixture480() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book480,
 		Model:        "KWTEST-480",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2FixedZero,       // "Always 0 for the TS-480." (480:953)
 		Byte19:       kw.Byte19Lockout,     // P6 is the lockout here (480:962)
 		Byte28:       kw.Byte28FixedZero,   // (480:973)
@@ -91,6 +103,28 @@ func fixture480() kw.Layout {
 			kw.FixedField{Pos: 28, Printed: "0"}, // P11 (480:973)
 			kw.FixedField{Pos: 41, Printed: "0"}, // P15 (480:982)
 		),
+	})
+}
+
+// fixture570 is a TS-570-shaped row: RecordLen 28 (no tail past P8), a
+// document Book480/Book590 has never named, P2Unused and ToneModesTwo —
+// the exact shape that used to fault kwtest.Run four separate ways
+// (checkLayoutSelfConsistency's Book switch and its unconditional
+// Byte28/3940/41 requirement, checkIdentity's Book switch,
+// checkEmptyChannel's panic past a 28-byte frame, and checkMemorySets'
+// hardcoded RecordLen/field comparisons). It is transcribed here rather
+// than imported from core/kw/ts570, on this file's own rule.
+func fixture570() kw.Layout {
+	return kw.MustNewLayout(kw.LayoutConfig{
+		Book:         kw.Book570,
+		Model:        "KWTEST-570",
+		RecordLen:    28,
+		P2:           kw.P2Unused,
+		Byte19:       kw.Byte19Lockout,
+		ToneModes:    kw.ToneModesTwo,
+		MaxEXAddress: 51,
+		ModeNames:    modeNames480(),
+		Slots:        []kw.SlotRange{{Class: kw.SlotMemory, Lo: 0, Hi: 99}},
 	})
 }
 
@@ -131,6 +165,7 @@ func TestRun_OverDisagreeingLayouts(t *testing.T) {
 		{"590SG (three slot classes, live filter byte)", fixture590SG()},
 		{"590S (the sibling: byte 28 either way, no extension slots)", fixture590S()},
 		{"480 (flat space, three hard-wired bytes, three tone modes)", fixture480()},
+		{"570 (RecordLen 28, no tail, Book570)", fixture570()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			kwtest.Run(t, tc.l)
@@ -176,6 +211,10 @@ func TestRun_ATinySlotSpaceStillSatisfiesEveryLeg(t *testing.T) {
 	tiny := kw.MustNewLayout(kw.LayoutConfig{
 		Book:         kw.Book480,
 		Model:        "KWTEST-TINY",
+		RecordLen:    kw.RecordLen,
+		P10:          kw.P10FixedZero,
+		P12:          kw.P12FixedZero,
+		P13:          kw.P13FixedZero,
 		P2:           kw.P2FixedZero,
 		Byte19:       kw.Byte19Lockout,
 		Byte28:       kw.Byte28FixedZero,
@@ -194,7 +233,7 @@ func TestRun_ATinySlotSpaceStillSatisfiesEveryLeg(t *testing.T) {
 	}
 }
 
-// TestRecorderSeesOrdinaryFailures keeps the two tests above honest: the
+// TestRecorderSeesOrdinaryFailures keeps the test above honest: the
 // recorder must be capable of observing a plain Errorf, or "rec.errors == 0"
 // would prove nothing.
 func TestRecorderSeesOrdinaryFailures(t *testing.T) {

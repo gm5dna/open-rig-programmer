@@ -661,7 +661,7 @@ func (r *conformanceRun) checkToneStateDomain() {
 
 		_, mwErr := r.d.BuildMWSet(m)
 		forged := append([]byte(nil), clean.Bytes()...)
-		forged[ctcssOffsetInMemoryFrame] = state.Wire()
+		forged[ctcssOffsetFor(len(forged))] = state.Wire()
 		gateOK := r.d.AllowedCommand(forged)
 
 		mtBuilt := false
@@ -742,13 +742,25 @@ func (r *conformanceRun) checkToneStateDomain() {
 	}
 }
 
-// ctcssOffsetInMemoryFrame is P8's byte offset in the 28-byte MR/MW field
-// block (position 24, 1-indexed). core/cat holds the offsets unexported, so
-// the one this suite needs is written here with its position — and the
-// splice is taken from a frame the dialect itself built and its own gate
-// admitted, so a wrong offset would corrupt some other field and show up as
-// a refusal on the FIVE-state arm rather than passing silently.
-const ctcssOffsetInMemoryFrame = 23
+// ctcssOffsetFor returns THIS DIALECT'S OWN byte offset for P8 (CTCSS) in a
+// short-form MR/MW frame of mwFrameLen bytes — position 24 (1-indexed) of
+// the registered 28-byte family, but SHIFTED by however many bytes
+// narrower or wider that dialect's P2 frequency field is (core/cat's
+// Lift-Y MemoryFrameLen/MemoryFreqDigits axes, commit 99cdaf9): the
+// ft2000/ftdx9000 family's 27-byte, 8-digit-P2 frame puts it one byte
+// earlier, at 23.
+//
+// core/cat holds its own field-block offsets unexported, so this package
+// cannot read them directly; mwFrameLen is the one length it CAN observe
+// (a frame the dialect itself just built), and every field from P3 onward
+// is a fixed distance from the frame's OWN end regardless of P2's width —
+// P8 is always 5 bytes before the final ';' — so deriving the offset from
+// mwFrameLen rather than a hardcoded 23 is correct for both the registered
+// family and the 27-byte one. The splice is taken from a frame the dialect
+// itself built and its own gate admitted, so a wrong offset would corrupt
+// some other field and show up as a refusal on the FIVE-state arm rather
+// than passing silently.
+func ctcssOffsetFor(mwFrameLen int) int { return mwFrameLen - 5 }
 
 // checkMTReadDomain is checkMCSendDomain's counterpart for MT: BuildMTRead
 // against the gate's own verdict on "MT"+s.Wire()+";", held to this
@@ -873,10 +885,11 @@ func (r *conformanceRun) checkMemoryP5() {
 		}
 		r.checkFrame("MW set (P5 fixed)", clean.Bytes())
 		forged := append([]byte(nil), clean.Bytes()...)
-		if got := forged[memoryP5WireOffset]; got != '0' {
+		txClarOff := txClarOffsetFor(len(forged))
+		if got := forged[txClarOff]; got != '0' {
 			r.t.Errorf("%s: its own MW Set carries %q at position 21 under %v, want '0' — the printed-fixed byte is not being written where the frame puts it", r.name(), got, policy)
 		}
-		forged[memoryP5WireOffset] = '1'
+		forged[txClarOff] = '1'
 		if _, err := r.d.ParseMRAnswer(mrShaped(forged)); err == nil {
 			r.t.Errorf("%s: its own parser ACCEPTED %q, whose P5 is '1' under %v — a byte this radio's manual prints \"(Fixed)\" must not be decoded into a flag", r.name(), mrShaped(forged), policy)
 		} else {
@@ -895,7 +908,7 @@ func (r *conformanceRun) checkMemoryP5() {
 		}
 		frame := cmd.Bytes()
 		r.checkFrame("MW set (TxClar true)", frame)
-		if got := frame[memoryP5WireOffset]; got != '1' {
+		if got := frame[txClarOffsetFor(len(frame))]; got != '1' {
 			r.t.Errorf("%s: BuildMWSet with TxClar true emitted %q, whose position 21 is %q rather than '1' — the flag is not reaching the byte the frame puts it in", r.name(), frame, got)
 		}
 		back, err := r.d.ParseMRAnswer(mrShaped(frame))
@@ -940,6 +953,21 @@ func (r *conformanceRun) checkCombinedMemoryP5(ctcss cat.CTCSSState, shift cat.S
 		return // checkCombinedMTSets has already reported this
 	}
 
+	// A short-form MW Set this dialect actually built, consulted ONLY for
+	// its length: the combined form's own frame carries a variable-width
+	// tag field after the shared block, so its length cannot stand in for
+	// txClarOffsetFor's mwFrameLen — see that function's doc comment. The
+	// shared field block sits at the same offsets from the START in both
+	// forms, and a plain (TxClar false) record is legal to build under
+	// either MemoryP5Policy, so this never fails for a reason unrelated to
+	// the axis under test here.
+	ref, refErr := r.d.BuildMWSet(recordFor(writable, r.emittable[0], r.d.MWWriteKind(), 0, ctcss, shift))
+	if refErr != nil {
+		r.t.Errorf("%s: BuildMWSet with TxClar false was refused (%v) — needed only to measure this dialect's own frame-block offsets", r.name(), refErr)
+		return
+	}
+	mwFrameLen := len(ref.Bytes())
+
 	m := recordFor(writable, r.emittable[0], cat.CombinedMTSetKind, 0, ctcss, shift)
 	m.TxClar = true
 
@@ -964,7 +992,7 @@ func (r *conformanceRun) checkCombinedMemoryP5(ctcss cat.CTCSSState, shift cat.S
 		}
 		frame := cmd.Bytes()
 		r.checkFrame("MT set combined (TxClar true)", frame)
-		if got := frame[memoryP5WireOffset]; got != '1' {
+		if got := frame[txClarOffsetFor(mwFrameLen)]; got != '1' {
 			r.t.Errorf("%s: combined BuildMTSetCombined with TxClar true emitted %q, whose position 21 is %q rather than '1' — the flag is not reaching the byte the frame puts it in", r.name(), frame, got)
 		}
 		gotM, _, _, err := r.parseCombined(frame)
@@ -978,17 +1006,28 @@ func (r *conformanceRun) checkCombinedMemoryP5(ctcss cat.CTCSSState, shift cat.S
 	}
 }
 
-// memoryP5WireOffset is position 21 of the shared memory field block,
-// 0-indexed — the byte cat.MemoryP5Policy governs.
+// txClarOffsetFor returns THIS DIALECT'S OWN byte offset for P5 (the TX
+// clarifier flag cat.MemoryP5Policy governs) in a short-form MR/MW frame of
+// mwFrameLen bytes — position 21 (1-indexed) of the registered 28-byte
+// family, SHIFTED the same way ctcssOffsetFor's doc comment describes for
+// P8: always 8 bytes before the frame's own final ';', so deriving it from
+// mwFrameLen is correct for both the registered family and the 27-byte
+// ft2000/ftdx9000 one (core/cat's Lift-Y axes, commit 99cdaf9).
 //
 // It is restated here rather than imported because core/cat's offsets are
-// unexported, which is the condition this package works under. It is a
-// documented protocol fact (the manuals' own position tables number P5 at
-// 21) and not a receiver-varying one, so restating it cannot drift into
-// describing one radio. What it must NOT become is a second opinion: the
-// checks above assert that this dialect's own builder puts the flag HERE,
-// which is what would fail if core/cat ever moved the field.
-const memoryP5WireOffset = 20
+// unexported, which is the condition this package works under. What it
+// must NOT become is a second opinion: the checks above assert that this
+// dialect's own builder puts the flag HERE, which is what would fail if
+// core/cat ever moved the field.
+//
+// The SAME formula holds for the combined MT form's own frame, whose
+// mwFrameLen argument a caller must supply from a SHORT-form MW frame this
+// dialect built (never the combined frame's own length, which carries a
+// variable-width tag field after this offset and would corrupt the
+// arithmetic) — the shared field block sits at identical offsets from the
+// START in both forms, and mwFrameLen is only ever used to recover the one
+// axis (P2's digit width) that varies it.
+func txClarOffsetFor(mwFrameLen int) int { return mwFrameLen - 8 }
 
 // mrShaped returns frame with its two-byte command prefix rewritten to "MR",
 // so an MW Set this package just built can be offered to the MR answer

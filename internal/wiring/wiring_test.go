@@ -20,10 +20,14 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -39,8 +43,11 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts480"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts570"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts870s"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -269,6 +276,37 @@ var fakePackageForModel = map[string]string{
 	// The v1.7.0 Icom wave's sixth and last registration, on the same
 	// footing.
 	IC7200Model: "internal/fakeic7200",
+	// v1.7.0 Kenwood/Yaesu wave, first row: internal/fakets2000 serves all
+	// three TS-2000 rows through WithModelName, not a per-row constructor.
+	TS2000Model: "internal/fakets2000",
+	// v1.7.0 Kenwood/Yaesu wave, second row: same package.
+	TS2000XModel: "internal/fakets2000",
+	// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row: same package.
+	TSB2000Model: "internal/fakets2000",
+	// v1.7.0 Kenwood/Yaesu wave, fourth row: internal/fakets570 serves all
+	// three TS-570 rows through WithModelName.
+	TS570DModel: "internal/fakets570",
+	// v1.7.0 Kenwood/Yaesu wave, fifth row: same package.
+	TS570SModel: "internal/fakets570",
+	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: same package.
+	TS570DGModel: "internal/fakets570",
+	// v1.7.0 Kenwood/Yaesu wave, seventh row: one simulator package to
+	// itself.
+	TS870SModel: "internal/fakets870s",
+	// v1.7.0 Kenwood/Yaesu wave, eighth row: internal/fakeft2000 serves
+	// both FT-2000 rows through WithModelName.
+	FT2000Model: "internal/fakeft2000",
+	// v1.7.0 Kenwood/Yaesu wave, ninth row: same package.
+	FT2000DModel: "internal/fakeft2000",
+	// v1.7.0 Kenwood/Yaesu wave, tenth row: one simulator package to
+	// itself.
+	FTdx5000Model: "internal/fakeftdx5000",
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row: one simulator package to
+	// itself.
+	FTdx9000Model: "internal/fakeftdx9000",
+	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: one simulator
+	// package to itself.
+	FT950Model: "internal/fakeft950",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -330,6 +368,8 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			case ic9100FakeAdapter:
 				concrete = reflect.ValueOf(a.Radio)
 			case ic7200FakeAdapter:
+				concrete = reflect.ValueOf(a.Radio)
+			case ts570FakeAdapter:
 				concrete = reflect.ValueOf(a.Radio)
 			}
 			if concrete.Kind() == reflect.Ptr {
@@ -1541,7 +1581,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S", "TS-870S", "FT-2000", "FT-2000D", "FTdx9000", "FT-950", "TS-570DG"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1704,6 +1744,54 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// The v1.7.0 Icom wave's sixth and last registration.
 	if IC7200Model != "IC-7200" {
 		t.Errorf("IC7200Model = %q, want \"IC-7200\"", IC7200Model)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, first row.
+	if TS2000Model != "TS-2000" {
+		t.Errorf("TS2000Model = %q, want \"TS-2000\"", TS2000Model)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, second row.
+	if TS2000XModel != "TS-2000X" {
+		t.Errorf("TS2000XModel = %q, want \"TS-2000X\"", TS2000XModel)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row.
+	if TSB2000Model != "TS-B2000" {
+		t.Errorf("TSB2000Model = %q, want \"TS-B2000\"", TSB2000Model)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, fourth row.
+	if TS570DModel != "TS-570D" {
+		t.Errorf("TS570DModel = %q, want \"TS-570D\"", TS570DModel)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, fifth row.
+	if TS570SModel != "TS-570S" {
+		t.Errorf("TS570SModel = %q, want \"TS-570S\"", TS570SModel)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row.
+	if TS570DGModel != "TS-570DG" {
+		t.Errorf("TS570DGModel = %q, want \"TS-570DG\"", TS570DGModel)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, seventh row.
+	if TS870SModel != "TS-870S" {
+		t.Errorf("TS870SModel = %q, want \"TS-870S\"", TS870SModel)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, eighth row.
+	if FT2000Model != "FT-2000" {
+		t.Errorf("FT2000Model = %q, want \"FT-2000\"", FT2000Model)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, ninth row.
+	if FT2000DModel != "FT-2000D" {
+		t.Errorf("FT2000DModel = %q, want \"FT-2000D\"", FT2000DModel)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, tenth row.
+	if FTdx5000Model != "FTdx5000" {
+		t.Errorf("FTdx5000Model = %q, want \"FTdx5000\"", FTdx5000Model)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row.
+	if FTdx9000Model != "FTdx9000" {
+		t.Errorf("FTdx9000Model = %q, want \"FTdx9000\"", FTdx9000Model)
+	}
+	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row.
+	if FT950Model != "FT-950" {
+		t.Errorf("FT950Model = %q, want \"FT-950\"", FT950Model)
 	}
 }
 
@@ -2289,7 +2377,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, TS570DGModel}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2557,6 +2645,62 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: IC7200Model, want: func() driver.Driver { return ic7200.New(ic7200.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic7200.New(ic7200.RealHardware, ic7200.WithConsentedUnverifiedWrites())
 		}},
+		// v1.7.0 Kenwood/Yaesu wave, tenth row: bare New takes the profile
+		// as its first argument.
+		{model: FTdx5000Model, want: func() driver.Driver { return ftdx5000.New(ftdx5000.RealHardware) }, wantConsent: func() driver.Driver {
+			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
+		// argument, so the consent arm is WithConsentedUnverifiedWrites
+		// alone rather than a second positional value.
+		{model: TS2000Model, want: func() driver.Driver { return ts2000.NewTS2000() }, wantConsent: func() driver.Driver {
+			return ts2000.NewTS2000(ts2000.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, second row: same shape as TS-2000's.
+		{model: TS2000XModel, want: func() driver.Driver { return ts2000.NewTS2000X() }, wantConsent: func() driver.Driver {
+			return ts2000.NewTS2000X(ts2000.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row.
+		{model: TSB2000Model, want: func() driver.Driver { return ts2000.NewTSB2000() }, wantConsent: func() driver.Driver {
+			return ts2000.NewTSB2000(ts2000.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, fourth row: NewD takes the profile as
+		// its first argument (the ftdx101 shape).
+		{model: TS570DModel, want: func() driver.Driver { return ts570.NewD(ts570.RealHardware) }, wantConsent: func() driver.Driver {
+			return ts570.NewD(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, fifth row: same shape as TS-570D's.
+		{model: TS570SModel, want: func() driver.Driver { return ts570.NewS(ts570.RealHardware) }, wantConsent: func() driver.Driver {
+			return ts570.NewS(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: same shape.
+		{model: TS570DGModel, want: func() driver.Driver { return ts570.NewDG(ts570.RealHardware) }, wantConsent: func() driver.Driver {
+			return ts570.NewDG(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New takes the
+		// profile as its first argument.
+		{model: TS870SModel, want: func() driver.Driver { return ts870s.New(ts870s.RealHardware) }, wantConsent: func() driver.Driver {
+			return ts870s.New(ts870s.RealHardware, ts870s.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, eighth row: NewFT2000 takes the
+		// profile as its first argument (the ftdx101 shape).
+		{model: FT2000Model, want: func() driver.Driver { return ft2000.NewFT2000(ft2000.RealHardware) }, wantConsent: func() driver.Driver {
+			return ft2000.NewFT2000(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, ninth row: same shape as FT-2000's.
+		{model: FT2000DModel, want: func() driver.Driver { return ft2000.NewFT2000D(ft2000.RealHardware) }, wantConsent: func() driver.Driver {
+			return ft2000.NewFT2000D(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, eleventh row: bare New takes the
+		// profile as its first argument.
+		{model: FTdx9000Model, want: func() driver.Driver { return ftdx9000.New(ftdx9000.RealHardware) }, wantConsent: func() driver.Driver {
+			return ftdx9000.New(ftdx9000.RealHardware, ftdx9000.WithConsentedUnverifiedWrites())
+		}},
+		// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: bare New takes
+		// the profile as its first argument.
+		{model: FT950Model, want: func() driver.Driver { return ft950.New(ft950.RealHardware) }, wantConsent: func() driver.Driver {
+			return ft950.New(ft950.RealHardware, ft950.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -2792,6 +2936,50 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		IC9100Model: true,
 		// The IC-7200 (v1.7.0 Icom wave), on the same footing.
 		IC7200Model: true,
+		// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row).
+		// writeTrialsComplete (core/driver/ftdx5000/caps.go) is FALSE, so
+		// its RealHardware profile carries a write-side Unverified field.
+		FTdx5000Model: true,
+		// The TS-2000 (v1.7.0 Kenwood/Yaesu wave, first row).
+		// writeTrialsComplete (core/driver/ts2000/caps.go) is FALSE, so its
+		// RealHardware profile carries a write-side Unverified field.
+		TS2000Model: true,
+		// The TS-2000X (v1.7.0 Kenwood/Yaesu wave, second row). Same
+		// package, same writeTrialsComplete false.
+		TS2000XModel: true,
+		// The TS-B2000 (v1.7.0 Kenwood/Yaesu wave, third and last ts2000
+		// row). Same package, same writeTrialsComplete false.
+		TSB2000Model: true,
+		// The TS-570D (v1.7.0 Kenwood/Yaesu wave, fourth row).
+		// writeTrialsComplete (core/driver/ts570/caps.go) is FALSE for
+		// every row, so its RealHardware profile carries a write-side
+		// Unverified field.
+		TS570DModel: true,
+		// The TS-570S (v1.7.0 Kenwood/Yaesu wave, fifth row). Same
+		// package, same writeTrialsComplete false.
+		TS570SModel: true,
+		// The TS-570DG (v1.7.0 Kenwood/Yaesu wave, sixth and last ts570
+		// row). Same package, same writeTrialsComplete false.
+		TS570DGModel: true,
+		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row).
+		// writeTrialsComplete (core/driver/ts870s/caps.go) is FALSE, so its
+		// RealHardware profile carries a write-side Unverified field.
+		TS870SModel: true,
+		// The FT-2000 (v1.7.0 Kenwood/Yaesu wave, eighth row).
+		// writeTrialsComplete (core/driver/ft2000/caps.go) is FALSE, so its
+		// RealHardware profile carries a write-side Unverified field.
+		FT2000Model: true,
+		// The FT-2000D (v1.7.0 Kenwood/Yaesu wave, ninth row). Same
+		// package, same writeTrialsComplete false.
+		FT2000DModel: true,
+		// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row).
+		// writeTrialsComplete (core/driver/ftdx9000/caps.go) is FALSE, so
+		// its RealHardware profile carries a write-side Unverified field.
+		FTdx9000Model: true,
+		// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row).
+		// writeTrialsComplete (core/driver/ft950/caps.go) is FALSE, so its
+		// RealHardware profile carries a write-side Unverified field.
+		FT950Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -3068,6 +3256,21 @@ func TestStopBitsFor_EveryKenwoodDriverReportsOne(t *testing.T) {
 		// still never be asked.
 		{"TS-890S (registered)", mustRealDriver(t, TS890SModel)},
 		{"TS-990S (registered)", mustRealDriver(t, TS990SModel)},
+		// v1.7.0 Kenwood/Yaesu wave, first row: this document prints the
+		// framing outright too (matrix §4), so this row reports 1 on the
+		// same footing as every Kenwood row above it.
+		{"TS-2000 (registered)", mustRealDriver(t, TS2000Model)},
+		{"TS-2000X (registered)", mustRealDriver(t, TS2000XModel)},
+		{"TS-B2000 (registered)", mustRealDriver(t, TSB2000Model)},
+		// v1.7.0 Kenwood/Yaesu wave, fourth row: this document prints the
+		// framing outright too (matrix §2), so this row reports 1 on the
+		// same footing as every Kenwood row above it.
+		{"TS-570D (registered)", mustRealDriver(t, TS570DModel)},
+		{"TS-570S (registered)", mustRealDriver(t, TS570SModel)},
+		// v1.7.0 Kenwood/Yaesu wave, seventh row: this document prints the
+		// framing outright too (matrix §1), so this row reports 1 on the
+		// same footing as every Kenwood row above it.
+		{"TS-870S (registered)", mustRealDriver(t, TS870SModel)},
 		// The UNREGISTERED TS-480, constructed directly: there is no
 		// registry key to look it up by, by design.
 		{"TS-480 (built, unregistered — plan P3)", ts480.New(ts480.RealHardware)},
@@ -3148,7 +3351,7 @@ func mustRealDriver(t *testing.T, model string) driver.Driver {
 // populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member CTCSSStates is
 // not a membership question: this list is about the maker, and the
 // vocabulary's width belongs to the tests that read it.
-var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel}
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel, FTdx5000Model, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model}
 
 // icomModels names every registered Icom model, on the same by-name
 // footing as yaesuModels — ELEVEN rows now (the IC-7610, the IC-7300 pair
@@ -3198,7 +3401,7 @@ var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, 
 // the two above them and both covered by the same seam pin. The list grew
 // by two names and by nothing else — see wantIdentityWidth below, which
 // this pair leaves UNCHANGED.
-var kenwoodModels = []string{TS590SModel, TS590SGModel, TS890SModel, TS990SModel}
+var kenwoodModels = []string{TS590SModel, TS590SGModel, TS890SModel, TS990SModel, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, TS570DGModel}
 
 // TestMakerModelListsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1

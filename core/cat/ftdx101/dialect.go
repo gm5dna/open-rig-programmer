@@ -161,6 +161,14 @@ func newDialect(catID string) cat.Dialect {
 		ToneStates:  cat.ToneStatesCTCSS,
 		MWWriteKind: cat.CombinedMTSetKind, // MW P7 "(Fixed)" — a fact
 		// of this radio, not a rule; see the difference pins.
+		// Pinned explicitly (v1.7.0 Kenwood/Yaesu wave, S1 lift): this
+		// radio's MR-answer/MW-set frame is the registered 28-byte,
+		// 9-digit-P2 shape, and its P9 is printed-fixed "00" on every
+		// memory-bearing block. Not an assumption: this is the legend,
+		// transcribed. Both DialectD and DialectMP share this config.
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         cat.P9Fixed00,
 	})
 }
 

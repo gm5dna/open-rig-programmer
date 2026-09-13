@@ -355,6 +355,44 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// The IC-7200 (v1.7.0 Icom wave's sixth and last registration), on
 		// IC7800Model's footing.
 		{"ic7200", "Simulated", "fakeic7200.New", "internal/fakeic7200", []string{"IC-7200"}},
+		// The FTdx5000 (v1.7.0 Kenwood/Yaesu wave, tenth row): bare New
+		// takes the profile as its first argument, one package, one
+		// simulator, no sibling.
+		{"ftdx5000", "Simulated", "fakeftdx5000.New", "internal/fakeftdx5000", []string{"FTdx5000"}},
+		// The TS-2000 family (v1.7.0 Kenwood/Yaesu wave, first row of
+		// three): core/driver/ts2000 has NO Profile positional argument at
+		// all (NewTS2000/NewTS2000X/NewTSB2000 take opts ...Option only),
+		// so there is no bare "ts2000.Simulated" selector for this guard to
+		// find anywhere — the token column names WithSimulatedProfile
+		// instead, the option function fake.go calls to select the fake
+		// capability arm. The mechanism is generic over any selector name,
+		// not just a constant (fileHasSelector matches any <recv>.<sel>),
+		// so this is the same confinement check on this package's own
+		// shape. ONE row for THREE registered models.
+		{"ts2000", "WithSimulatedProfile", "fakets2000.New", "internal/fakets2000", []string{"TS-2000", "TS-2000X", "TS-B2000"}},
+		// The TS-570 family (v1.7.0 Kenwood/Yaesu wave, fourth row of
+		// three): core/driver/ts570's NewD/NewS/NewDG each take the
+		// profile as their first argument, the ordinary shape, so the
+		// token is a bare "ts570.Simulated" constant. ONE row for THREE
+		// registered models (one constructor family, one fake).
+		{"ts570", "Simulated", "fakets570.New", "internal/fakets570", []string{"TS-570D", "TS-570S", "TS-570DG"}},
+		// The TS-870S (v1.7.0 Kenwood/Yaesu wave, seventh row): bare New
+		// takes the profile as its first argument, one package, one
+		// simulator, no sibling.
+		{"ts870s", "Simulated", "fakets870s.New", "internal/fakets870s", []string{"TS-870S"}},
+		// The FT-2000 family (v1.7.0 Kenwood/Yaesu wave, eighth row of
+		// two): core/driver/ft2000's NewFT2000/NewFT2000D each take the
+		// profile as their first argument, the ordinary shape. ONE row for
+		// TWO registered models (one constructor family, one fake).
+		{"ft2000", "Simulated", "fakeft2000.New", "internal/fakeft2000", []string{"FT-2000", "FT-2000D"}},
+		// The FTdx9000 (v1.7.0 Kenwood/Yaesu wave, eleventh row): bare New
+		// takes the profile as its first argument, one package, one
+		// simulator, no sibling.
+		{"ftdx9000", "Simulated", "fakeftdx9000.New", "internal/fakeftdx9000", []string{"FTdx9000"}},
+		// The FT-950 (v1.7.0 Kenwood/Yaesu wave, twelfth and last row):
+		// bare New takes the profile as its first argument, one package,
+		// one simulator, no sibling.
+		{"ft950", "Simulated", "fakeft950.New", "internal/fakeft950", []string{"FT-950"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

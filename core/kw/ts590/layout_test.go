@@ -76,8 +76,10 @@ func TestLayouts_AreConfiguredAndNamedPerRow(t *testing.T) {
 // Book and Model included).
 func TestLayoutConfig_HasExactlyTenComparedAxes(t *testing.T) {
 	const bookAndModel = 2 // identity fields, never compared as an axis
-	if got := reflect.TypeOf(kw.LayoutConfig{}).NumField() - bookAndModel; got != 10 {
-		t.Fatalf("kw.LayoutConfig has %d compared axes (NumField()-%d), want 10 — a field was added or removed; update TestLayouts_TheAxesTheTwoRowsShare and TestLayouts_TheThreeAxesTheRowsDifferOn in this file, core/kw/ts480/layout_test.go's TestLayout_EveryAxisByValue, and core/kw/layout_test.go's TestNewLayout_RefusesAnUnsetAxis for the new one", got, bookAndModel)
+	// FOURTEEN, since the Kenwood/Yaesu wave's RecordLen lift: RecordLen,
+	// P10, P12 and P13 joined the original ten as new shared axes.
+	if got := reflect.TypeOf(kw.LayoutConfig{}).NumField() - bookAndModel; got != 14 {
+		t.Fatalf("kw.LayoutConfig has %d compared axes (NumField()-%d), want 14 — a field was added or removed; update TestLayouts_TheAxesTheTwoRowsShare and TestLayouts_TheThreeAxesTheRowsDifferOn in this file, core/kw/ts480/layout_test.go's TestLayout_EveryAxisByValue, and core/kw/layout_test.go's TestNewLayout_RefusesAnUnsetAxis for the new one", got, bookAndModel)
 	}
 }
 
@@ -106,6 +108,10 @@ func TestLayouts_TheAxesTheTwoRowsShare(t *testing.T) {
 		{"bytes 39-40's meaning", s.Byte3940(), sg.Byte3940(), kw.Byte3940FMNarrowFlag},
 		{"byte 41's meaning", s.Byte41(), sg.Byte41(), kw.Byte41Lockout},
 		{"the tone-mode value set", s.ToneModes(), sg.ToneModes(), kw.ToneModesFour},
+		{"the record length", s.RecordLen(), sg.RecordLen(), uint8(kw.RecordLen)},
+		{"P10's policy", s.P10Policy(), sg.P10Policy(), kw.P10FixedZero},
+		{"P12's policy", s.P12Policy(), sg.P12Policy(), kw.P12FixedZero},
+		{"P13's policy", s.P13Policy(), sg.P13Policy(), kw.P13FixedZero},
 	} {
 		if tc.sv != tc.sgv {
 			t.Errorf("%s differs between the rows (S %v, SG %v), and this document prints one legend for both", tc.axis, tc.sv, tc.sgv)

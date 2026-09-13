@@ -27,8 +27,12 @@ package kw
 // layout590SG is the TS-590SG row.
 func layout590SG() Layout {
 	return MustNewLayout(LayoutConfig{
-		Book:  Book590,
-		Model: "TS-590SG",
+		Book:      Book590,
+		Model:     "TS-590SG",
+		RecordLen: RecordLen,
+		P10:       P10FixedZero,
+		P12:       P12FixedZero,
+		P13:       P13FixedZero,
 		// P2 is the channel's hundreds digit, "refer to the MC command"
 		// (590:1539-1540), and MC prints the space convention at
 		// 590:1332-1337.
@@ -68,13 +72,17 @@ func layout590SG() Layout {
 // changed, and the slot ceiling A12 leaves at 109.
 func layout590S() Layout {
 	return MustNewLayout(LayoutConfig{
-		Book:     Book590,
-		Model:    "TS-590S",
-		P2:       P2HundredsDigit,
-		Byte19:   Byte19DataMode,
-		Byte28:   Byte28FilterEither, // "always \"0\"" in firmware 1.xx (590:1478; E7)
-		Byte3940: Byte3940FMNarrowFlag,
-		Byte41:   Byte41Lockout,
+		Book:      Book590,
+		Model:     "TS-590S",
+		RecordLen: RecordLen,
+		P10:       P10FixedZero,
+		P12:       P12FixedZero,
+		P13:       P13FixedZero,
+		P2:        P2HundredsDigit,
+		Byte19:    Byte19DataMode,
+		Byte28:    Byte28FilterEither, // "always \"0\"" in firmware 1.xx (590:1478; E7)
+		Byte3940:  Byte3940FMNarrowFlag,
+		Byte41:    Byte41Lockout,
 
 		ToneModes: ToneModesFour,
 		// "000 ~ 087: Menu number (TS-590S)" (590:543), the line above the
@@ -92,8 +100,12 @@ func layout590S() Layout {
 // layout480 is the TS-480 row.
 func layout480() Layout {
 	return MustNewLayout(LayoutConfig{
-		Book:  Book480,
-		Model: "TS-480",
+		Book:      Book480,
+		Model:     "TS-480",
+		RecordLen: RecordLen,
+		P10:       P10FixedZero,
+		P12:       P12FixedZero,
+		P13:       P13FixedZero,
 		// P2 is "Always 0 for the TS-480." (480:953) — there is no bank
 		// field in this record.
 		P2: P2FixedZero,

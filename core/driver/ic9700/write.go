@@ -161,6 +161,23 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 	data := *ch.Data
 
+	// Rung 1b: core/driver.CheckFieldStates, THE FLEET'S shared walk
+	// rather than a table of this package's own: every field of
+	// ChannelData that carries a FieldState, judged against this
+	// session's own vocabularies. validateKnownValues below (rung 3)
+	// judges a value ONLY when its State == codeplug.Known, on the
+	// stated reasoning that a non-Known state — including Absent, the
+	// zero state a hand-built ChannelData leaves behind — "is the same
+	// case in practice: a caller who set nothing has requested nothing".
+	// That reasoning is sharpened here: Absent WITH A NON-ZERO VALUE is
+	// not "nothing requested" but a malformed request, and without this
+	// rung it would be DROPPED from the frame with the write reporting
+	// success rather than refused (the FT-891 closing review's C-M1,
+	// sharpened by MEDIUM-1).
+	if field, err := driver.CheckFieldStates(s.caps, data); err != nil {
+		return noSteps(), refuse(ch.Slot, []spec.Field{field}, "%v", err)
+	}
+
 	// Rung 2: the capability re-check, per requested field.
 	requested := requestedFields(data)
 	var unwritable []spec.Field

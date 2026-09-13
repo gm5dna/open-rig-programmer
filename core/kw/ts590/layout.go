@@ -126,6 +126,12 @@ func rowConfig(model string, byte28 kw.Byte28Policy, maxEXAddress uint8, slots [
 		Book:  kw.Book590,
 		Model: model,
 
+		// RecordLen was a package constant before the Kenwood/Yaesu wave's
+		// RecordLen lift; it is pinned here explicitly so this row's
+		// frames stay byte-identical by construction rather than by an
+		// unstated default surviving the lift.
+		RecordLen: kw.RecordLen,
+
 		// P2 is the channel number's hundreds digit: MR's and MW's charts
 		// say only "Channel number (refer to the MC command)" (590:1453,
 		// 590:1539-1540), and MC's own chart prints the space convention —
@@ -162,6 +168,13 @@ func rowConfig(model string, byte28 kw.Byte28Policy, maxEXAddress uint8, slots [
 
 		ModeNames: modeNames(),
 		Slots:     slots,
+		// P10, P12 and P13 are the TS-2000 lift's three axes, pinned to
+		// their constant readings here so this row's frames stay
+		// byte-identical: "Always 000" (590:1558-1559), "Always 0"
+		// (590:1565-1566) and "Always 000000000" (590:1567-1568).
+		P10: kw.P10FixedZero,
+		P12: kw.P12FixedZero,
+		P13: kw.P13FixedZero,
 		// P10 "000: Always 000" (590:1558-1559), P12 "0: Always 0"
 		// (590:1565-1566) and P13 "000000000: Always 000000000"
 		// (590:1567-1568). THIRTEEN of the 47 parameter bytes, and the whole

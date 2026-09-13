@@ -270,7 +270,7 @@ func (r *run) checkLayoutSelfConsistency() {
 		r.t.Fatal("a configured layout with an empty Model: every refusal it produces names the row it speaks for")
 	}
 	switch l.Book() {
-	case kw.Book590, kw.Book480:
+	case kw.Book590, kw.Book480, kw.Book570:
 	default:
 		r.t.Errorf("%s: Book is %v — a layout that names no document cannot quote a cause sentence (E13)", r.name(), l.Book())
 	}
@@ -280,14 +280,34 @@ func (r *run) checkLayoutSelfConsistency() {
 	if l.Byte19() == kw.Byte19Unset {
 		r.t.Errorf("%s: byte 19's meaning is unset", r.name())
 	}
-	if l.Byte28() == kw.Byte28Unset {
-		r.t.Errorf("%s: byte 28's policy is unset", r.name())
-	}
-	if l.Byte3940() == kw.Byte3940Unset {
-		r.t.Errorf("%s: bytes 39-40's meaning is unset", r.name())
-	}
-	if l.Byte41() == kw.Byte41Unset {
-		r.t.Errorf("%s: byte 41's meaning is unset", r.name())
+	// Byte28/Byte3940/Byte41 ARE REQUIRED ONLY OF A ROW WITH A TAIL. The
+	// RecordLen lift's own rule (core/kw/layout.go's NewLayout): a row
+	// whose RecordLen is anything but the family's full 50 has no byte
+	// 28, no bytes 39-40 and no byte 41 at all (the TS-570's 28-byte
+	// grid stops at P8), so those three are legitimately Unset there —
+	// demanding them here would fault a well-formed layout for a fact
+	// about the RADIO, not a gap in construction.
+	hasTail := l.RecordLen() == kw.RecordLen
+	if hasTail {
+		if l.Byte28() == kw.Byte28Unset {
+			r.t.Errorf("%s: byte 28's policy is unset", r.name())
+		}
+		if l.Byte3940() == kw.Byte3940Unset {
+			r.t.Errorf("%s: bytes 39-40's meaning is unset", r.name())
+		}
+		if l.Byte41() == kw.Byte41Unset {
+			r.t.Errorf("%s: byte 41's meaning is unset", r.name())
+		}
+	} else {
+		if l.Byte28() != kw.Byte28Unset {
+			r.t.Errorf("%s: byte 28's policy is %v, but this row's %d-byte record has no byte 28 at all", r.name(), l.Byte28(), l.RecordLen())
+		}
+		if l.Byte3940() != kw.Byte3940Unset {
+			r.t.Errorf("%s: bytes 39-40's meaning is %v, but this row's %d-byte record has no bytes 39-40 at all", r.name(), l.Byte3940(), l.RecordLen())
+		}
+		if l.Byte41() != kw.Byte41Unset {
+			r.t.Errorf("%s: byte 41's meaning is %v, but this row's %d-byte record has no byte 41 at all", r.name(), l.Byte41(), l.RecordLen())
+		}
 	}
 	if l.ToneModes() == kw.ToneModesUnset {
 		r.t.Errorf("%s: the tone-mode value set is unset", r.name())
@@ -298,9 +318,14 @@ func (r *run) checkLayoutSelfConsistency() {
 	if len(l.Slots()) == 0 {
 		r.t.Fatalf("%s: the slot space is empty, so no channel could be read or written", r.name())
 	}
-	if len(l.PrintedFixed()) == 0 {
-		r.t.Errorf("%s: the printed-fixed byte set is empty, and both books hard-wire P10, P12 and P13", r.name())
-	}
+	// AN EMPTY SET IS NO LONGER A FAULT, since the TS-2000 lift (core/kw's
+	// P10Policy/P12Policy/P13Policy plus Byte28Reverse/Byte41MemoryGroup):
+	// a row that carries all six cross-checked positions live has nothing
+	// to hard-wire at all — core/kw/ts2000/layout.go's own `PrintedFixed:
+	// nil`. What NewLayout still enforces is the crossCheck consistency
+	// between each axis and the set, which this suite's other legs
+	// exercise through BuildMWSet/ParseMRAnswer; there is no longer a
+	// standalone "the set must be non-empty" invariant to pin here.
 
 	// The accessors must COPY. A layout a model package minted at
 	// initialisation and handed out must not be editable by whoever holds
@@ -409,6 +434,28 @@ func (r *run) checkIdentity() {
 		}
 		r.refuse("the other book's command", "FV appears nowhere in the 2003 TS-480 document", []byte("FV;"))
 		r.refuse("answer frame", "a TY ANSWER is never a legal outbound command", []byte("TY001;"))
+	case kw.Book570:
+		// NEITHER FV NOR TY APPEARS ANYWHERE IN THE TS-570 DOCUMENT — a
+		// whole-document grep of ts570_manual_00_layout.txt finds no such
+		// command — so this is the one book where BOTH of identity.go's
+		// two commands are refused rather than exactly one being chosen.
+		// requireBook already enforces this (FV wants Book590 exactly, TY
+		// wants Book480 exactly, and Book570 is neither); this arm is what
+		// asserts that both refusals actually fire rather than silently
+		// dropping the FV/TY family for this book the way the default arm
+		// below would.
+		if _, err := l.BuildFVRead(); err == nil {
+			r.t.Errorf("%s: built an FV read, and FV appears nowhere in the TS-570 document", r.name())
+		} else {
+			r.refusals["the other book's command"]++
+		}
+		if _, err := l.BuildTYRead(); err == nil {
+			r.t.Errorf("%s: built a TY read, and TY appears nowhere in the TS-570 document", r.name())
+		} else {
+			r.refusals["the other book's command"]++
+		}
+		r.refuse("the other book's command", "neither FV nor TY appears anywhere in the TS-570 document", []byte("FV;"))
+		r.refuse("the other book's command", "neither FV nor TY appears anywhere in the TS-570 document", []byte("TY;"))
 	default:
 		// checkLayoutSelfConsistency has already reported an unknown Book,
 		// and kw.NewLayout refuses one, so this arm is unreachable today.
@@ -533,6 +580,19 @@ func (r *run) checkMemorySets() {
 	r.t.Helper()
 	l := r.l
 
+	// hasTail mirrors core/kw's own RecordLen lift (see
+	// checkLayoutSelfConsistency's and checkEmptyChannel's matching
+	// comments): a row whose RecordLen is anything but the family's full
+	// 50 has no byte 28, no bytes 39-40, no byte 41, no P10/P12/P13 and
+	// no P16 at all, so none of Byte28/Byte3940/Byte41/DCSCode/Shift/
+	// OffsetHz/CTCSSIndex/Name survives a build -> parse round trip on
+	// such a row — there is nothing on the wire to carry them back.
+	// Comparing them unconditionally, and demanding exactly kw.RecordLen
+	// (50) bytes regardless of this layout's own width, is what used to
+	// fault every sampled slot on a RecordLen:28 row.
+	hasTail := l.RecordLen() == kw.RecordLen
+	recordLen := int(l.RecordLen())
+
 	// The witness slot the matcher legs below correlate AGAINST: any slot
 	// of this row's own space that is not the one being answered.
 	witness := r.firstMemorySlot()
@@ -546,24 +606,30 @@ func (r *run) checkMemorySets() {
 		}
 		frame := cmd.Bytes()
 		r.checkFrame("MW set", frame)
-		if len(frame) != kw.RecordLen {
-			r.t.Errorf("%s: BuildMWSet produced %d bytes, want exactly %d — the short form of 590:1579-1581 ERASES the channel", r.name(), len(frame), kw.RecordLen)
+		if len(frame) != recordLen {
+			r.t.Errorf("%s: BuildMWSet produced %d bytes, want exactly %d (this row's own RecordLen) — the short form of 590:1579-1581 ERASES the channel", r.name(), len(frame), recordLen)
 		}
 
-		// The same fifty bytes under the MR prefix are the ANSWER, which is
+		// The same bytes under the MR prefix are the ANSWER, which is
 		// what a radio sends; decoding it back must reproduce the record.
 		answer := append([]byte{}, frame...)
 		answer[0], answer[1] = 'M', 'R'
 		got, err := l.ParseMRAnswer(answer)
 		if err != nil {
-			r.t.Errorf("%s: ParseMRAnswer refused the fifty bytes this layout's own MW builder produced (%q): %v", r.name(), answer, err)
+			r.t.Errorf("%s: ParseMRAnswer refused the bytes this layout's own MW builder produced (%q): %v", r.name(), answer, err)
 			continue
 		}
-		if got.FreqHz != rec.FreqHz || got.Mode != rec.Mode || got.Name != rec.Name ||
-			got.Byte19 != rec.Byte19 || got.Byte28 != rec.Byte28 || got.Byte41 != rec.Byte41 ||
-			got.Byte3940 != rec.Byte3940 || got.ToneMode != rec.ToneMode ||
-			got.ToneIndex != rec.ToneIndex || got.CTCSSIndex != rec.CTCSSIndex ||
-			got.Slot.Number() != s.Number() || got.Slot.Class() != s.Class() || got.Slot.Half() != s.Half() {
+		mismatch := got.FreqHz != rec.FreqHz || got.Mode != rec.Mode ||
+			got.Byte19 != rec.Byte19 || got.ToneMode != rec.ToneMode ||
+			got.ToneIndex != rec.ToneIndex ||
+			got.Slot.Number() != s.Number() || got.Slot.Class() != s.Class() || got.Slot.Half() != s.Half()
+		if hasTail {
+			mismatch = mismatch ||
+				got.Name != rec.Name || got.Byte28 != rec.Byte28 || got.Byte41 != rec.Byte41 ||
+				got.Byte3940 != rec.Byte3940 || got.CTCSSIndex != rec.CTCSSIndex ||
+				got.DCSCode != rec.DCSCode || got.Shift != rec.Shift || got.OffsetHz != rec.OffsetHz
+		}
+		if mismatch {
 			r.t.Errorf("%s: a record did not survive build -> parse for %v.\n  sent %+v\n  back %+v", r.name(), s, rec, got)
 			continue
 		}
@@ -571,7 +637,7 @@ func (r *run) checkMemorySets() {
 			r.t.Errorf("%s: a populated record for %v came back as the empty channel of 590:1492-1493", r.name(), s)
 		}
 		r.roundTrips++
-		r.refuse("answer frame", "a 50-byte MR ANSWER is never a legal outbound command — MR has no Set on either radio (480:911, erratum E17)", answer)
+		r.refuse("answer frame", "an MR ANSWER is never a legal outbound command — MR has no Set on either radio (480:911, erratum E17)", answer)
 
 		// THE ANSWER-TO-READ CORRELATION, which for MR is the matcher's
 		// and no caller's. Every memory answer is fifty bytes and starts
@@ -631,11 +697,28 @@ func (r *run) checkEmptyChannel() {
 	}
 	empty := cmd.Bytes()
 	empty[0], empty[1] = 'M', 'R'
-	for i := 6; i <= 40; i++ {
+
+	// hasTail mirrors core/kw's own RecordLen lift. A row whose RecordLen
+	// is the family's full 50 has P4-P15 (positions 7-41) and P16
+	// (positions 42-49) to zero/blank, exactly as 590:1492-1493 states; a
+	// row with no tail (the TS-570's 28) has only P4-P8 (positions 7-22)
+	// and no P16 at all — that row's own vacant-channel note (ts570
+	// manual lines 5931-5934: "the Answer command sends '0' for all
+	// parameters except the memory channel number"). Indexing to the
+	// family's fixed 41/48 unconditionally is what used to panic here
+	// ("index out of range") on a 28-byte frame.
+	hasTail := l.RecordLen() == kw.RecordLen
+	hi := 40 // P15, 0-indexed
+	if !hasTail {
+		hi = 21 // P8's last byte, 0-indexed
+	}
+	for i := 6; i <= hi; i++ {
 		empty[i] = '0'
 	}
-	for i := 41; i <= 48; i++ {
-		empty[i] = ' '
+	if hasTail {
+		for i := 41; i <= 48; i++ {
+			empty[i] = ' '
+		}
 	}
 
 	rec, err := l.ParseMRAnswer(empty)
@@ -647,12 +730,17 @@ func (r *run) checkEmptyChannel() {
 		r.t.Errorf("%s: the empty channel %q decoded as Empty = %v, Name = %q", r.name(), empty, rec.Empty, rec.Name)
 	}
 
-	named := append([]byte{}, empty...)
-	copy(named[41:], "NAME")
-	if got, err := l.ParseMRAnswer(named); err == nil {
-		r.t.Errorf("%s: ParseMRAnswer accepted an empty window whose P16 is not blank, returning Name = %q — the same sentence says P16 \"will be blank\", and A3 reads blank as eight spaces", r.name(), got.Name)
-	} else {
-		r.refusals["an empty channel whose P16 is not blank"]++
+	// A ROW WITH NO TAIL HAS NO P16 TO BE BLANK OR OTHERWISE, so there is
+	// nothing for this second half to check there — see
+	// checkNonVacuity's matching condition on this same refusal kind.
+	if hasTail {
+		named := append([]byte{}, empty...)
+		copy(named[41:], "NAME")
+		if got, err := l.ParseMRAnswer(named); err == nil {
+			r.t.Errorf("%s: ParseMRAnswer accepted an empty window whose P16 is not blank, returning Name = %q — the same sentence says P16 \"will be blank\", and A3 reads blank as eight spaces", r.name(), got.Name)
+		} else {
+			r.refusals["an empty channel whose P16 is not blank"]++
+		}
 	}
 }
 
@@ -816,11 +904,12 @@ func (r *run) checkGateRefusesAMutatedPrintedFixedByte() {
 		return
 	}
 
+	// A row with no printed-fixed byte at all — every cross-checked
+	// position traded for a live axis, core/kw/ts2000's own shape — has
+	// nothing for this leg to mutate; that is not a fault (see
+	// checkLayoutSelfConsistency's own comment), so the loop below is
+	// simply empty and only the terminator leg beneath it runs.
 	fixed := r.l.PrintedFixed()
-	if len(fixed) == 0 {
-		r.t.Errorf("%s: no printed-fixed byte to mutate", r.name())
-		return
-	}
 	for _, ff := range fixed {
 		for off := ff.Pos - 1; off < ff.Pos-1+len(ff.Printed); off++ {
 			mutated := append([]byte{}, good...)
@@ -856,7 +945,28 @@ func (r *run) checkNonVacuity() {
 	if r.roundTrips == 0 {
 		r.t.Errorf("%s: no record survived a build -> parse round trip, so the codec was never exercised in both directions", r.name())
 	}
-	for _, kind := range []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "a mutated printed-fixed byte", "an empty record", "an EX read past the row's printed menu domain", "an EX answer past the row's printed menu domain", "another channel's MR answer", "an empty channel whose P16 is not blank"} {
+	kinds := []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "an empty record", "an EX read past the row's printed menu domain", "an EX answer past the row's printed menu domain", "another channel's MR answer"}
+	// "A MUTATED PRINTED-FIXED BYTE" IS REQUIRED ONLY OF A ROW THAT HAS ONE
+	// TO MUTATE. checkGateRefusesAMutatedPrintedFixedByte's own mutation
+	// loop is empty for a row with no hard-wired byte at all (every
+	// cross-checked position traded for a live axis — core/kw/ts2000's
+	// `PrintedFixed: nil`), so this refusal kind is not merely unseen
+	// there, it is STRUCTURALLY IMPOSSIBLE: demanding it unconditionally
+	// would fail a well-formed conformance run for a fact about the RADIO,
+	// not a gap in the walk. checkLayoutSelfConsistency's own comment
+	// records the same retired invariant.
+	if len(r.l.PrintedFixed()) > 0 {
+		kinds = append(kinds, "a mutated printed-fixed byte")
+	}
+	// "AN EMPTY CHANNEL WHOSE P16 IS NOT BLANK" IS REQUIRED ONLY OF A ROW
+	// THAT HAS A P16 AT ALL. A row with no tail (RecordLen != the
+	// family's 50) has no name field to be blank or otherwise —
+	// checkEmptyChannel's own matching condition — so this kind is
+	// likewise structurally impossible there, not merely unseen.
+	if r.l.RecordLen() == kw.RecordLen {
+		kinds = append(kinds, "an empty channel whose P16 is not blank")
+	}
+	for _, kind := range kinds {
 		if r.refusals[kind] == 0 {
 			r.t.Errorf("%s: no refusal of kind %q was ever SEEN — a silent skip and an enforced rule are indistinguishable without this count", r.name(), kind)
 		}
@@ -962,12 +1072,21 @@ func (r *run) highestSlot() int {
 // 14.250 MHz, the row's own first mode by nibble, no tone, and the quiet
 // printed value in every raw byte.
 //
-// EVERY RAW BYTE IS '0' OR "00", WHICH IS LEGAL UNDER BOTH READINGS OF EACH
-// AXIS — byte 19 is the data mode on the 590 pair and the lockout on the 480
-// and '0' is a printed value of both; byte 28 is FILTER A or a hard-wired
-// constant; bytes 39-40 are "FM Normal" or ST step index 0; byte 41 is the
-// lockout or a constant. So one record serves every row without this suite
-// branching on an axis, and it therefore cannot silently stop exercising one.
+// EVERY RAW BYTE IS '0'/"00"/ZERO, WHICH IS LEGAL UNDER BOTH READINGS OF
+// EACH AXIS — byte 19 is the data mode on the 590 pair and the lockout on
+// the 480 and '0' is a printed value of both; byte 28 is FILTER A, a live
+// REVERSE status, or a hard-wired constant, all of which admit '0'; bytes
+// 39-40 are "FM Normal" or ST step index 0; byte 41 is the lockout, a live
+// Memory Group (0-9, and 0 is a real group), or a constant. P10's DCS code
+// and P13's offset frequency are both a printed "all zero" under
+// P10FixedZero/P13FixedZero and a perfectly ordinary value (no DCS, no
+// offset) under P10DCSCode/P13OffsetLive, so Record's own zero values for
+// DCSCode/OffsetHz need no explicit field here. P12's Shift is the one
+// exception: Go's zero byte is 0x00, not the ASCII '0' every reading of
+// P12 requires (P12FixedZero's constant AND P12ShiftLive's Simplex), so it
+// is the one raw byte this record sets explicitly for a reason. One record
+// serves every row without this suite branching on an axis, and it
+// therefore cannot silently stop exercising one.
 func (r *run) conformanceRecord(s kw.Slot) kw.Record {
 	r.t.Helper()
 	return kw.Record{
@@ -979,6 +1098,7 @@ func (r *run) conformanceRecord(s kw.Slot) kw.Record {
 		Byte28:   '0',
 		Byte3940: "00",
 		Byte41:   '0',
+		Shift:    '0',
 		Name:     "KWTEST",
 	}
 }

@@ -1017,6 +1017,145 @@ func ic7200LikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ftdx5000LikeCapabilities returns the FTdx5000's own REGISTERED
+// capabilities verbatim (v1.7.0 Kenwood/Yaesu wave, tenth row) — see
+// ic7200LikeCapabilities' own doc comment for why this is a
+// wiring.StaticCapabilities call rather than a hand-written fixture, and
+// for why it goes straight into chirpFixtures rather than
+// unreachableScanSkipCapabilities (that bucket is fixed to the
+// hand-written fixtures TestImportCHIRP_ScanSkipIsCapabilityAware asserts
+// against).
+func ftdx5000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FTdx5000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FTdx5000Model, err))
+	}
+	return caps
+}
+
+// ts2000LikeCapabilities returns the TS-2000's own REGISTERED capabilities
+// verbatim (v1.7.0 Kenwood/Yaesu wave, first row) — see
+// ic7200LikeCapabilities' own doc comment for why this is a
+// wiring.StaticCapabilities call rather than a hand-written fixture. Its
+// scan_skip IS reachable (byte 19, the family's channel-lockout flag), so
+// this fixture goes straight into chirpFixtures rather than
+// unreachableScanSkipCapabilities, on the TS-590 pair's footing.
+func ts2000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS2000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS2000Model, err))
+	}
+	return caps
+}
+
+// ts2000xLikeCapabilities is the TS-2000X's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, second row) — same package, zero byte
+// difference from the TS-2000's, so this fixture exists only because
+// chirpFixtures needs one entry per registered model.
+func ts2000xLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS2000XModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS2000XModel, err))
+	}
+	return caps
+}
+
+// tsb2000LikeCapabilities is the TS-B2000's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, third and last ts2000 row).
+func tsb2000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TSB2000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TSB2000Model, err))
+	}
+	return caps
+}
+
+// ts570dLikeCapabilities returns the TS-570D's own REGISTERED capabilities
+// verbatim (v1.7.0 Kenwood/Yaesu wave, fourth row). Its scan_skip IS
+// reachable (byte 19, this family's channel-lockout flag), so this
+// fixture goes straight into chirpFixtures, on the TS-590 pair's footing.
+func ts570dLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS570DModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS570DModel, err))
+	}
+	return caps
+}
+
+// ts570sLikeCapabilities is the TS-570S's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, fifth row).
+func ts570sLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS570SModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS570SModel, err))
+	}
+	return caps
+}
+
+// ts570dgLikeCapabilities is the TS-570DG's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row).
+// UNVERIFIED-BY-INHERITANCE — see internal/radiotext and
+// docs/kenwood-models.md.
+func ts570dgLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS570DGModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS570DGModel, err))
+	}
+	return caps
+}
+
+// ts870sLikeCapabilities returns the TS-870S's own REGISTERED capabilities
+// verbatim (v1.7.0 Kenwood/Yaesu wave, seventh row). Its scan_skip IS
+// reachable (byte 18, this record's own channel-lockout flag), so this
+// fixture goes straight into chirpFixtures on the TS-590 pair's footing.
+func ts870sLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.TS870SModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.TS870SModel, err))
+	}
+	return caps
+}
+
+// ft2000LikeCapabilities returns the FT-2000's own REGISTERED capabilities
+// verbatim (v1.7.0 Kenwood/Yaesu wave, eighth row).
+func ft2000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FT2000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FT2000Model, err))
+	}
+	return caps
+}
+
+// ft2000dLikeCapabilities is the FT-2000D's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, ninth row).
+func ft2000dLikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FT2000DModel)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FT2000DModel, err))
+	}
+	return caps
+}
+
+// ftdx9000LikeCapabilities is the FTdx9000's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, eleventh row).
+func ftdx9000LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FTdx9000Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FTdx9000Model, err))
+	}
+	return caps
+}
+
+// ft950LikeCapabilities is the FT-950's own REGISTERED capabilities
+// (v1.7.0 Kenwood/Yaesu wave, twelfth and last row).
+func ft950LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FT950Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FT950Model, err))
+	}
+	return caps
+}
+
 // skipEntries returns every LossEntry the report holds for the Skip
 // column, in order. The scan-skip tests assert on this slice alone: a row
 // may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
@@ -2791,6 +2930,19 @@ func chirpFixtures() []spec.Capabilities {
 		ic7700LikeCapabilities(),
 		ic9100LikeCapabilities(),
 		ic7200LikeCapabilities(),
+		// v1.7.0 Kenwood/Yaesu wave.
+		ftdx5000LikeCapabilities(),
+		ts2000LikeCapabilities(),
+		ts2000xLikeCapabilities(),
+		tsb2000LikeCapabilities(),
+		ts570dLikeCapabilities(),
+		ts570sLikeCapabilities(),
+		ts570dgLikeCapabilities(),
+		ts870sLikeCapabilities(),
+		ft2000LikeCapabilities(),
+		ft2000dLikeCapabilities(),
+		ftdx9000LikeCapabilities(),
+		ft950LikeCapabilities(),
 	)
 }
 

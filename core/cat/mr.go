@@ -73,13 +73,13 @@ func (d Dialect) ParseMRAnswer(frame []byte) (MemoryData, error) {
 // pass every test in the tree while the seam was fiction. That obligation
 // moved intact into parseMemoryFields, which is a Dialect method for it.
 func (d Dialect) parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, error) {
-	if len(frame) != memoryFrameLen {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame must be %d bytes", wantPrefix, memoryFrameLen))
+	if len(frame) != int(d.memoryFrameLen) {
+		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame must be %d bytes", wantPrefix, d.memoryFrameLen))
 	}
 	if frame[0] != wantPrefix[0] || frame[1] != wantPrefix[1] {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame missing %q prefix", wantPrefix, wantPrefix))
 	}
-	if frame[memTermOffset] != ';' {
+	if frame[d.memTermOff()] != ';' {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame missing ';' terminator", wantPrefix))
 	}
 	return d.parseMemoryFields(frame, wantPrefix)

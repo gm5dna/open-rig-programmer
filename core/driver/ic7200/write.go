@@ -152,6 +152,23 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return driver.WriteResult{Steps: []driver.WriteStep{}}, fmt.Errorf("ic7200: WriteChannel: %w", err)
 	}
 
+	// RUNG 1b — THE FIELD-STATE WALK. core/driver.CheckFieldStates is
+	// THE FLEET'S shared walk rather than a table of this package's own:
+	// every field of ChannelData that carries a FieldState, judged
+	// against this session's own vocabularies. What it prevents is
+	// silent rather than loud — a value carried alongside a state
+	// meaning "preserve whatever the radio has" (or alongside Absent,
+	// the zero state a hand-built ChannelData leaves behind) is never
+	// named by requestedFields, so without this rung it would be
+	// DROPPED from the frame and the write would report success (the
+	// FT-891 closing review's C-M1, sharpened by MEDIUM-1 to
+	// codeplug.Absent). This package's own RUNG 3/3b below cover only
+	// mode, filter and data_mode; this rung is what covers the other
+	// seventeen FieldState-carrying fields.
+	if field, err := driver.CheckFieldStates(s.caps, d); err != nil {
+		return refused(ch.Slot, []spec.Field{field}, err.Error())
+	}
+
 	// RUNG 2 — THE CAPABILITY GATE.
 	var unwritable []spec.Field
 	for _, f := range requestedFields(d) {

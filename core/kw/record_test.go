@@ -688,11 +688,12 @@ func assertRecordLengthMismatch(t testing.TB, err error, wantGot, wantWant int, 
 // specified by P2 and P3, its length is a reading rather than a printed
 // number (A5, erratum E19), and this milestone never builds it (decision 8).
 func TestCheckRecordLen_IsTheOneWidthPredicateBothDirectionsConsult(t *testing.T) {
-	if err := checkRecordLen("MW", RecordLen, make([]byte, RecordLen)); err != nil {
+	l := layout590SG()
+	if err := l.checkRecordLen("MW", RecordLen, make([]byte, RecordLen)); err != nil {
 		t.Errorf("checkRecordLen refused the printed width: %v", err)
 	}
 	for _, got := range []int{0, 7, 41, 42, 49, 51} {
-		err := checkRecordLen("MW", got, make([]byte, got))
+		err := l.checkRecordLen("MW", got, make([]byte, got))
 		assertRecordLengthMismatch(t, err, got, RecordLen, "MW")
 		if !strings.Contains(err.Error(), "ERASES") {
 			t.Errorf("Error() = %q, want it to say what a short MW does (590:1579-1581)", err)
@@ -710,7 +711,7 @@ func TestRecordLengthError_CarriesABoundedCopyOfTheOffendingFrame(t *testing.T) 
 		long[i] = 'A'
 	}
 	var lengthErr *RecordLengthError
-	if !errors.As(checkRecordLen("MR", len(long), long), &lengthErr) {
+	if !errors.As(layout590SG().checkRecordLen("MR", len(long), long), &lengthErr) {
 		t.Fatal("checkRecordLen did not return a *RecordLengthError")
 	}
 	if len(lengthErr.Frame) != maxParseErrorFrameLen {

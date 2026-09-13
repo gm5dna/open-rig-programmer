@@ -22,6 +22,13 @@ import (
 const (
 	// RecordLen is the MR answer and the MW Set frame: 50 bytes.
 	RecordLen = 50
+	// RecordLenPrefix is the TS-570's own width: 28 bytes, a true PREFIX
+	// of the family's 50-byte grid (positions 1-22 the same offsets, then
+	// the terminator — ts570-capability-matrix.md §1.4). RecordLen is a
+	// DISCRETE SHAPE, not an arithmetic threshold (hasTail's own reasoning,
+	// parse.go), so NewLayout's validation names these two values rather
+	// than accepting any width at or above some computed minimum.
+	RecordLenPrefix = 28
 	// MRReadLen is the MR read request, "M R P1 P2 P3 P3 ;": 7 bytes
 	// (590:1442, 480:918). The 590SG chart prints its terminator cell as
 	// ':' — erratum E1, doc.go — and the frame is a ';' frame like every
@@ -48,6 +55,18 @@ const (
 	recNameOff     = 41 // positions 42-49, P16
 	recByte41Off   = 40 // position 41,    P15
 	recTermOff     = 49 // position 50,    ';'
+
+	// recDCSOff, recShiftOff and recOffsetOff are the TS-2000 lift's three
+	// positions: P10 (DCS code), P12 (shift status) and P13 (offset
+	// frequency), which both registered books print as constants
+	// (commonHardWiring, layout.go) and the TS-2000 carries live
+	// (ts2000-capability-matrix.md §2). They are package constants like
+	// every other offset in this file, because both books agree on the
+	// GRID; the P10Policy/P12Policy/P13Policy axes (layout.go) say what
+	// each carries on a given row.
+	recDCSOff    = 24 // positions 25-27, P10
+	recShiftOff  = 28 // position 29,    P12
+	recOffsetOff = 29 // positions 30-38, P13
 )
 
 // Field widths for the offsets above.
@@ -61,6 +80,9 @@ const (
 	recPrefixLen    = 2
 	recTailLen      = 1 // the terminator
 	recFixedNonBody = recPrefixLen + recTailLen
+
+	recDCSDigits    = 3
+	recOffsetDigits = 9
 )
 
 // The empty-channel window: P4 through P15, positions 7 to 41 inclusive.
@@ -103,6 +125,17 @@ const maxFixedZeroSlot = 99
 // document read rather than a wire observation because a width is not a
 // range. Nothing here says a radio will accept 99,999,999,999 Hz.
 const MaxRecordFreqHz = 99_999_999_999
+
+// MaxDCSCode and MaxOffsetHz are the widest values the TS-2000 lift's two
+// live BCD runs can carry: P10's 3 digits and P13's 9 (both
+// commonHardWiring on the registered rows, live on a P10DCSCode /
+// P13OffsetLive row). Field widths, exactly as MaxRecordFreqHz is: neither
+// document is read by this lift, so nothing here claims a DCS chart or a
+// tuning range, only what the digit count holds.
+const (
+	MaxDCSCode  = 999
+	MaxOffsetHz = 999_999_999
+)
 
 // ErrOutOfDomain is the sentinel every OutOfDomainError wraps.
 var ErrOutOfDomain = errors.New("kw: value outside a wire field's domain")
@@ -342,6 +375,25 @@ type Record struct {
 	// (590:1572-1574) and a printed constant on the 480 (480:982).
 	Byte41 byte
 
+	// DCSCode is P10, positions 25-27: a printed constant on the 590 pair
+	// and the TS-480 (commonHardWiring) and a live 3-digit DCS code on a
+	// row whose P10Policy is P10DCSCode. It is always 0 on a
+	// P10FixedZero row — checkPrintedFixed has already required "000"
+	// there before this field is populated — the same "raw, gated by the
+	// layout's own axis" shape Byte19/Byte28/Byte41 already have.
+	DCSCode int
+
+	// Shift is P12, position 29, as a wire byte: a printed constant "0" on
+	// the 590 pair and the TS-480 (commonHardWiring) and a live shift-status
+	// enum on a row whose P12Policy is P12ShiftLive — '0' Simplex, '1' +,
+	// '2' -, '3' "= All E-types" (ts2000-capability-matrix.md §2).
+	Shift byte
+
+	// OffsetHz is P13, positions 30-38: a printed constant on the 590 pair
+	// and the TS-480 (commonHardWiring) and a live 9-digit offset frequency
+	// in Hz on a row whose P13Policy is P13OffsetLive.
+	OffsetHz uint64
+
 	// Name is P16, right-trimmed of the spaces a write pads it with — A1,
 	// which is assumed rather than printed and whose lift is a write-then-
 	// read on each registry row.
@@ -368,12 +420,38 @@ type Record struct {
 // sentence and a second copy of either would be one edit from disagreeing.
 const emptyName = "        " // recNameLen spaces
 
-// isEmptyWindow reports whether every byte of P4-P15 in frame is '0', which
-// is the empty-channel test of 590:1492-1493 (A18a). It is HALF the
-// sentence: the other half is P16, which parseRecordFrame requires to be
-// emptyName.
-func isEmptyWindow(frame []byte) bool {
-	for _, b := range frame[recEmptyLoOff : recEmptyHiOff+1] {
+// emptyWindowHiNoTail is the vacant-window's upper bound (0-indexed) on a
+// row with no tail past P8 — the TS-570's own note, printed on the MR
+// chart: "For a vacant channel, the Answer command sends '0' for all
+// parameters except the memory channel number" (ts570 manual, lines
+// 5931-5934 of docs/fixtures-private/manuals/ts570_manual_00_layout.txt).
+// P1 and P3 (the slot itself) are excluded, exactly as the family's own
+// window excludes them; P2 does not exist on this row at all (P2Unused).
+// That leaves P4 through P8 — freq, mode, lockout, tone mode, tone
+// number — the whole of what a RecordLen:28 row has past the slot.
+const emptyWindowHiNoTail = recToneOff + recToneDigits - 1
+
+// isEmptyWindow reports whether every byte of frame from P4 through hi
+// (0-indexed, inclusive) is '0' — the empty-channel test of 590:1492-1493
+// (A18a) generalised to whichever upper bound this row's own vacant-answer
+// shape has: byte 41 (P15) on the family's full 50-byte grid, byte 22 (P8)
+// on the TS-570's 28-byte one (emptyWindowHiNoTail). It is HALF the
+// sentence on a 50-byte row: the other half is P16, which parseRecordFrame
+// requires to be emptyName there and does not require at all on a row with
+// no P16 (RecordLen != RecordLen means NoTag on every row this lift
+// describes).
+//
+// hi IS A DISCRETE SHAPE, NOT AN ARITHMETIC THRESHOLD OF RecordLen — the
+// same reasoning hasTail (parse.go) already rests on: a family with a
+// THIRD width would need a third case here, not a formula extrapolated
+// from the two this lift knows.
+func isEmptyWindow(frame []byte, hi int) bool {
+	// A frame shorter than the window it tests has no byte at hi to be
+	// part of an "all zero" reading at all, so it is not this shape.
+	if len(frame) <= hi {
+		return false
+	}
+	for _, b := range frame[recEmptyLoOff : hi+1] {
 		if b != '0' {
 			return false
 		}

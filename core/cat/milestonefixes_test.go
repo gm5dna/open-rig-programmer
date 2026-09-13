@@ -127,15 +127,18 @@ func TestMWWriteKind_AcceptsEveryEmittableKind(t *testing.T) {
 // round trip.
 func TestMTClearTag_DecodingPreservesLegitimateTrailingBytes(t *testing.T) {
 	peer, err := NewDialect(DialectConfig{
-		CATID:         "6666",
-		ModeNames:     map[Mode]string{Mode('2'): "USB"},
-		Slots:         SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000", MCSelects: MCSelectsAll},
-		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 6, ClearTagByte: '-'},
-		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:      P5TxClar,
-		ToneStates:    ToneStatesCTCSS,
-		MWWriteKind:   KindMemory,
+		CATID:            "6666",
+		ModeNames:        map[Mode]string{Mode('2'): "USB"},
+		Slots:            SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000", MCSelects: MCSelectsAll},
+		EXAddressForm:    EXAddressTriple,
+		MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 6, ClearTagByte: '-'},
+		Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindMemory,
 	})
 	if err != nil {
 		t.Fatalf("building the '-'-clearing peer: %v", err)
@@ -248,6 +251,7 @@ func TestMTPadByte_DeclaredNotInferred(t *testing.T) {
 			EXAddressForm: EXAddressTriple,
 			MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 8, ClearTagByte: '-', PadByte: pad},
 			Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990}, MemoryP5: P5TxClar, ToneStates: ToneStatesCTCSS, MWWriteKind: KindMemory,
+			MemoryFrameLen: 28, MemoryFreqDigits: 9, MemoryP9: P9Fixed00,
 		})
 		if err != nil {
 			t.Fatalf("NewDialect(pad=%#02x): %v", pad, err)

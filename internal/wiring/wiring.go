@@ -36,11 +36,15 @@ import (
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -56,7 +60,10 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts2000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts570"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts870s"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts890"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -621,6 +628,151 @@ const (
 	TS990SModel = "TS-990S"
 )
 
+// TS2000Model names the TS-2000's realDrivers/fakeDrivers key, which must
+// equal ts2000.NewTS2000(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, FIRST ROW OF THREE over one driver package
+// (core/driver/ts2000, NewTS2000/NewTS2000X/NewTSB2000 — no bare New, the
+// IC-7851 shape): the TS-2000, TS-2000X and TS-B2000 share one 50-byte
+// MR/MW record with ZERO byte difference (matrix §1-§2), so ONE package
+// serves all three registry rows.
+//
+// TAGGED, unlike every other row this wave registers: TagLen 8 (P16, 8
+// bytes at record positions 42-49, matrix §4) — the wave's only tagged
+// package. CATID "019" is MANUAL-EVIDENCED for the TS-2000 alone; the
+// other two rows share it by ASSUMPTION (driver report), so this driver's
+// probe cannot distinguish a TS-2000X or TS-B2000 from a TS-2000 by wire
+// identity — only by which constructor the caller chose.
+//
+// WRITE POSTURE IS "WRITE EXISTING", not the TS-480's blanket refusal: a
+// pre-write MR read preserves four raw values this milestone models no
+// spec.Field for (P10 DCS, P11 REVERSE, P14 tuning-step index, P15 Memory
+// Group) — core/driver/ts2000/write.go's own doc comment.
+//
+// IMPLEMENTS driver.SerialFramingReporter, STOPBITS 1
+// (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
+const TS2000Model = "TS-2000"
+
+// TS2000XModel names the TS-2000X's realDrivers/fakeDrivers key — the
+// second of three rows over core/driver/ts2000. CATID "019" is ASSUMED for
+// this row (the driver's probe cannot distinguish it from a TS-2000 by
+// wire identity), and its record is byte-identical to the TS-2000's — see
+// TS2000Model's own doc comment.
+const TS2000XModel = "TS-2000X"
+
+// TSB2000Model names the TS-B2000's realDrivers/fakeDrivers key — the
+// third and last of three rows over core/driver/ts2000. CATID "019" is
+// ASSUMED for this row too, and its record is byte-identical to the
+// TS-2000's — see TS2000Model's own doc comment.
+const TSB2000Model = "TS-B2000"
+
+// TS570DModel names the TS-570D's realDrivers/fakeDrivers key, which must
+// equal ts570.NewD(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, FOURTH ROW, FIRST OF THREE over one driver
+// package (core/driver/ts570, NewD/NewS/NewDG — no bare New, an unexported
+// modelParams mirroring ftdx101's NewD/NewMP shape). 28-byte MR/MW record,
+// positions 1-22 matching the TS-2000's field-for-field, terminating short
+// of CTCSS/DCS/shift/offset/group/name.
+//
+// NOTAG: TagLen 0 (matrix §4, whole-document grep finds no name route at
+// all) — cited to the 12/09/2026 nameless-capability rule change, not the
+// old triage verdict.
+//
+// CATID "017" (matrix §2, Parameter Table). IMPLEMENTS
+// driver.SerialFramingReporter, STOPBITS 1
+// (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
+const TS570DModel = "TS-570D"
+
+// TS570SModel names the TS-570S's realDrivers/fakeDrivers key — the
+// second of three rows over core/driver/ts570 (NewS). CATID "018"
+// (matrix §2, "TS-570S: 018"), its own printed value, not shared with the
+// TS-570D's "017".
+const TS570SModel = "TS-570S"
+
+// TS570DGModel names the TS-570DG's realDrivers/fakeDrivers key — the
+// third and last of three rows over core/driver/ts570 (NewDG).
+// UNVERIFIED-BY-INHERITANCE (matrix §5, spec.md §6 Q2): document
+// B62-1542-00 names the TS-570D and TS-570S only, never the DG variant.
+// CATID is ASSUMED equal to the TS-570D's ("017"), since no document
+// prints one for this row — recorded here and in radiotext/README, never
+// implied MANUAL-EVIDENCED.
+const TS570DGModel = "TS-570DG"
+
+// TS870SModel names the TS-870S's realDrivers/fakeDrivers key, which must
+// equal ts870s.New(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, SEVENTH ROW: bare New (single row, no sibling),
+// 22-byte MR/MW record, own package separate from ts570 (a different
+// document, a different width). NOTAG (matrix §1.6, TagLen 0), cited to
+// the 12/09/2026 nameless-capability rule change, not the old triage
+// verdict. CATID "015" (matrix §1.2).
+//
+// IMPLEMENTS driver.SerialFramingReporter, STOPBITS 1
+// (TestStopBitsFor_EveryKenwoodDriverReportsOne carries this row).
+const TS870SModel = "TS-870S"
+
+// FT2000Model names the FT-2000's realDrivers/fakeDrivers key, which must
+// equal ft2000.NewFT2000(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, EIGHTH ROW, FIRST OF TWO over one driver
+// package (core/driver/ft2000, NewFT2000/NewFT2000D — no bare New, the
+// ftdx101 shape: one SERIES manual names both radios). 27-byte MR/MW
+// frame, 8-digit FreqHz (Lift Y). NOTAG: no tag/name command anywhere in
+// the 20-page manual. CATID "0251" (matrix). CTCSSTone is MAPPED (rw) —
+// the live P9 tone-table index.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT2000Model = "FT-2000"
+
+// FT2000DModel names the FT-2000D's realDrivers/fakeDrivers key — the
+// second of two rows over core/driver/ft2000 (NewFT2000D). CATID "0252"
+// (matrix), distinct from the FT-2000's "0251".
+const FT2000DModel = "FT-2000D"
+
+// FTdx5000Model names the FTdx5000's realDrivers/fakeDrivers key, which
+// must equal ftdx5000.New(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, TENTH ROW: bare New (single row, own
+// document, own package — the ft2000 dialect family's own words, not a
+// shared package). 27-byte MR/MW frame, 8-digit FreqHz (Lift Y). NOTAG:
+// TagLen 0, no tag/name command in the 20-page manual. CATID "0362"
+// (matrix). CTCSSTone is MAPPED (rw) — the live P9 tone-table index —
+// unlike every registered 9-digit-family dialect's fixed "00".
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTdx5000Model = "FTdx5000"
+
+// FTdx9000Model names the FTdx9000's realDrivers/fakeDrivers key, which
+// must equal ftdx9000.New(...).Model() — pinned, like every other constant
+// above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, ELEVENTH ROW: bare New (single row, "FT-9000"
+// an alias in radiotext prose only — never a Model constant, matrix §1
+// footnote, spec.md §6 Q5). 27-byte MR/MW frame, 8-digit FreqHz. NOTAG.
+// CATID "0101" canonical, though this driver's own probe accepts all
+// three documented answers (0101/0102/0103) via a custom handshake.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTdx9000Model = "FTdx9000"
+
+// FT950Model names the FT-950's realDrivers/fakeDrivers key, which must
+// equal ft950.New(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel.
+//
+// v1.7.0 KENWOOD/YAESU WAVE, TWELFTH AND LAST ROW: bare New (single row,
+// own document). 27-byte MR/MW frame, 8-digit FreqHz, one extra regular
+// channel (MemoryLo 000, not 001, unlike every sibling in this family).
+// NOTAG. CATID "0310" (matrix).
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT950Model = "FT-950"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -961,6 +1113,101 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites())
 		}
 		return ts990.New(ts990.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, tenth row: bare New takes the profile as
+	// its first argument.
+	FTdx5000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites())
+		}
+		return ftdx5000.New(ftdx5000.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, eleventh row: bare New takes the profile
+	// as its first argument.
+	FTdx9000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx9000.New(ftdx9000.RealHardware, ftdx9000.WithConsentedUnverifiedWrites())
+		}
+		return ftdx9000.New(ftdx9000.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: bare New takes the
+	// profile as its first argument.
+	FT950Model: func(consent bool) driver.Driver {
+		if consent {
+			return ft950.New(ft950.RealHardware, ft950.WithConsentedUnverifiedWrites())
+		}
+		return ft950.New(ft950.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
+	// argument (options only — the ic7851 shape), so the consent arm is
+	// WithConsentedUnverifiedWrites rather than a second positional value.
+	TS2000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ts2000.NewTS2000(ts2000.WithConsentedUnverifiedWrites())
+		}
+		return ts2000.NewTS2000()
+	},
+	// v1.7.0 Kenwood/Yaesu wave, second row: NewTS2000X, same shape.
+	TS2000XModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts2000.NewTS2000X(ts2000.WithConsentedUnverifiedWrites())
+		}
+		return ts2000.NewTS2000X()
+	},
+	// v1.7.0 Kenwood/Yaesu wave, third and last of the ts2000 rows:
+	// NewTSB2000, same shape.
+	TSB2000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ts2000.NewTSB2000(ts2000.WithConsentedUnverifiedWrites())
+		}
+		return ts2000.NewTSB2000()
+	},
+	// v1.7.0 Kenwood/Yaesu wave, fourth row: core/driver/ts570's NewD takes
+	// the profile as its first argument (the ftdx101 shape), so the consent
+	// arm names ts570.RealHardware explicitly.
+	TS570DModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts570.NewD(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}
+		return ts570.NewD(ts570.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, fifth row: NewS, same shape.
+	TS570SModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts570.NewS(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}
+		return ts570.NewS(ts570.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: NewDG, same
+	// shape.
+	TS570DGModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts570.NewDG(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
+		}
+		return ts570.NewDG(ts570.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New takes the profile as
+	// its first argument.
+	TS870SModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts870s.New(ts870s.RealHardware, ts870s.WithConsentedUnverifiedWrites())
+		}
+		return ts870s.New(ts870s.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, eighth row: NewFT2000 takes the profile as
+	// its first argument (the ftdx101 shape).
+	FT2000Model: func(consent bool) driver.Driver {
+		if consent {
+			return ft2000.NewFT2000(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+		}
+		return ft2000.NewFT2000(ft2000.RealHardware)
+	},
+	// v1.7.0 Kenwood/Yaesu wave, ninth row: NewFT2000D, same shape.
+	FT2000DModel: func(consent bool) driver.Driver {
+		if consent {
+			return ft2000.NewFT2000D(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+		}
+		return ft2000.NewFT2000D(ft2000.RealHardware)
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'

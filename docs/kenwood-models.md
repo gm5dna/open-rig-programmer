@@ -8,21 +8,73 @@ reviewers and contributors.
 
 ## The rows built, and which are selectable
 
-The **TS-590S**, the **TS-590SG**, the **TS-890S** and the **TS-990S**
-are in the model list. The **TS-480** is not, although its driver is
-written, tested and shipped in the binary — see *The TS-480 is built and
-not registered* below, which is the longest entry on this page because
-an absence needs more explaining than a presence.
+The **TS-590S**, the **TS-590SG**, the **TS-890S**, the **TS-990S**, the
+**TS-2000**/**TS-2000X**/**TS-B2000** family, the **TS-570D**/**TS-570S**/
+**TS-570DG** trio and the **TS-870S** are in the model list. The **TS-480**
+is not, although its driver is written, tested and shipped in the binary — see
+*The TS-480 is built and not registered* below, which is the longest
+entry on this page because an absence needs more explaining than a
+presence.
 
 These radios talk a third wire protocol: neither Yaesu's CAT nor Icom's
 CI-V, but Kenwood's own semicolon-terminated PC control commands. The
 envelope codec is `core/kw`; the two 590 layouts are `core/kw/ts590`, the
-TS-480's is `core/kw/ts480`, and the 890S's and 990S's are both in
-`core/kw/ma` — one package holding two layouts, two hand-written record
-codecs and its own outbound gate. The drivers are `core/driver/ts590`
-(both 590 rows, one package, a REQUIRED row argument),
-`core/driver/ts480`, and `core/driver/ts890` and `core/driver/ts990`, one
-package each.
+TS-480's is `core/kw/ts480`, the TS-2000 family's is `core/kw/ts2000` (one
+50-byte record, zero byte difference across all three rows), the TS-570
+pair's is `core/kw/ts570` (a 28-byte record, positions 1-22 matching the
+TS-2000's field-for-field), the TS-870S's is `core/kw/ts870s` (its own
+22-byte record, a different document and width again), and the 890S's and
+990S's are both in `core/kw/ma` — one package holding two layouts, two
+hand-written record codecs and its own outbound gate. The drivers are
+`core/driver/ts590` (both 590 rows, one package, a REQUIRED row argument),
+`core/driver/ts480`, `core/driver/ts890` and `core/driver/ts990` (one
+package each), `core/driver/ts2000` (one package, three constructors —
+`NewTS2000`/`NewTS2000X`/`NewTSB2000` — no bare `New`),
+`core/driver/ts570` (one package, `NewD`/`NewS`/`NewDG`, no bare `New`),
+and `core/driver/ts870s` (one row, bare `New`).
+
+**The TS-2000 family (v1.7.0 Kenwood/Yaesu wave).** TAGGED — the wave's
+only tagged package, TagLen 8 — with tone and scan skip both reachable, on
+the TS-590 pair's footing. CATID `"019"` is MANUAL-EVIDENCED for the
+TS-2000 alone; the other two rows share it by ASSUMPTION, so this driver's
+probe cannot distinguish a TS-2000X or TS-B2000 from a TS-2000 by wire
+identity — only by which constructor the caller chose. Write posture is
+"write existing": a pre-write read preserves four raw values (DCS code,
+REVERSE, tuning-step index, Memory Group) this milestone models no
+`spec.Field` for, rather than modelling a field for each.
+`writeTrialsComplete` is false for all three rows: no TS-2000 of any row
+has ever answered a frame from this project, so every write stays behind
+the opt-in consent route.
+
+**The TS-570D/TS-570S/TS-570DG trio (v1.7.0 Kenwood/Yaesu wave).** NoTag —
+no channel-name field over this radio's interface at all — with tone mode
+and both transmit and receive tone numbers reachable, plus scan skip, on
+the TS-2000's read/write footing. CATID `"017"` (D) and `"018"` (S) are
+each printed directly; the three rows are otherwise field-for-field
+identical. `writeTrialsComplete` is false: no TS-570 of any row has
+ever answered a frame from this project.
+
+**The TS-570DG is UNVERIFIED-BY-INHERITANCE.** Document B62-1542-00 names
+the TS-570D and TS-570S only — zero "DG" hits anywhere in it. The command
+set registered here is the document's own, and the DG is a D with the DSP
+option fitted, so this row is registered rather than dropped to a roadmap
+note (spec.md §6 Q2); its radiotext and README entries carry
+UNVERIFIED-BY-INHERITANCE verbatim so an owner sees the same caveat this
+page states. Its CATID is **ASSUMED** equal to the D's ("017"): no document
+prints one for the DG at all, `core/driver/ts570` makes the same ASSUMED
+choice independently (`ts570.go`, `modelDG.catID == modelD.catID`), and
+this is never implied MANUAL-EVIDENCED. `internal/fakets570` mirrors that
+same placeholder rather than inventing an independent one (doc.go register
+entry 6) — the only field in this wave where a fake deliberately copies a
+driver's ASSUMED value, because neither side has any manual content to
+disagree about.
+
+**The TS-870S (v1.7.0 Kenwood/Yaesu wave).** NoTag, with tone mode and a
+shared transmit-tone index reachable (no receive-tone byte on this row's
+own 22-byte record) and scan skip reachable, on the TS-590 pair's
+read/write footing. `writeTrialsComplete` is false: no TS-870S has ever
+answered a frame from this project. Evidence: B62-1536-00, via the
+rigpix.com mirror (the 12/09/2026 provenance widening).
 
 **Why the second pair gets two driver packages where the first pair
 shares one.** The 590 pair's two radios share a 50-byte memory record, so

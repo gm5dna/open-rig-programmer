@@ -24,12 +24,12 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 	// same offsets 2-26 the combined MT record writes, extracted from this
 	// body in M9c-3 task 3 with the golden vectors G5/G7 as the proof that
 	// not a byte moved.
-	frame := make([]byte, memoryFrameLen)
+	frame := make([]byte, int(d.memoryFrameLen))
 	frame[0], frame[1] = 'M', 'W'
 	if err := d.encodeMemoryFields(frame, m); err != nil {
 		return Command{}, err
 	}
-	frame[memTermOffset] = ';'
+	frame[d.memTermOff()] = ';'
 
 	return newCommand(frame), nil
 }
@@ -54,7 +54,9 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 //   - a ClarHz that violates THIS DIALECT'S clarifier policy
 //     (Dialect.clar): not a multiple of its step, or beyond its range.
 //     The FT-710's own policy is 10 Hz steps to +-9990 Hz;
-//   - a FreqHz that needs more than 9 digits, or is zero.
+//   - a FreqHz that needs more digits than THIS DIALECT'S OWN P2 field
+//     (d.memoryFreqDigits: 9 for the registered family, 8 for ft2000's),
+//     or is zero.
 //
 // This is shared, unchanged, between BuildMWSet (validating a
 // caller-constructed MemoryData, which may be entirely forged) and
@@ -180,8 +182,14 @@ func (d Dialect) validateSetFields(m MemoryData, prefix string, slotOK func(Slot
 		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), fmt.Sprintf("%s: ClarHz must be a multiple of %d Hz, magnitude <= %d", prefix, d.clar.StepHz, d.clar.MaxAbsHz))
 	}
 
-	if m.FreqHz == 0 || m.FreqHz > memFreqMax {
-		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), prefix+": FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
+	// FreqHz is bounded by THIS DIALECT'S OWN P2 digit width
+	// (d.memFreqDigitsMax, memdata.go), not the registered family's fixed
+	// 9 digits: Codex close-review finding P1 — a wider value would
+	// overflow encodeMemoryFields' fixed-width "%0*d" write into the
+	// clarifier sign byte that follows, corrupting the frame, since that
+	// function encodes and does not itself re-check width.
+	if freqMax := d.memFreqDigitsMax(); m.FreqHz == 0 || m.FreqHz > freqMax {
+		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), fmt.Sprintf("%s: FreqHz must be nonzero and fit in %d digits (<= %d)", prefix, d.memoryFreqDigits, freqMax))
 	}
 
 	// P5, BY THIS DIALECT'S OWN READING. Under P5Fixed byte 21 is printed
@@ -206,6 +214,22 @@ func (d Dialect) validateSetFields(m MemoryData, prefix string, slotOK func(Slot
 	case P5TxClar:
 	default:
 		return newParseError(nil, prefix+": P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
+	}
+
+	// P9, BY THIS DIALECT'S OWN READING, copied verbatim from P5's shape
+	// above: NewDialect's V18 already keeps every registered dialect from
+	// reaching the default case.
+	switch d.memoryP9 {
+	case P9Fixed00:
+		if m.ToneIndex != 0 {
+			return newParseError([]byte(fmt.Sprintf("%d", m.ToneIndex)), fmt.Sprintf("%s: ToneIndex must be 0 under %v — this dialect's manual prints P9 (positions 25-26) fixed \"00\", so there is no tone-table index to set", prefix, d.memoryP9))
+		}
+	case P9ToneIndex:
+		if m.ToneIndex > 49 {
+			return newParseError([]byte(fmt.Sprintf("%d", m.ToneIndex)), fmt.Sprintf("%s: ToneIndex must be 0-49 (the standard 50-entry CTCSS tone chart)", prefix))
+		}
+	default:
+		return newParseError(nil, prefix+": P9 (positions 25-26) policy unset — refusing to guess whether the field is fixed schema or a tone-table index")
 	}
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: never trust

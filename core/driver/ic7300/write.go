@@ -153,6 +153,23 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, err
 	}
 
+	// RUNG 4b — core/driver.CheckFieldStates, THE FLEET'S shared walk
+	// rather than a table of this package's own. RUNG 4 above already
+	// calls each of thirteen fields' own Valid() unconditionally, which
+	// already refuses Absent outright regardless of Value (Valid's
+	// default case) — stricter than this walk's Absent-with-zero
+	// tolerance — so this rung is additive for those thirteen. It is not
+	// additive for the seven FieldState fields RUNG 4 does not name
+	// (tuning step, attenuator, preamp, antenna, IP+): for those, an
+	// Absent field carrying a non-zero Value was previously DROPPED from
+	// the frame with the write reporting success, never refused (the
+	// FT-891 closing review's C-M1, sharpened by MEDIUM-1 to
+	// codeplug.Absent). Wired in as the fleet's single source of truth
+	// either way.
+	if field, err := driver.CheckFieldStates(s.caps, data); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
+	}
+
 	// RUNG 5 — THE capability gate, defence in depth below the clone service.
 	// spec.Inert is accepted as transmittable per the neutral rule; no field
 	// of this driver's is Inert today (that is an FT-710 HARDWARE finding

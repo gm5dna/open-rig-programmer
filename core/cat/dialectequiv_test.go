@@ -60,13 +60,16 @@ func ft710ConfigFromIndependentLiterals() DialectConfig {
 			NoneWire:      "000",
 			MCSelects:     MCSelectsAll,
 		},
-		EXItems:       exItemsGen, // NOT independent — see the doc comment
-		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:      P5TxClar,
-		ToneStates:    ToneStatesCTCSS,
-		MWWriteKind:   KindMemory,
+		EXItems:          exItemsGen, // NOT independent — see the doc comment
+		EXAddressForm:    EXAddressTriple,
+		MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:         P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindMemory,
 	}
 }
 
@@ -384,12 +387,15 @@ func TestNewDialect_InputIndependenceAcrossEveryDerivedStructure(t *testing.T) {
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 1}, Name: "A", Digits: 2},
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 2}, Name: "B", Digits: 4},
 		},
-		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 10, ClearTagByte: ' '},
-		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 100},
-		MemoryP5:      P5TxClar,
-		ToneStates:    ToneStatesCTCSS,
-		MWWriteKind:   KindMemory,
+		EXAddressForm:    EXAddressTriple,
+		MT:               MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 10, ClearTagByte: ' '},
+		Clarifier:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 100},
+		MemoryP5:         P5TxClar,
+		MemoryFrameLen:   28,
+		MemoryFreqDigits: 9,
+		MemoryP9:         P9Fixed00,
+		ToneStates:       ToneStatesCTCSS,
+		MWWriteKind:      KindMemory,
 	}
 
 	d, err := NewDialect(cfg)

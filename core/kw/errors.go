@@ -168,16 +168,13 @@ func (e *StreamError) Unwrap() error { return ErrStream }
 // it.
 //
 // IT PANICS on a frame that is not one of the two tokens OR on a book that
-// names no document, and the loudness is deliberate — but the panic arm
-// fires on TWO conditions and the caller guarantees BOTH, which is what
-// this comment used to overstate. framing.IsFatal has recognised the token
-// (streamErrorToken returned non-empty) AND has already returned early on
-// an invalid book, so neither condition can reach here from the only door
-// there is. Reaching this branch therefore means the recogniser and the
-// constructor have drifted apart, and that is worth a panic: returning nil
-// instead would make a fatal frame silently ordinary — the one failure mode
-// this whole design exists to prevent — and returning a placeholder
-// sentence would put words in a manufacturer's mouth.
+// names no document, and the loudness is deliberate: framing.IsFatal has
+// recognised the token (streamErrorToken returned non-empty) AND has
+// already returned early on an INVALID book (book.valid() false), so
+// neither condition can reach here from the only door there is. Reaching
+// this branch therefore means the recogniser and this constructor have
+// drifted apart — every VALID book now has a case, Book570 and Book870S
+// included (their citations landed in the Lift K follow-up, below).
 //
 // The unconfigured book is refused at the CALLER rather than here because
 // IsFatal runs on the engine's reader goroutine, which has no recover; see
@@ -205,16 +202,44 @@ func newStreamError(token string, book Book) *StreamError {
 		return &StreamError{Token: token, Book: book, Cause: "A receive buffer overrun error occurred", Citation: "890:121-123"}
 	case token == receiveOverrunFrame && book == Book990:
 		return &StreamError{Token: token, Book: book, Cause: "A receive buffer overrun error occurred", Citation: "990:121"}
+	// Book570 AND Book870S, FOUND IN THE LIFT K FOLLOW-UP (13/09/2026), by
+	// reading each document's own full manual text rather than the
+	// command-table-only evidence this lift originally had: both print
+	// "E;" with commErrorCauseNoComma's own wording (a genuine textual
+	// variant of commErrorCause — no comma after "occurred" — not a
+	// transcription slip either side of it) and "O;" with the TS-480's
+	// own sentence verbatim, so BOTH new books side with the TS-480 on
+	// "O;" where the 890/990 case above sides with the 590. Citations are
+	// this codec's own line numbers, from
+	// docs/fixtures-private/manuals/ts570_manual_00_layout.txt and
+	// ts870s_manual_mirror_layout.txt.
+	case token == communicationErrorFrame && book == Book570:
+		return &StreamError{Token: token, Book: book, Cause: commErrorCauseNoComma, Citation: "ts570:5170-5172"}
+	case token == receiveOverrunFrame && book == Book570:
+		return &StreamError{Token: token, Book: book, Cause: "Receive data was sent but processing was not completed", Citation: "ts570:5174-5175"}
+	case token == communicationErrorFrame && book == Book870S:
+		return &StreamError{Token: token, Book: book, Cause: commErrorCauseNoComma, Citation: "ts870s:8445-8447"}
+	case token == receiveOverrunFrame && book == Book870S:
+		return &StreamError{Token: token, Book: book, Cause: "Receive data was sent but processing was not completed", Citation: "ts870s:8449-8450"}
 	default:
-		panic(fmt.Sprintf("kw: newStreamError(%q, %v): not a stream-health token, or no book to quote — IsFatal is the only caller and it has already recognised the token", token, book))
+		panic(fmt.Sprintf("kw: newStreamError(%q, %v): not a stream-health token, or no book to quote — IsFatal is the only caller and it has already recognised both", token, book))
 	}
 }
 
-// commErrorCause is the sentence EVERY book gives for "E;", printed
-// identically in each (590:110-112, 480:140-142, 890:118-120, 990:118-120).
-// It is written once because the documents agree here, which is exactly what
-// makes the TS-480's disagreement about "O;" (E13) worth recording.
+// commErrorCause is the sentence EVERY original-four book gives for "E;",
+// printed identically in each (590:110-112, 480:140-142, 890:118-120,
+// 990:118-120). It is written once because the documents agree here, which
+// is exactly what makes the TS-480's disagreement about "O;" (E13) worth
+// recording.
 const commErrorCause = "A communication error occurred, such as an overrun or framing error during a serial data transmission"
+
+// commErrorCauseNoComma is the TS-570's and the TS-870S's own wording for
+// "E;": the same sentence commErrorCause carries, but printed with no
+// comma after "occurred" in either document (ts570:5170-5172,
+// ts870s:8445-8447) — a genuine textual variant the two new books agree
+// with each other on and not with the original four, so it is its own
+// constant rather than a fifth citation of commErrorCause's exact bytes.
+const commErrorCauseNoComma = "A communication error occurred such as an overrun or framing error during a serial data transmission"
 
 // rejectionCauses is the whole of what all four books say a "?;" means —
 // TWO causes, printed as alternatives, with nothing anywhere to tell them
@@ -243,11 +268,23 @@ const transientSentence = "the document also warns that \"Occasionally, this mes
 // numbers — TestTypedErrors_QuoteNoDocumentTheyWereNotGiven is the pin —
 // and it is why the lookup is a map rather than a switch with a default arm
 // that has to remember to be empty.
+// Book570 AND Book870S, FOUND IN THE LIFT K FOLLOW-UP (13/09/2026): both
+// print rejectionCauses' two sentences verbatim (ts570:5158-5163,
+// ts870s:8434-8439). Their own transient-warning line drops the comma
+// after "Occasionally" that transientSentence's quote carries ("Note:
+// Occasionally this message may not appear...", ts570:5165-5167,
+// ts870s:8441-8443) — the SAME single-comma variant newStreamError's
+// commErrorCauseNoComma records for "E;", not re-minted as a second
+// constant here because it changes no word transientSentence quotes,
+// only one already-silent punctuation mark the citation line still
+// points a reader at.
 var bookCitations = map[Book]struct{ causes, transient string }{
-	Book590: {"590:100-105", "590:106-108"},
-	Book480: {"480:130-135", "480:136-138"},
-	Book890: {"890:106-112", "890:114-116"},
-	Book990: {"990:108-113", "990:114-116"},
+	Book590:  {"590:100-105", "590:106-108"},
+	Book480:  {"480:130-135", "480:136-138"},
+	Book890:  {"890:106-112", "890:114-116"},
+	Book990:  {"990:108-113", "990:114-116"},
+	Book570:  {"ts570:5158-5163", "ts570:5165-5167"},
+	Book870S: {"ts870s:8434-8439", "ts870s:8441-8443"},
 }
 
 // RejectionError is the typed refusal a "?;" produces.

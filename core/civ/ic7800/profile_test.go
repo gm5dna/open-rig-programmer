@@ -115,7 +115,7 @@ func TestLayoutOffsetsFollowTheStatedRule(t *testing.T) {
 // TestUnmappedRegionsAreTheTwoE6Nibbles pins the E6 ruling's shape in the
 // profile itself: byte 0 (printed 'e') is unmapped in BOTH nibbles - its
 // high nibble is implicitly fixed 0 and its low nibble is the four-valued
-// SELECT-group marker - and byte 8's LOW nibble (printed '!1''s lower
+// SELECT-group marker - and byte 8's LOW nibble (printed '!1”s lower
 // printed value list) is the four-valued data mode. Neither has a
 // faithful neutral home, so E6 rules them unmapped, carried by the Fixed
 // template, with a write refused when a slot's actual bytes differ from

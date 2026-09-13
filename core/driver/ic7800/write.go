@@ -309,6 +309,32 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		}
 	}
 
+	// RUNG 4b — THE FIELD-STATE WALK. core/driver.CheckFieldStates is
+	// THE FLEET'S shared walk rather than a table of this package's own:
+	// every field of ChannelData that carries a FieldState, judged
+	// against this session's own vocabularies. What it prevents is
+	// silent rather than loud — a value carried alongside a state
+	// meaning "preserve whatever the radio has" (or alongside Absent,
+	// the zero state a hand-built ChannelData leaves behind) is never
+	// named by requestedFields, so without this rung it would be
+	// DROPPED from the frame and the write would report success (the
+	// FT-891 closing review's C-M1, sharpened by MEDIUM-1 to
+	// codeplug.Absent). PLACED AFTER RUNG 4 rather than immediately
+	// after erase (the fleet's usual spot, ts590/write.go): RUNG 4's own
+	// tone check above ALSO judges a Known tone's domain (via
+	// MaxToneDeciHz) and returns the more specific *OutOfDomainError
+	// (pinned by TestWriteChannel_RefusesAToneOutsideThePrintedDigitRange);
+	// this walk's ToneField.Valid(caps) asks caps.AdmitsTone, the SAME
+	// domain question, so placed any earlier it would intercept those
+	// cases first with a generic refusal and silently retire RUNG 4's
+	// typed error and its test. Placed here, RUNG 4 still answers every
+	// Known-value domain question it always has; this walk is reached
+	// only for what RUNG 4 does not judge — Unknown/Unavailable/Absent
+	// carrying a stray value.
+	if field, err := driver.CheckFieldStates(s.caps, d); err != nil {
+		return refused(ch.Slot, []spec.Field{field}, err.Error())
+	}
+
 	// RUNG 5 — THE ONE READ. E6 needs the slot's RAW unmapped regions and
 	// T1(4) needs its tone numbers; both come from this single exchange,
 	// through the same primitive ReadChannel uses, so the T2 address
@@ -439,7 +465,7 @@ func missingMandatory(d codeplug.ChannelData) (spec.Field, string) {
 //
 // THE UNMAPPED SET: record byte 0 ENTIRELY — printed 'e', whose HIGH
 // nibble is implicitly fixed 0 and whose LOW nibble is the four-valued
-// SELECT-group marker — and record byte 8's LOW nibble, printed '!1''s
+// SELECT-group marker — and record byte 8's LOW nibble, printed '!1”s
 // lower printed value list, the four-valued data mode. UNLIKE THE IC-7610
 // FAMILY, byte 8's HIGH nibble is tone_mode here (matrix §1b: "byte !1,
 // high nibble" for tone_mode, "byte !1, low nibble" for data_mode — the

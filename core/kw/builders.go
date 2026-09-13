@@ -121,24 +121,42 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	if rec.ToneIndex < MinToneIndex || rec.ToneIndex > MaxToneIndex {
 		return Command{}, newParseError(nil, "MW set: P8 is %d, and TN prints %02d ~ %d (590:2291, 480:1557); an index outside its own chart is refused rather than clamped (A21)", rec.ToneIndex, MinToneIndex, MaxToneIndex)
 	}
-	if rec.CTCSSIndex < MinCTCSSIndex || rec.CTCSSIndex > MaxCTCSSIndex {
-		return Command{}, newParseError(nil, "MW set: P9 is %d, and CN prints %02d ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", rec.CTCSSIndex, MinCTCSSIndex, MaxCTCSSIndex)
-	}
-	if err := l.checkByte28(rec.Byte28); err != nil {
-		return Command{}, newParseError(nil, "MW set: %v", err)
-	}
-	if err := l.checkByte3940(rec.Byte3940Wire()); err != nil {
-		return Command{}, newParseError(nil, "MW set: %v", err)
-	}
-	if err := l.checkByte41(rec.Byte41); err != nil {
-		return Command{}, newParseError(nil, "MW set: %v", err)
-	}
-	if len(rec.Name) > recNameLen {
-		return Command{}, newParseError([]byte(rec.Name), "MW set: the memory name is %d bytes and P16 holds %d (590:1576, 480:984)", len(rec.Name), recNameLen)
-	}
-	for i := 0; i < len(rec.Name); i++ {
-		if err := checkNameByte(rec.Name[i]); err != nil {
-			return Command{}, newParseError([]byte(rec.Name), "MW set: memory name byte %d: %v (A2)", i+1, err)
+	// hasTail is whether this row's record reaches past P8 at all — see
+	// parseRecordFrame's own hasTail for the citation. A row without a
+	// tail never has these fields to validate or encode, and rec's own
+	// zero values for them (a caller of an existing 50-byte driver never
+	// sets DCSCode/Shift/OffsetHz, and CTCSSIndex/Byte28/Byte3940/Byte41
+	// simply are not consulted here) are simply never reached.
+	hasTail := l.recordLen == RecordLen
+	if hasTail {
+		if rec.CTCSSIndex < MinCTCSSIndex || rec.CTCSSIndex > MaxCTCSSIndex {
+			return Command{}, newParseError(nil, "MW set: P9 is %d, and CN prints %02d ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", rec.CTCSSIndex, MinCTCSSIndex, MaxCTCSSIndex)
+		}
+		if err := l.checkP10(uint64(rec.DCSCode)); err != nil {
+			return Command{}, newParseError(nil, "MW set: %v", err)
+		}
+		if err := l.checkByte28(rec.Byte28); err != nil {
+			return Command{}, newParseError(nil, "MW set: %v", err)
+		}
+		if err := l.checkP12(rec.Shift); err != nil {
+			return Command{}, newParseError(nil, "MW set: %v", err)
+		}
+		if err := l.checkP13(rec.OffsetHz); err != nil {
+			return Command{}, newParseError(nil, "MW set: %v", err)
+		}
+		if err := l.checkByte3940(rec.Byte3940Wire()); err != nil {
+			return Command{}, newParseError(nil, "MW set: %v", err)
+		}
+		if err := l.checkByte41(rec.Byte41); err != nil {
+			return Command{}, newParseError(nil, "MW set: %v", err)
+		}
+		if len(rec.Name) > recNameLen {
+			return Command{}, newParseError([]byte(rec.Name), "MW set: the memory name is %d bytes and P16 holds %d (590:1576, 480:984)", len(rec.Name), recNameLen)
+		}
+		for i := 0; i < len(rec.Name); i++ {
+			if err := checkNameByte(rec.Name[i]); err != nil {
+				return Command{}, newParseError([]byte(rec.Name), "MW set: memory name byte %d: %v (A2)", i+1, err)
+			}
 		}
 	}
 
@@ -147,7 +165,7 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 		return Command{}, err
 	}
 
-	frame := make([]byte, RecordLen)
+	frame := make([]byte, l.recordLen)
 	frame[recPrefixOff], frame[recPrefixOff+1] = 'M', 'W'
 	frame[recP1Off] = rec.Slot.P1()
 	copy(frame[recP2Off:], wire)
@@ -156,16 +174,38 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	frame[recByte19Off] = rec.Byte19
 	frame[recToneModeOff] = rec.ToneMode.Wire()
 	copy(frame[recToneOff:], fmt.Sprintf("%0*d", recToneDigits, rec.ToneIndex))
-	copy(frame[recCTCSSOff:], fmt.Sprintf("%0*d", recCTCSSDigits, rec.CTCSSIndex))
-	frame[recByte28Off] = rec.Byte28
-	copy(frame[recByte3940Off:], rec.Byte3940Wire())
-	frame[recByte41Off] = rec.Byte41
-	// A1, cited at the site: 8 bytes, padded with SPACES on write and
-	// right-trimmed on read. Neither book states the rule for P16; the 480's
-	// KY gives the same-document precedent for a different command
-	// (480:785-787), and the lift is a write-then-read on each registry row.
-	copy(frame[recNameOff:], fmt.Sprintf("%-*s", recNameLen, rec.Name))
-	frame[recTermOff] = ';'
+	if hasTail {
+		copy(frame[recCTCSSOff:], fmt.Sprintf("%0*d", recCTCSSDigits, rec.CTCSSIndex))
+		copy(frame[recDCSOff:], fmt.Sprintf("%0*d", recDCSDigits, rec.DCSCode))
+		frame[recByte28Off] = rec.Byte28
+		frame[recShiftOff] = rec.Shift
+		copy(frame[recOffsetOff:], fmt.Sprintf("%0*d", recOffsetDigits, rec.OffsetHz))
+		copy(frame[recByte3940Off:], rec.Byte3940Wire())
+		frame[recByte41Off] = rec.Byte41
+		// A1, cited at the site: 8 bytes, padded with SPACES on write and
+		// right-trimmed on read. Neither book states the rule for P16; the
+		// 480's KY gives the same-document precedent for a different
+		// command (480:785-787), and the lift is a write-then-read on each
+		// registry row.
+		copy(frame[recNameOff:], fmt.Sprintf("%-*s", recNameLen, rec.Name))
+	} else {
+		// The TS-570's own "P9: NOT USED" span — positions 23-27, five
+		// bytes this row's own document assigns no meaning to at all
+		// (evidence/ts570d-transcription.csv: "unused_filler"; the MR/MW
+		// diagrams print no field there, only the terminator at position
+		// 28). A frame that left them Go's zero byte failed the outbound
+		// envelope's printable-ASCII rule (envelopeAllows, framing.go) and
+		// validMWCommand's own rebuild-and-compare gate (allowlist.go),
+		// so no 28-byte MW frame existed at all until this filled them.
+		// '0' is the SAME filler P2Unused already writes one byte to the
+		// west (slotWire) — ASSUMED rather than printed, since no book
+		// says what a Set should carry where none prints a meaning, and
+		// '0' is this family's own established choice for such a byte.
+		for i := recToneOff + recToneDigits; i < int(l.recordLen)-1; i++ {
+			frame[i] = '0'
+		}
+	}
+	frame[l.recordLen-1] = ';'
 
 	// THE PRINTED-FIXED BYTES ARE WRITTEN FROM THE LAYOUT'S OWN SET, not
 	// from the record, and last, so no field above can overwrite one. The
@@ -181,7 +221,7 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	// input can change len(frame) — and this gate records that invariant so
 	// an edit making the width variable would meet it. record_test.go is
 	// explicit that no input can make it fire.
-	if err := checkRecordLen("MW", len(frame), frame); err != nil {
+	if err := l.checkRecordLen("MW", len(frame), frame); err != nil {
 		return Command{}, err
 	}
 	return newCommand(frame), nil
@@ -261,6 +301,15 @@ func (l Layout) slotWire(s Slot) (string, error) {
 	case P2FixedZero:
 		if s.number > maxFixedZeroSlot {
 			return "", newParseError(nil, "slot %d cannot be named on the %s: byte 4 prints \"Always 0\" there (480:953) and P3 holds \"00 ~ 99\" (480:955), so there is no digit to carry the hundreds", s.number, l.model)
+		}
+		return fmt.Sprintf("0%02d", s.number), nil
+	case P2Unused:
+		// The book prints nothing for this byte at all (P2Unused's own
+		// doc comment), so no wire value is asserted; '0' is written as
+		// the filler every other byte in this family's empty/unused
+		// positions uses, ASSUMED rather than printed.
+		if s.number > maxFixedZeroSlot {
+			return "", newParseError(nil, "slot %d cannot be named on the %s: byte 4 carries no hundreds digit (the %s's Parameter Table prints no meaning for it) and P3 holds two digits, so there is no digit to carry the hundreds", s.number, l.model, l.model)
 		}
 		return fmt.Sprintf("0%02d", s.number), nil
 	case P2HundredsDigit:

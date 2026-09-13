@@ -319,7 +319,7 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		// as before. Under P11TagDisplay the byte is a live TAG flag and
 		// both of its documented values are admitted — and nothing else, so
 		// an undocumented third value is still refused outbound.
-		if !d.p11Valid(frame[mtCombinedP11Offset]) {
+		if !d.p11Valid(frame[d.mtCombinedP11Off()]) {
 			return false
 		}
 		// THE RAW TAG FIELD, PER BYTE, WITH validMTTagByte ONLY —
@@ -342,7 +342,7 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		// or a control byte is refused in whichever representation it
 		// appears. TagFill itself is always admissible here — V9 requires it
 		// to be a valid wire byte.
-		for _, b := range frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes] {
+		for _, b := range frame[d.mtCombinedTagOff() : d.mtCombinedTagOff()+d.mt.TagMaxBytes] {
 			if !validMTTagByte(b) {
 				return false
 			}
