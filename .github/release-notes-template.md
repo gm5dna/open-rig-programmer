@@ -55,7 +55,7 @@ certutil -hashfile <file> SHA256             # Windows, one file at a time
 
 ## First launch
 
-- **macOS**: the app is only ad-hoc signed, so Gatekeeper refuses it the first time. Right-click the app, choose *Open*, and confirm. Once.
+- **macOS**: the app is signed with a Developer ID and notarised by Apple, so it opens like any other download.
 - **Windows**: the installer is unsigned. Edge may flag the download, and SmartScreen shows *Windows protected your PC* the first time: click *More info*, then *Run anyway*. The app needs Microsoft's WebView2 runtime, which Windows 11 already ships; if it is missing the installer is set to download it, a path this project has not tried. On ARM64 install Silicon Labs' CP210x driver by hand before connecting; the radio shows as two COM ports and only one answers. See [docs/windows-setup.md](https://github.com/gm5dna/open-rig-programmer/blob/__VERSION__/docs/windows-setup.md).
 - **Linux**: join the `dialout` group and log out and in; keep ModemManager off the radio (the .deb installs the rule; the tarball needs it by hand). See [docs/linux-setup.md](https://github.com/gm5dna/open-rig-programmer/blob/__VERSION__/docs/linux-setup.md).
 

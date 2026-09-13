@@ -11,6 +11,13 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Changed
+- **macOS release builds are now signed with a Developer ID and
+  notarised.** Gatekeeper no longer needs a right-click.
+- Internal: the CHIRP per-model fixture ledger now covers all eleven
+  pre-v1.7.0 Icom models (`chirpFixtureExceptions` empty); no
+  user-visible change.
+
 ## [1.7.0] - 2026-09-13
 
 ### Added
