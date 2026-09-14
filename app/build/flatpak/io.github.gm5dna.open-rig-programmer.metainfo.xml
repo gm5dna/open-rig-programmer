@@ -3,7 +3,7 @@
 <component type="desktop-application">
   <id>io.github.gm5dna.open-rig-programmer</id>
   <name>Open Rig Programmer</name>
-  <summary>Memory-channel programmer for Yaesu, Icom and Kenwood transceivers</summary>
+  <summary>Radio memory-channel programmer</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <description>
@@ -13,8 +13,64 @@
       hardware; other supported models read, and write only once
       switched on for that radio.
     </p>
+    <p>
+      Memory-channel programmer for Yaesu, Icom and Kenwood transceivers:
+      view and edit channels in a spreadsheet-like grid, import/export
+      CSV and CHIRP files, and read or apply radio settings menus, all
+      over the same serial CAT link the manufacturer's own software
+      uses.
+    </p>
   </description>
   <launchable type="desktop-id">io.github.gm5dna.open-rig-programmer.desktop</launchable>
   <url type="homepage">https://github.com/gm5dna/open-rig-programmer</url>
+  <developer id="io.github.gm5dna">
+    <name>Stuart Henderson (GM5DNA)</name>
+  </developer>
+  <categories>
+    <category>Utility</category>
+    <category>HamRadio</category>
+  </categories>
+  <branding>
+    <color type="primary" scheme_preference="light">#9c5f00</color>
+    <color type="primary" scheme_preference="dark">#f5a623</color>
+  </branding>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main channel grid with a read codeplug loaded</caption>
+      <image>https://raw.githubusercontent.com/gm5dna/open-rig-programmer/v1.8.2/app/build/flatpak/screenshots/01-channel-grid.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings menu viewer, read from the radio</caption>
+      <image>https://raw.githubusercontent.com/gm5dna/open-rig-programmer/v1.8.2/app/build/flatpak/screenshots/02-settings-view.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Main channel grid in dark mode</caption>
+      <image>https://raw.githubusercontent.com/gm5dna/open-rig-programmer/v1.8.2/app/build/flatpak/screenshots/03-channel-grid-dark.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="1.8.2" date="2026-09-14">
+      <description>
+        <p>Flathub metainfo and screenshots.</p>
+      </description>
+    </release>
+    <release version="1.8.1" date="2026-09-14">
+      <description>
+        <p>Flatpak aarch64 builds and an RPM package on every release.</p>
+      </description>
+    </release>
+    <release version="1.8.0" date="2026-09-13">
+      <description>
+        <p>FTdx3000, FTdx1200 and FT-450D join the supported Yaesu
+        models; light/dark mode; the Flatpak bundle.</p>
+      </description>
+    </release>
+    <release version="1.7.1" date="2026-09-13">
+      <description>
+        <p>macOS release builds are signed with a Developer ID and
+        notarised.</p>
+      </description>
+    </release>
+  </releases>
   <content_rating type="oars-1.1" />
 </component>
