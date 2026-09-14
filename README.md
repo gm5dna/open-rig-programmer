@@ -53,7 +53,7 @@ Everything is on the [Releases page](../../releases), with a
   SmartScreen will say *Windows protected your PC*: click *More info*,
   then *Run anyway*. [docs/windows-setup.md](docs/windows-setup.md)
   covers the serial driver.
-- **Linux**: on Debian, Ubuntu or Mint, `sudo apt install ./<file>.deb`.
+- **Linux**: on Debian, Ubuntu or Mint, `sudo apt install ./<file>.deb`; on any other distribution with Flatpak, `flatpak install --user ./<file>.flatpak`.
   Elsewhere, the tarball is a single static binary.
   [docs/linux-setup.md](docs/linux-setup.md) covers the `dialout` group
   and ModemManager.

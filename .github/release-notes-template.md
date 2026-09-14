@@ -40,11 +40,12 @@ A minor release: three more Yaesu models join the supported tier — FTdx3000, F
 | Windows amd64 | Command line only (zip) | `rigprog-__VERSION__-windows-amd64.zip` |
 | Windows arm64 | Command line only (zip) | `rigprog-__VERSION__-windows-arm64.zip` |
 | Linux amd64 (Debian, Ubuntu, Mint) | App + command line (.deb) | `open-rig-programmer___VERSION_NO_V___amd64.deb` |
+| Linux x86_64 (any distribution with Flatpak) | App (Flatpak bundle) | `open-rig-programmer-__VERSION__-x86_64.flatpak` |
 | Linux arm64 (Debian, Ubuntu, Mint) | App + command line (.deb) | `open-rig-programmer___VERSION_NO_V___arm64.deb` |
 | Linux amd64 | Command line | `rigprog-__VERSION__-linux-amd64.tar.gz` |
 | Linux arm64 | Command line | `rigprog-__VERSION__-linux-arm64.tar.gz` |
 
-The Windows installers are native-only: the amd64 installer refuses to run on an ARM64 PC even though ARM64 Windows can emulate x64 programs. The Debian package installs the app, the command line, a desktop entry and the ModemManager udev rule; `sudo apt install ./<file>` resolves its GTK and WebKit dependencies (built and tested on Ubuntu 24.04; Ubuntu 22.04, Debian 12 and the Mint releases built from them carry the same packages but have not been tried). On other distributions take the command-line tarball, a single static binary.
+The Windows installers are native-only: the amd64 installer refuses to run on an ARM64 PC even though ARM64 Windows can emulate x64 programs. The Debian package installs the app, the command line, a desktop entry and the ModemManager udev rule; `sudo apt install ./<file>` resolves its GTK and WebKit dependencies (built and tested on Ubuntu 24.04; Ubuntu 22.04, Debian 12 and the Mint releases built from them carry the same packages but have not been tried). On other distributions install the Flatpak bundle (`flatpak install --user ./<file>.flatpak`; needs the GNOME 47 runtime from Flathub, and the app is granted `--device=all` so it can reach the radio's serial port), or take the command-line tarball, a single static binary.
 
 `SHA256SUMS` covers every file above. Verify with:
 
