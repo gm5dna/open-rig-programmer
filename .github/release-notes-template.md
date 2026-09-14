@@ -20,14 +20,10 @@ Which radios are supported, and how far each has been tested, is in [docs/radio-
 
 ## What changed in this version
 
-A minor release: three more Yaesu models join the supported tier — FTdx3000, FTdx1200 and FT-450D, all paper-only and opt-in for writes — plus a light/dark mode and a Flatpak bundle.
+A patch release: no new radios, no change to any driver. The Flatpak bundle introduced in 1.8.0 now also builds for aarch64, and an RPM package joins the `.deb` for Fedora and openSUSE.
 
-- **FTdx3000** joins the supported Yaesu models: a paper-only registration, opt-in for writes via the unverified-write consent gate, since no real radio has ever answered this program. NoTag — no channel-name field over CAT. CTCSS tone is read-only over CAT (the write command's own tone field is fixed to `"00"`); AM-N is assumed not storable via CAT and is excluded from the write-capable mode list.
-- **FTdx1200** joins the supported Yaesu models as one radio identified by either of two CAT IDs (`0582` with the FFT-1 filter fitted, `0583` without): the same paper-only, opt-in-write, NoTag shape as the FTdx3000.
-- **FT-450D** joins the supported Yaesu models, also paper-only and opt-in-write, in a deliberately safe shape: only memory channels 001-500 are written; the Programmable Memory Scan channels (501-504) stay read-only until an owner probes a real radio; the 60 m and Alaska-emergency channels are not exposed at all. Six probes that would lift these limits are listed in [docs/radio-notes.md](https://github.com/gm5dna/open-rig-programmer/blob/__VERSION__/docs/radio-notes.md).
-- **Light/dark mode**: a System/Light/Dark picker in the settings panel; the app follows the OS setting by default.
-- **Flatpak bundle** (`.flatpak`, app id `io.github.gm5dna.open-rig-programmer`, GNOME 47 runtime, `--device=all` for the radio's serial port) is now attached to each release; Flathub submission is not yet done.
-- Internal: a new `cat.MemoryP9Policy` value, `P9ToneIndexReadOnly`, covers a write dialect whose tone field cannot be set. Supported models: 39 → 42.
+- **Flatpak aarch64**: the Flatpak bundle introduced in 1.8.0 now builds on both amd64 and arm64 runners (native, no cross-compile), attaching `open-rig-programmer-<version>-x86_64.flatpak` and `-aarch64.flatpak` to every release.
+- **RPM package** (`.rpm`, nfpm from the same source as the `.deb`) for Fedora and openSUSE, x86_64 and aarch64, attached to every release alongside the `.deb`; built and metadata-checked in CI, not yet installed on a real Fedora or openSUSE machine. rpm forbids a `-` in the Version header, so a prerelease tag (e.g. `1.8.1-rc1`) splits into rpm's Version/Release fields for the rpm build only — the `.deb` Version is unaffected.
 
 ## Downloads
 
@@ -40,12 +36,15 @@ A minor release: three more Yaesu models join the supported tier — FTdx3000, F
 | Windows amd64 | Command line only (zip) | `rigprog-__VERSION__-windows-amd64.zip` |
 | Windows arm64 | Command line only (zip) | `rigprog-__VERSION__-windows-arm64.zip` |
 | Linux amd64 (Debian, Ubuntu, Mint) | App + command line (.deb) | `open-rig-programmer___VERSION_NO_V___amd64.deb` |
-| Linux x86_64 (any distribution with Flatpak) | App (Flatpak bundle) | `open-rig-programmer-__VERSION__-x86_64.flatpak` |
 | Linux arm64 (Debian, Ubuntu, Mint) | App + command line (.deb) | `open-rig-programmer___VERSION_NO_V___arm64.deb` |
+| Linux x86_64 (Fedora, openSUSE) | App + command line (.rpm) | `open-rig-programmer-__VERSION_NO_V__.x86_64.rpm` |
+| Linux aarch64 (Fedora, openSUSE) | App + command line (.rpm) | `open-rig-programmer-__VERSION_NO_V__.aarch64.rpm` |
+| Linux x86_64 (any distribution with Flatpak) | App (Flatpak bundle) | `open-rig-programmer-__VERSION__-x86_64.flatpak` |
+| Linux aarch64 (any distribution with Flatpak) | App (Flatpak bundle) | `open-rig-programmer-__VERSION__-aarch64.flatpak` |
 | Linux amd64 | Command line | `rigprog-__VERSION__-linux-amd64.tar.gz` |
 | Linux arm64 | Command line | `rigprog-__VERSION__-linux-arm64.tar.gz` |
 
-The Windows installers are native-only: the amd64 installer refuses to run on an ARM64 PC even though ARM64 Windows can emulate x64 programs. The Debian package installs the app, the command line, a desktop entry and the ModemManager udev rule; `sudo apt install ./<file>` resolves its GTK and WebKit dependencies (built and tested on Ubuntu 24.04; Ubuntu 22.04, Debian 12 and the Mint releases built from them carry the same packages but have not been tried). On other distributions install the Flatpak bundle (`flatpak install --user ./<file>.flatpak`; needs the GNOME 47 runtime from Flathub, and the app is granted `--device=all` so it can reach the radio's serial port), or take the command-line tarball, a single static binary.
+The Windows installers are native-only: the amd64 installer refuses to run on an ARM64 PC even though ARM64 Windows can emulate x64 programs. The Debian package installs the app, the command line, a desktop entry and the ModemManager udev rule; `sudo apt install ./<file>` resolves its GTK and WebKit dependencies (built and tested on Ubuntu 24.04; Ubuntu 22.04, Debian 12 and the Mint releases built from them carry the same packages but have not been tried). The RPM installs the same set (`sudo dnf install ./<file>.rpm`); it is built and its metadata checked in CI but has not been installed on a real Fedora or openSUSE machine. On other distributions install the Flatpak bundle (`flatpak install --user ./<file>.flatpak`, x86_64 or aarch64; needs the GNOME 47 runtime from Flathub, and the app is granted `--device=all` so it can reach the radio's serial port), or take the command-line tarball, a single static binary.
 
 `SHA256SUMS` covers every file above. Verify with:
 

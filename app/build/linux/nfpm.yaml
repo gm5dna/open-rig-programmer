@@ -17,6 +17,16 @@ version: ${NFPM_VERSION}
 # published and only ever installed in disposable rehearsal VMs;
 # published versions (1.1.0) carry no prerelease and are unaffected.
 version_schema: none
+# rpm forbids a "-" in the Version header (the deb Version above is
+# fine with one). release.yml's rpm packaging step splits a
+# prerelease tag (1.8.1-rc1) into NFPM_VERSION=1.8.1 and
+# NFPM_RELEASE=rc1 before invoking nfpm -p rpm; the deb step never
+# sets NFPM_RELEASE, so it stays empty here and the deb Version is
+# untouched (nfpm only appends "-${release}" when release is
+# non-empty). A published version (1.8.1, no hyphen) leaves
+# NFPM_RELEASE unset for rpm too, and nfpm defaults an empty Release
+# to "1", same as every other rpm.
+release: ${NFPM_RELEASE}
 section: hamradio
 priority: optional
 maintainer: Stuart Henderson GM5DNA <stuart@craggiemore.com>
@@ -54,3 +64,13 @@ scripts:
   postremove: build/linux/scripts/postremove.sh
 deb:
   compression: gzip
+overrides:
+  rpm:
+    # ASSUMED, untested on a real Fedora box: the `depends:` list above
+    # is Debian package naming (libgtk-3-0t64, libwebkit2gtk-4.1-0).
+    # Fedora's equivalents, per the Fedora 40/41 repos: "gtk3" (ships
+    # libgtk-3.so.0) and "webkit2gtk4.1" (ships libwebkit2gtk-4.1.so.0,
+    # named after the WebKitGTK API version like the Debian package).
+    depends:
+      - gtk3
+      - webkit2gtk4.1
