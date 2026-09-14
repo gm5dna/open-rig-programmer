@@ -94,6 +94,9 @@ sends it.
 [docs/developing.md](docs/developing.md) covers building from source,
 the repository layout, the evidence records and releasing;
 [CHANGELOG.md](CHANGELOG.md) lists what changed in each release.
+The [wiki](https://github.com/gm5dna/open-rig-programmer/wiki) is the
+user manual: getting started per platform, the grid, import and
+export, reading and writing, and a page per radio family.
 
 ## Licence
 
