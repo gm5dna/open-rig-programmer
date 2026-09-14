@@ -635,22 +635,22 @@ these radios declare no shift vocabulary at all, so such a row imports
 and nothing is reported. A `Duplex` column reading `off` is refused, and
 `CW`, `CWR` and `RTTY` rows are refused on the mode — they resolve to
 names these radios' own mode lists do not print, which are `CW`, `CW-R`,
-`FSK` and `FSK-R`. **Two values must be filled in before an imported
-CHIRP channel can be written, and they are the two tone numbers**: one
-frame carries the tone mode, the transmit tone and the receive tone
-together, and these radios' write path requires all three to be known,
-of which a CHIRP row gives only the mode. Its ordinary blank `Tone`
-column says only that tone is switched off, leaving both numbers unsaid,
-and nothing here supplies a value the file did not carry. **The transmit
-frequency is no longer among them**: a blank `Duplex` column is the
-file's own simplex statement, and each record prints that a simplex
-channel's split parameters all read zero, so an import now carries that
-value. A row reading `Tone` gives the transmit tone and still leaves the
-receive tone to you; a row reading `TSQL` is refused on the tone column
-outright, because CHIRP's tone squelch asks for a transmit-and-receive
-tone mode neither radio's own memory chart prints. The program's own CSV
-import and export are unaffected — a CSV read off the radio carries both
-already.
+`FSK` and `FSK-R`. **Neither tone index needs to be supplied by hand any
+more** (design 2026-09-12-chirp-b1, symmetric B1, which supersedes the
+ruling B2 this passage used to record): a CHIRP row's `rToneFreq` and
+`cToneFreq` columns are read even on a row whose own `Tone` mode does
+not use them, so an ordinary blank-`Tone` row's 88.5 fill values carry
+both, and one frame carries the tone mode, the transmit tone and the
+receive tone together — all three are Known from the file alone, and
+the write reaches these radios' unverified-write consent gate rather
+than refusing on the tone rung. **The transmit frequency is carried
+too**: a blank `Duplex` column is the file's own simplex statement, and
+each record prints that a simplex channel's split parameters all read
+zero, so an import carries that value. A row reading `TSQL` is still
+refused on the tone column outright, because CHIRP's tone squelch asks
+for a transmit-and-receive tone mode neither radio's own memory chart
+prints. The program's own CSV import and export are unaffected — a CSV
+read off the radio carries both already.
 
 **A write may read back as the old value if the radio is displaying
 that channel.** Both manuals print it in the same words: "When setting
