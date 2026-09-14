@@ -1,0 +1,124 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Flathub submission manifest. Unlike app/build/flatpak/*.yml (which
+# installs the prebuilt wails binary from a GitHub release for the
+# bundled .flatpak artefact), this builds Go and the npm frontend
+# entirely from source with no network access, per Flathub's
+# requirements (docs.flathub.org/docs/for-app-authors/requirements).
+# This is the file that gets copied into a flathub/flathub PR.
+#
+# --device=all: serial CAT ports are arbitrary /dev/ttyUSBn or
+# /dev/ttyACMn nodes with no stable udev tag inside the sandbox yet
+# (narrowing to the CP2105 VID:PID deferred — see
+# app/build/flatpak/README.md). --device=dri and the two display
+# sockets are WebKitGTK/GTK's own requirements. fldigi
+# (com.w1hkj.fldigi, Flathub-published, ham radio) carries the same
+# --device=all for the same serial-CAT reason.
+app-id: io.github.gm5dna.open-rig-programmer
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+# org.gnome.Sdk//50 has no Go and no Node (confirmed by the phase0
+# probe, reviews/phase0-webkit.md) — it does carry webkit2gtk-4.1
+# 2.52.5 and gtk+-3.0 3.24.52, which is all Wails v2 needs from the
+# runtime itself.
+#
+# Node comes from the org.freedesktop.Sdk.Extension.node22 build
+# extension (no branch pinned — it resolves against whichever
+# freedesktop-sdk branch org.gnome.Sdk//50 is built on, the same
+# pattern flatpak-node-generator's own quick-start manifests use).
+#
+# Go does NOT come from org.freedesktop.Sdk.Extension.golang: that
+# extension's only available current branch (25.08) ships go1.27.1,
+# and go.mod pins `go 1.25.0` — go1.27 fails two codeplug tests
+# locally (project memory: go-toolchain-pin-local-gate). GOTOOLCHAIN
+# can't fetch a different version inside the network-less build
+# sandbox, so the go1.25.0 linux tarball is vendored directly below
+# instead (sha256-pinned, dest: go-sdk).
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node22
+command: open-rig-programmer
+
+finish-args:
+  - --device=all
+  - --device=dri
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+
+# The desktop file, icon and their Icon= key say "open-rig-programmer";
+# flatpak-builder renames the installed copies to the app-id itself
+# (required for icon-theme/desktop lookup under the app-id).
+rename-desktop-file: open-rig-programmer.desktop
+rename-icon: open-rig-programmer
+
+modules:
+  - name: open-rig-programmer
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/node22/bin:/run/build/open-rig-programmer/go-sdk/bin
+      env:
+        XDG_CACHE_HOME: /run/build/open-rig-programmer/flatpak-node/cache
+        npm_config_cache: /run/build/open-rig-programmer/flatpak-node/npm-cache
+        npm_config_nodedir: /usr/lib/sdk/node22
+        GOROOT: /run/build/open-rig-programmer/go-sdk
+        GOFLAGS: -mod=vendor
+        GOPROXY: 'off'
+        GOSUMDB: 'off'
+        CGO_ENABLED: '1'
+    build-commands:
+      # Frontend (Svelte/Vite) built offline from the npm cache
+      # flatpak-node-generator populated from app/frontend/package-lock.json
+      # (152 resolved entries). Output lands at app/frontend/dist, which
+      # app/main.go embeds via `//go:embed all:frontend/dist`.
+      - cd app/frontend && npm install --offline && npm run build
+
+      # Reproduces exactly what `wails build -tags webkit2_41` does on
+      # Linux (verified against the vendored wails v2.13.0 source: CLI
+      # build tags = OutputType "desktop" + UserTags + "production",
+      # pkg/commands/build/base.go). No wails CLI needed — the frontend
+      # is already built above, and go:embed does the rest.
+      - >-
+        cd app && go build -trimpath -tags desktop,production,webkit2_41
+        -ldflags "-s -w -X github.com/gm5dna/open-rig-programmer/internal/buildinfo.version=v1.8.1"
+        -o open-rig-programmer .
+
+      - install -Dm755 app/open-rig-programmer /app/bin/open-rig-programmer
+      - install -Dm644 app/build/linux/open-rig-programmer.desktop /app/share/applications/open-rig-programmer.desktop
+      - install -Dm644 app/build/linux/open-rig-programmer-512.png /app/share/icons/hicolor/512x512/apps/open-rig-programmer.png
+      - install -Dm644 app/build/flatpak/io.github.gm5dna.open-rig-programmer.metainfo.xml /app/share/metainfo/io.github.gm5dna.open-rig-programmer.metainfo.xml
+    sources:
+      # The app source. Pinned to v1.8.1 for now — Phase 3 retags this
+      # to v1.8.2 once the metainfo fixes (branch flathub-meta) land in
+      # a tagged release. go.mod, go.sum and
+      # app/frontend/package-lock.json are byte-identical between this
+      # commit and v1.8.1 (`git diff v1.8.1 -- go.mod go.sum
+      # app/frontend/package-lock.json` is empty), so the sources below
+      # generated from this checkout match what v1.8.1 will fetch.
+      - type: git
+        url: https://github.com/gm5dna/open-rig-programmer.git
+        tag: v1.8.1
+        commit: e34012ae1aa95c80b78e31747951bb0ab567d09d
+
+      # go.sum -> vendor/ sources, from `flatpak-go-mod .` (dennwc/flatpak-go-mod).
+      - go-sources.json
+
+      # app/frontend/package-lock.json -> offline npm cache sources, from
+      # `flatpak-node-generator npm app/frontend/package-lock.json`.
+      - node-sources.json
+
+      # go1.25.0 official linux tarballs (see the sdk-extensions comment
+      # above for why this isn't the golang Sdk extension). Verified
+      # sha256 locally against the go.dev/dl download.
+      - type: archive
+        only-arches: [x86_64]
+        url: https://go.dev/dl/go1.25.0.linux-amd64.tar.gz
+        sha256: 2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613
+        dest: go-sdk
+        strip-components: 1
+      - type: archive
+        only-arches: [aarch64]
+        url: https://go.dev/dl/go1.25.0.linux-arm64.tar.gz
+        sha256: 05de75d6994a2783699815ee553bd5a9327d8b79991de36e38b66862782f54ae
+        dest: go-sdk
+        strip-components: 1
