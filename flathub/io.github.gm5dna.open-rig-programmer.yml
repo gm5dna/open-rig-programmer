@@ -80,7 +80,7 @@ modules:
       # is already built above, and go:embed does the rest.
       - >-
         cd app && go build -trimpath -tags desktop,production,webkit2_41
-        -ldflags "-s -w -X github.com/gm5dna/open-rig-programmer/internal/buildinfo.version=v1.8.1"
+        -ldflags "-s -w -X github.com/gm5dna/open-rig-programmer/internal/buildinfo.version=v1.8.2"
         -o open-rig-programmer .
 
       - install -Dm755 app/open-rig-programmer /app/bin/open-rig-programmer
@@ -88,17 +88,15 @@ modules:
       - install -Dm644 app/build/linux/open-rig-programmer-512.png /app/share/icons/hicolor/512x512/apps/open-rig-programmer.png
       - install -Dm644 app/build/flatpak/io.github.gm5dna.open-rig-programmer.metainfo.xml /app/share/metainfo/io.github.gm5dna.open-rig-programmer.metainfo.xml
     sources:
-      # The app source. Pinned to v1.8.1 for now — Phase 3 retags this
-      # to v1.8.2 once the metainfo fixes (branch flathub-meta) land in
-      # a tagged release. go.mod, go.sum and
-      # app/frontend/package-lock.json are byte-identical between this
-      # commit and v1.8.1 (`git diff v1.8.1 -- go.mod go.sum
-      # app/frontend/package-lock.json` is empty), so the sources below
-      # generated from this checkout match what v1.8.1 will fetch.
+      # The app source, pinned to v1.8.2 (the Flathub-ready metainfo
+      # release). go.mod, go.sum and app/frontend/package-lock.json are
+      # byte-identical between v1.8.1 and v1.8.2 (`git diff v1.8.1
+      # v1.8.2 -- go.mod go.sum app/frontend/package-lock.json` is
+      # empty), so the sources below still match what v1.8.2 fetches.
       - type: git
         url: https://github.com/gm5dna/open-rig-programmer.git
-        tag: v1.8.1
-        commit: e34012ae1aa95c80b78e31747951bb0ab567d09d
+        tag: v1.8.2
+        commit: 69cad45663ea917bd664d05bde168445d186ab2c
 
       # go.sum -> vendor/ sources, from `flatpak-go-mod .` (dennwc/flatpak-go-mod).
       - go-sources.json
