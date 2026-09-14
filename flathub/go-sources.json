@@ -2,7 +2,8 @@
   {
     "dest": "vendor",
     "path": "go-modules.txt",
-    "type": "file"
+    "type": "file",
+    "dest-filename": "modules.txt"
   },
   {
     "dest": "vendor/github.com/wailsapp/wails/v2",
