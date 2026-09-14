@@ -477,11 +477,47 @@ jobs:
       - name: Check the .deb
         run: bash app/build/linux/check-deb.sh "open-rig-programmer_${VERSION#v}_${{ matrix.arch }}.deb" "${VERSION#v}" "${{ matrix.arch }}"
 
+      - name: Package .rpm
+        working-directory: app
+        env:
+          NFPM_ARCH: ${{ matrix.arch }}
+        run: |
+          set -eu
+          # rpm forbids "-" in the Version header (unlike the .deb
+          # above, which is fine with one) — split a prerelease tag
+          # (1.8.1-rc1) into Version/Release for rpm only; a published
+          # tag (1.8.1, no hyphen) leaves NFPM_RELEASE unset and nfpm
+          # defaults Release to "1". See nfpm.yaml's `release:` comment.
+          RAW="${VERSION#v}"
+          case "$RAW" in
+            *-*) export NFPM_VERSION="${RAW%%-*}"; export NFPM_RELEASE="${RAW#*-}" ;;
+            *) export NFPM_VERSION="$RAW" ;;
+          esac
+          # nfpm maps amd64/arm64 to x86_64/aarch64 for the rpm
+          # Architecture header itself; the filename below matches
+          # that so the artefact name and the metadata agree.
+          case "${NFPM_ARCH}" in
+            amd64) rpm_arch=x86_64 ;;
+            arm64) rpm_arch=aarch64 ;;
+          esac
+          nfpm package -f build/linux/nfpm.yaml -p rpm \
+            -t "../open-rig-programmer-${RAW}.${rpm_arch}.rpm"
+
+      - name: Check the .rpm
+        run: |
+          case "${{ matrix.arch }}" in
+            amd64) rpm_arch=x86_64 ;;
+            arm64) rpm_arch=aarch64 ;;
+          esac
+          bash app/build/linux/check-rpm.sh "open-rig-programmer-${VERSION#v}.${rpm_arch}.rpm" "${VERSION#v}" "${{ matrix.arch }}"
+
       - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
           name: gui-linux-${{ matrix.arch }}
-          path: open-rig-programmer_*.deb
+          path: |
+            open-rig-programmer_*.deb
+            open-rig-programmer-*.rpm
           if-no-files-found: error
 
   gui-linux-flatpak:
@@ -493,8 +529,20 @@ jobs:
     # break (a Flathub outage, a flatpak-builder regression) never
     # blocks the .deb, tarballs or installers from reaching the draft
     # release — see app/build/flatpak/README.md for the bundle-not-
-    # Flathub scope this job stays inside.
-    runs-on: ubuntu-24.04
+    # Flathub scope this job stays inside. continue-on-error applies
+    # per matrix leg, so an aarch64-only break (say Flathub has no
+    # aarch64 GNOME 47 that week) still leaves x86_64 unaffected.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            flatpak_arch: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            flatpak_arch: aarch64
+    runs-on: ${{ matrix.runner }}
     continue-on-error: true
     env:
       APP_ID: io.github.gm5dna.open-rig-programmer
@@ -507,6 +555,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev flatpak flatpak-builder xvfb
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          # flatpak-builder --arch defaults to the host arch (confirmed
+          # against flatpak-builder's own docs: the --arch flag exists
+          # only to CROSS-build for a foreign arch, e.g. aarch64 from
+          # an amd64 host, which this workflow never does — each leg
+          # builds natively on a runner of that arch). Likewise
+          # `flatpak install` with no --arch picks the running host's
+          # arch, so this one command already installs the aarch64
+          # GNOME 47 runtime on the arm runner with no extra flag; add
+          # --arch=aarch64 explicitly only if that stops being true.
           flatpak install --user --noninteractive -y flathub org.gnome.Platform//47 org.gnome.Sdk//47
 
       - name: Set up Go
@@ -525,7 +582,7 @@ jobs:
       - name: Install Wails CLI
         run: go install "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
 
-      - name: wails build (linux/amd64)
+      - name: wails build (linux/${{ matrix.arch }})
         working-directory: app
         env:
           # Same reasoning as gui-linux: the GUI links GTK/WebKit via cgo.
@@ -541,15 +598,15 @@ jobs:
             --repo=flatpak-repo flatpak-build-dir "app/build/flatpak/${APP_ID}.yml"
 
       - name: Build the single-file bundle
-        run: flatpak build-bundle flatpak-repo "open-rig-programmer-${VERSION}-x86_64.flatpak" "${APP_ID}"
+        run: flatpak build-bundle flatpak-repo "open-rig-programmer-${VERSION}-${{ matrix.flatpak_arch }}.flatpak" "${APP_ID}"
 
       - name: Check the bundle
-        run: bash app/build/flatpak/check-flatpak.sh "open-rig-programmer-${VERSION}-x86_64.flatpak" "${APP_ID}"
+        run: bash app/build/flatpak/check-flatpak.sh "open-rig-programmer-${VERSION}-${{ matrix.flatpak_arch }}.flatpak" "${APP_ID}"
 
       - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
-          name: gui-linux-flatpak
+          name: gui-linux-flatpak-${{ matrix.arch }}
           path: open-rig-programmer-*.flatpak
           if-no-files-found: error
 
