@@ -11,6 +11,8 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-09-14
+
 ### Added
 - **Flatpak aarch64**: the Flatpak bundle introduced in 1.8.0 now
   builds on both amd64 and arm64 runners (native, no cross-compile),
@@ -528,7 +530,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.6.0...v1.7.0
