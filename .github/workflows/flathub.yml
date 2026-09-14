@@ -109,18 +109,21 @@ jobs:
             manifest "/mnt/${MANIFEST}"
 
       - name: lint appstream
-        # Expected to fail until a v1.8.2 tag exists: the metainfo
-        # (branch flathub-meta) points its screenshot URLs at that tag
-        # — see reviews/phase1-source-build.md. Kept as a real
-        # (non-continue-on-error) step so it still fails loudly for
-        # any *other* appstream regression; `lint repo` below still
-        # runs regardless via `if: always()`.
         run: |
           docker run -v "$(pwd)":/mnt --rm ghcr.io/flathub-infra/flatpak-builder-lint:latest \
             appstream "/mnt/app/build/flatpak/${APP_ID}.metainfo.xml"
 
       - name: lint repo
         if: always()
+        # appstream-external-screenshot-url and
+        # appstream-screenshots-not-mirrored-in-ostree are exempted via
+        # a local exceptions file: screenshots only get mirrored to
+        # https://dl.flathub.org/media by Flathub's own build once the
+        # app is accepted there, so no pre-submission CI can satisfy
+        # this check (the same pattern other pre-submission repos use,
+        # e.g. deskflow/deskflow's ci-build-lint-exceptions.json).
+        # A real Flathub submission still runs the check without this
+        # override.
         run: |
           docker run -v "$(pwd)":/mnt --rm ghcr.io/flathub-infra/flatpak-builder-lint:latest \
-            repo "/mnt/repo"
+            repo "/mnt/repo" --exceptions --user-exceptions /mnt/flathub/ci-lint-exceptions.json
