@@ -20,14 +20,10 @@ Which radios are supported, and how far each has been tested, is in [docs/radio-
 
 ## What changed in this version
 
-A minor release: three more Yaesu models join the supported tier — FTdx3000, FTdx1200 and FT-450D, all paper-only and opt-in for writes — plus a light/dark mode and a Flatpak bundle.
+A patch release: no new radios, no change to any driver. The Flatpak bundle introduced in 1.8.0 now also builds for aarch64, and an RPM package joins the `.deb` for Fedora and openSUSE.
 
-- **FTdx3000** joins the supported Yaesu models: a paper-only registration, opt-in for writes via the unverified-write consent gate, since no real radio has ever answered this program. NoTag — no channel-name field over CAT. CTCSS tone is read-only over CAT (the write command's own tone field is fixed to `"00"`); AM-N is assumed not storable via CAT and is excluded from the write-capable mode list.
-- **FTdx1200** joins the supported Yaesu models as one radio identified by either of two CAT IDs (`0582` with the FFT-1 filter fitted, `0583` without): the same paper-only, opt-in-write, NoTag shape as the FTdx3000.
-- **FT-450D** joins the supported Yaesu models, also paper-only and opt-in-write, in a deliberately safe shape: only memory channels 001-500 are written; the Programmable Memory Scan channels (501-504) stay read-only until an owner probes a real radio; the 60 m and Alaska-emergency channels are not exposed at all. Six probes that would lift these limits are listed in [docs/radio-notes.md](https://github.com/gm5dna/open-rig-programmer/blob/__VERSION__/docs/radio-notes.md).
-- **Light/dark mode**: a System/Light/Dark picker in the settings panel; the app follows the OS setting by default.
-- **Flatpak bundle** (`.flatpak`, app id `io.github.gm5dna.open-rig-programmer`, GNOME 47 runtime, `--device=all` for the radio's serial port) is now attached to each release; Flathub submission is not yet done.
-- Internal: a new `cat.MemoryP9Policy` value, `P9ToneIndexReadOnly`, covers a write dialect whose tone field cannot be set. Supported models: 39 → 42.
+- **Flatpak aarch64**: the Flatpak bundle introduced in 1.8.0 now builds on both amd64 and arm64 runners (native, no cross-compile), attaching `open-rig-programmer-<version>-x86_64.flatpak` and `-aarch64.flatpak` to every release.
+- **RPM package** (`.rpm`, nfpm from the same source as the `.deb`) for Fedora and openSUSE, x86_64 and aarch64, attached to every release alongside the `.deb`; built and metadata-checked in CI, not yet installed on a real Fedora or openSUSE machine. rpm forbids a `-` in the Version header, so a prerelease tag (e.g. `1.8.1-rc1`) splits into rpm's Version/Release fields for the rpm build only — the `.deb` Version is unaffected.
 
 ## Downloads
 
