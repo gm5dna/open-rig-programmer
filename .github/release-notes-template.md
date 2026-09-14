@@ -20,10 +20,11 @@ Which radios are supported, and how far each has been tested, is in [docs/radio-
 
 ## What changed in this version
 
-A patch release: no new radios, no change to any driver. The Flatpak bundle introduced in 1.8.0 now also builds for aarch64, and an RPM package joins the `.deb` for Fedora and openSUSE.
+A patch release: no functional change to the app. Flathub-ready AppStream metainfo (with screenshots and release history) and a source-build Flathub manifest.
 
-- **Flatpak aarch64**: the Flatpak bundle introduced in 1.8.0 now builds on both amd64 and arm64 runners (native, no cross-compile), attaching `open-rig-programmer-<version>-x86_64.flatpak` and `-aarch64.flatpak` to every release.
-- **RPM package** (`.rpm`, nfpm from the same source as the `.deb`) for Fedora and openSUSE, x86_64 and aarch64, attached to every release alongside the `.deb`; built and metadata-checked in CI, not yet installed on a real Fedora or openSUSE machine. rpm forbids a `-` in the Version header, so a prerelease tag (e.g. `1.8.1-rc1`) splits into rpm's Version/Release fields for the rpm build only — the `.deb` Version is unaffected.
+- **Flathub-ready metainfo**: `app/build/flatpak/io.github.gm5dna.open-rig-programmer.metainfo.xml` now carries screenshots, a release history and full AppStream metadata for a Flathub submission, with three screenshots of the real app committed alongside it.
+- **Source-build Flathub manifest**: `flathub/io.github.gm5dna.open-rig-programmer.yml` builds the app from source (Go 1.25.0 and Node 22 SDK extensions, no vendored binaries) with generated `go-sources.json`/`node-sources.json`, plus a `.github/workflows/flathub.yml` CI job that builds and lints the manifest, appstream and repo on every push touching `flathub/`.
+- No functional change to the app itself.
 
 ## Downloads
 

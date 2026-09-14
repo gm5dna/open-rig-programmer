@@ -11,6 +11,20 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-09-14
+
+### Added
+- **Flathub-ready metainfo**: `app/build/flatpak/io.github.gm5dna.open-rig-programmer.metainfo.xml`
+  now carries screenshots, a release history and full AppStream metadata for a
+  Flathub submission, with three screenshots of the real app committed
+  alongside it.
+- **Source-build Flathub manifest**: `flathub/io.github.gm5dna.open-rig-programmer.yml`
+  builds the app from source (Go 1.25.0 and Node 22 SDK extensions, no
+  vendored binaries) with generated `go-sources.json`/`node-sources.json`,
+  plus a `.github/workflows/flathub.yml` CI job that builds and lints the
+  manifest, appstream and repo on every push touching `flathub/`.
+- No functional change to the app itself.
+
 ## [1.8.1] - 2026-09-14
 
 ### Added
@@ -530,7 +544,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.2...HEAD
+[1.8.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.0...v1.7.1
