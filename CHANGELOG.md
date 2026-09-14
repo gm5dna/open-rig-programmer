@@ -11,6 +11,19 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Added
+- **Flatpak aarch64**: the Flatpak bundle introduced in 1.8.0 now
+  builds on both amd64 and arm64 runners (native, no cross-compile),
+  attaching `open-rig-programmer-<version>-x86_64.flatpak` and
+  `-aarch64.flatpak` to every release.
+- **RPM package** (`.rpm`, nfpm from the same source as the `.deb`)
+  for Fedora and openSUSE, x86_64 and aarch64, attached to every
+  release alongside the `.deb`; built and metadata-checked in CI, not
+  yet installed on a real Fedora or openSUSE machine. rpm forbids a
+  `-` in the Version header, so a prerelease tag (e.g. `1.8.1-rc1`)
+  splits into rpm's Version/Release fields for the rpm build only —
+  the `.deb` Version is unaffected.
+
 ## [1.8.0] - 2026-09-13
 
 ### Added
