@@ -433,7 +433,8 @@ Evidence: `docs/superpowers/icom-matrices/ic7700-capability-matrix.md`.
 
 ### IC-9100 (opt-in)
 
-Reads and writes the memory channels of ONE band (this build defers
+Reads and writes the memory channels of its three built-in bands, HF,
+144 MHz and 430 MHz, as one memory bank (this build defers
 the optional 4th, 1200 MHz, band; its frequency-field encoding is
 unresolved from this document). Its own record additionally carries
 duplex, offset, DTCS code and DTCS polarity — richer than every other
