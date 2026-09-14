@@ -14,6 +14,8 @@ set -u
 rpm_file="${1:?usage: check-rpm.sh <rpm> <version> <arch>}"
 version="${2:?usage: check-rpm.sh <rpm> <version> <arch>}"
 arch="${3:?usage: check-rpm.sh <rpm> <version> <arch>}"
+# Absolute path: the payload extraction below runs inside a cd into a temp dir.
+case "$rpm_file" in /*) ;; *) rpm_file="$PWD/$rpm_file" ;; esac
 here="$(cd "$(dirname "$0")" && pwd)"
 fail=0
 err() { echo "FAIL: $*" >&2; fail=1; }
