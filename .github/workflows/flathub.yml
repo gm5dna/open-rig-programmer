@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Builds flathub/io.github.gm5dna.open-rig-programmer.yml from source
+# (no prebuilt binary) inside the GNOME 50 flatpak-github-actions
+# container, then runs flatpak-builder-lint against the manifest, the
+# metainfo and the built repo. This replaces flathub-spike.yml (whose
+# question — does org.gnome.Sdk//50 carry webkit2gtk-4.1? — is answered
+# in reviews/phase0-webkit.md). Not the release pipeline: app/build/flatpak/*.yml
+# still builds the prebuilt-binary bundle release.yml ships.
+name: flathub
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [flathub-spike]
+  pull_request:
+    paths:
+      - 'flathub/**'
+
+permissions:
+  contents: read
+
+env:
+  APP_ID: io.github.gm5dna.open-rig-programmer
+  MANIFEST: flathub/io.github.gm5dna.open-rig-programmer.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: flatpak-builder (build from source, no network in the sandbox)
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: ${{ env.MANIFEST }}
+          bundle: open-rig-programmer.flatpak
+          repo-dir: repo
+          cache-key: flathub-${{ hashFiles('flathub/**') }}
+
+      - name: Pack the OSTree repo for the lint job
+        run: tar -czf repo.tar.gz repo
+
+      - name: Upload repo (for the repo lint check)
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-repo
+          path: repo.tar.gz
+          if-no-files-found: error
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: open-rig-programmer.flatpak
+          if-no-files-found: error
+
+      - name: Install xvfb for the launch smoke test
+        run: apt-get update && apt-get install -y --no-install-recommends xvfb
+
+      # Reuses the existing release-pipeline smoke script unmodified —
+      # the GUI takes no --version flag (app/main.go calls wails.Run
+      # with no flag parsing), so "does it launch and stay up" is the
+      # same smoke check.check-flatpak.sh does for the release bundle.
+      - name: Launch smoke test
+        run: bash app/build/flatpak/check-flatpak.sh open-rig-programmer.flatpak "${APP_ID}"
+
+  lint:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download the built repo
+        uses: actions/download-artifact@v4
+        with:
+          name: flatpak-repo
+
+      - name: Extract repo
+        run: tar -xzf repo.tar.gz
+
+      - name: lint manifest
+        run: |
+          docker run -v "$(pwd)":/mnt --rm ghcr.io/flathub-infra/flatpak-builder-lint:latest \
+            manifest "/mnt/${MANIFEST}"
+
+      - name: lint appstream
+        run: |
+          docker run -v "$(pwd)":/mnt --rm ghcr.io/flathub-infra/flatpak-builder-lint:latest \
+            appstream "/mnt/app/build/flatpak/${APP_ID}.metainfo.xml"
+
+      - name: lint repo
+        run: |
+          docker run -v "$(pwd)":/mnt --rm ghcr.io/flathub-infra/flatpak-builder-lint:latest \
+            repo "/mnt/repo"
