@@ -75,7 +75,7 @@ echo "$scripts" | grep -q 'command -v udevadm' || err "scriptlets lack udevadm g
 data="$(mktemp -d)" || exit 2
 trap 'rm -rf "$data"' EXIT
 if command -v rpm2cpio >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1; then
-  (cd "$data" && rpm2cpio "$rpm_file" | cpio -idm --quiet) || err "payload extraction"
+  (cd "$data" && rpm2cpio "$rpm_file" | cpio -idm --quiet --no-absolute-filenames) || err "payload extraction"
   diff -q "$here/open-rig-programmer.desktop" \
     "$data/usr/share/applications/open-rig-programmer.desktop" || err "desktop file drifted from repo copy"
   diff -q "$here/99-open-rig-programmer.rules" \
