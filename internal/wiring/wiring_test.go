@@ -22,6 +22,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft890900"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
@@ -317,6 +318,8 @@ var fakePackageForModel = map[string]string{
 	// v1.8.0 Yaesu trio, third and last row: one simulator package to
 	// itself.
 	FT450DModel: "internal/fakeft450d",
+	// v1.9.0 binary-CAT four, first row: its own simulator package.
+	FT890Model: "internal/fakeft890",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -625,10 +628,23 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			if err := json.Unmarshal(raw, &probe); err != nil {
 				t.Fatalf("probing saved fresh read: %v", err)
 			}
+			// reachesTierField asks whether a READ from this model could
+			// ever produce a non-Unavailable tier-field state — the only
+			// way a fresh read forces schema >= 4 at all (schemaFor,
+			// core/codeplug/file.go). A field graded Unreachable() ==
+			// false purely by its WRITE side (FieldOffset is the
+			// v1.9.0 binary-CAT four's own case: this family's opcode
+			// F9H can SET the repeater-offset magnitude but no byte
+			// anywhere reads it back) can only ever read Unavailable,
+			// which RepresentableByOmission accepts at schema 3 — so it
+			// must not count here, or this loop would demand schema >= 4
+			// from a fresh read that is honestly, permanently,
+			// representable at schema 3. FT-890's own read.go bears this
+			// out: it leaves FieldOffset Unavailable.
 			reachesTierField := false
 			for _, bank := range caps.Banks {
 				for _, field := range wiringTierFields {
-					if !caps.FieldSupport(bank.ID, field).Unreachable() {
+					if caps.FieldSupport(bank.ID, field).Read != spec.Unsupported {
 						reachesTierField = true
 					}
 				}
@@ -1591,7 +1607,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S", "TS-870S", "FT-2000", "FT-2000D", "FTdx9000", "FT-950", "TS-570DG", "FTdx3000", "FTdx1200", "FT-450D"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S", "TS-870S", "FT-2000", "FT-2000D", "FTdx9000", "FT-950", "TS-570DG", "FTdx3000", "FTdx1200", "FT-450D", "FT-890"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1814,6 +1830,10 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// v1.8.0 Yaesu trio, third and last row.
 	if FT450DModel != "FT-450D" {
 		t.Errorf("FT450DModel = %q, want \"FT-450D\"", FT450DModel)
+	}
+	// v1.9.0 binary-CAT four, first row.
+	if FT890Model != "FT-890" {
+		t.Errorf("FT890Model = %q, want \"FT-890\"", FT890Model)
 	}
 }
 
@@ -2399,7 +2419,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, TS570DGModel, FTdx3000Model, FTdx1200Model, FT450DModel}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, TS570DGModel, FTdx3000Model, FTdx1200Model, FT450DModel, FT890Model}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2738,6 +2758,11 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: FT450DModel, want: func() driver.Driver { return ft450d.New(ft450d.RealHardware) }, wantConsent: func() driver.Driver {
 			return ft450d.New(ft450d.RealHardware, ft450d.WithConsentedUnverifiedWrites())
 		}},
+		// v1.9.0 binary-CAT four, first row: bare New takes the profile as
+		// its first argument.
+		{model: FT890Model, want: func() driver.Driver { return ft890900.NewFT890(ft890900.RealHardware) }, wantConsent: func() driver.Driver {
+			return ft890900.NewFT890(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -3029,6 +3054,11 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// writeTrialsComplete (core/driver/ft450d/caps.go) is FALSE, so
 		// its RealHardware profile carries a write-side Unverified field.
 		FT450DModel: true,
+		// The FT-890 (v1.9.0 binary-CAT four, first row).
+		// writeTrialsComplete (core/driver/ft890900/caps.go) is FALSE for
+		// both radios in this package, so its RealHardware profile
+		// carries a write-side Unverified field.
+		FT890Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -3400,7 +3430,17 @@ func mustRealDriver(t *testing.T, model string) driver.Driver {
 // populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member CTCSSStates is
 // not a membership question: this list is about the maker, and the
 // vocabulary's width belongs to the tests that read it.
-var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel, FTdx5000Model, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, FTdx3000Model, FTdx1200Model, FT450DModel}
+// FT890Model: 8-N-2 is MANUAL-EVIDENCED, not merely this list's default
+// (Correction 15/09/2026 — the FT-890's manual states "8 data bits, no
+// parity and two stop bits" outright).
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel, FTdx5000Model, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, FTdx3000Model, FTdx1200Model, FT450DModel, FT890Model}
+
+// noCTCSSStateYaesuModels carves FT890Model out of
+// TestEveryYaesuModelStillValidatesUnchanged's "every Yaesu model reaches
+// FieldCTCSSState" assumption: the FT-890 DOES have a live, mapped
+// CTCSSTone, but no documented CTCSS on/off toggle distinct from the tone
+// byte itself anywhere in its manual (matrix, "CTCSSStates: OPEN").
+var noCTCSSStateYaesuModels = map[string]bool{FT890Model: true}
 
 // icomModels names every registered Icom model, on the same by-name
 // footing as yaesuModels — ELEVEN rows now (the IC-7610, the IC-7300 pair
@@ -3711,7 +3751,7 @@ func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
 			if !reachesShift {
 				t.Errorf("no bank reaches FieldShift — E5b's condition would switch the empty-ShiftOptions refusal OFF for this model, which is not what E5b relaxed")
 			}
-			if !reachesTone {
+			if !reachesTone && !noCTCSSStateYaesuModels[model] {
 				t.Errorf("no bank reaches FieldCTCSSState — same reasoning, on the tone pair")
 			}
 			if len(caps.DuplexOptions) != 0 {

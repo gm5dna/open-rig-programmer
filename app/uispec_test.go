@@ -872,6 +872,20 @@ var ftdx1200CoreFive = []spec.Field{
 	spec.FieldShift, spec.FieldCTCSSState,
 }
 
+// ft890900CoreFive is the core set the FT-890 derives, on every profile
+// (core/driver/ft890900/caps.go's memFields — shared, byte-for-byte,
+// with the FT-900's own row, registered separately): frequency, mode,
+// clarifier, shift and ctcss_tone. FIVE, not ftdx1200CoreFive's five-
+// member set (same size, different member): this row's CTCSSTone IS live
+// and mapped (both read and write, matrix §1.6), so it derives, but
+// CTCSSState does not — no CTCSS on/off toggle distinct from the tone
+// byte itself is documented anywhere (matrix, "CTCSSStates: OPEN") — the
+// reverse of the FTdx1200's own gap.
+var ft890900CoreFive = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSTone,
+}
+
 // ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
 // derives, on every profile — MEM and SCAN alike
 // (core/driver/ts2000/caps.go's bankFields, applied identically to both
@@ -1443,6 +1457,10 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// Write: Unsupported but Read stays rw.Read, non-zero on every
 		// profile, so all six candidates still derive on both banks.
 		"FT-450D": ftdx5000CoreSix,
+		// The FT-890 (v1.9.0 binary-CAT four, first row): FIVE fields,
+		// not ftdx5000CoreSix's six or ftdx1200CoreFive's five — see
+		// ft890900CoreFive's own doc comment for the composition.
+		"FT-890": ft890900CoreFive,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
