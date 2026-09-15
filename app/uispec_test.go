@@ -872,6 +872,33 @@ var ftdx1200CoreFive = []spec.Field{
 	spec.FieldShift, spec.FieldCTCSSState,
 }
 
+// ft890900CoreFive is the core set the FT-890 and FT-900 both derive, on
+// every profile (core/driver/ft890900/caps.go's memFields, shared by the
+// two): frequency, mode, clarifier, shift and ctcss_tone. FIVE, not
+// ftdx1200CoreFive's five-member SET (same size, different member): this
+// row's CTCSSTone IS live and mapped (both read and write, matrix §1.6),
+// so it derives, but CTCSSState does not — no CTCSS on/off toggle
+// distinct from the tone byte itself is documented anywhere (matrix,
+// "CTCSSStates: OPEN") — the reverse of the FTdx1200's own gap. ONE
+// variable for both registered rows: memFields' composition does not
+// vary between the two radios (only slot count and full-dump length do,
+// neither a bankCoreCandidates member).
+var ft890900CoreFive = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSTone,
+}
+
+// ft1000mpCoreFour is the core set every FT-1000MP/Mark-V bank derives
+// (MEM, P and QMB alike — core/driver/ft1000mp/caps.go's banks, one
+// shared field map for all three): frequency, mode, clarifier and shift.
+// FOUR, not ftdx5000CoreSix's six or either five-member set above: this
+// radio's 16-byte record carries no tone byte at all (matrix §1.2/§2 —
+// no CTCSSTone, no CTCSSState), the first registered Yaesu row for which
+// that is true.
+var ft1000mpCoreFour = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier, spec.FieldShift,
+}
+
 // ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
 // derives, on every profile — MEM and SCAN alike
 // (core/driver/ts2000/caps.go's bankFields, applied identically to both
@@ -1443,6 +1470,19 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// Write: Unsupported but Read stays rw.Read, non-zero on every
 		// profile, so all six candidates still derive on both banks.
 		"FT-450D": ftdx5000CoreSix,
+		// The FT-890 (v1.9.0 binary-CAT four, first row): FIVE fields,
+		// not ftdx5000CoreSix's six or ftdx1200CoreFive's five — see
+		// ft890900CoreFive's own doc comment for the composition.
+		"FT-890": ft890900CoreFive,
+		// The FT-900 (v1.9.0 binary-CAT four, second row): shares
+		// ft890900CoreFive's exact composition — same driver package,
+		// zero byte difference between the two for these candidates.
+		"FT-900": ft890900CoreFive,
+		// The FT-1000MP (v1.9.0 binary-CAT four, fourth and last row):
+		// FOUR fields — see ft1000mpCoreFour's own doc comment for why
+		// this is the first registered Yaesu row with no tone byte at
+		// all.
+		"FT-1000MP": ft1000mpCoreFour,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

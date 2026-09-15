@@ -1928,9 +1928,6 @@ func TestWritableFieldsMismatch_Table(t *testing.T) {
 		{"tagDisplay differs", func(c *codeplug.ChannelData) {
 			c.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: false}
 		}, []spec.Field{spec.FieldTagDisplay}},
-		{"CTCSSTone differs — excluded (read back Unknown by construction)", func(c *codeplug.ChannelData) {
-			c.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 100}
-		}, nil},
 		{"ScanSkip differs — excluded (read back Unknown by construction)", func(c *codeplug.ChannelData) {
 			c.ScanSkip = codeplug.BoolField{State: codeplug.Known, Value: true}
 		}, nil},
@@ -1954,13 +1951,15 @@ func TestWritableFieldsMismatch_Table(t *testing.T) {
 
 // TestWritableFieldsMismatch_TagDisplayMutualKnowledge (M9c-5, E1b):
 // TagDisplay is a BoolField now, so verification has to say WHICH
-// BoolFields it can verify. CTCSSTone and ScanSkip are excluded outright
-// (never readable at all); TagDisplay is excluded CONDITIONALLY — it is
-// compared only when BOTH sides are Known. A read-back that is Unknown or
-// Unavailable (a radio whose frame carries no display flag: E1's first
-// real producer of that state) says nothing about what was stored, so
-// comparing it against the Known value that was sent would manufacture a
-// mismatch and abort a write that in fact landed perfectly.
+// BoolFields it can verify. ScanSkip is excluded outright (never readable
+// at all on any registered radio); TagDisplay is excluded CONDITIONALLY —
+// it is compared only when BOTH sides are Known. A read-back that is
+// Unknown or Unavailable (a radio whose frame carries no display flag:
+// E1's first real producer of that state) says nothing about what was
+// stored, so comparing it against the Known value that was sent would
+// manufacture a mismatch and abort a write that in fact landed perfectly.
+// CTCSSTone gets the identical mutual-knowledge treatment — see
+// TestWritableFieldsMismatch_CTCSSToneMutualKnowledge below.
 func TestWritableFieldsMismatch_TagDisplayMutualKnowledge(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -2000,6 +1999,61 @@ func TestWritableFieldsMismatch_TagDisplayMutualKnowledge(t *testing.T) {
 			want.TagDisplay = tt.want
 			got := baseVerifyChannelData()
 			got.TagDisplay = tt.got
+			if bad := writableFieldsMismatch(want, got); !reflect.DeepEqual(bad, tt.wantFields) {
+				t.Errorf("writableFieldsMismatch = %v, want %v", bad, tt.wantFields)
+			}
+		})
+	}
+}
+
+// TestWritableFieldsMismatch_CTCSSToneMutualKnowledge (v1.9.0 binary-CAT
+// write model, §Write model, Codex #5): CTCSSTone is no longer excluded
+// unconditionally — it gets TagDisplay's mutual-knowledge treatment,
+// because unlike ScanSkip it IS readable on the FT-890/FT-900/FT-920
+// family (whose memory record carries a tone byte), even though every
+// radio registered before this milestone still reads it back Unknown and
+// so never triggers the comparison. A known FT-890/900 tone mismatch must
+// bite (ErrVerifyMismatch); equal known tones must pass; known-vs-Unknown
+// or known-vs-Unavailable must stay ignored, exactly as for TagDisplay.
+func TestWritableFieldsMismatch_CTCSSToneMutualKnowledge(t *testing.T) {
+	tests := []struct {
+		name       string
+		want, got  codeplug.ToneField
+		wantFields []spec.Field
+	}{
+		{
+			name: "both Known and equal",
+			want: codeplug.ToneField{State: codeplug.Known, Value: 100},
+			got:  codeplug.ToneField{State: codeplug.Known, Value: 100},
+		},
+		{
+			name:       "both Known and different — the one comparable case, and it must still bite",
+			want:       codeplug.ToneField{State: codeplug.Known, Value: 100},
+			got:        codeplug.ToneField{State: codeplug.Known, Value: 200},
+			wantFields: []spec.Field{spec.FieldCTCSSTone},
+		},
+		{
+			name: "read back Unavailable — no shared knowledge, no comparison",
+			want: codeplug.ToneField{State: codeplug.Known, Value: 100},
+			got:  codeplug.ToneField{State: codeplug.Unavailable},
+		},
+		{
+			name: "read back Unknown — no shared knowledge, no comparison (every radio registered today)",
+			want: codeplug.ToneField{State: codeplug.Known, Value: 100},
+			got:  codeplug.ToneField{State: codeplug.Unknown},
+		},
+		{
+			name: "sent non-Known — nothing was requested, so nothing to verify",
+			want: codeplug.ToneField{State: codeplug.Unknown},
+			got:  codeplug.ToneField{State: codeplug.Known, Value: 100},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := baseVerifyChannelData()
+			want.CTCSSTone = tt.want
+			got := baseVerifyChannelData()
+			got.CTCSSTone = tt.got
 			if bad := writableFieldsMismatch(want, got); !reflect.DeepEqual(bad, tt.wantFields) {
 				t.Errorf("writableFieldsMismatch = %v, want %v", bad, tt.wantFields)
 			}
