@@ -214,6 +214,8 @@ var yaesuModels = map[string]bool{
 	"FT-450D": true,
 	// The FT-890 (v1.9.0 binary-CAT four, first row): same reason.
 	"FT-890": true,
+	// The FT-900 (v1.9.0 binary-CAT four, second row): same reason.
+	"FT-900": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -410,6 +412,8 @@ var ownParticulars = map[string][]string{
 	"FT-450D": {"FT-450D"},
 	// v1.9.0 binary-CAT four, first row: bare name.
 	"FT-890": {"FT-890"},
+	// v1.9.0 binary-CAT four, second row: bare name.
+	"FT-900": {"FT-900"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -489,11 +493,27 @@ func assertNotBorrowedFromAnyOtherModel(t *testing.T, model string, got radiotex
 	for field, val := range textFields(got) {
 		bare := stripOwnName(val, model)
 		for _, particular := range particulars {
-			if strings.Contains(bare, particular) {
+			if containsWholeToken(bare, particular) {
 				t.Errorf("%s %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", model, field, particular)
 			}
 		}
 	}
+}
+
+// containsWholeToken reports whether s contains particular as a
+// WORD-BOUNDARY match, on stripOwnName's own reasoning above (Go's \b
+// fires only between a word character and a non-word one): a plain
+// strings.Contains would fault the FTdx9000's own prose (which names its
+// historic alternative marketing name "FT-9000") the moment "FT-900" is
+// registered as its own model and becomes a particular checked against
+// every OTHER model's prose — "FT-900" IS a substring of "FT-9000", but
+// there is no boundary between them (both the last character of "FT-900"
+// and the digit that follows it inside "FT-9000" are word characters), so
+// this is not a borrowing at all. A genuine borrowing — "FT-900" written
+// out as its own token, e.g. "the FT-900's record" — still has a boundary
+// on both sides and is still caught.
+func containsWholeToken(s, particular string) bool {
+	return regexp.MustCompile(`\b` + regexp.QuoteMeta(particular) + `\b`).MatchString(s)
 }
 
 // stripOwnName removes model's own self-references from val before the
@@ -2856,4 +2876,27 @@ func TestRadiotext_FT890Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FT-890", got)
+}
+
+// TestRadiotext_FT900Verbatim pins the v1.9.0 binary-CAT four's second
+// row's prose byte-for-byte.
+func TestRadiotext_FT900Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FT-900: no builder for one exists, and no FT-900 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FT-900's tone is read and written as a live CTCSS-tone index, but there is no CTCSS on/off toggle, no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "read and written for the FT-900; this build has never tested whether a rewrite preserves the tone index on a real radio",
+		},
+		ProbeFirmwareNote: "The FT-900 has no firmware query in this build — check the radio's own display. No FT-900 has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FT-900")
+	if !ok {
+		t.Fatal(`For("FT-900") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-900\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-900", got)
 }

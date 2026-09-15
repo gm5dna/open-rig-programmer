@@ -411,6 +411,9 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// fakeft890.New here and (separately registered) fakeft900.New
 		// for its sibling row.
 		{"ft890900", "Simulated", "fakeft890.New", "internal/fakeft890", []string{"FT-890"}},
+		// The FT-900 (v1.9.0 binary-CAT four, second row): FT-890's own
+		// sibling row over the same package, its own fake constructor.
+		{"ft890900", "Simulated", "fakeft900.New", "internal/fakeft900", []string{"FT-900"}},
 		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
 		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site

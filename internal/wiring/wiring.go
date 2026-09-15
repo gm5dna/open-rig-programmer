@@ -856,6 +856,19 @@ const FT450DModel = "FT-450D"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT890Model = "FT-890"
 
+// FT900Model names the FT-900's realDrivers/fakeDrivers key, which must
+// equal ft890900.NewFT900(...).Model() — the same shared-package shape as
+// FT890Model's own doc comment, which states what genuinely differs
+// (100 true memory channels, CATID "0900", the wider 500,000 Hz repeater-
+// offset ceiling) and what does not (the 5-byte opcode set, the 19-byte
+// record, NoTag, the tone chart, writeTrialsComplete false, ConsentedUnverified
+// gating). 8-N-2 is likewise MANUAL-EVIDENCED for the FT-900 specifically
+// (Correction 15/09/2026, docs/superpowers/ft900-capability-matrix.md),
+// not merely this package's default.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT900Model = "FT-900"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1252,6 +1265,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft890900.NewFT890(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites())
 		}
 		return ft890900.NewFT890(ft890900.RealHardware)
+	},
+	// v1.9.0 binary-CAT four, second row: NewFT900, same shared package as
+	// FT890Model above, same shape.
+	FT900Model: func(consent bool) driver.Driver {
+		if consent {
+			return ft890900.NewFT900(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites())
+		}
+		return ft890900.NewFT900(ft890900.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is

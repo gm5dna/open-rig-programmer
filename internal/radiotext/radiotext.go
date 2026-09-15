@@ -2416,6 +2416,22 @@ var ft890Text = Text{
 	ProbeFirmwareNote: "The FT-890 has no firmware query in this build — check the radio's own display. No FT-890 has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
 }
 
+// ft900Text is the FT-900's entry — v1.9.0 binary-CAT four, second row,
+// sharing core/driver/ft890900 with the FT-890: an identical opcode set
+// and 19-byte record, differing only in true channel count (100, not 32)
+// and repeater-offset ceiling (500,000 Hz, not 200,000 Hz) — neither of
+// which this entry's prose states. This entry names only "FT-900"
+// throughout (never the bare "FT-890") so the non-borrowing check can
+// tell the two apart.
+var ft900Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-900: no builder for one exists, and no FT-900 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FT-900's tone is read and written as a live CTCSS-tone index, but there is no CTCSS on/off toggle, no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written for the FT-900; this build has never tested whether a rewrite preserves the tone index on a real radio",
+	},
+	ProbeFirmwareNote: "The FT-900 has no firmware query in this build — check the radio's own display. No FT-900 has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2495,6 +2511,8 @@ var texts = map[string]Text{
 	"FT-450D": ft450dText,
 	// v1.9.0 binary-CAT four, first row.
 	"FT-890": ft890Text,
+	// v1.9.0 binary-CAT four, second row.
+	"FT-900": ft900Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
