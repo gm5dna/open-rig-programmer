@@ -163,9 +163,15 @@ func (e *ValidationFailedError) Unwrap() error { return ErrValidationFailed }
 
 // ErrVerifyMismatch is the sentinel a caller should compare against (via
 // errors.Is) when a per-channel write's read-back verify (obligation 7)
-// disagrees with what was written, on at least one WRITABLE field
-// (CTCSSTone/ScanSkip are deliberately excluded — they read back Unknown by
-// construction, see driver.Session.ReadChannel). The error actually
+// disagrees with what was written, on at least one WRITABLE field.
+// ScanSkip is deliberately excluded unconditionally — it reads back
+// Unknown by construction on every registered radio (see
+// driver.Session.ReadChannel). CTCSSTone is excluded only when it reads
+// back Unknown or Unavailable on either side (the FT-710/FTdx10/FT-991A
+// tier); a radio whose memory record carries a tone byte and reads it
+// back Known (the FT-890/FT-900/FT-920 family, v1.9.0 binary-CAT write
+// model) DOES get compared, by the same mutual-knowledge rule TagDisplay
+// uses. The error actually
 // returned is a *VerifyMismatchError, and it is always wrapped inside an
 // *AbortedError (see ErrAborted): a verify mismatch always stops the whole
 // Execute run.
