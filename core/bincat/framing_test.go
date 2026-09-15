@@ -61,6 +61,47 @@ func TestNewAccumulatorCalledTwicePanics(t *testing.T) {
 	f.NewAccumulator(0)
 }
 
+// TestCancelPendingWant_UnblocksASubsequentGenuineReply pins the fix
+// core/driver/ft890900's identity probe depends on (spec.md §Identity
+// probe): a request whose reply never arrives — this family's
+// documented silent "do nothing" behaviour — must not permanently
+// misalign the accumulator against every later reply, once the caller
+// has retracted the stale want.
+func TestCancelPendingWant_UnblocksASubsequentGenuineReply(t *testing.T) {
+	f, err := NewFraming(testProfile())
+	if err != nil {
+		t.Fatalf("NewFraming: %v", err)
+	}
+	canceller, ok := f.(PendingWantCanceller)
+	if !ok {
+		t.Fatal("Framing does not implement PendingWantCanceller")
+	}
+	acc := f.NewAccumulator(0)
+
+	stale := BuildFrame(OpStatusUpdate, [4]byte{UMemoryRecord, 0, 0, 99})
+	f.NoteSent(stale) // this request's reply will never arrive
+	canceller.CancelPendingWant()
+
+	real := BuildFrame(OpStatusUpdate, [4]byte{UMemoryRecord, 0, 0, 1})
+	f.NoteSent(real)
+	reply := bytes.Repeat([]byte{0xCD}, 19)
+	frames, err := acc.Push(reply)
+	if err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if len(frames) != 1 || !bytes.Equal(frames[0], reply) {
+		t.Fatalf("Push(% x) = %v, want one 19-byte frame equal to reply (not merged with the cancelled stale want)", reply, frames)
+	}
+}
+
+func TestCancelPendingWant_NoOpWhenNothingPending(t *testing.T) {
+	f, err := NewFraming(testProfile())
+	if err != nil {
+		t.Fatalf("NewFraming: %v", err)
+	}
+	f.(PendingWantCanceller).CancelPendingWant() // must not panic
+}
+
 func TestAccumulatorSplitFrame(t *testing.T) {
 	f, err := NewFraming(testProfile())
 	if err != nil {

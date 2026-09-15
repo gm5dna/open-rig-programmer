@@ -208,3 +208,49 @@ func (a lockedAccumulator) Push(chunk []byte) ([][]byte, error) {
 	defer a.f.mu.Unlock()
 	return a.f.acc.push(chunk)
 }
+
+// PendingWantCanceller is an OPTIONAL capability a core/driver caller may
+// use immediately after a ClassRead's own NoteSent expectation is known
+// to have gone PERMANENTLY unanswered — this family's own "silence means
+// no" identity probe (spec.md §Identity probe: the boundary-channel
+// probe that one of FT-890/FT-900 is documented to never answer).
+//
+// WHY THIS EXISTS: transport.Accumulator has no cancel primitive
+// (core/transport/framing.go's own interface is Push alone), and
+// noteWant's queue is a plain FIFO with no timeout of its own — a want
+// nothing will ever satisfy stays queued forever, and the NEXT genuine
+// exchange's real reply bytes complete THAT stale want first (accepting
+// bytes 1..N of a later, unrelated answer as if they were the timed-out
+// probe's), corrupting every read/write after it. transport.Engine's own
+// "suspect"/CONTAMINATED drains (core/transport/doc.go) solve the
+// analogous problem for RAW BYTE attribution; they do not, and cannot,
+// reach into a Framing's own per-request length bookkeeping.
+//
+// Calling this when the corresponding exchange might STILL arrive is a
+// driver bug: this is not a general-purpose accumulator reset, only the
+// undo half of the one NoteSent call the caller has independently
+// determined timed out with zero bytes received for it (errors.Is(err,
+// transport.ErrTimeout) from the Do call that sent it).
+type PendingWantCanceller interface {
+	// CancelPendingWant removes the most recently noted expected-reply
+	// length, if any. A no-op when none is pending.
+	CancelPendingWant()
+}
+
+// CancelPendingWant implements PendingWantCanceller.
+func (f *framing) CancelPendingWant() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.acc.cancelLastWant()
+}
+
+// cancelLastWant undoes the most recent noteWant call, if any is still
+// queued unsatisfied.
+func (a *accumulator) cancelLastWant() {
+	if len(a.want) == 0 {
+		return
+	}
+	a.want = a.want[:len(a.want)-1]
+}
+
+var _ PendingWantCanceller = (*framing)(nil)
