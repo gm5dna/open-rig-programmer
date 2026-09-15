@@ -114,8 +114,8 @@ func TestStoreEnter_CopiesLiveVFOIntoChannel(t *testing.T) {
 	if got, want := [4]byte(rec[1:5]), freqToRecordBytes(1425000); got != want {
 		t.Errorf("channel 5 freq bytes = % X, want % X", got, want)
 	}
-	if rec[7] != 0x02 {
-		t.Errorf("channel 5 mode byte = %#02x, want 0x02 (CW)", rec[7])
+	if rec[7] != 0x02<<5 {
+		t.Errorf("channel 5 mode byte = %#02x, want %#02x (CW's 3-bit family code, bits 5-7)", rec[7], byte(0x02<<5))
 	}
 	if rec[9] != shiftFlagMinus {
 		t.Errorf("channel 5 flags byte = %#02x, want %#02x (Minus)", rec[9], shiftFlagMinus)

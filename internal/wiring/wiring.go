@@ -36,6 +36,7 @@ import (
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft1000mp"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
@@ -869,6 +870,38 @@ const FT890Model = "FT-890"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT900Model = "FT-900"
 
+// FT1000MPModel names the FT-1000MP/Mark-V's realDrivers/fakeDrivers key,
+// which must equal ft1000mp.New(...).Model() — pinned, like every other
+// constant above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.9.0 BINARY-CAT FOUR, FOURTH AND LAST ROW: ONE ROW FOR BOTH THE
+// FT-1000MP AND THE MARK-V FT-1000MP — the matrix's own header states the
+// two share one command table and one 16-byte record, so core/driver/
+// ft1000mp is one package with one Model() name; nothing in this
+// project's registration distinguishes the two bodies. Its own 5-byte
+// binary-CAT opcode set, identity proved by FAH's fixed reply
+// (03H,93H), NO WIRE CAT-ID BYTE either — CATID "1000" is this row's own
+// fixed, invented, DISPLAY-ONLY synthetic identifier
+// (core/driver/ft1000mp/caps.go). 113 total memory slots across three
+// banks (MEM 1-99, P1-9, QMB1-5). NOTAG. NO TONE BYTE ANYWHERE IN THE
+// RECORD — the first registered Yaesu row for which that is true (no
+// CTCSSTone, no CTCSSState; internal/wiring/wiring_test.go's Yaesu-wide
+// tone-vocabulary tests carve this row out explicitly rather than
+// silently admitting an empty chart).
+//
+// Per Stuart's 15/09/2026 override (spec.md's own Amendment, plan.md's
+// Amendment): Store/Enter SHIPS as Unverified/ConsentedUnverified, like
+// every other write-side field here — NOT Unsupported, and NOT held back
+// — with its own channel-argument byte position an ASSUMED 1-based
+// reading (matrix §1.4/§1.8) that this driver does not attempt to
+// verify beyond a failed read-back after write. 8-N-2 is MANUAL-EVIDENCED
+// here too (matrix §1.10): "After 'opening' the computer's serial port
+// for 4800-baud, 8 data bits and 2 stop bits with no parity" is stated
+// explicitly.
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT1000MPModel = "FT-1000MP"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1273,6 +1306,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft890900.NewFT900(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites())
 		}
 		return ft890900.NewFT900(ft890900.RealHardware)
+	},
+	// v1.9.0 binary-CAT four, fourth and last row: bare New takes the
+	// profile as its first argument.
+	FT1000MPModel: func(consent bool) driver.Driver {
+		if consent {
+			return ft1000mp.New(ft1000mp.RealHardware, ft1000mp.WithConsentedUnverifiedWrites())
+		}
+		return ft1000mp.New(ft1000mp.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is

@@ -2432,6 +2432,24 @@ var ft900Text = Text{
 	ProbeFirmwareNote: "The FT-900 has no firmware query in this build — check the radio's own display. No FT-900 has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
 }
 
+// ft1000mpText is the FT-1000MP/Mark-V's entry — v1.9.0 binary-CAT four,
+// fourth and last row. ONE entry for both bodies (core/driver/ft1000mp's
+// own doc comment): the matrix and both manuals cite one shared command
+// table and record.
+//
+// NOTAG. NO TONE BYTE ANYWHERE IN ITS 16-BYTE RECORD — the first
+// registered Yaesu row for which that is true — so no CTCSS tone or
+// on/off state, and no scan-skip position either. Per Stuart's
+// 15/09/2026 override, Store/Enter (VFO->memory) SHIPS as
+// Unverified/consent-gated, not withheld: its own channel-argument byte
+// position is an ASSUMED 1-based reading this driver cannot verify
+// beyond a failed read-back after write.
+var ft1000mpText = Text{
+	EraseProcedure:    "This program sends no memory-clear frame for the FT-1000MP or Mark-V: no builder for one exists, and no FT-1000MP has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote:    "The FT-1000MP and Mark-V's memory record carries no tone byte at all — no CTCSS tone or on/off state, and no scan-skip position or tag/name command anywhere in either manual — so this build shows no Tone, Scan Skip or Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it. Store/Enter's own channel-argument byte position is an unverified assumption, so every write stays behind the opt-in consent route and a mismatch after write is reported as a failed write, never retried.",
+	ProbeFirmwareNote: "The FT-1000MP and Mark-V have no firmware query in this build — check the radio's own display. No FT-1000MP has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2513,6 +2531,8 @@ var texts = map[string]Text{
 	"FT-890": ft890Text,
 	// v1.9.0 binary-CAT four, second row.
 	"FT-900": ft900Text,
+	// v1.9.0 binary-CAT four, fourth and last row.
+	"FT-1000MP": ft1000mpText,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

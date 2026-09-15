@@ -216,6 +216,9 @@ var yaesuModels = map[string]bool{
 	"FT-890": true,
 	// The FT-900 (v1.9.0 binary-CAT four, second row): same reason.
 	"FT-900": true,
+	// The FT-1000MP (v1.9.0 binary-CAT four, fourth and last row): same
+	// reason.
+	"FT-1000MP": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -414,6 +417,10 @@ var ownParticulars = map[string][]string{
 	"FT-890": {"FT-890"},
 	// v1.9.0 binary-CAT four, second row: bare name.
 	"FT-900": {"FT-900"},
+	// v1.9.0 binary-CAT four, fourth and last row: bare name (also
+	// mentions "Mark-V", which names no OTHER model this project
+	// registers, so it does not trip the non-borrowing check).
+	"FT-1000MP": {"FT-1000MP"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2899,4 +2906,24 @@ func TestRadiotext_FT900Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FT-900", got)
+}
+
+// TestRadiotext_FT1000MPVerbatim pins the v1.9.0 binary-CAT four's fourth
+// and last row's prose byte-for-byte.
+func TestRadiotext_FT1000MPVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:    "This program sends no memory-clear frame for the FT-1000MP or Mark-V: no builder for one exists, and no FT-1000MP has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote:    "The FT-1000MP and Mark-V's memory record carries no tone byte at all — no CTCSS tone or on/off state, and no scan-skip position or tag/name command anywhere in either manual — so this build shows no Tone, Scan Skip or Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it. Store/Enter's own channel-argument byte position is an unverified assumption, so every write stays behind the opt-in consent route and a mismatch after write is reported as a failed write, never retried.",
+		ProbeFirmwareNote: "The FT-1000MP and Mark-V have no firmware query in this build — check the radio's own display. No FT-1000MP has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+	}
+
+	got, ok := radiotext.For("FT-1000MP")
+	if !ok {
+		t.Fatal(`For("FT-1000MP") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-1000MP\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-1000MP", got)
 }
