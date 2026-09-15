@@ -20,11 +20,12 @@ Which radios are supported, and how far each has been tested, is in [docs/radio-
 
 ## What changed in this version
 
-A patch release: no functional change to the app. Flathub-ready AppStream metainfo (with screenshots and release history) and a source-build Flathub manifest.
+A minor release: three new radios, and this project's first binary-CAT protocol. FT-890, FT-900 and FT-1000MP (and Mark-V) join the supported Yaesu models, all paper-only and opt-in for writes.
 
-- **Flathub-ready metainfo**: `app/build/flatpak/io.github.gm5dna.open-rig-programmer.metainfo.xml` now carries screenshots, a release history and full AppStream metadata for a Flathub submission, with three screenshots of the real app committed alongside it.
-- **Source-build Flathub manifest**: `flathub/io.github.gm5dna.open-rig-programmer.yml` builds the app from source (Go 1.25.0 and Node 22 SDK extensions, no vendored binaries) with generated `go-sources.json`/`node-sources.json`, plus a `.github/workflows/flathub.yml` CI job that builds and lints the manifest, appstream and repo on every push touching `flathub/`.
-- No functional change to the app itself.
+- **FT-890 and FT-900** join the supported Yaesu models on this project's first binary-CAT family: 5-byte opcode frames, no ASCII, no semicolon terminator, distinct from the NEWCAT/MR-MW protocol every other Yaesu row uses. Neither radio carries a CAT-ID byte on the wire; two fixed probe frames establish identity instead. Every write runs the family's VFO→M choreography (select VFO-A, set frequency, mode, clarifier, shift and tone, then Store) — never a partial update of one field. NoTag: no channel-name route over CAT. Paper-only, opt-in for writes via the unverified-write consent gate — no FT-890 or FT-900 has ever answered a frame from this project. The 19-byte memory record's second 9-byte half cannot be preserved: Store overwrites the whole record from live VFO state, so this build has no way to read those bytes aside and write them back unchanged.
+- **FT-1000MP** (and Mark-V) joins on the same binary-CAT protocol and VFO→M write model, narrowed to its own 16-byte, tone-less record. Also paper-only and opt-in. Store's channel-argument byte position and its channel-numbering base are both assumed, not confirmed; a mismatched write is always reported as failed, never hidden or retried. Owner probes that would settle both are listed in [docs/radio-notes.md](https://github.com/gm5dna/open-rig-programmer/blob/__VERSION__/docs/radio-notes.md).
+- The FT-920 — a related but different Yaesu radio from the same era — stays unregistered: its manual documents the Memory Store verb but not how the memory record encodes frequency, so no codec can be written from paper. Deferred to the roadmap, capture-gated on an owner's Status Update dump of a real radio.
+- Internal: new `core/bincat` package for the binary-CAT codec shared by FT-890, FT-900 and FT-1000MP. Supported models: 42 → 45.
 
 ## Downloads
 
