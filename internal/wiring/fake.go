@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft1000mp"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
@@ -44,6 +45,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ts990"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeft1000mp"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft2000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft450d"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft890"
@@ -561,6 +563,11 @@ var FT890FakeSessionOpts []fakeft890.Option
 // doc comment.
 var FT900FakeSessionOpts []fakeft900.Option
 
+// FT1000MPFakeSessionOpts is the FT-1000MP/Mark-V's own option source, on
+// the same terms as every single-row model's above — one row, one
+// package, one simulator.
+var FT1000MPFakeSessionOpts []fakeft1000mp.Option
+
 // IC7800FakeSessionOpts is the IC-7800's own option source, on the same
 // terms as every other model's own variable above: internal/fakeic7800
 // simulates the IC-7800 specifically, its Option is a
@@ -781,6 +788,9 @@ var (
 	// v1.9.0 binary-CAT four, second row: fakeft900's Port() already
 	// returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeft900.Radio)(nil)
+	// v1.9.0 binary-CAT four, fourth and last row: fakeft1000mp's Port()
+	// already returns io.ReadWriteCloser, so no adapter is needed.
+	_ fakeRadio = (*fakeft1000mp.Radio)(nil)
 	// The IC-7800's (v1.7.0 Icom wave) — via ic7800FakeAdapter, like the
 	// IC-7610's and unlike the four directly-satisfying Icom simulators:
 	// internal/fakeic7800's Port() returns net.Conn.
@@ -1345,6 +1355,12 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	FT900Model: {
 		newDriver: func() driver.Driver { return ft890900.NewFT900(ft890900.Simulated) },
 		newRadio:  func() fakeRadio { return fakeft900.New(FT900FakeSessionOpts...) },
+	},
+	// v1.9.0 binary-CAT four, fourth and last row: bare New, no adapter
+	// needed.
+	FT1000MPModel: {
+		newDriver: func() driver.Driver { return ft1000mp.New(ft1000mp.Simulated) },
+		newRadio:  func() fakeRadio { return fakeft1000mp.New(FT1000MPFakeSessionOpts...) },
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: fakets2000's Port() is already
 	// io.ReadWriteCloser, so no adapter is needed.

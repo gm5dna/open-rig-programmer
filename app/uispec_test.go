@@ -888,6 +888,17 @@ var ft890900CoreFive = []spec.Field{
 	spec.FieldShift, spec.FieldCTCSSTone,
 }
 
+// ft1000mpCoreFour is the core set every FT-1000MP/Mark-V bank derives
+// (MEM, P and QMB alike — core/driver/ft1000mp/caps.go's banks, one
+// shared field map for all three): frequency, mode, clarifier and shift.
+// FOUR, not ftdx5000CoreSix's six or either five-member set above: this
+// radio's 16-byte record carries no tone byte at all (matrix §1.2/§2 —
+// no CTCSSTone, no CTCSSState), the first registered Yaesu row for which
+// that is true.
+var ft1000mpCoreFour = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier, spec.FieldShift,
+}
+
 // ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
 // derives, on every profile — MEM and SCAN alike
 // (core/driver/ts2000/caps.go's bankFields, applied identically to both
@@ -1467,6 +1478,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// ft890900CoreFive's exact composition — same driver package,
 		// zero byte difference between the two for these candidates.
 		"FT-900": ft890900CoreFive,
+		// The FT-1000MP (v1.9.0 binary-CAT four, fourth and last row):
+		// FOUR fields — see ft1000mpCoreFour's own doc comment for why
+		// this is the first registered Yaesu row with no tone byte at
+		// all.
+		"FT-1000MP": ft1000mpCoreFour,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

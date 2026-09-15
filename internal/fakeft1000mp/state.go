@@ -25,12 +25,30 @@ const numFixedRecords = 3
 // channel byte, then (3+113) 16-byte records — 1,863 bytes (matrix §1.9).
 const fullDumpLen = 6 + 1 + (numFixedRecords+numMemories)*recordLen
 
-// modeNames is the 12-value mode legend memory-record byte 7 carries
-// (matrix §1.5) — the domain handleSetMode enforces on a write.
+// modeNames is the 12-value mode legend the 0CH SetMode opcode argument
+// carries (matrix §1.5) — the domain handleSetMode enforces on a write.
+// The 16-byte record's own byte 7 does NOT carry this value directly —
+// see modeFamilyIndex below.
 var modeNames = map[byte]string{
 	0x00: "LSB", 0x01: "USB", 0x02: "CW", 0x03: "CW-R",
 	0x04: "AM", 0x05: "AM-SYNC", 0x06: "FM", 0x07: "FM-W",
 	0x08: "RTTY-L", 0x09: "RTTY-U", 0x0A: "PKT-L", 0x0B: "PKT-F",
+}
+
+// modeFamilyIndex compresses a 0CH opcode mode code (0x00-0x0B) into the
+// 16-byte record's own 3-bit Operating Mode family code (matrix §1.5,
+// ft1000mpmarkv_manual layout:4929-4946, printed p.90-91's "Operating
+// Mode Byte (7)": "Bits5-7 Mode Data (3-bit code): LSB=000 USB=001 CW=010
+// AM=011 FM=100 RTTY=101 PKT=110"). LSB and USB are unpaired singles;
+// every later adjacent pair (CW/CW-R, AM/AM-SYNC, FM/FM-W, RTTY-L/RTTY-U,
+// PKT-L/PKT-F) shares one family — reimplemented independently here, per
+// THE HARD RULE, from the same manual passage core/driver/ft1000mp's own
+// caps.go cites for its (separately derived) recordModeBase table.
+func modeFamilyIndex(code byte) byte {
+	if code < 2 {
+		return code
+	}
+	return (code-2)/2 + 2
 }
 
 // Radio is a simulated FT-1000MP/Mark-V: an in-memory duplex pipe
@@ -119,7 +137,7 @@ func (r *Radio) vfoRecordBytesLocked() [recordLen]byte {
 	var rec [recordLen]byte
 	fb := freqToRecordBytes(r.vfoFreqTensOfHz)
 	copy(rec[1:5], fb[:])
-	rec[7] = r.vfoMode
+	rec[7] = modeFamilyIndex(r.vfoMode) << 5
 	rec[9] = r.vfoFlags
 	return rec
 }

@@ -459,6 +459,22 @@ var toneAbsentCIVModels = map[string]bool{
 	"IC-7200": true,
 }
 
+// toneAbsentNonCIVModels is toneAbsentCIVModels' own OR-arm in
+// TestTierRecordShapes_EveryModelDeclaresExactlyOneToneShape below,
+// kept as a SEPARATE map rather than folded into toneAbsentCIVModels:
+// that map also feeds icomModels()'s own CTCSSToneRange proxy, and
+// widening it here would misclassify a registered YAESU row as an Icom
+// one there (TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames
+// caught exactly this the first time this exception was written).
+//
+// The FT-1000MP/Mark-V (v1.9.0 binary-CAT four, fourth and last row): its
+// 16-byte memory record has no tone byte anywhere in it (matrix
+// §1.2/§2) — the first registered Yaesu row for which that is true, so
+// it declares neither CTCSSTones nor CTCSSToneRange, honestly.
+var toneAbsentNonCIVModels = map[string]bool{
+	"FT-1000MP": true,
+}
+
 func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabilities, error)) []string {
 	t.Helper()
 	var out []string
@@ -840,7 +856,7 @@ func TestTierRecordShapes_EveryModelDeclaresExactlyOneToneShape(t *testing.T) {
 		}
 		hasList := len(caps.CTCSSTones) > 0
 		hasRange := caps.CTCSSToneRange != nil
-		if hasList == hasRange && !toneAbsentCIVModels[model] {
+		if hasList == hasRange && !toneAbsentCIVModels[model] && !toneAbsentNonCIVModels[model] {
 			t.Errorf("%s declares CTCSSTones (non-empty: %v) and CTCSSToneRange (non-nil: %v) — want exactly one (or membership in toneAbsentCIVModels, named above); a model declaring neither would silently drop out of icomModels' proxy and vanish from the registration-coverage guard", model, hasList, hasRange)
 		}
 	}
