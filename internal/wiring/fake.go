@@ -11,6 +11,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft890900"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
@@ -45,6 +46,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft2000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft450d"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeft890"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft950"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft991a"
@@ -545,6 +547,13 @@ var FTdx1200FakeSessionOpts []fakeftdx1200.Option
 // simulator.
 var FT450DFakeSessionOpts []fakeft450d.Option
 
+// FT890FakeSessionOpts is the FT-890's own option source: internal/fakeft890
+// simulates the FT-890 specifically (a SEPARATE constructor from the
+// FT-900's own fakeft900.New, registered separately, both under the
+// ft890900 driver package's one Simulated token — the FTdx101D/FTdx101MP
+// shape, not the ts2000-family shared-fake one).
+var FT890FakeSessionOpts []fakeft890.Option
+
 // IC7800FakeSessionOpts is the IC-7800's own option source, on the same
 // terms as every other model's own variable above: internal/fakeic7800
 // simulates the IC-7800 specifically, its Option is a
@@ -759,6 +768,9 @@ var (
 	// v1.8.0 Yaesu trio, third and last row: fakeft450d's Port() already
 	// returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeft450d.Radio)(nil)
+	// v1.9.0 binary-CAT four, first row: fakeft890's Port() already
+	// returns io.ReadWriteCloser, so no adapter is needed.
+	_ fakeRadio = (*fakeft890.Radio)(nil)
 	// The IC-7800's (v1.7.0 Icom wave) — via ic7800FakeAdapter, like the
 	// IC-7610's and unlike the four directly-satisfying Icom simulators:
 	// internal/fakeic7800's Port() returns net.Conn.
@@ -1308,6 +1320,14 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	FT450DModel: {
 		newDriver: func() driver.Driver { return ft450d.New(ft450d.Simulated) },
 		newRadio:  func() fakeRadio { return fakeft450d.New(FT450DFakeSessionOpts...) },
+	},
+	// v1.9.0 binary-CAT four, first row: bare New, no adapter needed.
+	// fakeft890 is a SEPARATE constructor from FT-900's own fakeft900.New
+	// (its own row, registered separately) — the FTdx101D/FTdx101MP shape
+	// (one driver package, two fake constructors), not a shared-fake row.
+	FT890Model: {
+		newDriver: func() driver.Driver { return ft890900.NewFT890(ft890900.Simulated) },
+		newRadio:  func() fakeRadio { return fakeft890.New(FT890FakeSessionOpts...) },
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: fakets2000's Port() is already
 	// io.ReadWriteCloser, so no adapter is needed.

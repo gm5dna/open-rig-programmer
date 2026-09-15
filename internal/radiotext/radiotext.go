@@ -2397,6 +2397,25 @@ var ft450dText = Text{
 	ProbeFirmwareNote: "The FT-450D has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
+// ft890Text is the FT-890's entry — v1.9.0 binary-CAT four, first row.
+//
+// NOTAG: no TAG/NAME opcode exists in this radio's command table at all
+// (matrix §0). CTCSS tone is a live, mapped tone-table index, read and
+// written; there is no documented CTCSS on/off toggle distinct from the
+// tone byte itself, so that stays unmapped. The repeater-offset magnitude
+// can be written but never read back — no byte in the 19-byte memory
+// record carries it. No FT-890 has ever answered a frame from this
+// project (writeTrialsComplete false), so every write stays behind the
+// opt-in consent route.
+var ft890Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-890: no builder for one exists, and no FT-890 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FT-890's tone is read and written as a live CTCSS-tone index, but there is no CTCSS on/off toggle, no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written for the FT-890; this build has never tested whether a rewrite preserves the tone index on a real radio",
+	},
+	ProbeFirmwareNote: "The FT-890 has no firmware query in this build — check the radio's own display. No FT-890 has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2474,6 +2493,8 @@ var texts = map[string]Text{
 	"FTdx1200": ftdx1200Text,
 	// v1.8.0 Yaesu trio, third and last row.
 	"FT-450D": ft450dText,
+	// v1.9.0 binary-CAT four, first row.
+	"FT-890": ft890Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

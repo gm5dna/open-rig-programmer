@@ -39,6 +39,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft890900"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
@@ -831,6 +832,30 @@ const FTdx1200Model = "FTdx1200"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT450DModel = "FT-450D"
 
+// FT890Model names the FT-890's realDrivers/fakeDrivers key, which must
+// equal ft890900.NewFT890(...).Model() — pinned, like every other
+// constant above, by TestDriverTableKeysMatchDriverModel.
+//
+// v1.9.0 BINARY-CAT FOUR, FIRST ROW: core/driver/ft890900 shares ONE
+// package with the FT-900 (its own row, registered separately) — a
+// 5-byte binary-CAT opcode set (not this project's other Yaesu families'
+// ASCII MR/MW), no wire CAT-ID byte at all (identity is proved entirely
+// by Open's own two-probe sequence, package doc comment), and a 19-byte
+// VFO/Memory record. CATID "0890" (fixed, invented, DISPLAY-ONLY —
+// ft890900/profile.go). 32 true memory channels ("001"-"032"). NOTAG (no
+// TAG/NAME opcode in either radio's command table). CTCSSTone is a live,
+// mapped 33-entry tone-table index, read AND written; CTCSSState has no
+// documented on/off toggle distinct from the tone byte itself, so it
+// stays the zero FieldSupport. writeTrialsComplete is false (no FT-890
+// has ever answered this project): every write-side field is Unverified,
+// gated behind ConsentedUnverified. 8-N-2 is MANUAL-EVIDENCED for this
+// model, not merely this package's default: the FT-890 Operating Manual
+// states "8 data bits, no parity and two stop bits" outright (Correction
+// 15/09/2026, docs/superpowers/ft890-capability-matrix.md).
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FT890Model = "FT-890"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1219,6 +1244,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft450d.New(ft450d.RealHardware, ft450d.WithConsentedUnverifiedWrites())
 		}
 		return ft450d.New(ft450d.RealHardware)
+	},
+	// v1.9.0 binary-CAT four, first row: NewFT890 takes the profile as its
+	// first argument, same shape as the bare-New rows above.
+	FT890Model: func(consent bool) driver.Driver {
+		if consent {
+			return ft890900.NewFT890(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites())
+		}
+		return ft890900.NewFT890(ft890900.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is
