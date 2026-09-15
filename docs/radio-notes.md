@@ -257,6 +257,112 @@ Evidence: `core/driver/ft450d/doc.go`; the manuals are the Yaesu FT-450D
 CAT Operation Reference Book, revision 1710-B, and the Operating Manual,
 revision 1901L-LS-1.
 
+### FT-890 and FT-900 (opt-in) — a different, older Yaesu protocol
+
+The first two registered radios on this project's OTHER Yaesu protocol:
+a 5-byte binary-CAT opcode set (one argument-then-opcode frame, no ASCII,
+no semicolon terminator), not the NEWCAT/MR-MW family every other
+registered Yaesu row above uses. Neither radio carries a wire CAT-ID
+byte at all, so this build cannot ask either radio what it is directly —
+opening a session sends two fixed identity probes and reads the answer
+pattern instead (`core/driver/ft890900/doc.go`'s "Identity" section).
+
+The write model is **VFO→M**: there is no per-channel "write record N"
+opcode, only "commit whatever VFO-A currently holds into channel N"
+(`Store`, opcode `03H`). Every write therefore runs the family's full
+choreography — select VFO-A, set frequency, set mode, clear the
+clarifier, set shift (and repeater offset if shifted), set tone, then
+Store — never a partial update of one field. No FT-890 or FT-900 has
+ever answered a frame from this project, so every write stays behind the
+**opt-in consent route**, exactly like every other Unverified row in this
+document.
+
+The 19-byte memory record's second 9-byte half (offsets 10-18) is not
+modelled at all: Store/Enter overwrites the WHOLE record from live VFO
+state, so there is no way for this build to read those bytes, hold them
+aside, and write them back unchanged — a genuine gap in what this
+project can preserve on this family, not an oversight. Tone is a live,
+mapped CTCSS-tone index, read and written; there is no documented
+CTCSS on/off toggle distinct from the tone byte itself, so that stays
+unreachable. NoTag: no TAG/NAME opcode exists anywhere in either
+radio's command table.
+
+**ASSUMED/OPEN, from each radio's own capability matrix, pending an
+owner probe:**
+
+- The CTCSS tone-table's full 33-entry identity beyond the endpoints
+  already checked is **ASSUMED** — owner-probe: re-check the tone table
+  page against a second, independent mirror scan.
+- `MinFreqHz`/`MaxFreqHz` are **OPEN**: the memory record's own
+  wire-encoding range (100,000-30,000,000 Hz) is not necessarily either
+  radio's documented tuning range — owner-probe: re-read the general-
+  coverage-receive section before trusting the wire ceiling as the tuning
+  range.
+- A dedicated CTCSS on/off toggle (`FieldCTCSSState`) is **OPEN**: no
+  opcode or record byte distinct from the tone-code byte itself was
+  found in either manual — owner-probe: re-read the CAT command table for
+  a toggle before grading this field above Unsupported.
+
+The FT-920 — a related but DIFFERENT Yaesu radio from the same broad era
+— is deliberately not registered alongside these two: its own opcode
+table and 14-byte record differ enough that this package's codec does
+not fit it, and it remains capture-gated on the roadmap pending its own
+matrix and driver.
+
+Evidence: `core/driver/ft890900/doc.go`; the manuals are the FT-890
+Operating Manual (doc `02431001 (205B-CK)`) and the FT-900 Operating
+Manual (doc `E?6357502 (408r-DA)`, best-effort read off a low-resolution
+mirror scan).
+
+### FT-1000MP and Mark-V FT-1000MP (opt-in)
+
+One registered row for both bodies: the matrix and both manuals describe
+one shared 5-byte binary-CAT command table and one 16-byte memory
+record. Like the FT-890/FT-900 above, this is this project's OTHER
+Yaesu protocol, and identity is proved by a fixed reply pattern (opcode
+`FAH`) rather than a wire CAT-ID byte.
+
+The write model is the same **VFO→M** choreography as the FT-890/FT-900
+(set frequency, set mode, set shift, then `Store`/`Enter`, opcode `03H`)
+— narrower than theirs, since this radio's record has no tone byte for a
+tone step to write into at all. Per Stuart's 15/09/2026 override,
+Store/Enter **SHIPS** as Unverified and consent-gated, not withheld: its
+own channel-argument byte position is an unverified assumption (see
+below), and this build does not retry or hide a read-back mismatch after
+a write — it is reported as a failed write outright. No FT-1000MP has
+ever answered a frame from this project, so every write stays behind the
+**opt-in consent route**.
+
+This radio's 16-byte record carries **no tone byte anywhere in it** — no
+CTCSS tone, no CTCSS on/off state, and no scan-skip position — so this
+build shows no Tone, Scan Skip or Tag column for it at all (NoTag: no
+alphanumeric name route either, only a boolean scan-skip flag on a
+DIFFERENT opcode this build does not use). The repeater-offset magnitude
+can be written but never read back: no byte in the record carries it.
+
+**ASSUMED/OPEN, from this radio's own capability matrix, pending an
+owner probe:**
+
+- `Store`/`Enter`'s own channel argument `K`'s byte POSITION is
+  **ASSUMED** — chosen arbitrarily among three equally plausible
+  candidates in the opcode's own parameter table; a real write's
+  read-back is what would ever catch this being wrong, which is exactly
+  why this build never hides a mismatch.
+- The channel-numbering base is **ASSUMED 1-based** (channel 1 → argument
+  `01H`) — the manual's own coding examples disagree with themselves and
+  with each other on this point.
+- The repeater-offset write encoding is capped at 0-299 kHz, a
+  deliberately narrower range than the manual's own stated 0-500 kHz
+  ceiling, because the argument byte the manual also states can only
+  reach 299 kHz — an internal contradiction this build does not attempt
+  to resolve by guessing; owner-probe: capture a real offset frame above
+  299 kHz (e.g. a 600 kHz 2 m split) before trusting this encoding
+  further.
+
+Evidence: `core/driver/ft1000mp/doc.go`; the manuals are the FT-1000MP
+Operating Manual and the Mark-V FT-1000MP Operating Manual (own
+pagination), both citing the identical 5-byte opcode table.
+
 ## Icom
 
 ### Shared by every Icom model
@@ -797,3 +903,6 @@ by revision in the code that transcribes it.
 | FTdx3000 | Yaesu FTdx3000 CAT Operation Manual, revision 2006-D |
 | FTdx1200 | Yaesu FTdx1200 CAT Operation Manual, revision 1507-E0 |
 | FT-450D | Yaesu FT-450D CAT Operation Reference Book, revision 1710-B; Operating Manual, revision 1901L-LS-1 |
+| FT-890 | Yaesu FT-890 Operating Manual, doc `02431001 (205B-CK)` (community mirror) |
+| FT-900 | Yaesu FT-900 Operating Manual, doc `E?6357502 (408r-DA)` best-effort read (community mirror) |
+| FT-1000MP, Mark-V FT-1000MP | Yaesu FT-1000MP Operating Manual; Mark-V FT-1000MP Operating Manual (own pagination) |

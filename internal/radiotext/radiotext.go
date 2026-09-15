@@ -2397,6 +2397,59 @@ var ft450dText = Text{
 	ProbeFirmwareNote: "The FT-450D has no firmware query in this build — check the radio's own display. Its default baud of 38400 is unverified against real hardware.",
 }
 
+// ft890Text is the FT-890's entry — v1.9.0 binary-CAT four, first row.
+//
+// NOTAG: no TAG/NAME opcode exists in this radio's command table at all
+// (matrix §0). CTCSS tone is a live, mapped tone-table index, read and
+// written; there is no documented CTCSS on/off toggle distinct from the
+// tone byte itself, so that stays unmapped. The repeater-offset magnitude
+// can be written but never read back — no byte in the 19-byte memory
+// record carries it. No FT-890 has ever answered a frame from this
+// project (writeTrialsComplete false), so every write stays behind the
+// opt-in consent route.
+var ft890Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-890: no builder for one exists, and no FT-890 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FT-890's tone is read and written as a live CTCSS-tone index, but there is no CTCSS on/off toggle, no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written for the FT-890; this build has never tested whether a rewrite preserves the tone index on a real radio",
+	},
+	ProbeFirmwareNote: "The FT-890 has no firmware query in this build — check the radio's own display. No FT-890 has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+}
+
+// ft900Text is the FT-900's entry — v1.9.0 binary-CAT four, second row,
+// sharing core/driver/ft890900 with the FT-890: an identical opcode set
+// and 19-byte record, differing only in true channel count (100, not 32)
+// and repeater-offset ceiling (500,000 Hz, not 200,000 Hz) — neither of
+// which this entry's prose states. This entry names only "FT-900"
+// throughout (never the bare "FT-890") so the non-borrowing check can
+// tell the two apart.
+var ft900Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FT-900: no builder for one exists, and no FT-900 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FT-900's tone is read and written as a live CTCSS-tone index, but there is no CTCSS on/off toggle, no scan-skip position and no tag/name command anywhere in its manual, so this build shows no Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "read and written for the FT-900; this build has never tested whether a rewrite preserves the tone index on a real radio",
+	},
+	ProbeFirmwareNote: "The FT-900 has no firmware query in this build — check the radio's own display. No FT-900 has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+}
+
+// ft1000mpText is the FT-1000MP/Mark-V's entry — v1.9.0 binary-CAT four,
+// fourth and last row. ONE entry for both bodies (core/driver/ft1000mp's
+// own doc comment): the matrix and both manuals cite one shared command
+// table and record.
+//
+// NOTAG. NO TONE BYTE ANYWHERE IN ITS 16-BYTE RECORD — the first
+// registered Yaesu row for which that is true — so no CTCSS tone or
+// on/off state, and no scan-skip position either. Per Stuart's
+// 15/09/2026 override, Store/Enter (VFO->memory) SHIPS as
+// Unverified/consent-gated, not withheld: its own channel-argument byte
+// position is an ASSUMED 1-based reading this driver cannot verify
+// beyond a failed read-back after write.
+var ft1000mpText = Text{
+	EraseProcedure:    "This program sends no memory-clear frame for the FT-1000MP or Mark-V: no builder for one exists, and no FT-1000MP has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote:    "The FT-1000MP and Mark-V's memory record carries no tone byte at all — no CTCSS tone or on/off state, and no scan-skip position or tag/name command anywhere in either manual — so this build shows no Tone, Scan Skip or Tag column for it. The repeater-offset magnitude can be written but never read back: no byte in this radio's memory record carries it. Store/Enter's own channel-argument byte position is an unverified assumption, so every write stays behind the opt-in consent route and a mismatch after write is reported as a failed write, never retried.",
+	ProbeFirmwareNote: "The FT-1000MP and Mark-V have no firmware query in this build — check the radio's own display. No FT-1000MP has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2474,6 +2527,12 @@ var texts = map[string]Text{
 	"FTdx1200": ftdx1200Text,
 	// v1.8.0 Yaesu trio, third and last row.
 	"FT-450D": ft450dText,
+	// v1.9.0 binary-CAT four, first row.
+	"FT-890": ft890Text,
+	// v1.9.0 binary-CAT four, second row.
+	"FT-900": ft900Text,
+	// v1.9.0 binary-CAT four, fourth and last row.
+	"FT-1000MP": ft1000mpText,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",

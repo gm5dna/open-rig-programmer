@@ -11,6 +11,40 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-15
+
+### Added
+- **FT-890 and FT-900** join the supported Yaesu models on this
+  project's first binary-CAT family: 5-byte opcode frames, no ASCII,
+  no semicolon terminator, distinct from the NEWCAT/MR-MW protocol
+  every other Yaesu row uses. Neither radio carries a CAT-ID byte on
+  the wire; two fixed probe frames establish identity instead. Every
+  write runs the family's VFO→M choreography (select VFO-A, set
+  frequency, mode, clarifier, shift and tone, then Store) — never a
+  partial update of one field. NoTag: no channel-name route over CAT.
+  Paper-only, opt-in for writes via the unverified-write consent gate
+  — no FT-890 or FT-900 has ever answered a frame from this project.
+  The 19-byte memory record's second 9-byte half cannot be preserved:
+  Store overwrites the whole record from live VFO state, so this
+  build has no way to read those bytes aside and write them back
+  unchanged.
+- **FT-1000MP** (and Mark-V) joins on the same binary-CAT protocol and
+  VFO→M write model, narrowed to its own 16-byte, tone-less record.
+  Also paper-only and opt-in. Store's channel-argument byte position
+  and its channel-numbering base are both assumed, not confirmed; a
+  mismatched write is always reported as failed, never hidden or
+  retried. Owner probes that would settle both are listed in
+  `docs/radio-notes.md`.
+- The FT-920 — a related but different Yaesu radio from the same era
+  — stays unregistered: its manual documents the Memory Store verb
+  but not how the memory record encodes frequency, so no codec can be
+  written from paper. Deferred to the roadmap, capture-gated on an
+  owner's Status Update dump of a real radio.
+
+### Changed
+- Internal: new `core/bincat` package for the binary-CAT codec shared
+  by FT-890, FT-900 and FT-1000MP. Supported models: 42 → 45.
+
 ## [1.8.2] - 2026-09-14
 
 ### Added
@@ -544,7 +578,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.2...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.2...v1.9.0
 [1.8.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.7.1...v1.8.0

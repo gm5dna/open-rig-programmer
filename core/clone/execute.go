@@ -92,11 +92,20 @@ const (
 //
 // The exclusion list, and the two DIFFERENT mechanisms behind it:
 //
-// CTCSSTone and ScanSkip are excluded UNCONDITIONALLY — not compared at
-// all, in any circumstance: both always read back FieldState Unknown by
-// construction (driver.Session.ReadChannel's doc comment — the CAT
-// protocol has no command to read either), so comparing them would
-// manufacture a false mismatch on every single write.
+// ScanSkip is excluded UNCONDITIONALLY — not compared at all, in any
+// circumstance: it always reads back FieldState Unknown by construction
+// (driver.Session.ReadChannel's doc comment — no protocol this project
+// targets can read scan-skip back), so comparing it would manufacture a
+// false mismatch on every single write.
+//
+// CTCSSTone is excluded CONDITIONALLY (v1.9.0, binary-CAT write model
+// §Write model): the FT-710/FTdx10/FT-991A tier reads it back Unknown by
+// construction, same as ScanSkip, but the FT-890/FT-900/FT-920 family's
+// memory record DOES carry a tone byte and reads it back Known — so this
+// field uses the same mutual-knowledge rule as TagDisplay below, not the
+// blanket exclusion ScanSkip gets: compared only when BOTH sides are
+// Known, which today happens for zero registered radios and will start
+// happening once a binary-CAT driver's ReadChannel reports it Known.
 //
 // The seventeen fields the Icom model extensions added are excluded CONDITIONALLY too, by
 // the same mutual-knowledge rule TagDisplay uses — see
@@ -130,6 +139,10 @@ func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	}
 	if want.CTCSS != got.CTCSS {
 		bad = append(bad, spec.FieldCTCSSState)
+	}
+	if want.CTCSSTone.State == codeplug.Known && got.CTCSSTone.State == codeplug.Known &&
+		want.CTCSSTone.Value != got.CTCSSTone.Value {
+		bad = append(bad, spec.FieldCTCSSTone)
 	}
 	if want.Shift != got.Shift {
 		bad = append(bad, spec.FieldShift)
@@ -358,6 +371,21 @@ func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest s
 
 	candidateBySlot := indexChannels(plan.candidate)
 
+	// VFOStateRestorer seam (v1.9.0 binary-CAT write model, §Write model):
+	// snapshot VFO-A's live content/selection BEFORE anything else below,
+	// including the memory-selection snapshot right after it — this
+	// family's write choreography overwrites VFO-A to commit a channel,
+	// so unlike obligation 12's MemorySelector there is no safe
+	// best-effort-proceed path: a snapshot failure aborts HERE, before
+	// the first mutating frame. See vfo_state_restorer.go.
+	vfoSnap, hasVFOSnap, err := s.snapshotVFOState(ctx, journal)
+	if err != nil {
+		return s.abort(report, journal, "", fmt.Sprintf("vfo snapshot: %v", err), err)
+	}
+	if hasVFOSnap {
+		defer s.restoreVFOState(journal, vfoSnap)
+	}
+
 	// Obligation 12: snapshot the radio's current memory selection BEFORE
 	// the first write below — MW moves it to the written slot
 	// (HW-CONFIRMED 2026-07-13, M5b write trials, docs/hardware-notes.md)
@@ -367,6 +395,12 @@ func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest s
 	// for why this is entirely best-effort, never a refusal or an abort
 	// cause. The defer covers every return path below this point,
 	// including every s.abort(...) call inside the loop and writePair.
+	//
+	// Deferred AFTER vfoSnap's restore above so LIFO unwind order runs
+	// this memory-selection restore FIRST, then the VFO-content restore
+	// second — VFOStateRestorer brackets MemorySelector (§Write model:
+	// "VFO content is what steps 1-6 touch; a current-memory pointer, if
+	// any, is separate state").
 	if snap := s.snapshotMemorySelection(ctx, journal); snap != "" {
 		defer s.restoreMemorySelection(journal, snap)
 	}
