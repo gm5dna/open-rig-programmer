@@ -49,8 +49,31 @@ const (
 	OpTone byte = 0x90
 	// OpOffset sets the repeater shift magnitude — meaningful only when
 	// OpShift last sent Minus or Plus. Args: [0x00, S2, S3, S4]; the
-	// manual states the first byte must be zero.
+	// manual states the first byte must be zero. FT-890/900's own layout
+	// (Profile.OffsetZeroArg/OffsetBoundArg default to this one); see
+	// those fields' doc comments for FT-1000MP's differently-shaped
+	// F9H frame under the same opcode.
 	OpOffset byte = 0xF9
+	// OpIdentity is "Read Internal Status Flags" (FAH) — FT-1000MP's own
+	// identity discriminator (spec.md §Identity probe; ft1000mp
+	// capability matrix §1.7), unused by FT-890/900 (whose own
+	// discriminator is the full-dump length probe, spec.md's Amendment
+	// 14/09/2026 — they have no Model-ID reply at all). Args: [—, —, —,
+	// F], where F selects the reply shape — see IdentityShort/
+	// IdentityLong.
+	OpIdentity byte = 0xFA
+)
+
+// IdentityShort and IdentityLong are OpIdentity's F argument (arg index
+// 3) values: IdentityShort's 5-byte reply is 3 Status Flag bytes
+// followed by the 2 Model-ID bytes (`03H`,`93H` for FT-1000MP/Mark-V);
+// IdentityLong's 6-byte reply is six Status Flag bytes and carries no
+// ID at all (ft1000mpmarkv_manual layout:5210-5220, printed p.96-97,
+// "Read Internal Status Flags" row of Opcode Command Chart (4)). Only
+// IdentityShort is useful as an identity probe.
+const (
+	IdentityShort byte = 0x00
+	IdentityLong  byte = 0x01
 )
 
 // U values for OpStatusUpdate — how much of the radio's RAM table to
@@ -126,6 +149,35 @@ type Profile struct {
 	// §Tone table).
 	HasTone bool
 
+	// StoreChanArg is the OpStore (VFO→M/Enter) argument index (0-3)
+	// carrying the target channel number. Zero value 0 is FT-890/900's
+	// own layout ("Args: [CH, P2, —, —]", OpStore's doc comment) — the
+	// package's long-standing default, so neither existing Profile
+	// literal needs to change. FT-1000MP's own opcode table places its
+	// channel argument (X) in the 4th byte instead (ft1000mp capability
+	// matrix §1.8: "VFO/MEM – – – X 03H"), a genuinely different frame
+	// layout under the same opcode, not a guess — its driver sets this
+	// to 3.
+	StoreChanArg int
+
+	// OffsetZeroArg and OffsetBoundArg are OpOffset (F9H) argument
+	// indices: OffsetZeroArg's byte must be exactly 0x00, OffsetBoundArg's
+	// must be 0-2 (the SIMPLEX/Minus/Plus-shaped byte this opcode
+	// reuses). FT-890/900's own manual states the FIRST byte must be
+	// zero (index 0 — OffsetZeroArg's zero value, so the existing
+	// Profile literal is unaffected) and its own second byte carries the
+	// bounded value; OFFSETBOUNDARG'S ZERO VALUE IS TREATED AS INDEX 1
+	// (offsetBoundArg()) rather than 0, precisely so it need not be set
+	// to preserve that default. FT-1000MP's manual states the OPPOSITE
+	// byte must be zero (X4, its 4th byte) with X3 (its 3rd byte)
+	// carrying the bounded 00H/01H/02H value
+	// (ft1000mpmarkv_manual layout:5195-5210, printed p.95-96,
+	// "Repeater Offset" row) — a genuinely different byte layout under
+	// the same opcode, not a guess; its driver sets OffsetZeroArg=3,
+	// OffsetBoundArg=2.
+	OffsetZeroArg  int
+	OffsetBoundArg int
+
 	// Record offsets, all relative to the start of a 19-byte VFO/Memory
 	// Data Record (FT-890 p.33 / FT-900 pp.44-45, identical shape: 1
 	// leading Memory Status Flags byte, then a 9-byte front sub-record).
@@ -147,6 +199,16 @@ type Profile struct {
 func (p Profile) Configured() bool {
 	return p.Model != "" && p.SlotCount > 0 && p.RecordLen > 0 &&
 		p.FullDumpLen > 0 && len(p.Modes) > 0
+}
+
+// offsetBoundArg returns OffsetBoundArg, treating its zero value as index
+// 1 (FT-890/900's own layout) rather than 0 — see OffsetBoundArg's doc
+// comment for why the zero value cannot mean "index 0" here.
+func (p Profile) offsetBoundArg() int {
+	if p.OffsetBoundArg != 0 {
+		return p.OffsetBoundArg
+	}
+	return 1
 }
 
 // MaxFrame is the largest single reply this Profile's radio can return —
@@ -177,7 +239,13 @@ func (p Profile) ValidChannel(ch int) bool {
 // framing.go's NoteSent calls this for.
 func (p Profile) ReplyLength(frame []byte) (n int, ok bool) {
 	opcode, args, err := ParseFrame(frame)
-	if err != nil || opcode != OpStatusUpdate {
+	if err != nil {
+		return 0, false
+	}
+	if opcode == OpIdentity {
+		return identityReplyLength(args[3])
+	}
+	if opcode != OpStatusUpdate {
 		return 0, false
 	}
 	switch args[0] {
@@ -191,6 +259,20 @@ func (p Profile) ReplyLength(frame []byte) (n int, ok bool) {
 		return vfoBothLen, true
 	case UMemoryRecord:
 		return p.RecordLen, true
+	default:
+		return 0, false
+	}
+}
+
+// identityReplyLength reports OpIdentity's (FAH) reply length for the F
+// argument in frame, when frame is a well-formed OpIdentity command —
+// see IdentityShort/IdentityLong.
+func identityReplyLength(f byte) (n int, ok bool) {
+	switch f {
+	case IdentityShort:
+		return 5, true
+	case IdentityLong:
+		return 6, true
 	default:
 		return 0, false
 	}
@@ -221,7 +303,7 @@ func (p Profile) AllowedCommand(frame []byte) bool {
 	}
 	switch opcode {
 	case OpStore:
-		return p.ValidChannel(int(args[0]))
+		return p.ValidChannel(int(args[p.StoreChanArg]))
 	case OpABSelect:
 		return args[0] == 0 || args[0] == 1
 	case OpClarifier:
@@ -250,7 +332,9 @@ func (p Profile) AllowedCommand(frame []byte) bool {
 	case OpTone:
 		return args[0] <= 0x20
 	case OpOffset:
-		return args[0] == 0x00 && args[1] <= 2
+		return args[p.OffsetZeroArg] == 0x00 && args[p.offsetBoundArg()] <= 2
+	case OpIdentity:
+		return args[3] == IdentityShort || args[3] == IdentityLong
 	default:
 		return false
 	}
