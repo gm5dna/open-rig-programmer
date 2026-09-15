@@ -74,11 +74,15 @@
 //
 //  7. Per-channel write-then-verify. After each WriteChannel, Execute
 //     reads the same slot back (ReadChannel) and compares the WRITABLE
-//     fields against what was sent — CTCSSTone/ScanSkip are excluded
-//     from this comparison, since they read back Unknown by construction
-//     (the CAT protocol cannot read them at all). Any mismatch, or any
-//     ambiguity (a read-back error), aborts immediately: no further
-//     writes are attempted.
+//     fields against what was sent. ScanSkip is excluded unconditionally,
+//     since it reads back Unknown by construction on every registered
+//     radio. CTCSSTone is excluded only when it reads back Unknown or
+//     Unavailable on either side — a radio whose memory record carries a
+//     tone byte (the FT-890/FT-900/FT-920 family, v1.9.0 binary-CAT write
+//     model) reads it back Known and DOES get compared, by the same
+//     mutual-knowledge rule TagDisplay uses (writableFieldsMismatch).
+//     Any mismatch, or any ambiguity (a read-back error), aborts
+//     immediately: no further writes are attempted.
 //
 //  8. Append-only journal. Every step — prepare (including the snapshot
 //     path, and "consented_unverified": whether this SESSION'S
