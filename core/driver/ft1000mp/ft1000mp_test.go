@@ -256,6 +256,27 @@ func TestWriteChannel_Success(t *testing.T) {
 	}
 }
 
+// TestWriteChannel_RefusesOutOfDomainFrequency pins the defence-in-depth
+// wire-domain guard: a direct WriteChannel caller bypassing codeplug
+// validation must still be refused before any frame is sent, not just
+// callers that go through the 10 Hz alignment check.
+func TestWriteChannel_RefusesOutOfDomainFrequency(t *testing.T) {
+	for _, freqHz := range []uint64{99_990, 30_000_010} {
+		sess, port := newTestSession(t, buildDump(nil), nil)
+		before := len(port.Writes())
+		ch := writableChannel("1")
+		ch.Data.FreqHz = freqHz
+		_, err := sess.WriteChannel(context.Background(), ch)
+		if !errors.Is(err, driver.ErrWriteRefused) {
+			t.Errorf("FreqHz=%d: WriteChannel error = %v, want errors.Is(_, driver.ErrWriteRefused)", freqHz, err)
+		}
+		if len(port.Writes()) != before {
+			t.Errorf("FreqHz=%d: port.Writes() grew by %d, want no frames sent", freqHz, len(port.Writes())-before)
+		}
+		sess.Close()
+	}
+}
+
 func TestWriteChannel_ShiftRequiresKnownOffset(t *testing.T) {
 	sess, _ := newTestSession(t, buildDump(nil), nil)
 	defer sess.Close()

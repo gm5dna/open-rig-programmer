@@ -216,8 +216,13 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	if err != nil {
 		return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldClarifier}, Reason: err.Error()}
 	}
-	if ch.Data.FreqHz%10 != 0 {
-		return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: "frequency must be a whole 10 Hz (this radio's SetFreq step)"}
+	// Domain check is defence in depth against a direct WriteChannel
+	// caller bypassing codeplug validation: s.caps.Min/MaxFreqHz already
+	// IS the wire encoding's own bound here (caps.go: "the 28-band
+	// chart's own extremes", 0.1-30 MHz), so this reuses it rather than
+	// inventing a second constant.
+	if ch.Data.FreqHz%10 != 0 || ch.Data.FreqHz < s.caps.MinFreqHz || ch.Data.FreqHz > s.caps.MaxFreqHz {
+		return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: fmt.Sprintf("frequency must be a whole 10 Hz between %d and %d Hz (this radio's wire encoding)", s.caps.MinFreqHz, s.caps.MaxFreqHz)}
 	}
 	freqArgs, err := bincat.EncodeBCD(ch.Data.FreqHz/10, 4)
 	if err != nil {
