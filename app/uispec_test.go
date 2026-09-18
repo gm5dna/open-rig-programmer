@@ -1516,8 +1516,37 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 					t.Fatalf("%s: no banks — nothing asserted", profile)
 				}
 				for _, b := range caps.Banks {
+					// BankSatellite (v1.10.0, the TS-2000/2000X/B2000
+					// three) is the one bank whose core set genuinely
+					// differs from the rest of ITS OWN model's banks —
+					// FieldFrequency, FieldMode and FieldScanSkip are
+					// Unsupported there (no frequency, mode or scan
+					// position in the SA/SI record at all), where every
+					// other bank this loop walks shares one uniform set
+					// across the whole model. Asserted separately,
+					// TestBankCoreFields_RegisteredTS2000Trio_SatelliteBank
+					// — the FT-891's own discovered-bank precedent for a
+					// bank this generic loop does not cover.
+					if b.ID == spec.BankSatellite {
+						continue
+					}
 					wantFields(t, model+" "+profile+" bank "+string(b.ID), bankCoreFields(caps, b.ID), wantSet)
 				}
+			}
+		})
+	}
+}
+
+// TestBankCoreFields_RegisteredTS2000Trio_SatelliteBank is the
+// BankSatellite half TestBankCoreFields_EveryRegisteredModel_Membership's
+// own loop skips: this bank has NO frequency, mode or scan-skip position
+// (caps.go's satelliteBankFields — the manual routes frequency through
+// FA/FB instead), so its core set is FieldTag alone, on all three rows.
+func TestBankCoreFields_RegisteredTS2000Trio_SatelliteBank(t *testing.T) {
+	for _, model := range []string{"TS-2000", "TS-2000X", "TS-B2000"} {
+		t.Run(model, func(t *testing.T) {
+			for profile, caps := range registeredProfileCaps(t, model) {
+				wantFields(t, model+" "+profile+" bank SAT", bankCoreFields(caps, spec.BankSatellite), []spec.Field{spec.FieldTag})
 			}
 		})
 	}

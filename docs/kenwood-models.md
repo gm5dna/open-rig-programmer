@@ -46,6 +46,35 @@ REVERSE, tuning-step index, Memory Group) this milestone models no
 has ever answered a frame from this project, so every write stays behind
 the opt-in consent route.
 
+**The TS-2000 family's Satellite Memory bank (v1.10.0).** A fourth,
+separate ten-channel bank (`spec.BankSatellite`, slots `"0"`..`"9"`) over
+SA (status)/SI (name) — a wholly different record from the 50-byte MR/MW
+grid the family's other two banks share, and with NO frequency field of
+its own: the manual routes a satellite channel's frequency through FA
+(downlink)/FB (uplink) instead, so `FieldFrequency` is Unsupported on
+this bank. Of SA's seven flags (P1, P3-P7), only THREE are per-channel
+data and became `spec.Field`s — `sat_band_swap` (P3, the uplink/downlink
+band assignment), `sat_trace` (P5, TRACE) and `sat_trace_rev` (P6, TRACE
+REV), read/write-graded alongside the name (`FieldTag`, via SI). P1
+(satellite mode on/off), P4 (CTRL main/sub) and P7 (MULTI/CH control
+mode) are whole-radio LIVE STATE — the manual documents [CTRL] and the
+MULTI/CH VFO/memory split as generic, non-satellite-specific front-panel
+concepts elsewhere in the book — and carry no `spec.Field` at all.
+READ IS A NAMED, DOCUMENTED PROTOCOL LIMITATION: SA's Read carries no
+per-channel address ("SA;" alone), so it reports whichever channel is
+CURRENTLY SELECTED on the radio, and `ReadChannel` for any other slot
+refuses with the fleet's own answer-mismatch error rather than guessing.
+WRITE IS ASSUMED, MW's OWN PRECEDENT: no separate CAT-reachable "recall a
+channel" command exists, so an SA Set is read as directly writing the
+channel its own P2 addresses (the same "just write it" contract this
+project's memory-channel Sets already carry) — a pre-write "SA;" read
+threads the live P1/P4/P7 state back into the Set unchanged, so writing
+one channel's flags never invents a value for, or disturbs, the
+whole-radio state the record also carries. SI (the name) follows, as its
+own Set. Status: Unverified read AND write, consent-gated — the exact
+same mechanism and the same fail-safe posture as the family's memory
+bank, above.
+
 **The TS-570D/TS-570S/TS-570DG trio (v1.7.0 Kenwood/Yaesu wave).** NoTag —
 no channel-name field over this radio's interface at all — with tone mode
 and both transmit and receive tone numbers reachable, plus scan skip, on

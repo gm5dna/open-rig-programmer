@@ -157,6 +157,9 @@ func FieldStateChecks(caps spec.Capabilities, d codeplug.ChannelData) []FieldSta
 		{spec.FieldPreamp, judge(d.Preamp.State, d.Preamp.Value, func() error { return d.Preamp.Valid(caps.PreampOptions) })},
 		{spec.FieldAntenna, judge(d.Antenna.State, d.Antenna.Value, func() error { return d.Antenna.Valid(caps.AntennaOptions) })},
 		{spec.FieldIPPlus, judge(d.IPPlus.State, d.IPPlus.Value, d.IPPlus.Valid)},
+		{spec.FieldSatBandSwap, judge(d.SatBandSwap.State, d.SatBandSwap.Value, d.SatBandSwap.Valid)},
+		{spec.FieldSatTrace, judge(d.SatTrace.State, d.SatTrace.Value, d.SatTrace.Valid)},
+		{spec.FieldSatTraceRev, judge(d.SatTraceRev.State, d.SatTraceRev.Value, d.SatTraceRev.Valid)},
 	}
 }
 

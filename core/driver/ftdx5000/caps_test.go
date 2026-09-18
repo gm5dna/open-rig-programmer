@@ -30,6 +30,9 @@ var allFields = []spec.Field{
 // deliberatelyUnexpressedFields is the seventeen Icom-tier (D4/D8) fields
 // this radio's 27-byte record has no room for at all.
 var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldTxFrequency:       "design D4 — the FTdx5000 memory frame carries no independent transmit-frequency field (matrix §2)",
 	spec.FieldDuplex:            "design D4 — the FTdx5000 memory frame carries no Icom duplex field (matrix §2)",
 	spec.FieldOffset:            "design D4 — the FTdx5000 memory frame carries no per-channel repeater-offset field (matrix §2)",

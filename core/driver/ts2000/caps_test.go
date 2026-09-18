@@ -34,15 +34,18 @@ func TestCapabilities_ValidateOnEveryRowAndProfile(t *testing.T) {
 }
 
 // auditedFields is the hand-written list of the fields THIS ROW's record
-// expresses — nine, against the TS-480's five: this row's own P10/P12/P13
-// lift adds duplex/offset, and this document's own tone chart adds
-// tone_tx/tone_rx.
+// expresses — nine on the memory/scan banks (against the TS-480's five:
+// this row's own P10/P12/P13 lift adds duplex/offset, and this
+// document's own tone chart adds tone_tx/tone_rx), plus the three
+// v1.10.0 Satellite Memory bank fields (FieldTag is already in the nine;
+// SA's P3/P5/P6 are new).
 func auditedFields() []spec.Field {
 	return []spec.Field{
 		spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
 		spec.FieldScanSkip, spec.FieldToneMode,
 		spec.FieldDuplex, spec.FieldOffset,
 		spec.FieldToneTx, spec.FieldToneRx,
+		spec.FieldSatBandSwap, spec.FieldSatTrace, spec.FieldSatTraceRev,
 	}
 }
 
@@ -78,15 +81,22 @@ func TestFieldAudit_CoversEverySpecField(t *testing.T) {
 	drivertest.AssertFieldAuditCoversEverySpecField(t, "auditedFields()", auditedFields(), unexpressedFields())
 }
 
-// nonFieldReasons is the audit's OTHER half — the bytes and the roadmap
-// tail that have NO spec.Field to be covered by at all, so
-// AssertFieldAuditCoversEverySpecField cannot see them. The brief asks for
-// these named explicitly (byte 28/P11, byte 41/P15, and Satellite Memory).
+// nonFieldReasons is the audit's OTHER half — the bytes and the SA
+// positions that have NO spec.Field to be covered by at all, so
+// AssertFieldAuditCoversEverySpecField cannot see them. The brief asks
+// for these named explicitly (byte 28/P11, byte 41/P15). v1.10.0 adds
+// SA's three whole-radio-state positions (P1, P4, P7): the Satellite
+// Memory bank itself is NOW expressed (spec.BankSatellite, FieldTag and
+// the three per-channel flags — see auditedFields()), so the former
+// blanket "no row and no spec.Field" entry is retired; these three are
+// what remains genuinely UNMAPPED within that bank's own record.
 func nonFieldReasons() map[string]string {
 	return map[string]string{
-		"byte 28 (P11, REVERSE)":       "matrix §2: live on this row (kw.Byte28Reverse) and no spec.Field names repeater-reverse anywhere in this project — UNMAPPED-with-reason. Parsed by the codec (kw.Record.Byte28) and never published.",
-		"byte 41 (P15, Memory Group)":  "matrix §2: live on this row (kw.Byte41MemoryGroup) and no spec.Field names channel-group membership — UNMAPPED-with-reason, the TS-480 exemplar's own precedent for this exact gap. Parsed and never published.",
-		"Satellite Memory (SA/SI, MU)": "matrix §3, spec §6 open question 1 (Stuart, default accepted): a separate 10-channel record with no frequency field of its own, out of this wave on the IC-9100 D-STAR-block precedent. No row and no spec.Field.",
+		"byte 28 (P11, REVERSE)":        "matrix §2: live on this row (kw.Byte28Reverse) and no spec.Field names repeater-reverse anywhere in this project — UNMAPPED-with-reason. Parsed by the codec (kw.Record.Byte28) and never published.",
+		"byte 41 (P15, Memory Group)":   "matrix §2: live on this row (kw.Byte41MemoryGroup) and no spec.Field names channel-group membership — UNMAPPED-with-reason, the TS-480 exemplar's own precedent for this exact gap. Parsed and never published.",
+		"SA P1 (satellite mode on/off)": "v1.10.0: a single whole-radio toggle (ts2000:11310-11311, \"0: Satellite mode OFF / 1: Satellite mode ON\" — not \"channel N's satellite mode\"), not per-channel data; core/kw/ts2000/satellite.go's own doc comment. No spec.Field names it.",
+		"SA P4 (CTRL main/sub)":         "v1.10.0: the SAME generic, non-satellite-specific front-panel [CTRL] focus documented elsewhere in this book (ts2000:4688-4722, \"CONTROLLING THE SUB-RECEIVER\"), not a satellite channel attribute. No spec.Field names it.",
+		"SA P7 (MULTI/CH control mode)": "v1.10.0: the MULTI/CH knob's VFO-vs-memory-channel mode, a front-panel UI setting (ts2000:11322-11324) rather than a satellite channel attribute. No spec.Field names it.",
 	}
 }
 

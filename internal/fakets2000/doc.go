@@ -245,4 +245,19 @@
 //     three rows — entry 16's reasoning again, and the coordinator's own
 //     instruction: the manual gives no separate TY answer for TS-2000X or
 //     TS-B2000, so the TS-2000 one is answered for all three, ASSUMED.
+//
+//  18. SA SET WRITES ITS OWN CHANNEL DIRECTLY (v1.10.0, the Satellite
+//     Memory bank). The manual prints ONE SA Set form carrying P2 (the
+//     channel, 0-9) alongside P1 and P3-P7 in the same frame
+//     (ts2000:11296-11298), with no separate CAT-reachable "recall
+//     channel N" command and no CAT-reachable equivalent of the front
+//     panel's M.IN commit step (ts2000:5364-5379 describes M.IN, a
+//     physical button, not a command this book prints). This fake reads
+//     that the way it already reads MW — entry 1's own "a Set does not
+//     move the selection" is the ONE exception, since SA's own P2 DOES
+//     move it, being the channel address itself — an SA Set WRITES the
+//     addressed channel's P3/P5/P6 (and the whole-radio P1/P4/P7)
+//     DIRECTLY, with no recall step to model. ASSUMED, exactly like every
+//     other MR/MW/MC frame this fake answers: no TS-2000/2000X/B2000 has
+//     ever been asked anything (entry 1's own opening line).
 package fakets2000

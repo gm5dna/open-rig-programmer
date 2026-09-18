@@ -121,6 +121,9 @@ func yaesuShapeChannelData() codeplug.ChannelData {
 		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
 		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
 		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
+		SatBandSwap:         codeplug.BoolField{State: codeplug.Unavailable},
+		SatTrace:            codeplug.BoolField{State: codeplug.Unavailable},
+		SatTraceRev:         codeplug.BoolField{State: codeplug.Unavailable},
 	}
 }
 
@@ -162,6 +165,9 @@ func TestAssertFreshReadSaveLoad_RefusesAnAbsentField(t *testing.T) {
 		{"preamp", func(d *codeplug.ChannelData) { d.Preamp = codeplug.StringField{} }},
 		{"antenna", func(d *codeplug.ChannelData) { d.Antenna = codeplug.StringField{} }},
 		{"ip_plus", func(d *codeplug.ChannelData) { d.IPPlus = codeplug.BoolField{} }},
+		{"sat_band_swap", func(d *codeplug.ChannelData) { d.SatBandSwap = codeplug.BoolField{} }},
+		{"sat_trace", func(d *codeplug.ChannelData) { d.SatTrace = codeplug.BoolField{} }},
+		{"sat_trace_rev", func(d *codeplug.ChannelData) { d.SatTraceRev = codeplug.BoolField{} }},
 	} {
 		t.Run(tt.field, func(t *testing.T) {
 			d := yaesuShapeChannelData()

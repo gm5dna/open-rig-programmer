@@ -44,11 +44,15 @@ var tierColumns = []string{
 // looking columns up by name.
 var headerV2 = append(append([]string(nil), header...), tierColumns...)
 
-// receiverColumns are version 3's seven D8 columns, appended after the
-// version-2 prefix in ChannelData declaration order.
+// receiverColumns are version 3's columns, appended after the version-2
+// prefix in ChannelData declaration order: the seven D8 fields, then the
+// three TS-2000 satellite bank fields of v1.10.0, which share this
+// bucket by reuse (codeplug.TierField's Receiver doc comment) rather
+// than a fresh CSV version bump.
 var receiverColumns = []string{
 	"tuning_step_enabled", "tuning_step", "program_tuning_step",
 	"attenuator", "preamp", "antenna", "ip_plus",
+	"sat_band_swap", "sat_trace", "sat_trace_rev",
 }
 
 // headerV3 preserves the complete version-2 header as a prefix.

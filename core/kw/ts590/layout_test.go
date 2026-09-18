@@ -76,10 +76,15 @@ func TestLayouts_AreConfiguredAndNamedPerRow(t *testing.T) {
 // Book and Model included).
 func TestLayoutConfig_HasExactlyTenComparedAxes(t *testing.T) {
 	const bookAndModel = 2 // identity fields, never compared as an axis
-	// FOURTEEN, since the Kenwood/Yaesu wave's RecordLen lift: RecordLen,
-	// P10, P12 and P13 joined the original ten as new shared axes.
-	if got := reflect.TypeOf(kw.LayoutConfig{}).NumField() - bookAndModel; got != 14 {
-		t.Fatalf("kw.LayoutConfig has %d compared axes (NumField()-%d), want 14 — a field was added or removed; update TestLayouts_TheAxesTheTwoRowsShare and TestLayouts_TheThreeAxesTheRowsDifferOn in this file, core/kw/ts480/layout_test.go's TestLayout_EveryAxisByValue, and core/kw/layout_test.go's TestNewLayout_RefusesAnUnsetAxis for the new one", got, bookAndModel)
+	// FIFTEEN, since v1.10.0's Satellite axis joined the fourteen the
+	// Kenwood/Yaesu wave's RecordLen lift left this count at (RecordLen,
+	// P10, P12 and P13 joined the original ten as new shared axes).
+	// Satellite is false on both TS-590 rows — it has no unset sentinel
+	// (core/kw/layout_test.go's TestNewLayout_RefusesAnUnsetAxis does not
+	// need a new case for it), so it joins TestLayouts_TheAxesTheTwoRowsShare
+	// rather than the differ list.
+	if got := reflect.TypeOf(kw.LayoutConfig{}).NumField() - bookAndModel; got != 15 {
+		t.Fatalf("kw.LayoutConfig has %d compared axes (NumField()-%d), want 15 — a field was added or removed; update TestLayouts_TheAxesTheTwoRowsShare and TestLayouts_TheThreeAxesTheRowsDifferOn in this file and core/kw/ts480/layout_test.go's TestLayout_EveryAxisByValue for the new one", got, bookAndModel)
 	}
 }
 
@@ -112,6 +117,7 @@ func TestLayouts_TheAxesTheTwoRowsShare(t *testing.T) {
 		{"P10's policy", s.P10Policy(), sg.P10Policy(), kw.P10FixedZero},
 		{"P12's policy", s.P12Policy(), sg.P12Policy(), kw.P12FixedZero},
 		{"P13's policy", s.P13Policy(), sg.P13Policy(), kw.P13FixedZero},
+		{"the Satellite axis", s.Satellite(), sg.Satellite(), false},
 	} {
 		if tc.sv != tc.sgv {
 			t.Errorf("%s differs between the rows (S %v, SG %v), and this document prints one legend for both", tc.axis, tc.sv, tc.sgv)

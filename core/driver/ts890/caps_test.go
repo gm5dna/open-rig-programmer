@@ -284,8 +284,8 @@ func TestBanks_NoSlotInTheUpperClassesIsPublished(t *testing.T) {
 // the same fact.
 func TestBankFields_NameEveryOneOfTheTwentySeven(t *testing.T) {
 	all := spec.AllFields()
-	if len(all) != 27 {
-		t.Fatalf("spec.AllFields() has %d entries, want 27", len(all))
+	if len(all) != 30 {
+		t.Fatalf("spec.AllFields() has %d entries, want 30", len(all))
 	}
 	fields := CapabilitiesUnverified().Banks[0].Fields
 	for _, f := range all {
@@ -369,6 +369,9 @@ func auditedFields() []spec.Field {
 // grades the zero FieldSupport, with the matrix's own reason.
 func unexpressedFields() map[spec.Field]string {
 	return map[spec.Field]string{
+		spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+		spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+		spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 		spec.FieldClarifier:         "§1.7, M-E4/M-E5: no clarifier position over the complete 13-parameter account (890:3164-3209); the radio HAS RIT and XIT (890:4558, 890:5411)",
 		spec.FieldCTCSSState:        "§2.1: tone is a four-value mode selector, which is FieldToneMode",
 		spec.FieldCTCSSTone:         "§2.1: the record carries TWO independent indices (P6, P7) and FieldCTCSSTone is ONE field",

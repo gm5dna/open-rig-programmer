@@ -24,6 +24,9 @@ var allCapabilityFields = []spec.Field{
 // deliberatelyUnexpressedFields is every other spec.Field, each with the
 // bank-table reason bankFields' own comments cite (matrix §2).
 var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap:  "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:     "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev:  "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldClarifier:    "matrix §1.7/§1.8, §2: no clarifier field in the 22-byte record",
 	spec.FieldCTCSSState:   "matrix §1.16/§1.19, §2: this row expresses tone through FieldToneMode, the Icom-style field, not FieldCTCSSState",
 	spec.FieldCTCSSTone:    "matrix §1.9/§2: the single tone index is FieldToneTx, not FieldCTCSSTone",

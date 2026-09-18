@@ -139,5 +139,8 @@ func recordToChannelData(rec record) (*codeplug.ChannelData, error) {
 		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
 		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
 		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
+		SatBandSwap:         codeplug.BoolField{State: codeplug.Unavailable},
+		SatTrace:            codeplug.BoolField{State: codeplug.Unavailable},
+		SatTraceRev:         codeplug.BoolField{State: codeplug.Unavailable},
 	}, nil
 }

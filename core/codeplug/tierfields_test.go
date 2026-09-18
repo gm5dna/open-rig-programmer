@@ -10,8 +10,8 @@ import (
 )
 
 func TestTierFields_SeventeenRowsAllDistinct(t *testing.T) {
-	if len(TierFields) != 17 {
-		t.Fatalf("TierFields has %d rows; want 17 — the two Icom extensions added ten then seven", len(TierFields))
+	if len(TierFields) != 20 {
+		t.Fatalf("TierFields has %d rows; want 20 — the two Icom extensions added ten then seven, and v1.10.0 added the TS-2000 satellite bank's three", len(TierFields))
 	}
 	names := map[string]bool{}
 	fields := map[spec.Field]bool{}
@@ -32,8 +32,8 @@ func TestTierFields_SeventeenRowsAllDistinct(t *testing.T) {
 			receivers++
 		}
 	}
-	if receivers != 7 {
-		t.Errorf("%d rows marked Receiver; want 7 (the D8 group)", receivers)
+	if receivers != 10 {
+		t.Errorf("%d rows marked Receiver; want 10 (the D8 group's seven, plus v1.10.0's TS-2000 satellite bank three — Receiver's own doc comment)", receivers)
 	}
 }
 

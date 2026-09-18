@@ -175,6 +175,9 @@ func TestRequestedFields_EveryConditionalIsReachable(t *testing.T) {
 		Preamp:              codeplug.StringField{State: codeplug.Known, Value: "ON"},
 		Antenna:             codeplug.StringField{State: codeplug.Known, Value: "ANT1"},
 		IPPlus:              codeplug.BoolField{State: codeplug.Known, Value: true},
+		SatBandSwap:         codeplug.BoolField{State: codeplug.Known, Value: true},
+		SatTrace:            codeplug.BoolField{State: codeplug.Known, Value: true},
+		SatTraceRev:         codeplug.BoolField{State: codeplug.Known, Value: true},
 	}
 	got := map[spec.Field]bool{}
 	for _, f := range requestedFields(data) {
