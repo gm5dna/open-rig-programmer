@@ -135,6 +135,13 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
+	// BankSatellite's slots ("0".."9") are not the three-digit shape
+	// parseSlotID expects, so dispatch on bank membership BEFORE it —
+	// satellite.go's own doc comment has the read shape.
+	if bank, ok := s.bankFor(id); ok && bank.ID == spec.BankSatellite {
+		return s.readSatelliteChannel(ctx, id)
+	}
+
 	number, half, err := parseSlotID(id)
 	if err != nil {
 		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: s.p.name, Reason: err.Error()}
@@ -275,6 +282,9 @@ func (s *Session) channelData(rec kw.Record, bank spec.Bank) (*codeplug.ChannelD
 		Preamp:       codeplug.StringField{State: codeplug.Unavailable},
 		Antenna:      codeplug.StringField{State: codeplug.Unavailable},
 		IPPlus:       codeplug.BoolField{State: codeplug.Unavailable},
+		SatBandSwap:  codeplug.BoolField{State: codeplug.Unavailable},
+		SatTrace:     codeplug.BoolField{State: codeplug.Unavailable},
+		SatTraceRev:  codeplug.BoolField{State: codeplug.Unavailable},
 	}, nil
 }
 
