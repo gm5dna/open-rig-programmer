@@ -81,6 +81,9 @@ func TestLayout_EveryAxisByValue(t *testing.T) {
 	if got := l.P13Policy(); got != kw.P13FixedZero {
 		t.Errorf("P13's policy is %v, want %v — \"Always 000000000 for the TS-480.\" (480:977)", got, kw.P13FixedZero)
 	}
+	if got := l.Satellite(); got != false {
+		t.Errorf("the Satellite axis is %v, want false — this book prints no SA/SI, unlike core/kw/ts2000's own three rows", got)
+	}
 
 	if got := l.MaxEXAddress(); got != 60 {
 		t.Errorf("the printed EX menu domain stops at %d, want 60 — \"000 ~ 060: Menu No.\" (480:401), the narrowest of the three registry rows", got)

@@ -151,6 +151,12 @@ func newLayout(model string) kw.Layout {
 		// (matrix §2: "THREE need a NEW field-encoding type... TWO reuse
 		// an existing byte-enum TYPE with new enum values").
 		PrintedFixed: nil,
+
+		// This row's own SA/SI Satellite Memory commands (v1.10.0,
+		// satellite.go) — outside the shared 50-byte MR/MW record family
+		// this Layout otherwise describes, and gated on this axis alone
+		// so AllowedCommand admits them only here (allowlist.go).
+		Satellite: true,
 	})
 }
 
