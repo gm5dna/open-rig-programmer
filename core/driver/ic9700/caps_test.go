@@ -27,8 +27,8 @@ var receiverCapabilitiesDeliberatelyZero = map[string]string{
 }
 
 func TestDeliberatelyZeroAudit_ReceiverCapabilities(t *testing.T) {
-	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 30 {
-		t.Fatalf("spec.Capabilities has %d fields, this audit knows 30", got)
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, this audit knows 29", got)
 	}
 	for _, caps := range []spec.Capabilities{CapabilitiesUnverified(), CapabilitiesSimulated()} {
 		value := reflect.ValueOf(caps)
@@ -127,12 +127,15 @@ func TestBankSlotCounts(t *testing.T) {
 }
 
 func TestLegitimatelyEmptyVocabulariesAreAdmitted(t *testing.T) {
-	// E5b: an Icom bank carries no Yaesu shift/CTCSS-state vocabulary,
-	// and fail-closed is preserved through those fields' Unsupported
-	// write grades rather than through a non-empty list.
+	// E5b: an Icom bank carries no Yaesu shift vocabulary, and
+	// fail-closed is preserved through FieldShift's Unsupported write
+	// grade rather than through a non-empty list. ToneModes is NOT
+	// checked here: it is this radio's OWN (non-empty) tone vocabulary,
+	// serving FieldToneMode, now that the Yaesu FieldCTCSSState and
+	// Icom/Kenwood FieldToneMode identities share one vocabulary type.
 	caps := CapabilitiesUnverified()
-	if len(caps.ShiftOptions) != 0 || len(caps.CTCSSStates) != 0 {
-		t.Fatal("this model must declare neither vocabulary")
+	if len(caps.ShiftOptions) != 0 {
+		t.Fatal("this model must declare no shift vocabulary")
 	}
 	if err := caps.Validate(); err != nil {
 		t.Fatalf("Validate refused the empty-vocabulary shape: %v", err)

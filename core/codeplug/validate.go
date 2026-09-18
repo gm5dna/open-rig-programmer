@@ -38,32 +38,45 @@ type Issue struct {
 	Msg string
 }
 
-// findToneState returns the spec.ToneState in states whose Value equals
-// value, and true, or the zero spec.ToneState and false if none matches.
-func findToneState(states []spec.ToneState, value string) (spec.ToneState, bool) {
-	i := slices.IndexFunc(states, func(s spec.ToneState) bool { return s.Value == value })
+// findToneMode returns the spec.ToneMode in modes whose Value equals
+// value, and true, or the zero spec.ToneMode and false if none matches.
+// Used against caps.ToneModes for BOTH field identities: FieldCTCSSState
+// (Yaesu, matching d.CTCSS) and FieldToneMode (Icom/Kenwood).
+func findToneMode(modes []spec.ToneMode, value string) (spec.ToneMode, bool) {
+	i := slices.IndexFunc(modes, func(m spec.ToneMode) bool { return m.Value == value })
 	if i < 0 {
-		return spec.ToneState{}, false
+		return spec.ToneMode{}, false
 	}
-	return states[i], true
+	return modes[i], true
+}
+
+// capsExpressesCTCSSState reports whether ANY bank in caps reaches
+// spec.FieldCTCSSState — this radio's own answer to "is this the Yaesu
+// tone-state identity, or the Icom/Kenwood FieldToneMode one", now that
+// both draw their Semantics from the same caps.ToneModes list (see
+// spec.ToneMode's doc comment). Radio-wide, not per-bank: some Yaesu
+// banks (the FT-710's PMS and 60M) list FieldFrequency alone, but their
+// channels still carry a real ctcss value that must be validated.
+func capsExpressesCTCSSState(caps spec.Capabilities) bool {
+	for _, b := range caps.Banks {
+		if !caps.FieldSupport(b.ID, spec.FieldCTCSSState).Unreachable() {
+			return true
+		}
+	}
+	return false
 }
 
 // valuesOf returns the Value of every entry in items, in order, via the
 // caller's own accessor — for building a caps-driven vocabulary list for
 // an error message without re-deriving a []string by hand at the call
-// site. Shared by toneStateValues, shiftOptionValues, duplexOptionValues
-// and toneModeValues below, whose item types differ.
+// site. Shared by shiftOptionValues, duplexOptionValues and
+// toneModeValues below, whose item types differ.
 func valuesOf[T any](items []T, value func(T) string) []string {
 	out := make([]string, len(items))
 	for i, it := range items {
 		out[i] = value(it)
 	}
 	return out
-}
-
-// toneStateValues returns the Value of every entry in states, in order.
-func toneStateValues(states []spec.ToneState) []string {
-	return valuesOf(states, func(s spec.ToneState) string { return s.Value })
 }
 
 // shiftOptionValues returns the Value of every entry in opts, in order.
@@ -325,26 +338,23 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 	}
 
 	// The Yaesu CTCSS-state vocabulary check, CAPABILITY-KEYED since the
-	// Icom tier (design D4, adjudication 10): it runs when this radio
-	// EXPRESSES that vocabulary at all, and is skipped when caps supplies
-	// none. Empty CTCSSStates is not a gap to fill with a default; it is
-	// the positive statement that this radio has no such vocabulary
-	// (spec.Capabilities.Validate accepts it only when the radio supplies
-	// ToneModes instead), and an unconditional check would then report
-	// every channel's empty ctcss as an error and block every add.
+	// Icom tier (design D4, adjudication 10): it runs when this RADIO
+	// expresses FieldCTCSSState at all (any bank, not just this one — see
+	// capsExpressesCTCSSState), and is skipped for a radio that does not.
+	// An unconditional check would report every Icom channel's empty
+	// d.CTCSS as an error and block every add.
 	//
-	// The key is caps' VOCABULARY, deliberately, not the per-bank
-	// FieldCTCSSState support. Keying on the bank would have changed the
-	// verdict for banks that carry channels without listing the field —
-	// the FT-710's PMS and 60M banks list FieldFrequency alone — and
-	// silently stopped validating a field those channels really do carry.
-	// Keying on the vocabulary changes nothing for any radio that has one.
-	ctcssState, ctcssKnown := findToneState(caps.CTCSSStates, d.CTCSS)
-	checkCTCSS := len(caps.CTCSSStates) > 0
+	// The key is RADIO-WIDE, deliberately, not the per-bank FieldCTCSSState
+	// support: keying on the bank would have changed the verdict for banks
+	// that carry channels without listing the field — the FT-710's PMS and
+	// 60M banks list FieldFrequency alone — and silently stopped validating
+	// a field those channels really do carry.
+	ctcssMode, ctcssKnown := findToneMode(caps.ToneModes, d.CTCSS)
+	checkCTCSS := capsExpressesCTCSSState(caps)
 	if checkCTCSS && !ctcssKnown {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSState, Severity: SeverityError,
-			Msg: fmt.Sprintf("slot %q: ctcss %q must be one of %s", slot, d.CTCSS, quotedList(toneStateValues(caps.CTCSSStates))),
+			Msg: fmt.Sprintf("slot %q: ctcss %q must be one of %s", slot, d.CTCSS, quotedList(toneModeValues(caps.ToneModes))),
 		})
 	}
 
@@ -373,13 +383,13 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 		})
 	}
 
-	// A CTCSS state that requires a tone (RequiresTone() true for a state
+	// A CTCSS state that requires a tone (NeedsTxTone() true for a mode
 	// matched against caps; an unmatched state — already flagged as an
 	// Error above — is conservatively treated the same way, since it
 	// cannot make a positive claim about not needing one) but has no
 	// known CTCSSTone gets a Warning: CAT cannot set a per-channel tone,
 	// so the radio's own existing tone will apply as-is.
-	if checkCTCSS && (!ctcssKnown || ctcssState.RequiresTone()) && d.CTCSSTone.State != Known {
+	if checkCTCSS && (!ctcssKnown || ctcssMode.NeedsTxTone()) && d.CTCSSTone.State != Known {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSTone, Severity: SeverityWarning,
 			Msg: fmt.Sprintf("slot %q: tone cannot be set via CAT; the radio's current per-channel tone will apply", slot),

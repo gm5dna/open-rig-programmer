@@ -111,7 +111,7 @@ func ft710LikeCapabilities() spec.Capabilities {
 		TagLen:       12,
 		CTCSSTones:   tones[:],
 		ShiftOptions: spec.StandardShiftOptions(),
-		CTCSSStates:  spec.StandardCTCSSStates(),
+		ToneModes:    spec.StandardToneModes(),
 	}
 }
 
@@ -137,10 +137,10 @@ func deviantCapabilities() spec.Capabilities {
 			{Value: "SPLIT-PLUS", Direction: spec.ShiftUp},
 			{Value: "SPLIT-MINUS", Direction: spec.ShiftDown},
 		},
-		CTCSSStates: []spec.ToneState{
-			{Value: "DISABLED", Semantics: spec.ToneOff},
-			{Value: "TONE-TX", Semantics: spec.ToneEncode},
-			{Value: "TONE-BOTH", Semantics: spec.ToneEncodeDecode},
+		ToneModes: []spec.ToneMode{
+			{Value: "DISABLED", Semantics: spec.ToneModeOff},
+			{Value: "TONE-TX", Semantics: spec.ToneModeCTCSS},
+			{Value: "TONE-BOTH", Semantics: spec.ToneModeCTCSSSquelch},
 		},
 	}
 }
@@ -164,7 +164,7 @@ func noTagCapabilities() spec.Capabilities {
 		TagLen:       0,
 		CTCSSTones:   tones[:],
 		ShiftOptions: spec.StandardShiftOptions(),
-		CTCSSStates:  spec.StandardCTCSSStates(),
+		ToneModes:    spec.StandardToneModes(),
 	}
 }
 
@@ -262,9 +262,9 @@ func TestImportCHIRP_ToneNotInCapsChartBlocks(t *testing.T) {
 // otherwise unverified).
 func TestImportCHIRP_MissingOffStateBlocks(t *testing.T) {
 	caps := deviantCapabilities()
-	caps.CTCSSStates = []spec.ToneState{
-		{Value: "TONE-TX", Semantics: spec.ToneEncode},
-		{Value: "TONE-BOTH", Semantics: spec.ToneEncodeDecode},
+	caps.ToneModes = []spec.ToneMode{
+		{Value: "TONE-TX", Semantics: spec.ToneModeCTCSS},
+		{Value: "TONE-BOTH", Semantics: spec.ToneModeCTCSSSquelch},
 	}
 
 	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode\n1,145.500000,USB\n"), caps)
@@ -284,9 +284,9 @@ func TestImportCHIRP_MissingOffStateBlocks(t *testing.T) {
 // encode+decode CTCSS at all.
 func TestImportCHIRP_MissingEncodeDecodeStateBlocks(t *testing.T) {
 	caps := deviantCapabilities()
-	caps.CTCSSStates = []spec.ToneState{
-		{Value: "DISABLED", Semantics: spec.ToneOff},
-		{Value: "TONE-TX", Semantics: spec.ToneEncode},
+	caps.ToneModes = []spec.ToneMode{
+		{Value: "DISABLED", Semantics: spec.ToneModeOff},
+		{Value: "TONE-TX", Semantics: spec.ToneModeCTCSS},
 	}
 
 	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode,Tone,cToneFreq\n1,145.500000,USB,TSQL,88.5\n"), caps)
@@ -2637,7 +2637,7 @@ func TestImportCHIRP_FT891BlocksCWAndRTTYRows(t *testing.T) {
 // every sibling's can only say CTCSS. The DCS half is what
 // TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord's DCS branch is
 // about; the first three members are byte-identical to
-// spec.StandardCTCSSStates() because the radio's own legend is.
+// spec.StandardToneModes() because the radio's own legend is.
 //
 // FieldTagDisplay IS THE ZERO FieldSupport, the FTdx10's shape and the
 // inversion of the FT-891's: MT position 28 prints "0: (Fixed)" on this
@@ -2685,24 +2685,24 @@ func ft991aLikeCapabilities() spec.Capabilities {
 		"CW-R", "DATA-LSB", "RTTY-USB", "DATA-FM", "FM-N", "DATA-USB",
 		"AM-N", "C4FM",
 	}
-	caps.CTCSSStates = []spec.ToneState{
-		{Value: "OFF", Semantics: spec.ToneOff},
-		{Value: "ENC-DEC", Semantics: spec.ToneEncodeDecode},
-		{Value: "ENC", Semantics: spec.ToneEncode},
-		{Value: "DCS-ENC-DEC", Semantics: spec.ToneDCSEncodeDecode},
-		{Value: "DCS-ENC", Semantics: spec.ToneDCSEncode},
+	caps.ToneModes = []spec.ToneMode{
+		{Value: "OFF", Semantics: spec.ToneModeOff},
+		{Value: "ENC-DEC", Semantics: spec.ToneModeCTCSSSquelch},
+		{Value: "ENC", Semantics: spec.ToneModeCTCSS},
+		{Value: "DCS-ENC-DEC", Semantics: spec.ToneModeDCSEncodeDecode},
+		{Value: "DCS-ENC", Semantics: spec.ToneModeDCSEncode},
 	}
 	return caps
 }
 
 // declaresADCSState reports whether this radio's memory record can name a
-// DCS state at all — either of the two spec.ToneSemantics members S0.4
+// DCS state at all — either of the two spec.ToneModeSemantics members S0.4
 // added. It is the question the DTCS/Cross refusal's REASON turns on, and
 // it is asked of the capabilities rather than of the model name so that a
 // second such radio needs no edit here.
 func declaresADCSState(caps spec.Capabilities) bool {
-	_, encDec := toneStateFor(caps, spec.ToneDCSEncodeDecode)
-	_, enc := toneStateFor(caps, spec.ToneDCSEncode)
+	_, encDec := toneStateFor(caps, spec.ToneModeDCSEncodeDecode)
+	_, enc := toneStateFor(caps, spec.ToneModeDCSEncode)
 	return encDec || enc
 }
 
@@ -2877,9 +2877,10 @@ func ts590LikeCapabilities(model, catID string) spec.Capabilities {
 	// the row's own receive frequency.
 	caps.SimplexTx = spec.SimplexTxEqualsRx
 	caps.Transmit = spec.HasTransmitter
-	// Mirrored item 6. nil, as core/driver/ts590/caps.go's own is: this row
-	// publishes the Icom half of the vocabulary pair and no Yaesu half.
-	caps.CTCSSStates = nil
+	// Mirrored item 6, core/driver/ts590/caps.go's own ToneModes list: this
+	// row expresses tone through FieldToneMode, not the Yaesu
+	// FieldCTCSSState — the two field identities that now share one
+	// vocabulary type (spec.ToneMode's own doc comment).
 	caps.ToneModes = []spec.ToneMode{
 		{Value: "OFF", Semantics: spec.ToneModeOff},
 		{Value: "TONE", Semantics: spec.ToneModeCTCSS},
@@ -3028,14 +3029,6 @@ func maLikeCapabilities(model, catID string, modes []string) spec.Capabilities {
 	caps.Modes = modes
 	caps.ShiftOptions = nil
 	caps.Transmit = spec.HasTransmitter
-	// nil, as both drivers' own are (ts890/caps.go:552, ts990/caps.go:499),
-	// and NOT the FT-710's standard three: a row that publishes the Icom half
-	// of the vocabulary pair publishes no Yaesu half at all. It is load-bearing
-	// rather than tidy — codeplug.Validate measures a channel's ctcss_state
-	// against this list, and importCHIRPToneIcom never writes that field, so a
-	// fixture that kept the inherited three would report an error on every
-	// channel these two radios can import.
-	caps.CTCSSStates = nil
 	// Mirrored from both drivers' caps.go: SimplexTxZero. Each book prints
 	// that a simplex channel's split parameters all read 0
 	// (890:3217-3218, 990:2964-2965).

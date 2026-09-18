@@ -64,9 +64,10 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 // ShiftOptions unconditionally and would have refused this shape; E5b
 // makes the requirement conditional on a bank actually REACHING
 // FieldShift or FieldDuplex (core/spec/validate.go, anyBankReaches), and
-// the same change was made for the CTCSSStates/ToneModes pair. This model
-// satisfies the tone half by declaring ToneModes and the shift half by
-// reaching neither field.
+// the same change (now a single non-empty rule, not a pair) was made for
+// ToneModes — the vocabulary FieldCTCSSState (Yaesu) and FieldToneMode
+// (Icom/Kenwood) now share. This model satisfies the tone rule by
+// declaring ToneModes and the shift rule by reaching neither field.
 func TestBaseline_Validate(t *testing.T) {
 	for name, caps := range bothProfiles() {
 		t.Run(name, func(t *testing.T) {
@@ -204,9 +205,6 @@ func TestBaseline_Shape(t *testing.T) {
 	// express. Each is a positive statement, not an omission.
 	if len(caps.ShiftOptions) != 0 {
 		t.Error("ShiftOptions is non-empty - the 1A 00 record has no repeater shift field")
-	}
-	if len(caps.CTCSSStates) != 0 {
-		t.Error("CTCSSStates is non-empty - this radio expresses tone through ToneModes, the Icom vocabulary")
 	}
 	if len(caps.DuplexOptions) != 0 {
 		t.Error("DuplexOptions is non-empty - the 1A 00 record has no duplex field")
@@ -550,7 +548,7 @@ func TestSimulated_IsAClaimAboutTheFakeOnly(t *testing.T) {
 // inherit a zero without this driver deciding about it.
 func TestDeliberatelyZeroAudit(t *testing.T) {
 	// 28 since additions design D4.2 added the transmit declaration.
-	const wantFieldCount = 30
+	const wantFieldCount = 29
 
 	for name, caps := range bothProfiles() {
 		t.Run(name, func(t *testing.T) {

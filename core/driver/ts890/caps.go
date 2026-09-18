@@ -558,7 +558,6 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// what spec.Validate's own pair rules are conditional on
 		// (core/spec/validate.go:380, :415).
 		ShiftOptions: nil,
-		CTCSSStates:  nil,
 		// EMPTY (§1.18), AND THIS ROW PUBLISHES ONLY ONE HALF OF THE ICOM
 		// HALF, deliberately: ToneModes below is non-empty and this is not,
 		// because the MA0 grid carries no duplex selector and no offset

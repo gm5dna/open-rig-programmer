@@ -37,7 +37,7 @@ func validStubCaps(model string) spec.Capabilities {
 		DefaultBaud:  38400,
 		TagLen:       12,
 		ShiftOptions: spec.StandardShiftOptions(),
-		CTCSSStates:  spec.StandardCTCSSStates(),
+		ToneModes:    spec.StandardToneModes(),
 	}
 }
 

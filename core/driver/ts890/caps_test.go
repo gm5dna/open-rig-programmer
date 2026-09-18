@@ -405,7 +405,6 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"MaxFreqHz":              "§1.14, A15 — as MinFreqHz; a zero DISABLES the ceiling check",
 		"RequiredSlots":          "§1.15 — the book marks no channel mandatory",
 		"ShiftOptions":           "§1.16 — the Yaesu half of the vocabulary pair",
-		"CTCSSStates":            "§1.17 — as ShiftOptions",
 		"DuplexOptions":          "§1.18 — TOTAL absence; this row publishes only one half of the Icom half",
 		"DTCSPolarities":         "§1.20 — DCS appears nowhere in this book",
 		"DTCSCodes":              "§1.21 — as DTCSPolarities",
@@ -421,8 +420,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := CapabilitiesUnverified()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 30 {
-		t.Fatalf("spec.Capabilities has %d fields, want 30 — this test's list is stale", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name
@@ -435,8 +434,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 			t.Errorf("%s is populated but the deliberately-empty list says %q", name, reason)
 		}
 	}
-	if len(deliberatelyEmpty) != 19 {
-		t.Errorf("the deliberately-empty list has %d entries; §1 records eighteen empty cells on this row, plus NoTag", len(deliberatelyEmpty))
+	if len(deliberatelyEmpty) != 18 {
+		t.Errorf("the deliberately-empty list has %d entries; §1 records seventeen empty cells on this row, plus NoTag", len(deliberatelyEmpty))
 	}
 }
 

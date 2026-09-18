@@ -123,8 +123,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := New().Capabilities()
 	v := reflect.ValueOf(caps)
 	ty := v.Type()
-	if ty.NumField() != 30 {
-		t.Errorf("spec.Capabilities has %d fields, want 30", ty.NumField())
+	if ty.NumField() != 29 {
+		t.Errorf("spec.Capabilities has %d fields, want 29", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name

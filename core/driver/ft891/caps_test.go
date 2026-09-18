@@ -104,15 +104,17 @@ func TestProfiles_Validate(t *testing.T) {
 }
 
 // tierFieldsMustBeEmpty names the spec.Capabilities fields for which this
-// radio's explicit decision is EMPTY — matrix §1.10 and §1.18-1.28, twelve
-// of them, each with its own reason recorded there. See
+// radio's explicit decision is EMPTY — matrix §1.10 and §1.20-1.28,
+// thirteen of them, each with its own reason recorded there.
+// spec.Capabilities.ToneModes is NOT in this list: it now carries P8's
+// three-value CTCSS state itself (StandardToneModes(), matrix §1.19),
+// since the Yaesu and Icom/Kenwood tone vocabularies unified onto one
+// enum — CTCSSStates, the field that used to carry it, is deleted. See
 // TestCapabilities_EveryFieldExplicit.
 var tierFieldsMustBeEmpty = map[string]bool{
 	// §1.18: the record expresses repeater shift as P10's three-value
 	// Simplex/Plus/Minus, which is spec.FieldShift, not FieldDuplex.
 	"DuplexOptions": true,
-	// §1.19: the record's tone vocabulary is P8's three-value CTCSS state.
-	"ToneModes": true,
 	// §1.20/§1.21: this radio HAS DCS (Table 2, CN's P2=1, CT's "3: DCS")
 	// but the 41-position MT record has no per-channel DCS field at all.
 	"DTCSPolarities": true,
@@ -163,7 +165,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // zero MaxFreqHz reads as "no ceiling" to every validator, a zero TagLen
 // makes core/csvio's CHIRP import truncate every imported name to "", a
 // non-positive entry in Bauds reaches SerialConfig.Baud, and an empty
-// ShiftOptions or CTCSSStates fails spec.Validate outright. Four of the
+// ShiftOptions or ToneModes fails spec.Validate outright. Four of the
 // values populated here are ASSUMED rather than manual-evidenced
 // (DefaultBaud, the two frequency bounds, RequiredSlots) and doc.go's
 // register carries each one's provenance — the honest response to an
@@ -171,8 +173,9 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // that reads as a decision nobody took.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// 29 since additions design D4.2 added the transmit declaration
-	// (matrix §1, §5); now 30 with NoTag.
-	const wantFieldCount = 30
+	// (matrix §1, §5); 30 with NoTag; 29 again once the tone vocabularies
+	// unified (CTCSSStates deleted, ToneModes now shared).
+	const wantFieldCount = 29
 
 	for _, tt := range []struct {
 		name string
@@ -327,8 +330,8 @@ func TestBaseline_Shape(t *testing.T) {
 			if !reflect.DeepEqual(caps.ShiftOptions, spec.StandardShiftOptions()) {
 				t.Errorf("ShiftOptions = %+v, want the standard three (matrix §1.16: P10's \"0: Simplex 1: Plus Shift 2: Minus Shift\")", caps.ShiftOptions)
 			}
-			if !reflect.DeepEqual(caps.CTCSSStates, spec.StandardCTCSSStates()) {
-				t.Errorf("CTCSSStates = %+v, want the standard three (matrix §1.17: P8's three values, and CT's fourth is LIVE STATE, not a memory field)", caps.CTCSSStates)
+			if !reflect.DeepEqual(caps.ToneModes, spec.StandardToneModes()) {
+				t.Errorf("ToneModes = %+v, want the standard three (matrix §1.17: P8's three values, and CT's fourth is LIVE STATE, not a memory field)", caps.ToneModes)
 			}
 		})
 	}
@@ -381,8 +384,8 @@ func TestCTCSSTones_NonEmptyForTheDenseBankRule(t *testing.T) {
 	if len(caps.CTCSSTones) == 0 {
 		t.Error("CTCSSTones is empty — the dense-bank class in app/uispec_test.go relies on this radio offering a tone list")
 	}
-	if len(caps.CTCSSStates) == 0 {
-		t.Error("CTCSSStates is empty — spec.Validate refuses that outright, and the dense-bank class relies on it too")
+	if len(caps.ToneModes) == 0 {
+		t.Error("ToneModes is empty — spec.Validate refuses that outright, and the dense-bank class relies on it too")
 	}
 }
 

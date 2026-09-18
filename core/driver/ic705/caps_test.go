@@ -220,8 +220,6 @@ var deliberatelyZero = []struct {
 		"E3: this radio's tone field is a number, so the domain is CTCSSToneRange and the list is empty by declaration"},
 	{"len(ShiftOptions)", func(c spec.Capabilities) int { return len(c.ShiftOptions) },
 		"the Yaesu shift vocabulary; this radio expresses duplex instead, and E5b admits the empty half because no bank reaches FieldShift"},
-	{"len(CTCSSStates)", func(c spec.Capabilities) int { return len(c.CTCSSStates) },
-		"as ShiftOptions: this radio expresses tone_mode instead"},
 	{"len(RequiredSlots)", func(c spec.Capabilities) int { return len(c.RequiredSlots) },
 		"no individual slot on this radio is documented as never-empty; the CALL BANK's NoBlank carries what is claimed, and claims nothing per-slot"},
 	{"len(TuningSteps)", func(c spec.Capabilities) int { return len(c.TuningSteps) },
@@ -242,10 +240,10 @@ var deliberatelyZero = []struct {
 }
 
 func TestDeliberateZerosAreAudited(t *testing.T) {
-	// The audit covers all 30 top-level capabilities plus the two sparse
+	// The audit covers all 29 top-level capabilities plus the two sparse
 	// numbering bases pinned by TestMemBankIsSparseWithTheRecordedSpace.
-	if got := reflect.TypeOf(spec.Capabilities{}).NumField() + 2; got != 32 {
-		t.Fatalf("capability/base audit has %d fields, this audit knows 32", got)
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField() + 2; got != 31 {
+		t.Fatalf("capability/base audit has %d fields, this audit knows 31", got)
 	}
 	for name, caps := range bothProfiles() {
 		for _, z := range deliberatelyZero {

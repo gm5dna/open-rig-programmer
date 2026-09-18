@@ -1532,7 +1532,7 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 			DefaultBaud:  fixtureBaud,
 			TagLen:       12,
 			ShiftOptions: spec.StandardShiftOptions(),
-			CTCSSStates:  spec.StandardCTCSSStates(),
+			ToneModes:    spec.StandardToneModes(),
 		}}
 	}
 	t.Cleanup(func() { delete(realDrivers, fixtureModel) })
@@ -3000,7 +3000,7 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// (core/driver/ft991a/caps.go) is FALSE, so its RealHardware
 		// profile is CapabilitiesUnverified — every candidate field's
 		// Write Unverified on both of its static banks, which is what
-		// this predicate must find. Its five-state CTCSSStates and its
+		// this predicate must find. Its five-state ToneModes and its
 		// numeric PMS slots change nothing here: what decides the answer
 		// is the write-trial guard alone.
 		FT991AModel: true,
@@ -3262,7 +3262,7 @@ func registerFramingFixture(t *testing.T, model string, stopBits int) {
 				DefaultBaud:  transport.DefaultBaud,
 				TagLen:       12,
 				ShiftOptions: spec.StandardShiftOptions(),
-				CTCSSStates:  spec.StandardCTCSSStates(),
+				ToneModes:    spec.StandardToneModes(),
 			}},
 			stopBits: stopBits,
 		}
@@ -3474,7 +3474,7 @@ func mustRealDriver(t *testing.T, model string) driver.Driver {
 // implements no driver.SerialFramingReporter either — its framing is an
 // ASSUMED entry in core/cat/ft991a's own register, FRAMING: 8 DATA BITS,
 // NO PARITY, TWO STOP BITS — and its CTCSSToneRange is nil beside a
-// populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member CTCSSStates is
+// populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member ToneModes is
 // not a membership question: this list is about the maker, and the
 // vocabulary's width belongs to the tests that read it.
 // FT890Model, FT900Model and FT1000MPModel: 8-N-2 is MANUAL-EVIDENCED for
@@ -3797,13 +3797,18 @@ func TestEveryYaesuModelDeclaresAToneListAndNoRange(t *testing.T) {
 //
 // E5a replaced the "at most one option per direction" rule on the Icom
 // vocabularies with the canonical-entry rule. No Yaesu model declares
-// either vocabulary, so that change must be invisible here, which the
-// empty-slice assertions say.
+// DuplexOptions, so that change must be invisible here for THAT vocabulary,
+// which the empty-slice assertion below says. ToneModes is NOT asserted
+// empty: since the Yaesu and Icom/Kenwood tone vocabularies unified onto
+// one spec.ToneMode type, every Yaesu model that reaches FieldCTCSSState
+// populates it — but every one of their vocabularies (the family three, or
+// the FT-991A's own five) declares a unique Semantics per entry, so E5a's
+// canonical rule stays untriggered for them just the same.
 //
 // SCOPED TO yaesuModels, not SupportedModels(), since Wave 4's IC-7610
-// registration: that model DOES declare ToneModes (matrix §1 row 8), which
-// is exactly the Icom vocabulary E5a's canonical-entry rule exists for and
-// that this test asserts is empty for every Yaesu radio.
+// registration: that model DOES declare ToneModes with a genuinely
+// duplicated semantic (matrix §1 row 8), which is exactly the shape E5a's
+// canonical-entry rule exists for and that this test does not cover.
 func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
 	models := yaesuModels
 	for _, model := range models {
@@ -3834,9 +3839,15 @@ func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
 			if len(caps.DuplexOptions) != 0 {
 				t.Errorf("DuplexOptions = %v, want empty for a Yaesu model", caps.DuplexOptions)
 			}
-			if len(caps.ToneModes) != 0 {
-				t.Errorf("ToneModes = %v, want empty for a Yaesu model", caps.ToneModes)
-			}
+			// ToneModes is NOT asserted empty here: it is now the SHARED
+			// vocabulary FieldCTCSSState (Yaesu) and FieldToneMode
+			// (Icom/Kenwood) both draw Semantics from, so every Yaesu
+			// model that reaches FieldCTCSSState populates it (the
+			// family three, or the FT-991A's own five) — see
+			// spec.ToneMode's own doc comment. Before the two
+			// vocabularies unified, CTCSSStates carried the Yaesu half
+			// and ToneModes stayed empty on every Yaesu model, which is
+			// what this assertion used to pin.
 
 			// And the E5b condition really does bite: strip the
 			// vocabulary this model DOES declare and Validate must still

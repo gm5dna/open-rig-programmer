@@ -286,7 +286,7 @@ func TestSession_CapabilitiesIsADefensiveCopy(t *testing.T) {
 	first.Banks[0].Slots[0] = "TAMPERED"
 	first.Bauds[0] = 1
 	first.RequiredSlots[0] = "999"
-	first.CTCSSStates[0] = spec.ToneState{}
+	first.ToneModes[0] = spec.ToneMode{}
 
 	second := sess.Capabilities()
 	if fs := second.FieldSupport(spec.BankMemory, spec.FieldErase); fs.CanWrite() {
@@ -298,8 +298,8 @@ func TestSession_CapabilitiesIsADefensiveCopy(t *testing.T) {
 	if second.Bauds[0] != 4800 || second.RequiredSlots[0] != "001" {
 		t.Errorf("Bauds/RequiredSlots = %v/%v after tampering, want [4800 ...]/[001]", second.Bauds, second.RequiredSlots)
 	}
-	if second.CTCSSStates[0].Value != "OFF" {
-		t.Errorf("CTCSSStates[0] = %+v after tampering, want the OFF state — this radio's five-member vocabulary must be copied like every other slice", second.CTCSSStates[0])
+	if second.ToneModes[0].Value != "OFF" {
+		t.Errorf("ToneModes[0] = %+v after tampering, want the OFF state — this radio's five-member vocabulary must be copied like every other slice", second.ToneModes[0])
 	}
 }
 

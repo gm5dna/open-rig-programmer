@@ -29,7 +29,7 @@ var readChannelGapHook func()
 
 // ctcssNames maps the wire CTCSS state to codeplug's display spelling
 // ("OFF", "ENC-DEC", "ENC" — the strings codeplug.Validate checks for, and
-// the ones this driver's own Capabilities.CTCSSStates advertises).
+// the ones this driver's own Capabilities.ToneModes advertises).
 // Deliberately NOT cat.CTCSSState.String(), whose spellings ("off",
 // "ENC/DEC") are log labels rather than model values.
 //

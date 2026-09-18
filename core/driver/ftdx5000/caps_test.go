@@ -76,10 +76,12 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 // registered sibling — TagLen itself: this radio is NoTag, so TagLen must
 // stay exactly 0 (core/spec/validate.go's NoTag pairing rule).
 // RequiredSlots is also here: the matrix's own §4 leaves it deliberately
-// unresolved (doc.go's ASSUMED register entry 4).
+// unresolved (doc.go's ASSUMED register entry 4). ToneModes is NOT here:
+// it carries this radio's own three-value CTCSS state
+// (StandardToneModes()) now that the Yaesu and Icom/Kenwood tone
+// vocabularies unified onto one enum.
 var tierFieldsMustBeEmpty = map[string]bool{
 	"DuplexOptions":          true,
-	"ToneModes":              true,
 	"DTCSPolarities":         true,
 	"DTCSCodes":              true,
 	"Filters":                true,
@@ -100,7 +102,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // profile, with nothing left at its zero value UNLESS this radio's own
 // explicit decision is that it stays empty (tierFieldsMustBeEmpty).
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	const wantFieldCount = 30
+	const wantFieldCount = 29
 
 	for _, tt := range []struct {
 		name string

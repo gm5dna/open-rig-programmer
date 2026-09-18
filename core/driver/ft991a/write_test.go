@@ -1142,14 +1142,14 @@ func TestNameMaps_AreExactInverses(t *testing.T) {
 	// above can pass over an empty pair. FIVE and three on this radio, and
 	// the five is what makes the CTCSS half non-trivial.
 	caps := CapabilitiesSimulated()
-	if len(caps.CTCSSStates) != len(ctcssByName) || len(caps.ShiftOptions) != len(shiftByName) {
+	if len(caps.ToneModes) != len(ctcssByName) || len(caps.ShiftOptions) != len(shiftByName) {
 		t.Fatalf("advertised vocabularies (%d CTCSS states, %d shifts) do not match the write maps (%d, %d)",
-			len(caps.CTCSSStates), len(caps.ShiftOptions), len(ctcssByName), len(shiftByName))
+			len(caps.ToneModes), len(caps.ShiftOptions), len(ctcssByName), len(shiftByName))
 	}
 	if len(ctcssByName) != 5 {
 		t.Errorf("ctcssByName has %d entries, want the FIVE this radio's P8 legend prints", len(ctcssByName))
 	}
-	for _, st := range caps.CTCSSStates {
+	for _, st := range caps.ToneModes {
 		if _, ok := ctcssByName[st.Value]; !ok {
 			t.Errorf("Capabilities advertises CTCSS state %q, which the write path cannot resolve", st.Value)
 		}

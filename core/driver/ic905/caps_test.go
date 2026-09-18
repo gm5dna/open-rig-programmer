@@ -56,7 +56,6 @@ var tierFieldsMustBeEmpty = map[string]string{
 	"CTCSSTones":             "matrix section 1 row 8 — the tone is a BCD frequency, not an index into a chart; the numeric CTCSSToneRange carries it instead",
 	"RequiredSlots":          "matrix section 1 row 13 — this radio's non-clearable set is a whole bank (Bank.NoBlank on CALL), not an individual-slot list",
 	"ShiftOptions":           "matrix section 1 row 14 — superseded by DuplexOptions; the two vocabularies never coexist on one model (D4)",
-	"CTCSSStates":            "matrix section 1 row 15 — superseded by ToneModes, whose vocabulary has eight values, not three",
 	"TuningSteps":            "additions design D8 — this record predates the receiver extension and carries no tuning-step field",
 	"ProgramTuningStepRange": "additions design D8 — this record carries no programmable tuning-step field",
 	"AttenuatorDB":           "additions design D8 — this record carries no attenuator field",
@@ -77,9 +76,11 @@ var tierFieldsMustBeEmpty = map[string]string{
 // than waived: they must be EMPTY, and the test fails if one is ever filled
 // in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// Twenty-nine top-level fields plus GroupBase and ChannelBase, which
-	// TestBanks_ShapeAndSparseDescriptors audits on the nested sparse bank.
-	const wantFieldCount = 32
+	// Twenty-nine top-level fields (folded to twenty-eight since the
+	// tone vocabularies unified — CTCSSStates deleted) plus GroupBase and
+	// ChannelBase, which TestBanks_ShapeAndSparseDescriptors audits on the
+	// nested sparse bank.
+	const wantFieldCount = 31
 
 	for _, tt := range []struct {
 		name string

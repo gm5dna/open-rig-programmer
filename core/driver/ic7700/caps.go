@@ -82,7 +82,6 @@ var deliberatelyZero = map[string]string{
 	"CTCSSTones":             "this radio's tone spans are BCD FREQUENCIES, not indices into a chart. CTCSSToneRange is the declaration (matrix §1 row 11)",
 	"RequiredSlots":          "no channel is documented as one that must stay populated (matrix §1 row 17); the scan edges' non-clearable rule is a WHOLE-BANK fact this driver does not carry as Bank.NoBlank either — see the SCAN bank's own NoBlank comment",
 	"ShiftOptions":           "the Yaesu repeater-shift vocabulary. This radio's own vocabulary is the Split ON/OFF boolean plus an independent TX block, not a shift direction (matrix §1 row 18)",
-	"CTCSSStates":            "the Yaesu tone-state vocabulary. This radio expresses tone through ToneModes, the Icom one (matrix §1 row 19)",
 	"DuplexOptions":          "the record has no fixed-offset repeater-duplex field: what it has instead is Split ON/OFF plus tx_frequency (matrix §1 row 20)",
 	"TuningSteps":            "additions design D8 — a transceiver record, no receiver tuning-step field (matrix §1 row 25)",
 	"ProgramTuningStepRange": "additions design D8 — no programmable tuning-step field (matrix §1 row 26)",

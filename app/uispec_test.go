@@ -5124,9 +5124,9 @@ func TestGetUISpec_RegisteredFT891_TagDisplayDefaults(t *testing.T) {
 // registered fake.
 //
 // WHAT WOULD FAIL HERE AND NOWHERE ELSE. app/uispec.go builds the picker as
-// `ctcssStateOptions := ctcssStateValues(caps.CTCSSStates)` — through the
+// `ctcssStateOptions := ctcssStateValues(caps.ToneModes)` — through the
 // helper, from the radio's OWN list. A driver or a UI seam that reached for
-// spec.StandardCTCSSStates() instead would still pass every length-agnostic
+// spec.StandardToneModes() instead would still pass every length-agnostic
 // check in this package, and would silently offer this radio's owner three
 // options where its P8 legend prints five (matrix §1.17, §3.7). The ORDER is
 // asserted too, because the picker's order is the legend's order and a set
@@ -5182,9 +5182,9 @@ func TestGetUISpec_RegisteredFT991A_FiveStateVocabularyReachesTheGrid(t *testing
 // makes a piece of REASONING into a checked fact.
 //
 // core/csvio/chirp.go's toneStateFor resolves a CTCSS state BY SEMANTICS —
-// it walks caps.CTCSSStates for the member whose Semantics field matches —
-// and importCHIRPToneCTCSS asks it for exactly three of them: spec.ToneOff
-// for a blank Tone column, spec.ToneEncode for "Tone", spec.ToneEncodeDecode
+// it walks caps.ToneModes for the member whose Semantics field matches —
+// and importCHIRPToneCTCSS asks it for exactly three of them: spec.ToneModeOff
+// for a blank Tone column, spec.ToneModeCTCSS for "Tone", spec.ToneModeCTCSSSquelch
 // for "TSQL". It never asks for either DCS semantics, and "DTCS"/"Cross"
 // rows are refused outright. Therefore a CHIRP import can neither PRODUCE a
 // DCS state nor, since MergeCHIRP replaces only the slots the file names,
@@ -5214,8 +5214,8 @@ func TestImportCHIRP_RegisteredFT991A_BlankToneNeitherClobbersNorInventsADCSStat
 	// The premise: this radio really does declare both DCS states, so the
 	// assertions below are not vacuous.
 	var dcsStates int
-	for _, st := range caps.CTCSSStates {
-		if st.Semantics == spec.ToneDCSEncodeDecode || st.Semantics == spec.ToneDCSEncode {
+	for _, st := range caps.ToneModes {
+		if st.Semantics == spec.ToneModeDCSEncodeDecode || st.Semantics == spec.ToneModeDCSEncode {
 			dcsStates++
 		}
 	}
@@ -5255,7 +5255,7 @@ func TestImportCHIRP_RegisteredFT991A_BlankToneNeitherClobbersNorInventsADCSStat
 		t.Errorf("slot 002 ctcss = %q after a CHIRP import that never named it, want %q — a merge must not disturb a slot the file leaves alone, and on this radio that slot can hold a state the importer cannot even express", got, "DCS-ENC-DEC")
 	}
 	if got := working.Channels[0].Data.CTCSS; got != "OFF" {
-		t.Errorf("slot 001 ctcss = %q after a CHIRP row with a BLANK Tone column, want \"OFF\" — toneStateFor resolves spec.ToneOff BY SEMANTICS, so a five-state vocabulary must still yield the off state and never a DCS one", got)
+		t.Errorf("slot 001 ctcss = %q after a CHIRP row with a BLANK Tone column, want \"OFF\" — toneStateFor resolves spec.ToneModeOff BY SEMANTICS, so a five-state vocabulary must still yield the off state and never a DCS one", got)
 	}
 }
 
@@ -5280,9 +5280,9 @@ func TestFT991A_NativeCSVAndCodeplugRoundTripADCSState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wiring.StaticCapabilities(\"FT-991A\"): unexpected error: %v", err)
 	}
-	stateFor := func(sem spec.ToneSemantics) string {
+	stateFor := func(sem spec.ToneModeSemantics) string {
 		t.Helper()
-		for _, st := range caps.CTCSSStates {
+		for _, st := range caps.ToneModes {
 			if st.Semantics == sem {
 				return st.Value
 			}
@@ -5290,12 +5290,12 @@ func TestFT991A_NativeCSVAndCodeplugRoundTripADCSState(t *testing.T) {
 		t.Fatalf("the registered FT-991A declares no state with semantics %v — this test reads its vocabulary from the radio rather than restating it", sem)
 		return ""
 	}
-	dcsEncDec, dcsEnc := stateFor(spec.ToneDCSEncodeDecode), stateFor(spec.ToneDCSEncode)
+	dcsEncDec, dcsEnc := stateFor(spec.ToneModeDCSEncodeDecode), stateFor(spec.ToneModeDCSEncode)
 
 	channels := []codeplug.Channel{
 		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 145500000, Mode: "FM", CTCSS: dcsEncDec, Shift: "SIMPLEX"}},
 		{Slot: "100", Data: &codeplug.ChannelData{FreqHz: 145600000, Mode: "FM", CTCSS: dcsEnc, Shift: "SIMPLEX"}},
-		{Slot: "117", Data: &codeplug.ChannelData{FreqHz: 145700000, Mode: "FM", CTCSS: stateFor(spec.ToneEncodeDecode), Shift: "SIMPLEX"}},
+		{Slot: "117", Data: &codeplug.ChannelData{FreqHz: 145700000, Mode: "FM", CTCSS: stateFor(spec.ToneModeCTCSSSquelch), Shift: "SIMPLEX"}},
 	}
 
 	// 1. Native CSV.

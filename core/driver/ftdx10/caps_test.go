@@ -106,10 +106,12 @@ func TestProfiles_Validate(t *testing.T) {
 
 // tierFieldsMustBeEmpty names the spec.Capabilities fields the Icom tier
 // added, for which this radio's explicit decision is EMPTY — see
-// TestCapabilities_EveryFieldExplicit's doc comment.
+// TestCapabilities_EveryFieldExplicit's doc comment. ToneModes is NOT
+// here: it carries this radio's own three-value CTCSS state
+// (StandardToneModes()) now that the Yaesu and Icom/Kenwood tone
+// vocabularies unified onto one enum.
 var tierFieldsMustBeEmpty = map[string]bool{
 	"DuplexOptions":          true,
-	"ToneModes":              true,
 	"DTCSPolarities":         true,
 	"DTCSCodes":              true,
 	"Filters":                true,
@@ -148,7 +150,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // ceiling" to every validator, a zero TagLen makes core/csvio's CHIRP
 // import truncate every channel name to "", an empty Bauds makes
 // core/transport substitute a guessed baud, and an empty ShiftOptions or
-// CTCSSStates fails Validate outright. Three of the values populated here
+// ToneModes fails Validate outright. Three of the values populated here
 // are ASSUMED rather than manual-evidenced (DefaultBaud, the frequency
 // bounds, RequiredSlots) and doc.go's register carries each one's
 // provenance — the honest response to an unverified value is to populate it
@@ -170,7 +172,7 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // waived, and the test still fails if one is ever filled in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// 29 since additions design D4.2 added the transmit declaration; now 30 with NoTag.
-	const wantFieldCount = 30
+	const wantFieldCount = 29
 
 	for _, tt := range []struct {
 		name string
@@ -459,8 +461,8 @@ func TestBaseline_Shape(t *testing.T) {
 			if !reflect.DeepEqual(caps.ShiftOptions, spec.StandardShiftOptions()) {
 				t.Errorf("ShiftOptions = %+v, want the standard three", caps.ShiftOptions)
 			}
-			if !reflect.DeepEqual(caps.CTCSSStates, spec.StandardCTCSSStates()) {
-				t.Errorf("CTCSSStates = %+v, want the standard three", caps.CTCSSStates)
+			if !reflect.DeepEqual(caps.ToneModes, spec.StandardToneModes()) {
+				t.Errorf("ToneModes = %+v, want the standard three", caps.ToneModes)
 			}
 		})
 	}

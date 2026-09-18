@@ -345,7 +345,7 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// (M9a-2) moved out of core/codeplug's validation switches into
 		// this capability data.
 		ShiftOptions: spec.StandardShiftOptions(),
-		CTCSSStates:  spec.StandardCTCSSStates(),
+		ToneModes:    spec.StandardToneModes(),
 	}
 }
 

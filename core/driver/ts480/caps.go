@@ -431,7 +431,6 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// FieldShift or FieldCTCSSState above Unsupported, which is what
 		// spec.Validate's own pair rules are conditional on.
 		ShiftOptions: nil,
-		CTCSSStates:  nil,
 		// EMPTY (§1.18), the deliberately INCOMPLETE Icom pair: the record
 		// carries no duplex selector and no offset magnitude, and split is
 		// expressed only as two frames — which on this row is a field

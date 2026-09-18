@@ -88,9 +88,10 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 
 		// The Yaesu-family four: this radio expresses duplex and
 		// tone_mode instead, and matrix §2 grades all four Unsupported on
-		// both banks. E5b is what lets ShiftOptions and CTCSSStates stay
-		// empty in consequence — a bank that reaches neither field has no
-		// vocabulary to name.
+		// both banks. E5b is what lets ShiftOptions stay empty in
+		// consequence — a bank that reaches FieldShift has no vocabulary
+		// to name (ToneModes is populated below: FieldToneMode IS this
+		// radio's own tone vocabulary).
 		spec.FieldClarifier:  none,
 		spec.FieldCTCSSState: none,
 		spec.FieldCTCSSTone:  none,
@@ -209,7 +210,6 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// because no bank of this radio reaches FieldShift or
 		// FieldCTCSSState; before E5b, spec.Validate refused it.
 		ShiftOptions: nil,
-		CTCSSStates:  nil,
 
 		// Three duplex directions, one wire code each, so E5's canonical
 		// marking is trivially satisfied — asserted by

@@ -19,8 +19,9 @@ import (
 //
 // The CHIRP direction is deliberately not touched. csvio's CHIRP surface is
 // import-only and resolves states BY SEMANTICS, asking only for
-// ToneOff/ToneEncode/ToneEncodeDecode, so a DCS state can never be SELECTED
-// by an import — which is the property TestImportCHIRP_* already hold.
+// ToneModeOff/ToneModeCTCSS/ToneModeCTCSSSquelch, so a DCS state can never
+// be SELECTED by an import — which is the property TestImportCHIRP_*
+// already hold.
 func TestNativeCSV_RoundTripsADCSState(t *testing.T) {
 	channels := []codeplug.Channel{
 		{Slot: "001", Data: &codeplug.ChannelData{
