@@ -41,9 +41,11 @@ tag. The full release notes for each version are on the
   (`SA`/`SI`, 10 channels): a name plus three per-channel flags —
   band swap, trace and trace-reverse. The record carries no
   frequency; satellite operation reads that live off `FA`/`FB`
-  instead, and a read returns only the currently selected channel, a
-  protocol limit rather than a bug. Unverified, consent-gated, on the
-  same terms as the ordinary memory bank.
+  instead. The radio answers `SA` only for the currently selected
+  channel, so a whole-radio read skips this bank (marked
+  current-channel-only) and a single-channel read of the selected slot
+  works; other slots return an honest mismatch error. Unverified,
+  consent-gated, on the same terms as the ordinary memory bank.
 
 ### Changed
 - Internal: `core/cat` gained four axes for FTX-1's own record shapes
@@ -63,7 +65,8 @@ tag. The full release notes for each version are on the
   check meant for Icom only. Both fixed.
 - Internal: three new `spec.Field` constants for the satellite flags
   ship fleet-wide — every radio other than TS-2000/2000X/B2000
-  answers Unavailable for them.
+  answers Unavailable for them. The IC-R8600 CSV export, which lists
+  every field explicitly, gains three empty columns.
 - **FTdx3000 AM-N storability** closed on paper: the CAT manual's own
   MW/MR memory-record mode legend prints only A/B/C, never D, so
   AM-N has no byte position in a stored channel at all and no real
