@@ -405,6 +405,28 @@ func (c CTCSSState) String() string {
 	return fmt.Sprintf("CTCSSState(%#02x)", byte(c))
 }
 
+// CTCSSStateString names c under d's declared tone-state domain, for
+// diagnostics that need a per-dialect label rather than c.String()'s
+// shared one. Every domain but ToneStatesSix defers to c.String()
+// unchanged. Under ToneStatesSix, bytes '4'/'5' carry no named
+// CTCSSState constant — dialectconfig.go's ToneStatesSix doc comment
+// explains why: '4' already names the FT-991A's CTCSSDCSEnc in the
+// shared ctcssNames table, and a second name for the same byte would be
+// a duplicate map key — so they are named here instead, straight from
+// the FTX-1's own P8 legend ("4: PR FREQ", "5: REV TONE", spec.md §6),
+// rather than falling back to that FT-991A label.
+func (d Dialect) CTCSSStateString(c CTCSSState) string {
+	if d.toneStates == ToneStatesSix {
+		switch c {
+		case CTCSSState('4'):
+			return "PR FREQ"
+		case CTCSSState('5'):
+			return "REV TONE"
+		}
+	}
+	return c.String()
+}
+
 // Shift is the CAT P10 repeater shift field: a single ASCII digit byte,
 // styled like Mode's P6 nibble. Reference: "shift: 0 simplex, 1 plus, 2
 // minus".

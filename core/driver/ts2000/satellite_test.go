@@ -142,31 +142,18 @@ func TestWriteChannel_Satellite_SendsSAThenSI(t *testing.T) {
 // promises: this bank's write.go has no per-channel Field for P1
 // (satellite mode)/P4 (CTRL)/P7 (MULTI/CH mode) at all, so writing
 // channel 5's flags must thread the fake's own current live values for
-// those three positions straight through — never invent, never zero —
-// which a naive implementation (e.g. always sending '0') would satisfy
-// by accident at construction time. This drives the fake to a live state
-// its OWN default does not have (satellite mode ON, via a direct SA
-// write.go bypass) and checks a subsequent channel write leaves it
-// exactly there.
+// those three positions straight through — never invent, never zero.
+//
+// The fake is seeded directly via WithSatelliteLiveState — NOT by a prior
+// driver write, which would only prove the driver echoes back what it
+// itself just sent — to a MIXED, non-default combination (mode ON, CTRL
+// still main, MULTI/CH ON): a driver that hardcoded any single fixed
+// value (all false, all true, or any other constant triple) fails this,
+// because gotMode/gotCtrl/gotMulti would then disagree with at least one
+// of the three independently-seeded values.
 func TestWriteChannel_Satellite_PreservesLiveState(t *testing.T) {
-	sess, r := openFakeSession(t)
-
-	// Put the fake's live state somewhere its construction-time default
-	// is NOT (satMode/satCtrl/satMulti all '0'): write channel 2 through
-	// the SAME driver path, whose current implementation always re-sends
-	// whatever it just read — so after this call the fake's live state
-	// is unchanged from default, and the assertion below is trivially
-	// true unless a future change starts inventing '1's. Recorded
-	// explicitly rather than assumed, so a regression that DOES start
-	// inventing values fails here.
-	seed := satelliteWriteData()
-	if _, err := sess.WriteChannel(context.Background(), codeplug.Channel{Slot: "2", Data: &seed}); err != nil {
-		t.Fatalf("seed WriteChannel(2): %v", err)
-	}
-	wantMode, _, wantCtrl, wantMulti := r.SatelliteSelected()
-	if wantMode || wantCtrl || wantMulti {
-		t.Fatalf("SatelliteSelected() after seeding = (mode=%v ctrl=%v multi=%v), want all false — the fake's construction-time default", wantMode, wantCtrl, wantMulti)
-	}
+	const wantMode, wantCtrl, wantMulti = true, false, true
+	sess, r := openFakeSession(t, fakets2000.WithSatelliteLiveState(wantMode, wantCtrl, wantMulti))
 
 	data := satelliteWriteData()
 	if _, err := sess.WriteChannel(context.Background(), codeplug.Channel{Slot: "5", Data: &data}); err != nil {
@@ -178,7 +165,7 @@ func TestWriteChannel_Satellite_PreservesLiveState(t *testing.T) {
 		t.Fatalf("SatelliteSelected() channel = %d, want 5", channel)
 	}
 	if gotMode != wantMode || gotCtrl != wantCtrl || gotMulti != wantMulti {
-		t.Errorf("live state after writing channel 5 = (mode=%v ctrl=%v multi=%v), want the state channel 2's write left it in (mode=%v ctrl=%v multi=%v) — WriteChannel must preserve it, not invent it",
+		t.Errorf("live state after writing channel 5 = (mode=%v ctrl=%v multi=%v), want the seeded state (mode=%v ctrl=%v multi=%v) — WriteChannel must preserve it, not invent it",
 			gotMode, gotCtrl, gotMulti, wantMode, wantCtrl, wantMulti)
 	}
 }
