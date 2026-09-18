@@ -152,30 +152,21 @@ type Capabilities struct {
 	// Every entry's Direction must be one of ShiftNone/ShiftUp/ShiftDown
 	// (never the zero value, ShiftUnspecified) — see Validate.
 	ShiftOptions []ShiftOption
-	// CTCSSStates lists the CTCSS state vocabulary this radio's wire
-	// protocol expresses, each paired with the semantic fact of whether
-	// that state requires a known CTCSS tone to accompany it (see
-	// ToneState.RequiresTone). Typically built from StandardCTCSSStates().
-	// Every entry's Semantics must be one of ToneOff/ToneEncode/
-	// ToneEncodeDecode/ToneDCSEncodeDecode/ToneDCSEncode (never the zero
-	// value, ToneSemanticsUnspecified) — see Validate. The two DCS members
-	// exist for a radio whose CTCSS state field names DCS states too; a
-	// model built from StandardCTCSSStates() declares the family three.
-	CTCSSStates []ToneState
-
-	// The vocabularies the Icom tier adds (design D4). EVERY ONE OF THEM
-	// IS EMPTY on the four Yaesu NEWCAT models registered before that
-	// tier, and empty is not a gap to be filled in later by a default:
-	// it is the positive statement "this radio expresses no such
-	// vocabulary", and it is what every capability-keyed check in
-	// core/codeplug and core/csvio tests before it runs. That is how the
-	// Yaesu outputs stay byte-identical.
+	// The vocabularies the Icom tier adds (design D4): DuplexOptions,
+	// DTCSPolarities and DTCSCodes. EVERY ONE OF THEM IS EMPTY on the four
+	// Yaesu NEWCAT models registered before that tier, and empty is not a
+	// gap to be filled in later by a default: it is the positive statement
+	// "this radio expresses no such vocabulary", and it is what every
+	// capability-keyed check in core/codeplug and core/csvio tests before
+	// it runs. That is how the Yaesu outputs stay byte-identical.
 	//
-	// The two families' vocabularies never coexist on one model: a radio
-	// supplies ShiftOptions+CTCSSStates or DuplexOptions+ToneModes,
-	// never both. Validate enforces that at least one of each PAIR is
-	// present, rather than demanding the Yaesu half unconditionally as
-	// it did before this tier.
+	// The repeater-shift vocabularies never coexist on one model: a radio
+	// supplies ShiftOptions or DuplexOptions, never both. Validate
+	// enforces that at least one of the pair is present, rather than
+	// demanding the Yaesu half unconditionally as it did before this tier.
+	// The tone vocabulary, unlike the shift one, is now a SINGLE list
+	// (ToneModes, below) that both families populate — see its own doc
+	// comment.
 
 	// DuplexOptions lists the FieldDuplex vocabulary this radio's wire
 	// protocol expresses, in the UI's preferred order, each paired with
@@ -183,11 +174,17 @@ type Capabilities struct {
 	// DuplexOff/DuplexUp/DuplexDown (never the zero value,
 	// DuplexUnspecified) — see Validate.
 	DuplexOptions []DuplexOption
-	// ToneModes lists the FieldToneMode vocabulary this radio expresses,
-	// in the UI's preferred order, each paired with its
-	// ToneModeSemantics. Every entry's Semantics must be one of the five
-	// declared, meaningful constants (never ToneModeUnspecified) — see
-	// Validate.
+	// ToneModes lists the tone-squelch vocabulary this radio's wire
+	// protocol expresses, in the UI's preferred order, each paired with its
+	// ToneModeSemantics — ONE VOCABULARY SHARED BY BOTH FIELD IDENTITIES:
+	// FieldCTCSSState (Yaesu) and FieldToneMode (Icom/Kenwood, which
+	// additionally spans the CROSS combinations and carries a code table).
+	// A Yaesu model typically builds this from StandardToneModes() (the
+	// family's three-member OFF/ENC/ENC-DEC vocabulary); a radio whose
+	// field names DCS states too (the FT-991A's five-value P8) or an Icom
+	// model's own TONE/TSQL/DTCS/CROSS set builds its own list. Every
+	// entry's Semantics must be one of the seven declared, meaningful
+	// constants (never ToneModeUnspecified) — see Validate.
 	ToneModes []ToneMode
 	// DTCSPolarities lists the FieldDTCSPolarity vocabulary this radio
 	// expresses, e.g. {"NN", "NR", "RN", "RR"}. Plain strings: unlike
@@ -342,7 +339,6 @@ func (c Capabilities) Clone() Capabilities {
 	out.Bauds = slices.Clone(c.Bauds)
 	out.RequiredSlots = slices.Clone(c.RequiredSlots)
 	out.ShiftOptions = slices.Clone(c.ShiftOptions)
-	out.CTCSSStates = slices.Clone(c.CTCSSStates)
 	out.DuplexOptions = slices.Clone(c.DuplexOptions)
 	out.ToneModes = slices.Clone(c.ToneModes)
 	out.DTCSPolarities = slices.Clone(c.DTCSPolarities)

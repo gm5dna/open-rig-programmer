@@ -103,8 +103,8 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		MinFreqHz: 0, MaxFreqHz: 0,
 		// Matrix section 1 row 14: no individually mandatory slot.
 		RequiredSlots: nil,
-		// Matrix section 1 rows 15-16: the Yaesu vocabularies do not apply.
-		ShiftOptions: nil, CTCSSStates: nil,
+		// Matrix section 1 row 15: the Yaesu shift vocabulary does not apply.
+		ShiftOptions: nil,
 		// Matrix section 1 row 17.
 		DuplexOptions: []spec.DuplexOption{
 			{Value: "OFF", Direction: spec.DuplexOff},

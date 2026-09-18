@@ -352,7 +352,7 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// core/cat/ftdx10's reused-command verification established when
 		// it accepted the shared codec.
 		ShiftOptions: spec.StandardShiftOptions(),
-		CTCSSStates:  spec.StandardCTCSSStates(),
+		ToneModes:    spec.StandardToneModes(),
 	}
 }
 

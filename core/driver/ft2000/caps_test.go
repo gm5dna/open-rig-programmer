@@ -26,7 +26,11 @@ var allCapabilityFields = []spec.Field{
 	spec.FieldAntenna, spec.FieldIPPlus,
 }
 
-var deliberatelyUnexpressedFields = map[spec.Field]string{}
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+}
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
 	drivertest.AssertFieldAuditCoversEverySpecField(t, "allCapabilityFields", allCapabilityFields, deliberatelyUnexpressedFields)
@@ -40,7 +44,6 @@ var deliberatelyZero = map[string]string{
 	"TagLen":                 "NoTag (matrix §0/§2.6): this radio has no channel-name route over CAT at all, so TagLen is 0 by declaration, not omission",
 	"RequiredSlots":          "matrix §2.12: no manual statement that any channel must stay populated",
 	"DuplexOptions":          "matrix §2.14: Icom-tier vocabulary, MANUAL-EVIDENCED ABSENCE",
-	"ToneModes":              "matrix §2.14: Icom-tier vocabulary, MANUAL-EVIDENCED ABSENCE",
 	"DTCSPolarities":         "matrix §2.14: Icom-tier vocabulary, MANUAL-EVIDENCED ABSENCE",
 	"DTCSCodes":              "matrix §2.14: Icom-tier vocabulary, MANUAL-EVIDENCED ABSENCE",
 	"Filters":                "matrix §2.14: Icom-tier vocabulary, MANUAL-EVIDENCED ABSENCE",

@@ -285,13 +285,15 @@ func shiftFor(caps spec.Capabilities, d spec.ShiftDirection) (string, bool) {
 // toneStateFor returns the wire-form CTCSS state caps uses for the given
 // tone semantics, and true, or ("", false) when this radio expresses no
 // such state. As with shiftFor, spec.Validate guarantees at most one
-// state per semantics value.
-func toneStateFor(caps spec.Capabilities, semantics spec.ToneSemantics) (string, bool) {
-	i := slices.IndexFunc(caps.CTCSSStates, func(s spec.ToneState) bool { return s.Semantics == semantics })
+// state per semantics value on the Yaesu family this is called for
+// (StandardToneModes or a radio's own three/five-member list never
+// repeats a Semantics).
+func toneStateFor(caps spec.Capabilities, semantics spec.ToneModeSemantics) (string, bool) {
+	i := slices.IndexFunc(caps.ToneModes, func(m spec.ToneMode) bool { return m.Semantics == semantics })
 	if i < 0 {
 		return "", false
 	}
-	return caps.CTCSSStates[i].Value, true
+	return caps.ToneModes[i].Value, true
 }
 
 // containsMode reports whether caps lists the given display-name mode.
@@ -778,11 +780,11 @@ func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.C
 // state in a "this radio expresses no ... CTCSS state" diagnostic).
 var ctcssToneModeRows = map[string]struct {
 	freqColumn string
-	semantics  spec.ToneSemantics
+	semantics  spec.ToneModeSemantics
 	stateNoun  string
 }{
-	"Tone": {freqColumn: "rToneFreq", semantics: spec.ToneEncode, stateNoun: "encode-only"},
-	"TSQL": {freqColumn: "cToneFreq", semantics: spec.ToneEncodeDecode, stateNoun: "encode+decode"},
+	"Tone": {freqColumn: "rToneFreq", semantics: spec.ToneModeCTCSS, stateNoun: "encode-only"},
+	"TSQL": {freqColumn: "cToneFreq", semantics: spec.ToneModeCTCSSSquelch, stateNoun: "encode+decode"},
 }
 
 // importCHIRPToneCTCSS is the pre-Icom-tier Tone mapping, unchanged:
@@ -798,7 +800,7 @@ func importCHIRPToneCTCSS(line int, cell func(string) string, data *codeplug.Cha
 	switch toneRaw := cell("Tone"); toneRaw {
 	case "":
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
-		v, ok := toneStateFor(caps, spec.ToneOff)
+		v, ok := toneStateFor(caps, spec.ToneModeOff)
 		if !ok {
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
@@ -845,7 +847,7 @@ func importCHIRPToneCTCSS(line int, cell func(string) string, data *codeplug.Cha
 		// The REFUSAL is the same on every radio and rests on the DCS
 		// CODE, which no registered radio's memory record has a field
 		// for. The REASON is not: a record that can name a DCS state
-		// (spec.ToneDCSEncodeDecode or spec.ToneDCSEncode, the two
+		// (spec.ToneModeDCSEncodeDecode or spec.ToneModeDCSEncode, the two
 		// members S0.4 added) is one this programme writes DCS states
 		// to, so telling that user there is "no DCS memory write" denies
 		// something it does. The FT-991A is the first such radio
@@ -855,8 +857,8 @@ func importCHIRPToneCTCSS(line int, cell func(string) string, data *codeplug.Cha
 		// for byte. TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord
 		// pins both branches over every fixture, in full rather than by
 		// substring.
-		_, dcsEncDec := toneStateFor(caps, spec.ToneDCSEncodeDecode)
-		_, dcsEnc := toneStateFor(caps, spec.ToneDCSEncode)
+		_, dcsEncDec := toneStateFor(caps, spec.ToneModeDCSEncodeDecode)
+		_, dcsEnc := toneStateFor(caps, spec.ToneModeDCSEncode)
 		detail := fmt.Sprintf("%s CAT has no DCS memory write; %s tone squelch cannot be imported", caps.Model, toneRaw)
 		if dcsEncDec || dcsEnc {
 			detail = fmt.Sprintf("%s CAT writes the DCS state but not the DCS code; %s tone squelch cannot be imported", caps.Model, toneRaw)

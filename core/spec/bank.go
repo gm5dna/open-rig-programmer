@@ -33,6 +33,14 @@ const (
 	// Yaesu pair invariants (a lower/upper pair per index, NoBlank), and
 	// a scan edge on another family is not obliged to honour them.
 	BankScan BankID = "SCAN"
+	// BankSatellite is the Kenwood ten-channel Satellite Memory bank
+	// ("SAT"), v1.10.0's TS-2000/2000X/B2000 addition (core/kw/ts2000's
+	// SA/SI). It is its own family rather than a corner of BankMemory
+	// because it is a wholly separate ten-slot address space with NO
+	// frequency field of its own (the manual routes frequency through
+	// FA/FB instead — spec.FieldFrequency is Unsupported on this bank)
+	// and a completely different wire record.
+	BankSatellite BankID = "SAT"
 )
 
 // Bank describes one family of memory slots: what they are called for
@@ -100,6 +108,18 @@ type Bank struct {
 	// populated-channel capacity is not documented. It suppresses only the
 	// occupancy refusal; WithinSpace remains authoritative.
 	BudgetUnstated bool
+
+	// CurrentChannelOnly is true when this bank's read command has no
+	// per-slot address and can only ever answer for whichever slot is
+	// CURRENTLY SELECTED on the radio (the TS-2000 Satellite Memory
+	// bank's SA read, core/driver/ts2000/satellite.go's own doc
+	// comment). A bulk read cannot enumerate such a bank — there is no
+	// way to select each slot in turn over CAT — so a whole-radio
+	// ReadAll must skip it rather than treat the inevitable per-slot
+	// mismatch as fatal. A single-slot read of the one currently
+	// selected still succeeds; a single-slot read naming any other slot
+	// still refuses, honestly, exactly as before.
+	CurrentChannelOnly bool
 }
 
 // SparseSlot renders the canonical wire-form slot identifier for group

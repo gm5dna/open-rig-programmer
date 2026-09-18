@@ -24,7 +24,7 @@ func (d Dialect) BuildMRRead(s Slot) (Command, error) {
 	if !d.readableSlot(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MR: slot must be a readable memory/PMS/60m/EMG slot, not \"000\" or invalid")
 	}
-	frame := make([]byte, 0, mrReadLen)
+	frame := make([]byte, 0, d.slotOnlyFrameLen())
 	frame = append(frame, 'M', 'R')
 	frame = append(frame, s.Wire()...)
 	frame = append(frame, ';')

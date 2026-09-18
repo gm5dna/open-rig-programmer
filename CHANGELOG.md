@@ -11,6 +11,72 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-09-18
+
+### Added
+- **FTX-1** joins the supported Yaesu models, paper-only and opt-in for
+  writes via the unverified-write consent gate — no FTX-1 has ever
+  answered a frame from this project. Reads and writes memory and PMS
+  channels on a widened version of the FT-710's own MR/MW record:
+  5-digit addresses (`00001`-`00999`), 50 PMS pairs as a hyphenated
+  two-digit token (`P-01L`-`P-50U`), a 5 MHz band (`50001`-`50020`)
+  and a named `EMGCH` channel, both banks read-only even under
+  consent. Tags carry no display byte, so this build shows no Tag
+  Display column for them. Tone widens to six states, adding `PR
+  FREQ` and `REV TONE` to the fleet's vocabulary; no tone-frequency
+  chart exists in the manual, so only the six-state selector is read
+  and written. `EX`, `GT` and `VM` are not implemented; `MC` goes
+  unused — reads go via `MR`/`MT` only, since `MC` carries a
+  per-port byte this project's CAT codec cannot build or parse. This
+  build cannot tell an FTX-1 "Field" body from an "Optima" body: both
+  share CAT identity `0840` and nothing in the manual gives CAT a way
+  to ask, so the body is never inferred. The manual requires main
+  firmware V1.08 or later for CAT to work at all; this build cannot
+  check it — the wire carries no version byte — so a pre-V1.08 radio
+  simply never answers. Further ASSUMED values (channel range past
+  99, which of three printed 5 MHz ranges is real, MW's P7 enum,
+  TagFill, the clarifier's step size, and more) are listed with their
+  own probe list in `docs/radio-notes.md`.
+- **TS-2000, TS-2000X and B2000** gain a Satellite Memory bank
+  (`SA`/`SI`, 10 channels): a name plus three per-channel flags —
+  band swap, trace and trace-reverse. The record carries no
+  frequency; satellite operation reads that live off `FA`/`FB`
+  instead. The radio answers `SA` only for the currently selected
+  channel, so a whole-radio read skips this bank (marked
+  current-channel-only) and a single-channel read of the selected slot
+  works; other slots return an honest mismatch error. Unverified,
+  consent-gated, on the same terms as the ordinary memory bank.
+
+### Changed
+- Internal: `core/cat` gained four axes for FTX-1's own record shapes
+  — 5-digit addresses, the dash-token PMS form, a tag form with no
+  display byte, and an `MC`-unsupported gate. That gate closed a
+  pre-existing hole: a fixed `MC;` read frame was previously admitted
+  regardless of policy. `dialecttest` was taught all four axes, so
+  every existing dialect stays exercised (byte-identical for every
+  registered three-digit dialect).
+- Internal: Yaesu's separate `ToneSemantics`/`CTCSSStates` vocabulary
+  is gone. Every Yaesu driver now publishes the same `spec.ToneMode`
+  list Icom and Kenwood already used, plus two new DCS members;
+  byte-identical for every existing dialect. The unification caught
+  two latent bugs: a Yaesu-detection check (in the codeplug validator
+  and the app's UI spec) was keying off `CTCSSStates`, and the shared
+  write-gate was feeding the now-shared `ToneModes` list into a tier
+  check meant for Icom only. Both fixed.
+- Internal: three new `spec.Field` constants for the satellite flags
+  ship fleet-wide — every radio other than TS-2000/2000X/B2000
+  answers Unavailable for them. The IC-R8600 CSV export, which lists
+  every field explicitly, gains three empty columns.
+- **FTdx3000 AM-N storability** closed on paper: the CAT manual's own
+  MW/MR memory-record mode legend prints only A/B/C, never D, so
+  AM-N has no byte position in a stored channel at all and no real
+  radio could store it regardless of what this driver writes.
+- Internal: supported models 45 → 46.
+
+### Not included
+- **Settings write.** Parked for this milestone; still on the
+  roadmap.
+
 ## [1.9.0] - 2026-09-15
 
 ### Added
@@ -578,7 +644,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.2...v1.9.0
 [1.8.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.0...v1.8.1

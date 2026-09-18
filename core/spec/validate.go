@@ -22,7 +22,7 @@ func validSupport(s Support) bool {
 }
 
 // validateVocabEntries checks a capability vocabulary list — ShiftOptions,
-// or CTCSSStates' Values — for blank or duplicate entries, without a
+// or ToneModes' Values — for blank or duplicate entries, without a
 // non-empty rule. It exists for the Icom tier's paired vocabularies
 // (design D4), where an EMPTY list is a legitimate positive statement —
 // "this radio expresses no such vocabulary" — as long as the other half
@@ -92,25 +92,19 @@ func validDuplexDirection(d DuplexDirection) bool {
 	return d >= DuplexOff && d <= DuplexDown
 }
 
-// validToneModeSemantics reports whether s is one of the five declared,
+// validToneModeSemantics reports whether s is one of the nine declared,
 // meaningful ToneModeSemantics constants. ToneModeUnspecified (the zero
-// value) is deliberately excluded.
-func validToneModeSemantics(s ToneModeSemantics) bool {
-	return s >= ToneModeOff && s <= ToneModeCross
-}
-
-// validToneSemantics reports whether s is one of the five declared,
-// meaningful ToneSemantics constants. ToneSemanticsUnspecified (the zero
-// value) is deliberately excluded: a ToneState whose Semantics was simply
-// never set must fail here, not silently read as ToneOff — see
-// ToneSemantics' doc comment.
+// value) is deliberately excluded: a ToneMode whose Semantics was simply
+// never set must fail here, not silently read as ToneModeOff.
 //
-// The two DCS members were appended for a radio whose CTCSS state field
-// names DCS as well as CTCSS. They widen what a profile MAY declare and
-// nothing else: no registered model's CTCSSStates moves, and the
-// uniqueness rule below is unchanged.
-func validToneSemantics(s ToneSemantics) bool {
-	return s >= ToneOff && s <= ToneDCSEncode
+// The two DCS members were appended for a radio whose CTCSS-state field
+// names DCS as well as CTCSS (the FT-991A's P8). ToneModePRFreq and
+// ToneModeRevTone were appended after them for the FTX-1's P8 (§6) — two
+// more NEUTRAL states with no tone/DTCS analogue at all. Every appended
+// pair widens what a profile MAY declare and nothing else: no existing
+// model's ToneModes moves, and the uniqueness rule below is unchanged.
+func validToneModeSemantics(s ToneModeSemantics) bool {
+	return s >= ToneModeOff && s <= ToneModeRevTone
 }
 
 // Validate checks c for internal STRUCTURAL consistency — not hardware
@@ -169,49 +163,47 @@ func validToneSemantics(s ToneSemantics) bool {
 //     silently evade completeness checking.
 //   - ShiftOptions must be non-empty and contain no blank or duplicate
 //     values.
-//   - CTCSSStates must be non-empty and contain no blank or duplicate
-//     Values.
 //   - Every ShiftOptions entry's Direction must be one of the three
 //     declared ShiftDirection constants (ShiftNone/ShiftUp/ShiftDown) —
 //     never the zero value, ShiftUnspecified: see ShiftDirection's doc
 //     comment for why the zero value must not be allowed to mean
 //     anything.
-//   - Every CTCSSStates entry's Semantics must be one of the five
-//     declared ToneSemantics constants (ToneOff/ToneEncode/
-//     ToneEncodeDecode/ToneDCSEncodeDecode/ToneDCSEncode) — never the
-//     zero value, ToneSemanticsUnspecified — for the same reason.
 //   - No two ShiftOptions may express the same ShiftDirection.
-//   - No two CTCSSStates may express the same Semantics.
+//   - ToneModes must be non-empty, whenever any bank reaches
+//     FieldCTCSSState (Yaesu) or FieldToneMode (Icom/Kenwood) — the one
+//     vocabulary now shared by both field identities, see its own doc
+//     comment — and contain no blank or duplicate values.
+//   - Every ToneModes entry's Semantics must be one of the seven
+//     declared ToneModeSemantics constants — never the zero value,
+//     ToneModeUnspecified.
+//   - A ToneModeSemantics value expressed by MORE THAN ONE entry must
+//     have EXACTLY ONE of them marked Canonical (E5) — see
+//     canonicalProblems.
 //
-// The Icom tier (design D4) adds five rules, every one of which is
-// VACUOUS for a radio registered before it (all five fields are then
+// The Icom tier (design D4) adds four more rules, every one of which is
+// VACUOUS for a radio registered before it (all four fields are then
 // zero/empty), so none of them can change an existing profile's verdict:
 //
 //   - A Bank's sparse-space descriptor must be internally consistent:
 //     Sparse/Groups/PerGroup/Budget are legal only together, and all
 //     three numbers must be zero when Sparse is false (see
 //     Bank.sparseProblems).
-//   - The two vocabulary PAIRS — ShiftOptions/DuplexOptions and
-//     CTCSSStates/ToneModes — must each have at least one non-empty
-//     half WHENEVER ANY BANK REACHES THE CORRESPONDING FIELD. The
-//     non-empty rule moved from the Yaesu half alone to the pair,
-//     because the two vocabularies never coexist on one model; the
-//     problem string for "neither" is unchanged. The bank condition is
-//     E5b: a model whose bank legitimately carries no shift or duplex
+//   - The vocabulary PAIR ShiftOptions/DuplexOptions must have at least
+//     one non-empty half WHENEVER ANY BANK REACHES FieldShift or
+//     FieldDuplex. The non-empty rule moved from the Yaesu half alone to
+//     the pair, because the two vocabularies never coexist on one model;
+//     the problem string for "neither" is unchanged. The bank condition
+//     is E5b: a model whose bank legitimately carries no shift or duplex
 //     field at all — an HF-only Icom memory bank — used to be refused by
 //     a rule written when every registered radio had one. Fail-closed is
 //     preserved through the FIELD's own support grades: a bank that
 //     reaches the field must still name the values it can hold, so every
 //     Yaesu model (all four declare FieldShift and FieldCTCSSState) is
 //     judged exactly as before.
-//   - DuplexOptions and ToneModes get the blank/duplicate rules every
-//     vocabulary gets and must carry declared (never zero-value)
-//     semantics. A semantic value expressed by MORE THAN ONE entry must
-//     have EXACTLY ONE of them marked Canonical (E5) — see
-//     canonicalProblems. This replaces the at-most-one rule those two
-//     lists used to share with ShiftOptions: multiplicity is real, and
-//     what the reverse mapping needs is a single ANSWER, not a single
-//     entry.
+//   - DuplexOptions gets the same blank/duplicate/canonical rules
+//     ToneModes gets above, restated here only because DuplexOptions
+//     stays a genuinely Icom-tier-only vocabulary (empty on every Yaesu
+//     model).
 //   - DTCSPolarities and Filters must contain no blank or duplicate
 //     value.
 //   - DTCSCodes, if non-empty, must be strictly ascending.
@@ -219,9 +211,9 @@ func validToneSemantics(s ToneSemantics) bool {
 // There is no separate "RequiresTone must equal Encodes||Decodes"
 // invariant: that used to be checked because RequiresTone, Encodes and
 // Decodes were three independent stored bool fields that could disagree.
-// ToneState now stores only Semantics; RequiresTone is a method fully
-// derived from it (see ToneState.RequiresTone), so there is no
-// independent value left for it to disagree with.
+// ToneMode now stores only Semantics; NeedsTxTone/NeedsRxTone are methods
+// fully derived from it, so there is no independent value left for them
+// to disagree with.
 //
 // Every radio driver constructor is expected to call Validate on the
 // Capabilities value it builds and fail construction if it returns a
@@ -426,36 +418,13 @@ func (c Capabilities) Validate() error {
 		seenDirection[o.Direction] = o.Value
 	}
 
-	// The tone PAIR, by the same rule and for the same reason as the
-	// shift pair above: CTCSSStates (Yaesu) or ToneModes (Icom).
-	ctcssValues := make([]string, len(c.CTCSSStates))
-	for i, ts := range c.CTCSSStates {
-		ctcssValues[i] = ts.Value
-	}
-	if len(c.CTCSSStates) == 0 && len(c.ToneModes) == 0 && c.anyBankReaches(FieldCTCSSState, FieldToneMode) {
-		problems = append(problems, "CTCSSStates must not be empty")
-	}
-	problems = append(problems, validateVocabEntries("CTCSSStates", ctcssValues)...)
-
-	// Every CTCSSStates entry's Semantics must be a declared, meaningful
-	// ToneSemantics — never ToneSemanticsUnspecified, its zero value: a
-	// state whose Semantics was simply omitted must be refused here, not
-	// silently read as ToneOff (see ToneSemantics' doc comment).
-	for _, ts := range c.CTCSSStates {
-		if !validToneSemantics(ts.Semantics) {
-			problems = append(problems, fmt.Sprintf("CTCSSStates %q has invalid Semantics %d", ts.Value, ts.Semantics))
-		}
-	}
-
-	// For the same reason ShiftOptions' directions must be unique, each
-	// Semantics value must name at most one state.
-	seenSemantics := make(map[ToneSemantics]string, len(c.CTCSSStates))
-	for _, ts := range c.CTCSSStates {
-		if prev, dup := seenSemantics[ts.Semantics]; dup {
-			problems = append(problems, fmt.Sprintf("CTCSSStates %q and %q express the same semantics", prev, ts.Value))
-			continue
-		}
-		seenSemantics[ts.Semantics] = ts.Value
+	// ToneModes, UNLIKE the shift pair above, is a SINGLE list rather than
+	// two: Yaesu's FieldCTCSSState and Icom/Kenwood's FieldToneMode both
+	// draw their Semantics from it now (see its own doc comment), so
+	// there is one non-empty rule, not a pair, whenever any bank reaches
+	// either field.
+	if len(c.ToneModes) == 0 && c.anyBankReaches(FieldCTCSSState, FieldToneMode) {
+		problems = append(problems, "ToneModes must not be empty")
 	}
 
 	// The Icom-tier vocabularies (design D4). Each is checked only for
@@ -492,7 +461,7 @@ func (c Capabilities) Validate() error {
 			problems = append(problems, fmt.Sprintf("ToneModes %q has NeedsTxTone semantics on a ReceiveOnly radio", m.Value))
 		}
 	}
-	// The canonical rule again, on the other Icom vocabulary.
+	// The canonical rule again, on the shared tone vocabulary.
 	problems = append(problems, canonicalProblems("ToneModes", "semantics", canonicalGroupsOf(c.ToneModes,
 		func(m ToneMode) ToneModeSemantics { return m.Semantics },
 		func(m ToneMode) string { return m.Value },

@@ -47,6 +47,16 @@ type Radio struct {
 	// ai is '0', '1', '2' or '3' — the whole of this book's AI legend
 	// (ts2000:9662-9668). OFF at construction — doc.go's register entry 12.
 	ai byte
+
+	// The Satellite Memory bank's state (v1.10.0, SA/SI). satChannels
+	// holds the three per-channel flags and the name; satMode/satChannel/
+	// satCtrl/satMulti are the live radio state SA's record also carries
+	// but no channel owns (satelliteChannel's own doc comment, state.go).
+	satChannels [10]satelliteChannel
+	satMode     byte // SA P1, '0'/'1' — satellite mode, OFF at construction.
+	satChannel  int  // SA P2, 0-9 — the selected channel, 0 at construction.
+	satCtrl     byte // SA P4, '0'/'1' — CTRL main/sub, main at construction.
+	satMulti    byte // SA P7, '0'/'1' — MULTI/CH mode, VFO at construction.
 }
 
 // New constructs a *Radio and starts its servicing goroutine. Without a
@@ -60,6 +70,11 @@ func New(opts ...Option) *Radio {
 		records:        DefaultImage(),
 		currentChannel: lowestChannel,
 		ai:             aiOff,
+		satChannels:    defaultSatelliteChannels(),
+		satMode:        '0',
+		satChannel:     0,
+		satCtrl:        '0',
+		satMulti:       '0',
 	}
 	for _, opt := range opts {
 		opt(r)

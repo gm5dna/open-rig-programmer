@@ -545,6 +545,102 @@ func (r *Radio) handleAI(body []byte) []byte {
 	return rejection
 }
 
+// --- SA: the Satellite Memory status (ts2000:11292-11333) ---
+//
+// O O O X: a seven-byte Set (P1 through P7), a bare Read, an
+// eighteen-byte Answer (P1 through P7 then the eight-byte name), no AI
+// push. Set and Read share the "SA" prefix and are disambiguated by
+// length, exactly like MC.
+//
+// SA SET WRITES CHANNEL P2 DIRECTLY — core/kw/ts2000/satellite.go's own
+// ASSUMPTION, MW's own precedent, restated here for the fake: P2 both
+// selects and stores in one frame, with no separate CAT-reachable
+// "recall" primitive. Reading only ever reports whichever channel a Set
+// (or construction) last selected — SA's own Read carries no address at
+// all — which is exactly the real protocol's own limitation, not a fake
+// shortcut.
+
+// satAnswerLen is "S A P1 P2 P3 P4 P5 P6 P7 P8(x8) ;" — eighteen bytes.
+const satAnswerLen = 18
+
+// satSetLen is "S A P1 P2 P3 P4 P5 P6 P7 ;" — ten bytes.
+const satSetLen = 10
+
+// validSatBoolByte is SA's plain '0'/'1' two-valued convention, shared by
+// P1, P3, P4, P5, P6 and P7.
+func validSatBoolByte(b byte) bool { return b == '0' || b == '1' }
+
+func buildSAAnswer(satMode byte, channel int, ch satelliteChannel, satCtrl, satMulti byte) []byte {
+	out := make([]byte, 0, satAnswerLen)
+	out = append(out, 'S', 'A')
+	out = append(out, satMode, byte('0'+channel), boolByte(ch.swap), satCtrl, boolByte(ch.trace), boolByte(ch.traceRev), satMulti)
+	out = append(out, ch.name...)
+	out = append(out, ';')
+	return out
+}
+
+func boolByte(on bool) byte {
+	if on {
+		return '1'
+	}
+	return '0'
+}
+
+func (r *Radio) handleSA(body []byte) []byte {
+	switch len(body) {
+	case 0:
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return buildSAAnswer(r.satMode, r.satChannel, r.satChannels[r.satChannel], r.satCtrl, r.satMulti)
+
+	case satSetLen - 3:
+		if !validSatBoolByte(body[0]) || body[1] < '0' || body[1] > '9' ||
+			!validSatBoolByte(body[2]) || !validSatBoolByte(body[3]) ||
+			!validSatBoolByte(body[4]) || !validSatBoolByte(body[5]) || !validSatBoolByte(body[6]) {
+			return rejection
+		}
+		channel := int(body[1] - '0')
+		r.mu.Lock()
+		r.satMode = body[0]
+		r.satChannel = channel
+		r.satChannels[channel].swap = body[2] == '1'
+		r.satCtrl = body[3]
+		r.satChannels[channel].trace = body[4] == '1'
+		r.satChannels[channel].traceRev = body[5] == '1'
+		r.satMulti = body[6]
+		r.mu.Unlock()
+		return nil // fire-and-forget success
+	}
+	return rejection
+}
+
+// --- SI: the Satellite Memory name (ts2000:11400-11413) ---
+//
+// O X X X: an eleven-byte Set (P1, the channel, then the eight-byte
+// name), no Read, no Answer, no AI push — fire-and-forget, MW's own
+// shape.
+
+// siSetLen is "S I P1 P2(x8) ;" — twelve bytes.
+const siSetLen = 12
+
+func (r *Radio) handleSI(body []byte) []byte {
+	if len(body) != siSetLen-3 {
+		return rejection
+	}
+	if body[0] < '0' || body[0] > '9' {
+		return rejection
+	}
+	name := body[1:9]
+	if !validNameField(name) {
+		return rejection
+	}
+	channel := int(body[0] - '0')
+	r.mu.Lock()
+	r.satChannels[channel].name = string(name)
+	r.mu.Unlock()
+	return nil // fire-and-forget success
+}
+
 // --- Top-level dispatch ---
 
 // upperASCII folds the two ASCII bytes of a command name to upper case and
@@ -592,6 +688,10 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleMW(rest)
 	case [2]byte{'M', 'C'}:
 		return r.handleMC(rest)
+	case [2]byte{'S', 'A'}:
+		return r.handleSA(rest)
+	case [2]byte{'S', 'I'}:
+		return r.handleSI(rest)
 	default:
 		return rejection
 	}

@@ -75,7 +75,6 @@ func ConsentUnverifiedWrites(caps Capabilities) Capabilities {
 	out.Bauds = append([]int(nil), caps.Bauds...)
 	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
 	out.ShiftOptions = append([]ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]ToneState(nil), caps.CTCSSStates...)
 	// The Icom-tier vocabularies (design D4). They carry no Support
 	// labels either, and are copied for the same reason: the result must
 	// share no storage with caps AT ALL, so that a consented session can

@@ -38,6 +38,7 @@ var allSpecFields = []spec.Field{
 	spec.FieldFilter, spec.FieldDataMode, spec.FieldTuningStepEnabled,
 	spec.FieldTuningStep, spec.FieldProgramTuningStep, spec.FieldAttenuator,
 	spec.FieldPreamp, spec.FieldAntenna, spec.FieldIPPlus,
+	spec.FieldSatBandSwap, spec.FieldSatTrace, spec.FieldSatTraceRev,
 }
 
 // bothRows is every registry row this package serves, so a per-row table
@@ -45,8 +46,8 @@ var allSpecFields = []spec.Field{
 var bothRows = []Row{RowS, RowSG}
 
 func TestAllSpecFields_IsTwentySeven(t *testing.T) {
-	if len(allSpecFields) != 27 {
-		t.Fatalf("allSpecFields has %d entries, want 27 (core/spec/field.go)", len(allSpecFields))
+	if len(allSpecFields) != 30 {
+		t.Fatalf("allSpecFields has %d entries, want 30 (core/spec/field.go)", len(allSpecFields))
 	}
 	seen := map[spec.Field]bool{}
 	for _, f := range allSpecFields {
@@ -171,8 +172,8 @@ func TestCapabilities_MatrixValuesPerRow(t *testing.T) {
 		if caps.RequiredSlots != nil { // §1.15
 			t.Errorf("%s: RequiredSlots = %v, want nil (§1.15)", tc.model, caps.RequiredSlots)
 		}
-		if len(caps.ShiftOptions) != 0 || len(caps.CTCSSStates) != 0 { // §1.16, §1.17
-			t.Errorf("%s: Shift/CTCSSStates = %v/%v, want both empty (§1.16, §1.17)", tc.model, caps.ShiftOptions, caps.CTCSSStates)
+		if len(caps.ShiftOptions) != 0 { // §1.16
+			t.Errorf("%s: ShiftOptions = %v, want empty (§1.16)", tc.model, caps.ShiftOptions)
 		}
 		if len(caps.DuplexOptions) != 0 { // §1.18
 			t.Errorf("%s: DuplexOptions = %v, want empty (§1.18)", tc.model, caps.DuplexOptions)
@@ -224,7 +225,6 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"MaxFreqHz":              "§1.14, M-E6 — as MinFreqHz; a zero DISABLES the ceiling check",
 		"RequiredSlots":          "§1.15 — neither book marks any channel mandatory",
 		"ShiftOptions":           "§1.16 — the Yaesu half of the vocabulary pair (decision 6)",
-		"CTCSSStates":            "§1.17 — as ShiftOptions",
 		"DuplexOptions":          "§1.18 — no duplex selector in the record",
 		"DTCSPolarities":         "§1.20 — DCS appears nowhere in either book",
 		"DTCSCodes":              "§1.21 — as DTCSPolarities",
@@ -240,8 +240,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		caps := CapabilitiesUnverified(row)
 		v := reflect.ValueOf(caps)
 		typ := v.Type()
-		if typ.NumField() != 30 {
-			t.Fatalf("spec.Capabilities has %d fields, want 30 — this test's list is stale", typ.NumField())
+		if typ.NumField() != 29 {
+			t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
 		}
 		for i := 0; i < typ.NumField(); i++ {
 			name := typ.Field(i).Name
@@ -441,6 +441,9 @@ func auditedFields(row Row) []spec.Field {
 // grades the zero FieldSupport, with the matrix's own reason.
 func unexpressedFields(row Row) map[spec.Field]string {
 	out := map[spec.Field]string{
+		spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+		spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+		spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 		spec.FieldClarifier:         "§1.7, M-E5: the 50-byte record has NO clarifier position over a complete 47-byte account (590:1539-1577); the radios DO have RIT and XIT",
 		spec.FieldCTCSSState:        "§2.1: this record expresses tone as P7's mode selector, which is FieldToneMode",
 		spec.FieldCTCSSTone:         "§2.1: the record carries TWO independent tone indices (P8, P9) and FieldCTCSSTone is ONE field",

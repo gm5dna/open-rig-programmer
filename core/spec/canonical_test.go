@@ -13,7 +13,6 @@ import (
 func icomVocabCaps() Capabilities {
 	c := validTestCapabilities()
 	c.ShiftOptions = nil
-	c.CTCSSStates = nil
 	c.Banks[0].Fields[FieldDuplex] = FieldSupport{Read: Supported, Write: Unverified}
 	c.Banks[0].Fields[FieldToneMode] = FieldSupport{Read: Supported, Write: Unverified}
 	delete(c.Banks[0].Fields, FieldShift)
@@ -200,11 +199,12 @@ func TestValidate_ABankWithNoShiftVocabularyIsAdmitted(t *testing.T) {
 }
 
 // TestValidate_ABankWithNoToneVocabularyIsAdmitted is E5b's other half,
-// on the CTCSSStates/ToneModes pair, with the same protection intact.
+// on ToneModes — the single vocabulary FieldCTCSSState (Yaesu) and
+// FieldToneMode (Icom/Kenwood) now share — with the same protection
+// intact.
 func TestValidate_ABankWithNoToneVocabularyIsAdmitted(t *testing.T) {
 	t.Run("no bank reaches the tone field: admitted", func(t *testing.T) {
 		c := validTestCapabilities()
-		c.CTCSSStates = nil
 		c.ToneModes = nil
 		delete(c.Banks[0].Fields, FieldCTCSSState)
 		delete(c.Banks[0].Fields, FieldToneMode)
@@ -215,23 +215,21 @@ func TestValidate_ABankWithNoToneVocabularyIsAdmitted(t *testing.T) {
 
 	t.Run("a bank reaches FieldCTCSSState with no vocabulary: refused", func(t *testing.T) {
 		c := validTestCapabilities()
-		c.CTCSSStates = nil
 		c.ToneModes = nil
 		c.Banks[0].Fields[FieldCTCSSState] = FieldSupport{Read: Supported, Write: Unverified}
 		err := c.Validate()
-		if err == nil || !strings.Contains(err.Error(), "CTCSSStates must not be empty") {
+		if err == nil || !strings.Contains(err.Error(), "ToneModes must not be empty") {
 			t.Fatalf("Validate() = %v, want the empty-vocabulary refusal", err)
 		}
 	})
 
 	t.Run("a bank reaches FieldToneMode with no vocabulary: refused", func(t *testing.T) {
 		c := validTestCapabilities()
-		c.CTCSSStates = nil
 		c.ToneModes = nil
 		delete(c.Banks[0].Fields, FieldCTCSSState)
 		c.Banks[0].Fields[FieldToneMode] = FieldSupport{Read: Supported, Write: Unverified}
 		err := c.Validate()
-		if err == nil || !strings.Contains(err.Error(), "CTCSSStates must not be empty") {
+		if err == nil || !strings.Contains(err.Error(), "ToneModes must not be empty") {
 			t.Fatalf("Validate() = %v, want the empty-vocabulary refusal", err)
 		}
 	})

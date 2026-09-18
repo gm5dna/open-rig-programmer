@@ -53,7 +53,6 @@ var deliberatelyZero = map[string]string{
 	"CTCSSToneRange":         "matrix §1 row 10: same as CTCSSTones — there is no BCD tone-frequency field to declare a range over, unlike the IC-7610/IC-7100 family this radio otherwise resembles",
 	"RequiredSlots":          "matrix §1 row 15: no memory or scan-edge channel is documented as one that must stay populated",
 	"ShiftOptions":           "matrix §1 row 16: the record has no shift/duplex/offset field at all, and FieldShift/FieldDuplex both carry the zero FieldSupport on both banks, so enabler E5b's anyBankReaches guard makes the empty list lawful",
-	"CTCSSStates":            "matrix §1 row 17: same reasoning as CTCSSTones — no tone vocabulary of any kind exists on this record",
 	"DuplexOptions":          "matrix §1b: the record has no duplex field; Split (③) is a TX-block-enable flag with no +/- sense, not a shift vocabulary (matrix §3.15(a))",
 	"ToneModes":              "matrix §1 row 9/§1b: this radio has no tone route over CI-V at all",
 	"DTCSPolarities":         "matrix §1b: DTCS is printed nowhere in the command table",

@@ -91,7 +91,9 @@ type FieldStateCheck struct {
 // vocabulary for a field fails closed on every Known value for it —
 // StringField.Valid's and IntField.Valid's
 // own documented rule, and the right answer for a radio whose record has
-// no room for the field at all. The COHERENCE half of the stance is
+// no room for the field at all. d.ToneMode (FieldToneMode) is the one
+// exception to "caps.ToneModes directly": see the local variable's own
+// comment in FieldStateChecks for why. The COHERENCE half of the stance is
 // settled without consulting caps, so an empty vocabulary changes no
 // incoherent channel's outcome.
 //
@@ -115,9 +117,24 @@ func FieldStateChecks(caps spec.Capabilities, d codeplug.ChannelData) []FieldSta
 	for i, o := range caps.DuplexOptions {
 		duplex[i] = o.Value
 	}
-	toneModes := make([]string, len(caps.ToneModes))
-	for i, m := range caps.ToneModes {
-		toneModes[i] = m.Value
+	// caps.ToneModes is now the ONE vocabulary shared by two field
+	// identities — Yaesu's FieldCTCSSState and Icom/Kenwood's
+	// FieldToneMode (spec.ToneMode's own doc comment) — but d.ToneMode is
+	// specifically the Icom/Kenwood tier field, and the fleet invariant
+	// (a model expresses one identity or the other, never both) still
+	// holds. Judging d.ToneMode against caps.ToneModes UNCONDITIONALLY
+	// would let a Yaesu radio's CTCSS-state spellings ("OFF", "ENC")
+	// wrongly ADMIT a d.ToneMode value on a radio with no FieldToneMode
+	// at all. So this rung uses caps.ToneModes only when this radio does
+	// NOT express FieldCTCSSState; a Yaesu radio gets the empty
+	// vocabulary here, which fails Known d.ToneMode closed exactly as it
+	// did before the two vocabularies unified.
+	var toneModes []string
+	if !anyBankReaches(caps, spec.FieldCTCSSState) {
+		toneModes = make([]string, len(caps.ToneModes))
+		for i, m := range caps.ToneModes {
+			toneModes[i] = m.Value
+		}
 	}
 	return []FieldStateCheck{
 		{spec.FieldCTCSSTone, judge(d.CTCSSTone.State, d.CTCSSTone.Value, func() error { return d.CTCSSTone.Valid(caps) })},
@@ -140,6 +157,9 @@ func FieldStateChecks(caps spec.Capabilities, d codeplug.ChannelData) []FieldSta
 		{spec.FieldPreamp, judge(d.Preamp.State, d.Preamp.Value, func() error { return d.Preamp.Valid(caps.PreampOptions) })},
 		{spec.FieldAntenna, judge(d.Antenna.State, d.Antenna.Value, func() error { return d.Antenna.Valid(caps.AntennaOptions) })},
 		{spec.FieldIPPlus, judge(d.IPPlus.State, d.IPPlus.Value, d.IPPlus.Valid)},
+		{spec.FieldSatBandSwap, judge(d.SatBandSwap.State, d.SatBandSwap.Value, d.SatBandSwap.Valid)},
+		{spec.FieldSatTrace, judge(d.SatTrace.State, d.SatTrace.Value, d.SatTrace.Valid)},
+		{spec.FieldSatTraceRev, judge(d.SatTraceRev.State, d.SatTraceRev.Value, d.SatTraceRev.Valid)},
 	}
 }
 
@@ -194,4 +214,18 @@ func CheckFieldStates(caps spec.Capabilities, d codeplug.ChannelData) (spec.Fiel
 		}
 	}
 	return "", nil
+}
+
+// anyBankReaches reports whether ANY bank in caps grades f above the zero
+// FieldSupport — this radio's own answer to "does it express this field
+// at all", radio-wide rather than per-bank. Used by FieldStateChecks to
+// tell the Yaesu FieldCTCSSState identity from the Icom/Kenwood
+// FieldToneMode one now that both draw from caps.ToneModes.
+func anyBankReaches(caps spec.Capabilities, f spec.Field) bool {
+	for _, b := range caps.Banks {
+		if !caps.FieldSupport(b.ID, f).Unreachable() {
+			return true
+		}
+	}
+	return false
 }

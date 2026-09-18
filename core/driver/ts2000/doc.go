@@ -49,7 +49,10 @@
 // from a TS-2000 by wire identity, only by which constructor the caller
 // chose.
 //
-// SATELLITE MEMORY (SA/SI, MU) IS OUT OF THIS WAVE, spec §6 open question 1
-// (matrix §3, IC-9100 D-STAR-block precedent) — recorded in
-// TestDeliberatelyZeroAudit, not built.
+// SATELLITE MEMORY (SA/SI) IS BUILT (v1.10.0, spec.BankSatellite,
+// satellite.go): its SA read has no per-channel address, so
+// spec.Bank.CurrentChannelOnly is set and core/clone's whole-radio
+// ReadAll skips the bank outright rather than aborting on the inevitable
+// per-slot mismatch — a single-slot read of the one currently selected
+// channel still succeeds, exactly as before.
 package ts2000

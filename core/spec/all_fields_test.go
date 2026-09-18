@@ -91,8 +91,8 @@ func declaredFieldsInSourceOrder(t *testing.T) []Field {
 
 func TestAllFieldsMatchesDeclarationsInDeterministicOrder(t *testing.T) {
 	declared := declaredFieldsInSourceOrder(t)
-	if len(declared) != 27 {
-		t.Fatalf("core/spec declares %d Field constants, want 27 — when minting a Field, update this count and AllFields in the same change", len(declared))
+	if len(declared) != 30 {
+		t.Fatalf("core/spec declares %d Field constants, want 30 — when minting a Field, update this count and AllFields in the same change", len(declared))
 	}
 	if got := AllFields(); !slices.Equal(got, declared) {
 		t.Errorf("AllFields() = %v, want Field declarations in file-name then source-position order: %v", got, declared)

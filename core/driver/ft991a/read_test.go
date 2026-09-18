@@ -109,6 +109,9 @@ func unavailableTierFields() codeplug.ChannelData {
 		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
 		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
 		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
+		SatBandSwap:         codeplug.BoolField{State: codeplug.Unavailable},
+		SatTrace:            codeplug.BoolField{State: codeplug.Unavailable},
+		SatTraceRev:         codeplug.BoolField{State: codeplug.Unavailable},
 	}
 }
 
@@ -230,6 +233,9 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 			want.Preamp = tier.Preamp
 			want.Antenna = tier.Antenna
 			want.IPPlus = tier.IPPlus
+			want.SatBandSwap = tier.SatBandSwap
+			want.SatTrace = tier.SatTrace
+			want.SatTraceRev = tier.SatTraceRev
 
 			if !reflect.DeepEqual(*ch.Data, want) {
 				t.Errorf("ChannelData =\n%+v\nwant\n%+v", *ch.Data, want)
@@ -289,8 +295,8 @@ func TestReadChannel_FiveStateP8IsMappedEndToEnd(t *testing.T) {
 		if ch.Data.CTCSS != tt.want {
 			t.Errorf("P8 %q read back as %q, want %q", '0'+byte(i), ch.Data.CTCSS, tt.want)
 		}
-		if caps.CTCSSStates[i].Value != tt.want {
-			t.Errorf("caps.CTCSSStates[%d] = %q, but the read maps that wire byte to %q — the driver's map and its published vocabulary must be the same five", i, caps.CTCSSStates[i].Value, tt.want)
+		if caps.ToneModes[i].Value != tt.want {
+			t.Errorf("caps.ToneModes[%d] = %q, but the read maps that wire byte to %q — the driver's map and its published vocabulary must be the same five", i, caps.ToneModes[i].Value, tt.want)
 		}
 	}
 }
@@ -302,16 +308,16 @@ func TestReadChannel_FiveStateP8IsMappedEndToEnd(t *testing.T) {
 // sibling would silently drop.
 func TestCTCSSNames_CoverExactlyTheAdvertisedVocabulary(t *testing.T) {
 	caps := CapabilitiesUnverified()
-	if len(ctcssNames) != len(caps.CTCSSStates) {
-		t.Fatalf("read.go's ctcssNames has %d entries, Capabilities advertises %d states — a state the radio can send and this driver cannot name fails every read of that channel", len(ctcssNames), len(caps.CTCSSStates))
+	if len(ctcssNames) != len(caps.ToneModes) {
+		t.Fatalf("read.go's ctcssNames has %d entries, Capabilities advertises %d states — a state the radio can send and this driver cannot name fails every read of that channel", len(ctcssNames), len(caps.ToneModes))
 	}
 	published := map[string]bool{}
-	for _, st := range caps.CTCSSStates {
+	for _, st := range caps.ToneModes {
 		published[st.Value] = true
 	}
 	for wire, name := range ctcssNames {
 		if !published[name] {
-			t.Errorf("ctcssNames[%q] = %q, which Capabilities.CTCSSStates does not advertise", wire, name)
+			t.Errorf("ctcssNames[%q] = %q, which Capabilities.ToneModes does not advertise", wire, name)
 		}
 	}
 }

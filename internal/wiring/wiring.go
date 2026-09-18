@@ -50,6 +50,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx3000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftx1"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -902,6 +903,43 @@ const FT900Model = "FT-900"
 // NO driver.SerialFramingReporter, like every other Yaesu row.
 const FT1000MPModel = "FT-1000MP"
 
+// FTX1Model names the FTX-1's realDrivers/fakeDrivers key, which must
+// equal ftx1.New(...).Model() — pinned, like every other constant above,
+// by TestDriverTableKeysMatchDriverModel. The registry key is "FTX-1" —
+// no body suffix: the wire carries no body-distinguishing byte at all
+// (core/driver/ftx1/doc.go), so this row names the product line, not the
+// "field" or "optima" body a real unit ships as. Body identity is never
+// inferred from CATID or anything else on the wire.
+//
+// v1.10.0, FTX-1 ROW: bare New (single row, own document, INLINE dialect
+// — the ftdx1200/ftdx3000 shape, not ft710's). The FT-710's own 27-byte
+// MR/MW field block with its address field widened from 3 to 5 bytes:
+// 00001-00999 memory, P-01L-P-50U PMS (a hyphenated, two-digit,
+// dash-token form), 50001-50020 "5 MHz BAND", and a named EMGCH token.
+// MT is a SHORT form with NO display byte at all. Tag width 12
+// (TagFill-padded). The tone (P8) domain widens to SIX states, one of
+// them ("3", DCS) UNSPLIT, and two ("PR FREQ", "REV TONE") with no
+// analogue anywhere else in this project's tone vocabulary — its own
+// ToneModes list, not spec.StandardToneModes(). CTCSSTones (a
+// tone-frequency chart) stays nil: no such chart was located in the
+// manual excerpts read for this spec, OPEN. MC is a genuinely different
+// frame shape (a leading per-port byte) nothing in core/cat can build or
+// parse: this driver declares MCSelectsUnsupported and reads via MR+MT
+// only. NO FTX-1 has ever answered a frame from this project
+// (writeTrialsComplete false), so every write stays behind the opt-in
+// consent route — the 5 MHz and EMGCH banks stay write-Unsupported on
+// every profile regardless, consent included.
+//
+// Firmware floor V1.08 ("The CAT operation does not work with MAIN
+// Firmware before Ver. 1.08", the manual's own opening notes) is a
+// DOCUMENTED PRECONDITION this driver does not enforce: the wire carries
+// no firmware-version byte to check, and a pre-V1.08 radio simply never
+// answers CAT at all, which Open's own ID-probe failure already treats
+// as "no radio present".
+//
+// NO driver.SerialFramingReporter, like every other Yaesu row.
+const FTX1Model = "FTX-1"
+
 // IC7800Model names the IC-7800's realDrivers/fakeDrivers key, which must
 // equal ic7800.New(...).Model() — pinned, like every other Icom constant
 // above, by TestDriverTableKeysMatchDriverModel walking both tables.
@@ -1314,6 +1352,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft1000mp.New(ft1000mp.RealHardware, ft1000mp.WithConsentedUnverifiedWrites())
 		}
 		return ft1000mp.New(ft1000mp.RealHardware)
+	},
+	// v1.10.0, FTX-1 row: bare New takes the profile as its first
+	// argument, same shape as every other ftdx1200/ftdx3000-style row.
+	FTX1Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftx1.New(ftx1.RealHardware, ftx1.WithConsentedUnverifiedWrites())
+		}
+		return ftx1.New(ftx1.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is

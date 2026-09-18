@@ -55,7 +55,7 @@ func validTestCapabilities() Capabilities {
 		MinFreqHz:    30000,
 		MaxFreqHz:    56000000,
 		ShiftOptions: StandardShiftOptions(),
-		CTCSSStates:  StandardCTCSSStates(),
+		ToneModes:    StandardToneModes(),
 	}
 }
 
@@ -238,9 +238,9 @@ func TestCapabilitiesValidate(t *testing.T) {
 }
 
 // TestCapabilitiesValidate_RequiresVocab covers Validate's ShiftOptions
-// and CTCSSStates rules specifically: both must be non-empty, and each
+// and ToneModes rules specifically: both must be non-empty, and each
 // rejects a blank value and a duplicate value. validTestCapabilities'
-// baseline already carries StandardShiftOptions()/StandardCTCSSStates(),
+// baseline already carries StandardShiftOptions()/StandardToneModes(),
 // so every case here mutates a fresh copy to break exactly one rule.
 func TestCapabilitiesValidate_RequiresVocab(t *testing.T) {
 	cases := []struct {
@@ -276,23 +276,23 @@ func TestCapabilitiesValidate_RequiresVocab(t *testing.T) {
 			wantSub: `ShiftOptions contains duplicate value "SIMPLEX"`,
 		},
 		{
-			name:    "CTCSSStates empty",
-			mutate:  func(c *Capabilities) { c.CTCSSStates = nil },
-			wantSub: "CTCSSStates must not be empty",
+			name:    "ToneModes empty",
+			mutate:  func(c *Capabilities) { c.ToneModes = nil },
+			wantSub: "ToneModes must not be empty",
 		},
 		{
-			name: "CTCSSStates blank Value",
+			name: "ToneModes blank Value",
 			mutate: func(c *Capabilities) {
-				c.CTCSSStates = []ToneState{{Value: "OFF", Semantics: ToneOff}, {Value: "", Semantics: ToneEncode}}
+				c.ToneModes = []ToneMode{{Value: "OFF", Semantics: ToneModeOff}, {Value: "", Semantics: ToneModeCTCSS}}
 			},
-			wantSub: "CTCSSStates must not contain a blank value",
+			wantSub: "ToneModes must not contain a blank value",
 		},
 		{
-			name: "CTCSSStates duplicate Value",
+			name: "ToneModes duplicate Value",
 			mutate: func(c *Capabilities) {
-				c.CTCSSStates = []ToneState{{Value: "OFF", Semantics: ToneOff}, {Value: "OFF", Semantics: ToneEncode}}
+				c.ToneModes = []ToneMode{{Value: "OFF", Semantics: ToneModeOff}, {Value: "OFF", Semantics: ToneModeCTCSS}}
 			},
-			wantSub: `CTCSSStates contains duplicate value "OFF"`,
+			wantSub: `ToneModes contains duplicate value "OFF"`,
 		},
 	}
 
@@ -327,19 +327,26 @@ func TestValidate_ShiftOptionsDuplicateDirection(t *testing.T) {
 	}
 }
 
-func TestValidate_CTCSSStatesDuplicateEncodeDecodePair(t *testing.T) {
+// TestValidate_ToneModesDuplicateEncodeDecodePairNeedsCanonical pins the
+// Yaesu family's own tone vocabulary against the CANONICAL rule the
+// unified ToneModes type now carries (E5), replacing the old CTCSSStates
+// strict-uniqueness rule: two entries sharing a Semantics value are
+// admitted, but exactly one of them must be marked Canonical, or the
+// reverse mapping (csvio's CHIRP export, asking "which wire code means
+// ENC?") has no single answer.
+func TestValidate_ToneModesDuplicateEncodeDecodePairNeedsCanonical(t *testing.T) {
 	c := validTestCapabilities()
-	c.CTCSSStates = []ToneState{
-		{Value: "OFF", Semantics: ToneOff},
-		{Value: "ENC", Semantics: ToneEncode},
-		{Value: "ENC-AGAIN", Semantics: ToneEncode},
+	c.ToneModes = []ToneMode{
+		{Value: "OFF", Semantics: ToneModeOff},
+		{Value: "ENC", Semantics: ToneModeCTCSS},
+		{Value: "ENC-AGAIN", Semantics: ToneModeCTCSS},
 	}
 	err := c.Validate()
 	if err == nil {
-		t.Fatal("Validate() = nil, want an error: two ToneStates share the same semantics")
+		t.Fatal("Validate() = nil, want an error: two ToneModes share the same semantics with no canonical one marked")
 	}
-	if !strings.Contains(err.Error(), "same semantics") {
-		t.Errorf("Validate() error = %q, want it to mention \"same semantics\"", err)
+	if !strings.Contains(err.Error(), "no canonical one is marked") {
+		t.Errorf("Validate() error = %q, want it to mention \"no canonical one is marked\"", err)
 	}
 }
 
@@ -459,19 +466,19 @@ func TestValidate_ShiftOptionDirectionOutOfRange(t *testing.T) {
 // TestValidate_CTCSSStateZeroValueSemanticsRejected is FIX A1's failing-
 // first test for the CTCSS side: before this fix, (Encodes: false,
 // Decodes: false) — CTCSS off — was the zero value of the old bool-triple
-// shape, so a ToneState whose semantics were simply omitted (as
+// shape, so a ToneMode whose semantics were simply omitted (as
 // "RADIO-ENC" is here) silently read as "off" and passed Validate because
 // "OFF" was still a member of the declared vocabulary. Now the zero value
-// is ToneSemanticsUnspecified, which Validate must reject.
+// is ToneModeUnspecified, which Validate must reject.
 func TestValidate_CTCSSStateZeroValueSemanticsRejected(t *testing.T) {
 	c := validTestCapabilities()
-	c.CTCSSStates = []ToneState{
+	c.ToneModes = []ToneMode{
 		{Value: "RADIO-ENC"}, // Semantics accidentally omitted
-		{Value: "RADIO-BOTH", Semantics: ToneEncodeDecode},
+		{Value: "RADIO-BOTH", Semantics: ToneModeCTCSSSquelch},
 	}
 	err := c.Validate()
 	if err == nil {
-		t.Fatal("Validate() = nil, want an error: a ToneState with omitted (zero-value) Semantics must be rejected")
+		t.Fatal("Validate() = nil, want an error: a ToneMode with omitted (zero-value) Semantics must be rejected")
 	}
 	if !strings.Contains(err.Error(), "invalid Semantics") {
 		t.Errorf("Validate() error = %q, want it to mention \"invalid Semantics\"", err)
@@ -479,14 +486,15 @@ func TestValidate_CTCSSStateZeroValueSemanticsRejected(t *testing.T) {
 }
 
 // TestValidate_CTCSSStateSemanticsOutOfRange covers a Semantics value
-// outside the five declared ToneSemantics constants entirely. It said
-// "three" until S0.4 appended the two DCS members and the Stage 0 close
-// review found the count stale in the very test that exercises the widened
-// rule (seat 2, LOW-5).
+// outside the seven declared ToneModeSemantics constants entirely. It
+// said "three" until S0.4 appended the two DCS members and the Stage 0
+// close review found the count stale in the very test that exercises the
+// widened rule (seat 2, LOW-5); it said "five" again once the Yaesu and
+// Icom/Kenwood tone vocabularies unified onto the one enum.
 func TestValidate_CTCSSStateSemanticsOutOfRange(t *testing.T) {
 	c := validTestCapabilities()
-	c.CTCSSStates = []ToneState{
-		{Value: "WEIRD", Semantics: ToneSemantics(99)},
+	c.ToneModes = []ToneMode{
+		{Value: "WEIRD", Semantics: ToneModeSemantics(99)},
 	}
 	err := c.Validate()
 	if err == nil {
@@ -555,13 +563,16 @@ func TestValidate_NegativeBaudRejected(t *testing.T) {
 
 // TestValidXxxRangeChecksCoverExactlyTheDeclaredEnum pins each validXxx
 // range check's upper bound to a literal cardinality. validSupport,
-// validShiftDirection, validDuplexDirection, validToneModeSemantics and
-// validToneSemantics all became `v >= low && v <= high` range checks
-// (finding 47) instead of an explicit case list — correct only as long as
-// `high` really is the LAST declared constant. A constant inserted before
-// it would shift its iota value with no compiler error, silently
-// widening or narrowing what the range admits; this pins that value so
-// such an insertion fails loudly here instead.
+// validShiftDirection, validDuplexDirection and validToneModeSemantics
+// all became `v >= low && v <= high` range checks (finding 47) instead of
+// an explicit case list — correct only as long as `high` really is the
+// LAST declared constant. A constant inserted before it would shift its
+// iota value with no compiler error, silently widening or narrowing what
+// the range admits; this pins that value so such an insertion fails
+// loudly here instead. validToneSemantics (the Yaesu-only vocabulary) is
+// gone along with ToneSemantics itself: the Yaesu and Icom/Kenwood tone
+// vocabularies unified onto ToneModeSemantics, so ToneModeDCSEncode is
+// now the last declared constant for BOTH families' Semantics checks.
 func TestValidXxxRangeChecksCoverExactlyTheDeclaredEnum(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -571,8 +582,7 @@ func TestValidXxxRangeChecksCoverExactlyTheDeclaredEnum(t *testing.T) {
 		{"Support (validSupport, ConsentedUnverified)", int(ConsentedUnverified), 4},
 		{"ShiftDirection (validShiftDirection, ShiftDown)", int(ShiftDown), 3},
 		{"DuplexDirection (validDuplexDirection, DuplexDown)", int(DuplexDown), 3},
-		{"ToneModeSemantics (validToneModeSemantics, ToneModeCross)", int(ToneModeCross), 6},
-		{"ToneSemantics (validToneSemantics, ToneDCSEncode)", int(ToneDCSEncode), 5},
+		{"ToneModeSemantics (validToneModeSemantics, ToneModeDCSEncode)", int(ToneModeDCSEncode), 8},
 	} {
 		if tc.last != tc.want {
 			t.Errorf("%s = %d, want %d — a constant was inserted or removed; update both this pin and the range check's bound deliberately", tc.name, tc.last, tc.want)

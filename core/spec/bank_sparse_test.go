@@ -258,17 +258,16 @@ func TestValidate_VocabularyPairs(t *testing.T) {
 			t.Fatalf("Validate() = %v, want nil", err)
 		}
 	})
-	t.Run("neither half of the tone pair", func(t *testing.T) {
+	t.Run("no tone vocabulary", func(t *testing.T) {
 		c := minimalCaps()
-		c.CTCSSStates = nil
+		c.ToneModes = nil
 		err := c.Validate()
-		if err == nil || !strings.Contains(err.Error(), "CTCSSStates must not be empty") {
-			t.Fatalf("Validate() = %v, want an error containing %q", err, "CTCSSStates must not be empty")
+		if err == nil || !strings.Contains(err.Error(), "ToneModes must not be empty") {
+			t.Fatalf("Validate() = %v, want an error containing %q", err, "ToneModes must not be empty")
 		}
 	})
-	t.Run("Icom half alone satisfies the tone pair", func(t *testing.T) {
+	t.Run("an Icom-shaped ToneModes list still satisfies the rule", func(t *testing.T) {
 		c := minimalCaps()
-		c.CTCSSStates = nil
 		c.ToneModes = []ToneMode{
 			{Value: "OFF", Semantics: ToneModeOff},
 			{Value: "TONE", Semantics: ToneModeCTCSS},
@@ -403,7 +402,7 @@ func minimalCaps() Capabilities {
 		Bauds:        []int{38400},
 		DefaultBaud:  38400,
 		ShiftOptions: StandardShiftOptions(),
-		CTCSSStates:  StandardCTCSSStates(),
+		ToneModes:    StandardToneModes(),
 		Banks: []Bank{
 			// THE BANK REACHES BOTH VOCABULARY FIELDS, which is what
 			// keeps the empty-vocabulary refusals below meaningful. Since

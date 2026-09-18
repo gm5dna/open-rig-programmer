@@ -33,6 +33,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx3000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftx1"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -327,6 +328,8 @@ var fakePackageForModel = map[string]string{
 	// v1.9.0 binary-CAT four, fourth and last row: one simulator package
 	// to itself.
 	FT1000MPModel: "internal/fakeft1000mp",
+	// v1.10.0, FTX-1 row: one simulator package to itself.
+	FTX1Model: "internal/fakeftx1",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -564,6 +567,19 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 				for _, slot := range bank.Slots {
 					ch, err := sess.ReadChannel(ctx, slot)
 					if err != nil {
+						// BankSatellite is a NAMED, DOCUMENTED exception
+						// (core/kw/ts2000/satellite.go's own doc comment):
+						// its read has no per-channel address at all, so
+						// ReadChannel(slot) succeeds only for whichever
+						// channel the fake currently has selected (slot
+						// "0" at construction) and every other slot
+						// legitimately answers AnswerMismatchError — a
+						// real protocol limitation, not a gap this sweep
+						// should fail on.
+						if bank.ID == spec.BankSatellite && errors.Is(err, driver.ErrAnswerMismatch) {
+							t.Logf("ReadChannel(%q) in bank %s: %v — expected: SA's read has no per-channel address (satellite.go's own doc comment)", slot, bank.ID, err)
+							continue
+						}
 						t.Errorf("ReadChannel(%q) in bank %s: unexpected error: %v", slot, bank.ID, err)
 						continue
 					}
@@ -713,6 +729,7 @@ var wiringTierFields = []spec.Field{
 	spec.FieldDataMode, spec.FieldTuningStepEnabled, spec.FieldTuningStep,
 	spec.FieldProgramTuningStep, spec.FieldAttenuator, spec.FieldPreamp,
 	spec.FieldAntenna, spec.FieldIPPlus,
+	spec.FieldSatBandSwap, spec.FieldSatTrace, spec.FieldSatTraceRev,
 }
 
 // wiringPreTierFields is the ten Field constants core/spec declared
@@ -1532,7 +1549,7 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 			DefaultBaud:  fixtureBaud,
 			TagLen:       12,
 			ShiftOptions: spec.StandardShiftOptions(),
-			CTCSSStates:  spec.StandardCTCSSStates(),
+			ToneModes:    spec.StandardToneModes(),
 		}}
 	}
 	t.Cleanup(func() { delete(realDrivers, fixtureModel) })
@@ -1628,7 +1645,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S", "TS-870S", "FT-2000", "FT-2000D", "FTdx9000", "FT-950", "TS-570DG", "FTdx3000", "FTdx1200", "FT-450D", "FT-890", "FT-900", "FT-1000MP"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A", "TS-590S", "TS-590SG", "TS-890S", "TS-990S", "IC-7800", "IC-7600", "IC-7410", "IC-7700", "IC-9100", "IC-7200", "FTdx5000", "TS-2000", "TS-2000X", "TS-B2000", "TS-570D", "TS-570S", "TS-870S", "FT-2000", "FT-2000D", "FTdx9000", "FT-950", "TS-570DG", "FTdx3000", "FTdx1200", "FT-450D", "FT-890", "FT-900", "FT-1000MP", "FTX-1"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1863,6 +1880,10 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// v1.9.0 binary-CAT four, fourth and last row.
 	if FT1000MPModel != "FT-1000MP" {
 		t.Errorf("FT1000MPModel = %q, want \"FT-1000MP\"", FT1000MPModel)
+	}
+	// v1.10.0, FTX-1 row.
+	if FTX1Model != "FTX-1" {
+		t.Errorf("FTX1Model = %q, want \"FTX-1\"", FTX1Model)
 	}
 }
 
@@ -2448,7 +2469,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, TS570DGModel, FTdx3000Model, FTdx1200Model, FT450DModel, FT890Model, FT900Model, FT1000MPModel}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel, TS590SModel, TS590SGModel, TS890SModel, TS990SModel, IC7800Model, IC7600Model, IC7410Model, IC7700Model, IC9100Model, IC7200Model, FTdx5000Model, TS2000Model, TS2000XModel, TSB2000Model, TS570DModel, TS570SModel, TS870SModel, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, TS570DGModel, FTdx3000Model, FTdx1200Model, FT450DModel, FT890Model, FT900Model, FT1000MPModel, FTX1Model}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2802,6 +2823,11 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: FT1000MPModel, want: func() driver.Driver { return ft1000mp.New(ft1000mp.RealHardware) }, wantConsent: func() driver.Driver {
 			return ft1000mp.New(ft1000mp.RealHardware, ft1000mp.WithConsentedUnverifiedWrites())
 		}},
+		// v1.10.0, FTX-1 row: bare New takes the profile as its first
+		// argument.
+		{model: FTX1Model, want: func() driver.Driver { return ftx1.New(ftx1.RealHardware) }, wantConsent: func() driver.Driver {
+			return ftx1.New(ftx1.RealHardware, ftx1.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	// MEMBERSHIP, not length. A length check passes a table that names one
@@ -3000,7 +3026,7 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// (core/driver/ft991a/caps.go) is FALSE, so its RealHardware
 		// profile is CapabilitiesUnverified — every candidate field's
 		// Write Unverified on both of its static banks, which is what
-		// this predicate must find. Its five-state CTCSSStates and its
+		// this predicate must find. Its five-state ToneModes and its
 		// numeric PMS slots change nothing here: what decides the answer
 		// is the write-trial guard alone.
 		FT991AModel: true,
@@ -3106,6 +3132,12 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// its RealHardware profile carries a write-side Unverified field —
 		// Store/Enter included, per Stuart's 15/09/2026 override.
 		FT1000MPModel: true,
+		// The FTX-1 (v1.10.0). writeTrialsComplete
+		// (core/driver/ftx1/caps.go) is FALSE — no FTX-1 has ever
+		// answered a frame from this project — so its RealHardware
+		// profile carries a write-side Unverified field on every bank
+		// that reaches one.
+		FTX1Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -3262,7 +3294,7 @@ func registerFramingFixture(t *testing.T, model string, stopBits int) {
 				DefaultBaud:  transport.DefaultBaud,
 				TagLen:       12,
 				ShiftOptions: spec.StandardShiftOptions(),
-				CTCSSStates:  spec.StandardCTCSSStates(),
+				ToneModes:    spec.StandardToneModes(),
 			}},
 			stopBits: stopBits,
 		}
@@ -3474,7 +3506,7 @@ func mustRealDriver(t *testing.T, model string) driver.Driver {
 // implements no driver.SerialFramingReporter either — its framing is an
 // ASSUMED entry in core/cat/ft991a's own register, FRAMING: 8 DATA BITS,
 // NO PARITY, TWO STOP BITS — and its CTCSSToneRange is nil beside a
-// populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member CTCSSStates is
+// populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member ToneModes is
 // not a membership question: this list is about the maker, and the
 // vocabulary's width belongs to the tests that read it.
 // FT890Model, FT900Model and FT1000MPModel: 8-N-2 is MANUAL-EVIDENCED for
@@ -3482,14 +3514,23 @@ func mustRealDriver(t *testing.T, model string) driver.Driver {
 // FT-890/FT-900's manuals state "8 data bits, no parity and two stop
 // bits" outright; the FT-1000MP/Mark-V manual states the identical
 // format at its own "SENDING A COMMAND" passage, matrix §1.10).
-var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel, FTdx5000Model, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, FTdx3000Model, FTdx1200Model, FT450DModel, FT890Model, FT900Model, FT1000MPModel}
+// FTX1Model: 8-N-2 is this list's ordinary default (no
+// driver.SerialFramingReporter, core/driver/ftx1's own doc.go); no
+// manual statement either way, unlike the three models above.
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel, FTdx5000Model, FT2000Model, FT2000DModel, FTdx9000Model, FT950Model, FTdx3000Model, FTdx1200Model, FT450DModel, FT890Model, FT900Model, FT1000MPModel, FTX1Model}
 
-// noToneYaesuModels carves FT1000MPModel out of
+// noToneYaesuModels carves FT1000MPModel and FTX1Model out of
 // TestEveryYaesuModelDeclaresAToneListAndNoRange's "every Yaesu model
-// declares a non-empty tone chart" assumption (Codex #12(c)): it is the
-// first registered Yaesu model with NO tone byte anywhere in its 16-byte
-// memory record (matrix §1.2/§2 — no CTCSSTone, no CTCSSState).
-var noToneYaesuModels = map[string]bool{FT1000MPModel: true}
+// declares a non-empty tone chart" assumption (Codex #12(c)). The two
+// gaps are DIFFERENT shapes: FT-1000MP is the first registered Yaesu
+// model with NO tone byte anywhere in its 16-byte memory record (matrix
+// §1.2/§2 — no CTCSSTone, no CTCSSState); FTX-1 DOES have a live tone
+// byte (P8, a six-value state domain — its own populated ToneModes,
+// core/driver/ftx1/caps.go), but no CTCSS tone-FREQUENCY chart was
+// located in the manual excerpts this project's spec pass read (matrix
+// §6, OPEN) — so CTCSSTones stays nil for a different reason, and this
+// predicate only cares that it is nil.
+var noToneYaesuModels = map[string]bool{FT1000MPModel: true, FTX1Model: true}
 
 // noCTCSSStateYaesuModels carves FT890Model, FT900Model and FT1000MPModel
 // out of TestEveryYaesuModelStillValidatesUnchanged's "every Yaesu model
@@ -3797,13 +3838,18 @@ func TestEveryYaesuModelDeclaresAToneListAndNoRange(t *testing.T) {
 //
 // E5a replaced the "at most one option per direction" rule on the Icom
 // vocabularies with the canonical-entry rule. No Yaesu model declares
-// either vocabulary, so that change must be invisible here, which the
-// empty-slice assertions say.
+// DuplexOptions, so that change must be invisible here for THAT vocabulary,
+// which the empty-slice assertion below says. ToneModes is NOT asserted
+// empty: since the Yaesu and Icom/Kenwood tone vocabularies unified onto
+// one spec.ToneMode type, every Yaesu model that reaches FieldCTCSSState
+// populates it — but every one of their vocabularies (the family three, or
+// the FT-991A's own five) declares a unique Semantics per entry, so E5a's
+// canonical rule stays untriggered for them just the same.
 //
 // SCOPED TO yaesuModels, not SupportedModels(), since Wave 4's IC-7610
-// registration: that model DOES declare ToneModes (matrix §1 row 8), which
-// is exactly the Icom vocabulary E5a's canonical-entry rule exists for and
-// that this test asserts is empty for every Yaesu radio.
+// registration: that model DOES declare ToneModes with a genuinely
+// duplicated semantic (matrix §1 row 8), which is exactly the shape E5a's
+// canonical-entry rule exists for and that this test does not cover.
 func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
 	models := yaesuModels
 	for _, model := range models {
@@ -3834,9 +3880,15 @@ func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
 			if len(caps.DuplexOptions) != 0 {
 				t.Errorf("DuplexOptions = %v, want empty for a Yaesu model", caps.DuplexOptions)
 			}
-			if len(caps.ToneModes) != 0 {
-				t.Errorf("ToneModes = %v, want empty for a Yaesu model", caps.ToneModes)
-			}
+			// ToneModes is NOT asserted empty here: it is now the SHARED
+			// vocabulary FieldCTCSSState (Yaesu) and FieldToneMode
+			// (Icom/Kenwood) both draw Semantics from, so every Yaesu
+			// model that reaches FieldCTCSSState populates it (the
+			// family three, or the FT-991A's own five) — see
+			// spec.ToneMode's own doc comment. Before the two
+			// vocabularies unified, CTCSSStates carried the Yaesu half
+			// and ToneModes stayed empty on every Yaesu model, which is
+			// what this assertion used to pin.
 
 			// And the E5b condition really does bite: strip the
 			// vocabulary this model DOES declare and Validate must still

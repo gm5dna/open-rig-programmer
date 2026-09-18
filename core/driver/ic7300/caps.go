@@ -513,9 +513,6 @@ func baseCapabilities(m modelParams, memFields, scanFields map[spec.Field]spec.F
 		// reaches FieldShift or FieldDuplex, so no vocabulary is demanded.
 		// Inventing a dummy one to satisfy a validator would be dishonest.
 		ShiftOptions: nil,
-		// DELIBERATELY EMPTY: displaced by ToneModes on Icom models
-		// (spec D4; matrix §1 row 15).
-		CTCSSStates: nil,
 		// DELIBERATELY EMPTY: MANUAL-EVIDENCED absence (matrix §1b, duplex).
 		DuplexOptions: nil,
 		// ⑪'s LOW nibble: "0: OFF, 1: TONE, 2: TSQL" (the IC-7300's PDF

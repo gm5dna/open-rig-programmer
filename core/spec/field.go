@@ -112,6 +112,25 @@ const (
 	FieldIPPlus Field = "ip_plus"
 )
 
+// The three per-channel Fields the TS-2000/TS-2000X/TS-B2000 Satellite
+// Memory bank adds (v1.10.0, core/kw/ts2000's SA/SI). They join the
+// tier-added fields above in ChannelData/TierFields (core/codeplug) so
+// the existing generic export/import/diff/validate machinery carries
+// them for free; core/kw/ts2000/satellite.go's own doc comment explains
+// which of the record's seven flags are per-channel (these three) and
+// which are whole-radio live state (not Fields at all).
+const (
+	// FieldSatBandSwap is the satellite record's uplink/downlink band
+	// assignment: which of the main transceiver/sub-receiver carries
+	// uplink and which carries downlink.
+	FieldSatBandSwap Field = "sat_band_swap"
+	// FieldSatTrace is the satellite record's TRACE (Doppler-tracking)
+	// on/off flag.
+	FieldSatTrace Field = "sat_trace"
+	// FieldSatTraceRev is the satellite record's TRACE REVERSE flag.
+	FieldSatTraceRev Field = "sat_trace_rev"
+)
+
 // AllFields returns every Field constant declared by this package, ordered by
 // source file name and then declaration position. It exists so capability and
 // write-guard tests can audit their coverage; it is not a statement that any
@@ -145,6 +164,9 @@ func AllFields() []Field {
 		FieldPreamp,
 		FieldAntenna,
 		FieldIPPlus,
+		FieldSatBandSwap,
+		FieldSatTrace,
+		FieldSatTraceRev,
 	}
 }
 

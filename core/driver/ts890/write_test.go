@@ -167,7 +167,7 @@ func TestToneModeWire_IsTheExactInverseOfToneModeNames(t *testing.T) {
 }
 
 // TestRequestedFields_MembershipAndOrder pins the table against
-// spec.AllFields() — twenty-six entries, every spec.Field but FieldErase, in
+// spec.AllFields() — twenty-nine entries, every spec.Field but FieldErase, in
 // declaration order (plan P5 permits naming the helper on these rows).
 //
 // FieldErase is not a field a write REQUESTS: it is the whole shape of a

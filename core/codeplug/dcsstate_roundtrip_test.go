@@ -11,11 +11,14 @@ import (
 
 // --- FT-991A Stage 0 (S0.4): a five-state CTCSS vocabulary ---
 //
-// spec.ToneSemantics gained two DCS members so a radio whose P8 legend
-// prints five states can declare a vocabulary Validate accepts. This
-// package needs no change for that — ChannelData.CTCSS is an opaque string
-// and the vocabulary check reads caps' own list — and these pins are what
-// says so rather than leaving it assumed.
+// spec.ToneModeSemantics gained two DCS members so a radio whose P8
+// legend prints five states can declare a vocabulary Validate accepts.
+// This package needs no change for that — ChannelData.CTCSS is an opaque
+// string and the vocabulary check reads caps' own list — and these pins
+// are what says so rather than leaving it assumed. Originally these DCS
+// members lived on the Yaesu-only spec.ToneSemantics/spec.ToneState pair;
+// the fixture below moved onto spec.ToneMode/ToneModeSemantics once that
+// vocabulary unified with Icom/Kenwood's.
 //
 // A TEST FIXTURE, not a registered model: no radio declares this vocabulary
 // until Stage 2.
@@ -24,19 +27,19 @@ import (
 // in place of the family three.
 func fiveStateCapabilities() spec.Capabilities {
 	caps := testCapabilities()
-	caps.CTCSSStates = []spec.ToneState{
-		{Value: "OFF", Semantics: spec.ToneOff},
-		{Value: "ENC-DEC", Semantics: spec.ToneEncodeDecode},
-		{Value: "ENC", Semantics: spec.ToneEncode},
-		{Value: "DCS-ENC-DEC", Semantics: spec.ToneDCSEncodeDecode},
-		{Value: "DCS-ENC", Semantics: spec.ToneDCSEncode},
+	caps.ToneModes = []spec.ToneMode{
+		{Value: "OFF", Semantics: spec.ToneModeOff},
+		{Value: "ENC-DEC", Semantics: spec.ToneModeCTCSSSquelch},
+		{Value: "ENC", Semantics: spec.ToneModeCTCSS},
+		{Value: "DCS-ENC-DEC", Semantics: spec.ToneModeDCSEncodeDecode},
+		{Value: "DCS-ENC", Semantics: spec.ToneModeDCSEncode},
 	}
 	return caps
 }
 
 // TestValidate_AcceptsADCSStateChannel is the point of the widening seen
 // from this side: a channel in a DCS state is valid, and — because
-// RequiresTone was deliberately NOT widened — it raises NO tone warning
+// NeedsTxTone was deliberately NOT widened — it raises NO tone warning
 // even though it carries no known CTCSS tone. A DCS state needs a code,
 // and the code is not a field of this record.
 func TestValidate_AcceptsADCSStateChannel(t *testing.T) {
@@ -57,7 +60,7 @@ func TestValidate_AcceptsADCSStateChannel(t *testing.T) {
 			t.Errorf("Validate flagged a declared DCS state: %s", issue.Msg)
 		}
 		if issue.Field == spec.FieldCTCSSTone && issue.Severity == SeverityWarning {
-			t.Errorf("Validate warned that a DCS state's TONE cannot be set: %s — a DCS state needs a CODE, not a tone, and RequiresTone is deliberately false for it", issue.Msg)
+			t.Errorf("Validate warned that a DCS state's TONE cannot be set: %s — a DCS state needs a CODE, not a tone, and NeedsTxTone is deliberately false for it", issue.Msg)
 		}
 	}
 

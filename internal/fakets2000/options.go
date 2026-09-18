@@ -112,6 +112,22 @@ func WithTransientNAKSuppressed() Option {
 	}
 }
 
+// WithSatelliteLiveState seeds the fake's live satellite radio state —
+// SA's P1 (satellite mode)/P4 (CTRL main/sub)/P7 (MULTI/CH mode),
+// fakets2000.go's satMode/satCtrl/satMulti — away from New's all-OFF
+// construction default. It exists so a test can drive that state
+// somewhere the driver's own write path (the only other writer of these
+// three fields, parser.go's handleSASet) could not have put it, and then
+// prove a subsequent channel write threads the SEEDED values through
+// unchanged rather than merely echoing back whatever it just wrote itself.
+func WithSatelliteLiveState(satModeOn, ctrlOnSub, multiCHMemoryMode bool) Option {
+	return func(r *Radio) {
+		r.satMode = boolByte(satModeOn)
+		r.satCtrl = boolByte(ctrlOnSub)
+		r.satMulti = boolByte(multiCHMemoryMode)
+	}
+}
+
 // WithStreamError scripts one of the two SERIAL-LINE error tokens
 // (ts2000:9614-9618) in place of exchange n's reply, where n counts EVENTS
 // the fake has handled from 1.
