@@ -180,6 +180,9 @@ var tierFields = []spec.Field{
 	spec.FieldTuningStepEnabled, spec.FieldTuningStep,
 	spec.FieldProgramTuningStep, spec.FieldAttenuator,
 	spec.FieldPreamp, spec.FieldAntenna, spec.FieldIPPlus,
+	// The three TS-2000 Satellite Memory bank fields (v1.10.0). Only that
+	// bank's BankView ever reaches them.
+	spec.FieldSatBandSwap, spec.FieldSatTrace, spec.FieldSatTraceRev,
 }
 
 // bankTierFields returns, in tierFields order, every tier-added field the

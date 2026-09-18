@@ -9,12 +9,16 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
-// deliberatelyUnexpressedFields is EMPTY: this driver's bank map (caps.go's
-// bankFields) names every spec.Field explicitly, including the twenty-one
-// that carry the zero FieldSupport — so there is no field whose absence
-// from allFields needs a second reason here (ft891's own identical
-// precedent).
-var deliberatelyUnexpressedFields = map[spec.Field]string{}
+// deliberatelyUnexpressedFields carries only the three TS-2000-only
+// Satellite Memory bank flags (v1.10.0): every OTHER spec.Field is named
+// explicitly in this driver's bank map (caps.go's bankFields), including
+// the twenty-one that carry the zero FieldSupport — so none of THOSE
+// needs a second reason here (ft891's own identical precedent).
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+}
 
 // TestFieldAuditCoversEverySpecField is the brief's TestDeliberatelyZeroAudit
 // obligation: every spec.Field is either mapped (allFields, caps.go) or
