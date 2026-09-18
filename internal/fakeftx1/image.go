@@ -86,7 +86,8 @@ func padTag(s string) string {
 // DefaultImage is the image New uses when no WithFactoryImage option is
 // given: a few channels across EVERY bank FTX-1's slot space has (spec.md
 // §4) — two plain memory channels, one PMS pair (both halves), one 5 MHz
-// channel, and the emergency channel — plus tags on a couple of them, so
+// channel, and the emergency channel — every one of them tagged too (see
+// the tags map's own doc comment for why none is left half-populated), so
 // fleet-wide read-every-registered-model pins and this milestone's BI
 // legs are non-vacuous against every bank.
 //
@@ -113,9 +114,27 @@ func DefaultImage() (map[string]MemState, map[string]string) {
 		// channel above.
 		emgWire: defaultState(5_167_500, modeUSB, kindMemory),
 	}
+	// EVERY POPULATED SLOT ABOVE GETS A TAG, deliberately: MW and MT
+	// mutate independent fields (register entry 5), which is a fact
+	// about what a SET can do, not a claim that a genuine channel is
+	// ever missing one half in practice — internal/wiring's own
+	// TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot
+	// walks every declared slot on every registered model and calls
+	// ReadChannel, and this driver's own read.go treats a successful MR
+	// answer followed by a rejected MT as a genuine error (the FT-710's
+	// own posture, "a successful MR followed by a rejected MT is a
+	// genuine error here, not an empty-tag signal") — so a DEFAULT image
+	// with an untagged-but-populated slot would fail that generic test
+	// for every model this way, not exercise anything this fake's own
+	// register claims to be testing. A caller after that specific split
+	// state uses WithSlot/WithTag directly (their own doc comments).
 	tags := map[string]string{
 		"00001":         padTag("HOME"),
+		"00002":         padTag("WORK"),
 		pmsWire(1, 'L'): padTag("160M-EDGE"),
+		pmsWire(1, 'U'): padTag("160M-TOP"),
+		"50001":         padTag("5MHZ-CH1"),
+		emgWire:         padTag("EMERGENCY"),
 	}
 	return slots, tags
 }

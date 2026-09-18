@@ -2450,6 +2450,32 @@ var ft1000mpText = Text{
 	ProbeFirmwareNote: "The FT-1000MP and Mark-V have no firmware query in this build — check the radio's own display. No FT-1000MP has ever answered a frame from this project, so its default baud of 4800 is unverified against real hardware.",
 }
 
+// ftx1Text is the FTX-1's entry — v1.10.0, bare New (single row, own
+// document, INLINE dialect, the ftdx1200/ftdx3000 shape).
+//
+// TAG (12 characters, TagFill-padded), unlike ftdx1200Text/ftdx3000Text's
+// NOTAG rows: this radio's MT form carries a name, just no display flag
+// (FieldTagDisplay is the zero FieldSupport unconditionally, so this
+// build shows no Tag Display column for it either — silent, like every
+// other Tag-but-no-TagDisplay row, ftdx10Text included). CTCSSState is
+// LIVE and mapped (a six-value domain: OFF, ENC, ENC-DEC, DCS, PR FREQ,
+// REV TONE); CTCSSTone (a tone-FREQUENCY chart, the frontend's separate
+// "tone" column) is the zero FieldSupport because no such chart was
+// located in the manual excerpts this project's spec pass read — OPEN,
+// not a printed-fixed byte the way FTdx1200's P9 is. The 5 MHz band and
+// EMGCH banks are read-only on every profile, consent included: this
+// radio's own MW command cannot target either. No FTX-1 has ever
+// answered a frame from this project (writeTrialsComplete false), so
+// every write stays behind the opt-in consent route.
+var ftx1Text = Text{
+	EraseProcedure: "This program sends no memory-clear frame for the FTX-1: no builder for one exists, and no FTX-1 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	GridLegendNote: "The FTX-1 has no CTCSS tone-frequency chart anywhere in the manual excerpts this build was read from, so this build neither reads nor writes a tone frequency for it; its six-value CTCSS/DCS state (OFF, ENC, ENC-DEC, DCS, PR FREQ, REV TONE) is read and written normally. There is no scan-skip position anywhere in its manual, so this build shows no Scan Skip column for it. This radio's own memory-write command cannot target its 5 MHz band or EMGCH channels at all, so this build treats both banks as read-only, consent included. The wire carries no byte distinguishing the FTX-1 Field body from the FTX-1 Optima: both answer the identical CAT identity, so this build cannot tell them apart.",
+	PreservationTooltips: PreservationTooltips{
+		Tone: "not read or written over CAT for the FTX-1 — no CTCSS tone-frequency chart was found in this radio's manual",
+	},
+	ProbeFirmwareNote: "The FTX-1 has no firmware-version query in this build — check the radio's own display. The manual states CAT does not work at all before MAIN firmware V1.08; there is no CAT byte this build could use to check that itself, and a pre-V1.08 radio simply will not answer any CAT frame.",
+}
+
 var texts = map[string]Text{
 	"FT-710":     ft710Text,
 	"FTdx10":     ftdx10Text,
@@ -2533,6 +2559,8 @@ var texts = map[string]Text{
 	"FT-900": ft900Text,
 	// v1.9.0 binary-CAT four, fourth and last row.
 	"FT-1000MP": ft1000mpText,
+	// v1.10.0.
+	"FTX-1": ftx1Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
