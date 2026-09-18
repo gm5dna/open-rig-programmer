@@ -22,11 +22,17 @@ var allCapabilityFields = []spec.Field{
 	spec.FieldAntenna, spec.FieldIPPlus,
 }
 
-// deliberatelyUnexpressedFields is empty: every spec.Field is graded in
-// fieldGrid (RW for the twelve the record maps, the zero FieldSupport for
-// the rest), so every one is AUDITED rather than a separate "unexpressed"
-// entry — matching core/driver/ic7100's identical convention.
-var deliberatelyUnexpressedFields = map[spec.Field]string{}
+// deliberatelyUnexpressedFields carries only the three TS-2000-only
+// Satellite Memory bank flags (v1.10.0): every OTHER spec.Field is graded
+// in fieldGrid (RW for the twelve the record maps, the zero FieldSupport
+// for the rest), so every one of those is AUDITED rather than a separate
+// "unexpressed" entry — matching core/driver/ic7100's identical
+// convention.
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+}
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
 	drivertest.AssertFieldAuditCoversEverySpecField(t, "allCapabilityFields", allCapabilityFields, deliberatelyUnexpressedFields)

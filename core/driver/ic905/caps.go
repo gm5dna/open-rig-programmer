@@ -212,6 +212,13 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		spec.FieldPreamp:            {},
 		spec.FieldAntenna:           {},
 		spec.FieldIPPlus:            {},
+
+		// The three TS-2000-only Satellite Memory bank fields (v1.10.0):
+		// a different Kenwood row's bank, with no position in this
+		// record.
+		spec.FieldSatBandSwap: {},
+		spec.FieldSatTrace:    {},
+		spec.FieldSatTraceRev: {},
 	}
 }
 

@@ -109,6 +109,9 @@ func unavailableTierFields() codeplug.ChannelData {
 		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
 		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
 		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
+		SatBandSwap:         codeplug.BoolField{State: codeplug.Unavailable},
+		SatTrace:            codeplug.BoolField{State: codeplug.Unavailable},
+		SatTraceRev:         codeplug.BoolField{State: codeplug.Unavailable},
 	}
 }
 
@@ -230,6 +233,9 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 			want.Preamp = tier.Preamp
 			want.Antenna = tier.Antenna
 			want.IPPlus = tier.IPPlus
+			want.SatBandSwap = tier.SatBandSwap
+			want.SatTrace = tier.SatTrace
+			want.SatTraceRev = tier.SatTraceRev
 
 			if !reflect.DeepEqual(*ch.Data, want) {
 				t.Errorf("ChannelData =\n%+v\nwant\n%+v", *ch.Data, want)

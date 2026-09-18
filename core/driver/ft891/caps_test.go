@@ -48,12 +48,16 @@ var allFields = []spec.Field{
 	spec.FieldIPPlus,
 }
 
-// deliberatelyUnexpressedFields is EMPTY, and that is the decision rather
-// than an omission: this driver's bank maps name every spec.Field, so there
-// is no field whose absence needs a reason (matrix §2 — "All twenty-seven
-// appear explicitly in every bank's map"). core/driver/icr8600's empty map
-// is the precedent.
-var deliberatelyUnexpressedFields = map[spec.Field]string{}
+// deliberatelyUnexpressedFields carries only the three TS-2000-only
+// Satellite Memory bank flags (v1.10.0); every OTHER spec.Field is named
+// explicitly in this driver's bank maps, so none of THOSE needs a reason
+// here (matrix §2 — "All twenty-seven appear explicitly in every bank's
+// map").
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+}
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
 	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFields, deliberatelyUnexpressedFields)

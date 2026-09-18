@@ -991,6 +991,9 @@ func tierFieldsInOrder() []spec.Field {
 		spec.FieldPreamp,
 		spec.FieldAntenna,
 		spec.FieldIPPlus,
+		spec.FieldSatBandSwap,
+		spec.FieldSatTrace,
+		spec.FieldSatTraceRev,
 	}
 }
 
@@ -1017,6 +1020,9 @@ func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
 	data.Preamp = codeplug.StringField{State: codeplug.Known, Value: "1"}
 	data.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT1"}
 	data.IPPlus = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.SatBandSwap = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.SatTrace = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.SatTraceRev = codeplug.BoolField{State: codeplug.Known, Value: true}
 	return data
 }
 

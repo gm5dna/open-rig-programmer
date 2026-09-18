@@ -227,6 +227,12 @@ func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) c
 		Preamp:              codeplug.StringField{State: codeplug.Known, Value: preamp},
 		Antenna:             codeplug.StringField{State: codeplug.Known, Value: antenna},
 		IPPlus:              codeplug.BoolField{State: codeplug.Known, Value: ipPlus == "ON"},
+		// The three TS-2000-only Satellite Memory bank fields (v1.10.0):
+		// a different Kenwood row's bank, with no position in this
+		// record.
+		SatBandSwap: codeplug.BoolField{State: codeplug.Unavailable},
+		SatTrace:    codeplug.BoolField{State: codeplug.Unavailable},
+		SatTraceRev: codeplug.BoolField{State: codeplug.Unavailable},
 	}
 	if v, ok := rec.ToneMode.Get(); ok {
 		d.ToneMode = codeplug.StringField{State: codeplug.Known, Value: v}
