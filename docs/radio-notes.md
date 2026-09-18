@@ -201,7 +201,11 @@ so it is read-only over CAT: a read-modify-write silently loses it. AM-N
 programme will write — it is printed only on the live mode command, never
 on the memory-read or memory-write legend. No FTdx3000 has ever answered
 a frame from this project, so every write stays behind the opt-in consent
-route.
+route. AM-N storability is closed on paper, not merely assumed: the
+FTdx3000 CAT Operation Manual's own MW/MR memory-record mode legend
+prints only A/B/C, never D — AM-N exists solely on the live MD command
+and has no byte position in a stored memory channel at all, so no real
+radio could store it regardless of what this driver chose to write.
 
 Evidence: `core/driver/ftdx3000/doc.go`; the manual is the Yaesu FTdx3000
 CAT Operation Manual, revision 2006-D.
@@ -362,6 +366,75 @@ owner probe:**
 Evidence: `core/driver/ft1000mp/doc.go`; the manuals are the FT-1000MP
 Operating Manual and the Mark-V FT-1000MP Operating Manual (own
 pagination), both citing the identical 5-byte opcode table.
+
+### FTX-1 (unverified)
+
+Read and write the memory and PMS channels on a widened version of the
+FT-710's own 27-byte MR/MW record: the address field grows from 3 digits
+to 5, giving 00001-00999 memory channels, a hyphenated, two-digit PMS
+pair token (`P-01L` through `P-50U`, not the family's usual single-digit
+form), a "5 MHz BAND" bank (`50001`-`50020`), and a named `EMGCH` channel
+rather than a numbered one. Tags are 12 characters, TagFill-padded; the
+tag form carries no display flag at all, so this build shows no Tag
+Display column for it. The tone byte widens to six states (OFF, ENC,
+ENC-DEC, DCS, PR FREQ, REV TONE); no CTCSS tone-frequency chart was
+found anywhere in this radio's manual, so this build reads and writes
+the six-state selector but no separate tone-frequency value. The 5 MHz
+and EMGCH banks are read-only, consent included: this radio's own MW
+command cannot target either. No FTX-1 has ever answered a frame from
+this project, so every write stays behind the opt-in consent route.
+
+This build cannot tell an FTX-1 "Field" body apart from an FTX-1
+"Optima" body: both answer the identical CAT identity `0840`, and
+nothing in the manual gives CAT a way to ask. `MC` — which would
+otherwise select a channel directly — carries a leading per-port byte
+this project's CAT codec cannot build or parse, so reads go via `MR` and
+`MT` only.
+
+**Firmware floor**: the manual's own opening notes state plainly that
+"the CAT operation does not work with MAIN Firmware before Ver. 1.08."
+This build does not check it — the wire carries no firmware-version byte
+to check — and a pre-V1.08 radio simply never answers any CAT frame at
+all, which this build's own identity probe already treats as "no radio
+present".
+
+**ASSUMED/OPEN — the probe list a future owner would need**
+(`.superpowers/sdd/2026-09-18-v1100-ftx1/reviews/spec.md`):
+
+1. **Body identity** — no CAT mechanism was found to tell a "Field" body
+   from an "Optima" one; the AC command's internal-tuner answer is the
+   nearest proxy, and it is a capability, not a name.
+2. **MC/MT's channel range past 99** — the manual's own P0/P2 legends
+   print "099", taken as an erratum per the roadmap's ruling and shipped
+   as 999; unconfirmed against real hardware.
+3. **Which of the manual's three printed "5 MHz BAND" ranges** a real
+   radio actually stores and recalls: this build ships the majority
+   reading, `50001`-`50020`; `MC`'s own `50000`-`50020` and `MT`'s own
+   `50001`-`50009` are footnoted, not shipped.
+4. **MW's own P7 enum** — whether a real MW genuinely accepts the full
+   0-5/PMS set its own legend prints, or (like the FT-710's own
+   HW-CONFIRMED finding) requires one fixed Kind value on every write
+   regardless of bank; this build assumes the FT-710's answer,
+   unconfirmed for the FTX-1.
+5. **MT on the 5 MHz bank** — whether a real radio would accept an MT Set
+   there at all; this build refuses it regardless, as a project policy,
+   not a manual finding.
+6. **MW's P1 gap** — whether MW's own printed domain (which, unlike MR/OI/
+   IF, omits the 5 MHz/EMGCH lines) reflects a genuine hardware
+   restriction or an editorial drop from the template it was likely
+   copied from; moot while writes to those two banks stay refused.
+7. **WIRES-X/GM channel visibility** — whether anything in the P7 "kind"
+   byte silently aliases a WIRES-X or GM channel into one of the five
+   documented kinds; the roadmap notes those menus have no CAT surface
+   of their own at all.
+8. **The tag's fill character** on a blank name (TagFill `' '`) is the
+   FT-710's own value, unconfirmed for the FTX-1: the manual gives no
+   worked example of an empty tag.
+9. **The clarifier's step size** (10 Hz) is likewise assumed: the manual
+   states the range (0000-9990 Hz), not the step granularity.
+
+Evidence: `core/driver/ftx1/doc.go`; the manual is the Yaesu FTX-1 CAT
+Operation Manual, revision 2508-C.
 
 ## Icom
 
@@ -906,3 +979,4 @@ by revision in the code that transcribes it.
 | FT-890 | Yaesu FT-890 Operating Manual, doc `02431001 (205B-CK)` (community mirror) |
 | FT-900 | Yaesu FT-900 Operating Manual, doc `E?6357502 (408r-DA)` best-effort read (community mirror) |
 | FT-1000MP, Mark-V FT-1000MP | Yaesu FT-1000MP Operating Manual; Mark-V FT-1000MP Operating Manual (own pagination) |
+| FTX-1 | Yaesu FTX-1 CAT Operation Manual, revision 2508-C |
