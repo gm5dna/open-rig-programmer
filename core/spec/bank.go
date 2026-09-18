@@ -33,6 +33,14 @@ const (
 	// Yaesu pair invariants (a lower/upper pair per index, NoBlank), and
 	// a scan edge on another family is not obliged to honour them.
 	BankScan BankID = "SCAN"
+	// BankSatellite is the Kenwood ten-channel Satellite Memory bank
+	// ("SAT"), v1.10.0's TS-2000/2000X/B2000 addition (core/kw/ts2000's
+	// SA/SI). It is its own family rather than a corner of BankMemory
+	// because it is a wholly separate ten-slot address space with NO
+	// frequency field of its own (the manual routes frequency through
+	// FA/FB instead — spec.FieldFrequency is Unsupported on this bank)
+	// and a completely different wire record.
+	BankSatellite BankID = "SAT"
 )
 
 // Bank describes one family of memory slots: what they are called for
