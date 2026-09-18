@@ -108,6 +108,18 @@ type Bank struct {
 	// populated-channel capacity is not documented. It suppresses only the
 	// occupancy refusal; WithinSpace remains authoritative.
 	BudgetUnstated bool
+
+	// CurrentChannelOnly is true when this bank's read command has no
+	// per-slot address and can only ever answer for whichever slot is
+	// CURRENTLY SELECTED on the radio (the TS-2000 Satellite Memory
+	// bank's SA read, core/driver/ts2000/satellite.go's own doc
+	// comment). A bulk read cannot enumerate such a bank — there is no
+	// way to select each slot in turn over CAT — so a whole-radio
+	// ReadAll must skip it rather than treat the inevitable per-slot
+	// mismatch as fatal. A single-slot read of the one currently
+	// selected still succeeds; a single-slot read naming any other slot
+	// still refuses, honestly, exactly as before.
+	CurrentChannelOnly bool
 }
 
 // SparseSlot renders the canonical wire-form slot identifier for group

@@ -63,7 +63,10 @@ concepts elsewhere in the book — and carry no `spec.Field` at all.
 READ IS A NAMED, DOCUMENTED PROTOCOL LIMITATION: SA's Read carries no
 per-channel address ("SA;" alone), so it reports whichever channel is
 CURRENTLY SELECTED on the radio, and `ReadChannel` for any other slot
-refuses with the fleet's own answer-mismatch error rather than guessing.
+refuses with the fleet's own answer-mismatch error rather than guessing;
+because of this, a whole-radio ReadAll skips the bank outright
+(`spec.Bank.CurrentChannelOnly`) rather than treating that inevitable
+per-slot mismatch as fatal.
 WRITE IS ASSUMED, MW's OWN PRECEDENT: no separate CAT-reachable "recall a
 channel" command exists, so an SA Set is read as directly writing the
 channel its own P2 addresses (the same "just write it" contract this
