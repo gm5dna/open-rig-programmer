@@ -418,6 +418,16 @@ type LayoutConfig struct {
 	// positions that carry a meaning on one radio and a constant on
 	// another.
 	PrintedFixed []FixedField
+
+	// Satellite is whether this row's book prints the Satellite Memory
+	// commands SA/SI (core/kw/ts2000's own satellite.go) — false unless a
+	// row explicitly sets it, which today is only the TS-2000/2000X/B2000
+	// three (core/kw/ts2000/layout.go). It gates AllowedCommand's SA/SI
+	// admission (allowlist.go): SA/SI are otherwise wholly outside this
+	// package's own eight-grammar record family, and a row that has never
+	// printed them must refuse a frame shaped like one exactly as it
+	// refuses any other radio's grammar.
+	Satellite bool
 }
 
 // Layout is one radio row's reading of the shared 50-byte memory grid: the
@@ -459,6 +469,7 @@ type Layout struct {
 	modeNames    map[Mode]string
 	slots        []SlotRange
 	printedFixed []FixedField
+	satellite    bool
 }
 
 // hardWiredPositions is the set of 1-indexed positions a Kenwood memory
@@ -666,6 +677,7 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 		modeNames:    names,
 		slots:        slots,
 		printedFixed: fixed,
+		satellite:    cfg.Satellite,
 	}, nil
 }
 
@@ -847,6 +859,11 @@ func (l Layout) P12Policy() P12Policy { return l.p12 }
 
 // P13Policy is bytes 30-38's policy on this row.
 func (l Layout) P13Policy() P13Policy { return l.p13 }
+
+// Satellite reports whether this row's book prints the Satellite Memory
+// commands SA/SI (AllowedCommand's own doc comment) — true only for the
+// TS-2000/2000X/B2000 three (core/kw/ts2000/layout.go).
+func (l Layout) Satellite() bool { return l.satellite }
 
 // MaxEXAddress is the highest EX menu number this row's book prints,
 // inclusive (590:543, 590:544, 480:401). It is 0 on the zero Layout, which
