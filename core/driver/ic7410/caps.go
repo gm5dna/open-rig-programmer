@@ -55,12 +55,11 @@ const (
 // field this model leaves at its zero value, with the matrix reading that
 // says so. TestCapabilities_EveryFieldExplicit requires the two sets —
 // this map and every non-zero field in baseCapabilities — to partition the
-// struct's 30 fields exactly.
+// struct's 29 fields exactly.
 var deliberatelyZero = map[string]string{
 	"ClarMaxHz":              "the 40-byte record has no clarifier field (matrix §1 row 9, poor fit, MANUAL-EVIDENCED absence)",
 	"ClarStepHz":             "the same (matrix §1 row 10)",
 	"ShiftOptions":           "this model's per-channel flag is boolean Split, not a shift-magnitude vocabulary; superseded by tx_frequency + SimplexTx (matrix §1 row 18)",
-	"CTCSSStates":            "superseded by ToneModes, the Icom vocabulary (matrix §1 row 19)",
 	"DuplexOptions":          "Split is boolean ON/OFF with no printed direction, which does not fit DuplexOption's {Value, Direction} shape at all (matrix §1 row 20)",
 	"DTCSCodes":              "\"DTCS\" and \"DCS\" occur zero times in the 124-page manual; the tone-type nibble stops at 2: TSQL (matrix §1 row 22)",
 	"DTCSPolarities":         "the same sweep, same reasoning (matrix §1 row 23)",
@@ -209,7 +208,6 @@ func baseCapabilities(memF, scanF map[spec.Field]spec.FieldSupport) spec.Capabil
 
 		RequiredSlots: nil, // deliberatelyZero.
 		ShiftOptions:  nil, // deliberatelyZero.
-		CTCSSStates:   nil, // deliberatelyZero.
 		DuplexOptions: nil, // deliberatelyZero.
 		// Matrix §1 row 21: the three-value vocabulary, byte ⑫'s high
 		// nibble. ToneModeCTCSS/ToneModeCTCSSSquelch is this project's

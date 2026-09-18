@@ -471,8 +471,17 @@ var toneAbsentCIVModels = map[string]bool{
 // 16-byte memory record has no tone byte anywhere in it (matrix
 // §1.2/§2) — the first registered Yaesu row for which that is true, so
 // it declares neither CTCSSTones nor CTCSSToneRange, honestly.
+//
+// The FTX-1 (v1.10.0) is a DIFFERENT shape of the same gap: it DOES have
+// a live tone byte (P8, a six-value CTCSSState domain — its own
+// populated ToneModes, core/driver/ftx1/caps.go), but no CTCSS
+// tone-FREQUENCY chart was located in the manual excerpts this
+// project's spec pass read (matrix §6, OPEN) — so CTCSSTones stays nil
+// for a different reason than FT-1000MP's, and this predicate only
+// cares that it is nil alongside a nil CTCSSToneRange too.
 var toneAbsentNonCIVModels = map[string]bool{
 	"FT-1000MP": true,
+	"FTX-1":     true,
 }
 
 func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabilities, error)) []string {

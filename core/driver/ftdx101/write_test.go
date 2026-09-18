@@ -759,6 +759,9 @@ func tierFieldsInOrder() []spec.Field {
 		spec.FieldPreamp,
 		spec.FieldAntenna,
 		spec.FieldIPPlus,
+		spec.FieldSatBandSwap,
+		spec.FieldSatTrace,
+		spec.FieldSatTraceRev,
 	}
 }
 
@@ -785,6 +788,9 @@ func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
 	data.Preamp = codeplug.StringField{State: codeplug.Known, Value: "1"}
 	data.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT1"}
 	data.IPPlus = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.SatBandSwap = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.SatTrace = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.SatTraceRev = codeplug.BoolField{State: codeplug.Known, Value: true}
 	return data
 }
 
@@ -1346,7 +1352,7 @@ func TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire(t *testing.T) {
 // mysterious refusal rather than as a broken test. The cross-check is also
 // what keeps the vocabularies tied to what this driver ADVERTISES — the third
 // leg below checks both name sets against the capability data's own
-// CTCSSStates and ShiftOptions, for BOTH models, so a name that reaches no
+// ToneModes and ShiftOptions, for BOTH models, so a name that reaches no
 // user's screen cannot sit in either map unnoticed.
 func TestNameMaps_AreExactInverses(t *testing.T) {
 	t.Run("ctcss", func(t *testing.T) {
@@ -1384,13 +1390,13 @@ func TestNameMaps_AreExactInverses(t *testing.T) {
 	t.Run("both vocabularies are the ones this driver advertises", func(t *testing.T) {
 		for _, m := range testModels {
 			caps := capabilitiesSimulated(m.params)
-			for _, s := range caps.CTCSSStates {
+			for _, s := range caps.ToneModes {
 				if _, ok := ctcssByName[s.Value]; !ok {
-					t.Errorf("%s: Capabilities.CTCSSStates advertises %q, which the write path cannot map to a wire byte", m.name, s.Value)
+					t.Errorf("%s: Capabilities.ToneModes advertises %q, which the write path cannot map to a wire byte", m.name, s.Value)
 				}
 			}
-			if len(caps.CTCSSStates) != len(ctcssByName) {
-				t.Errorf("%s: Capabilities advertises %d CTCSS states, ctcssByName maps %d", m.name, len(caps.CTCSSStates), len(ctcssByName))
+			if len(caps.ToneModes) != len(ctcssByName) {
+				t.Errorf("%s: Capabilities advertises %d CTCSS states, ctcssByName maps %d", m.name, len(caps.ToneModes), len(ctcssByName))
 			}
 			for _, s := range caps.ShiftOptions {
 				if _, ok := shiftByName[s.Value]; !ok {

@@ -232,7 +232,7 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		ShiftOptions: spec.StandardShiftOptions(),
 		// matrix §1.16: the family THREE (OFF/ENC-DEC/ENC), not FT-991A's
 		// five — no DCS member.
-		CTCSSStates: spec.StandardCTCSSStates(),
+		ToneModes: spec.StandardToneModes(),
 	}
 }
 

@@ -269,6 +269,13 @@ var requestedFieldRules = []struct {
 	{spec.FieldPreamp, func(d codeplug.ChannelData) bool { return d.Preamp.State == codeplug.Known }},
 	{spec.FieldAntenna, func(d codeplug.ChannelData) bool { return d.Antenna.State == codeplug.Known }},
 	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
+	// The three TS-2000-only Satellite Memory bank fields (v1.10.0). This
+	// row has no such record position; the predicates are carried only
+	// because spec.AllFields() (minus Erase) is this table's own
+	// completeness contract (TestRequestedFields_MembershipAndOrder).
+	{spec.FieldSatBandSwap, func(d codeplug.ChannelData) bool { return d.SatBandSwap.State == codeplug.Known }},
+	{spec.FieldSatTrace, func(d codeplug.ChannelData) bool { return d.SatTrace.State == codeplug.Known }},
+	{spec.FieldSatTraceRev, func(d codeplug.ChannelData) bool { return d.SatTraceRev.State == codeplug.Known }},
 }
 
 // always is the predicate of a field the record carries on every write.

@@ -355,6 +355,13 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		// An Icom concept with no position in this frame and no mention in
 		// this book.
 		spec.FieldIPPlus: {},
+
+		// The three TS-2000-only Satellite Memory bank fields (v1.10.0):
+		// a different Kenwood row's bank, with no position in this
+		// record and no bearing on this book.
+		spec.FieldSatBandSwap: {},
+		spec.FieldSatTrace:    {},
+		spec.FieldSatTraceRev: {},
 	}
 }
 
@@ -503,7 +510,6 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// grades FieldShift or FieldCTCSSState above Unsupported, which is
 		// what spec.Validate's own pair rules are conditional on.
 		ShiftOptions: nil,
-		CTCSSStates:  nil,
 		// EMPTY (§1.18), and this is the one place this row publishes an
 		// INCOMPLETE Icom pair: the record carries no duplex selector and
 		// no offset magnitude, and split is expressed only as an absolute

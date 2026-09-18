@@ -229,8 +229,8 @@ func pmsSlots() []string {
 	}
 }
 
-// ctcssStates returns THIS RADIO'S OWN FIVE-member P8 vocabulary, and it is
-// deliberately NOT spec.StandardCTCSSStates() (matrix §1.17, §3.7).
+// toneModes returns THIS RADIO'S OWN FIVE-member P8 vocabulary, and it is
+// deliberately NOT spec.StandardToneModes() (matrix §1.17, §3.7).
 //
 // The memory record's P8 legend prints `0: CTCSS "OFF" 1: CTCSS ENC/DEC
 // 2: CTCSS ENC 3: DCS ENC/DEC 4: DCS ENC`, identically on all five blocks
@@ -242,7 +242,7 @@ func pmsSlots() []string {
 // THE STANDARD THREE ARE A PREFIX OF THESE FIVE, which is exactly why the
 // shared helper must not be reached for: a driver that called it would
 // pass every length-agnostic check and silently publish a three-state
-// vocabulary for a five-state radio. TestCTCSSStates_AreThisRadiosOwnFive
+// vocabulary for a five-state radio. TestToneModes_AreThisRadiosOwnFive
 // asserts the negative half as well as the positive one.
 //
 // THE TWO DCS SPELLINGS ARE NOT FREE. "DCS-ENC-DEC" and "DCS-ENC" are
@@ -258,19 +258,19 @@ func pmsSlots() []string {
 // register entry, A DCS-STATE CHANNEL'S CODE SURVIVES A REWRITE.
 //
 // Each call returns a fresh slice, so no two profiles share one.
-func ctcssStates() []spec.ToneState {
-	return []spec.ToneState{
-		{Value: "OFF", Semantics: spec.ToneOff},
-		{Value: "ENC-DEC", Semantics: spec.ToneEncodeDecode},
-		{Value: "ENC", Semantics: spec.ToneEncode},
-		// RequiresTone reports FALSE for both, deliberately (core/spec's
-		// own doc comment, matrix §1.17): a DCS state needs a CODE, not a
-		// tone, and on this radio the code is not a field of the memory
-		// record at all. Reporting true would make core/codeplug's
-		// validator demand a Known CTCSSTone for a channel whose tone this
-		// programme can never read.
-		{Value: "DCS-ENC-DEC", Semantics: spec.ToneDCSEncodeDecode},
-		{Value: "DCS-ENC", Semantics: spec.ToneDCSEncode},
+func toneModes() []spec.ToneMode {
+	return []spec.ToneMode{
+		{Value: "OFF", Semantics: spec.ToneModeOff},
+		{Value: "ENC-DEC", Semantics: spec.ToneModeCTCSSSquelch},
+		{Value: "ENC", Semantics: spec.ToneModeCTCSS},
+		// NeedsTxTone/NeedsRxTone report FALSE for both, deliberately
+		// (core/spec's own doc comment, matrix §1.17): a DCS state needs
+		// a CODE, not a tone, and on this radio the code is not a field
+		// of the memory record at all. Reporting true would make
+		// core/codeplug's validator demand a Known CTCSSTone for a
+		// channel whose tone this programme can never read.
+		{Value: "DCS-ENC-DEC", Semantics: spec.ToneModeDCSEncodeDecode},
+		{Value: "DCS-ENC", Semantics: spec.ToneModeDCSEncode},
 	}
 }
 
@@ -410,7 +410,7 @@ func bankFields(rw, clar spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // omission: a zero MaxFreqHz reads as "no ceiling" to every validator, a
 // zero TagLen makes core/csvio's CHIRP import truncate every imported name
 // to "", a non-positive Bauds entry reaches SerialConfig.Baud, and an
-// empty ShiftOptions or CTCSSStates fails spec.Validate outright. Where
+// empty ShiftOptions or ToneModes fails spec.Validate outright. Where
 // the honest value is unverified it is populated anyway and doc.go's
 // register carries the provenance (the DefaultBaud 38400,
 // MinFreqHz/MaxFreqHz and RequiredSlots entries).
@@ -584,8 +584,8 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// live state, not a memory field, and its footnote is not a
 		// constraint on the memory record's P10.
 		ShiftOptions: spec.StandardShiftOptions(),
-		// THIS RADIO'S OWN FIVE, not the shared three — see ctcssStates.
-		CTCSSStates: ctcssStates(),
+		// THIS RADIO'S OWN FIVE, not the shared three — see toneModes.
+		ToneModes: toneModes(),
 	}
 }
 

@@ -84,6 +84,11 @@ export const TIER_COLUMNS = [
 	{ id: 'preamp', label: 'Preamp', field: 'preamp', key: 'preamp', kind: 'text' },
 	{ id: 'antenna', label: 'Antenna', field: 'antenna', key: 'antenna', kind: 'text' },
 	{ id: 'ipPlus', label: 'IP+', field: 'ip_plus', key: 'ip_plus', kind: 'bool' },
+	// The three TS-2000 Satellite Memory bank fields (v1.10.0). Only that
+	// bank's BankView ever reaches them.
+	{ id: 'satBandSwap', label: 'Satellite band swap', field: 'sat_band_swap', key: 'sat_band_swap', kind: 'bool' },
+	{ id: 'satTrace', label: 'Satellite trace', field: 'sat_trace', key: 'sat_trace', kind: 'bool' },
+	{ id: 'satTraceRev', label: 'Satellite trace reverse', field: 'sat_trace_rev', key: 'sat_trace_rev', kind: 'bool' },
 ]
 
 /** TIER_COLUMNS keyed by column id, for the per-column helpers below. */

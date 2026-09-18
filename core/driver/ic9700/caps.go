@@ -325,7 +325,6 @@ func capabilities(write spec.Support) spec.Capabilities {
 		// those fields' Unsupported grades rather than through a
 		// non-empty list nobody would use.
 		ShiftOptions: nil,
-		CTCSSStates:  nil,
 
 		DuplexOptions:  duplexOptions(),
 		ToneModes:      toneModes(),

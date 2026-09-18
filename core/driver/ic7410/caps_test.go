@@ -103,6 +103,9 @@ var allFields = []spec.Field{
 // from memFields/scanFields entirely (a map lookup for any of them returns
 // the zero FieldSupport implicitly).
 var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldTuningStepEnabled: "additions design D8 — the IC-7410 40-byte record carries no tuning-step-enabled field",
 	spec.FieldTuningStep:        "additions design D8 — no tuning-step field",
 	spec.FieldProgramTuningStep: "additions design D8 — no programmable-tuning-step field",
@@ -123,8 +126,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := New().Capabilities()
 	v := reflect.ValueOf(caps)
 	ty := v.Type()
-	if ty.NumField() != 30 {
-		t.Errorf("spec.Capabilities has %d fields, want 30", ty.NumField())
+	if ty.NumField() != 29 {
+		t.Errorf("spec.Capabilities has %d fields, want 29", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name

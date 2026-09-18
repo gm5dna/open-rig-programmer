@@ -187,11 +187,11 @@ func baseCapabilities(fields map[spec.Field]spec.FieldSupport) spec.Capabilities
 		// P10 "0: Simplex 1: Plus Shift 2: Minus Shift" (matrix §4).
 		ShiftOptions: spec.StandardShiftOptions(),
 		// P8's three-state domain (matrix §4).
-		CTCSSStates: spec.StandardCTCSSStates(),
+		ToneModes: spec.StandardToneModes(),
 		// This radio expresses no Icom-family vocabulary at all (matrix
-		// §4's "twelve empty Icom-family fields").
+		// §4's "twelve empty Icom-family fields" — now eleven, since
+		// ToneModes is shared and set above).
 		DuplexOptions:          nil,
-		ToneModes:              nil,
 		DTCSPolarities:         nil,
 		DTCSCodes:              nil,
 		Filters:                nil,

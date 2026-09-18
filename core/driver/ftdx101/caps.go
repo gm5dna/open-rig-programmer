@@ -484,7 +484,7 @@ func baseCapabilities(m modelParams, memFields, pmsFields map[spec.Field]spec.Fi
 		// the state byte does anything live on either radio is unverified —
 		// see register entry 6 — and FieldCTCSSState's support level, not
 		// this list, is where that caution is expressed.
-		CTCSSStates: spec.StandardCTCSSStates(),
+		ToneModes: spec.StandardToneModes(),
 	}
 }
 

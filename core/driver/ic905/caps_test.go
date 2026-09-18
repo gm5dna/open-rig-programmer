@@ -56,7 +56,6 @@ var tierFieldsMustBeEmpty = map[string]string{
 	"CTCSSTones":             "matrix section 1 row 8 — the tone is a BCD frequency, not an index into a chart; the numeric CTCSSToneRange carries it instead",
 	"RequiredSlots":          "matrix section 1 row 13 — this radio's non-clearable set is a whole bank (Bank.NoBlank on CALL), not an individual-slot list",
 	"ShiftOptions":           "matrix section 1 row 14 — superseded by DuplexOptions; the two vocabularies never coexist on one model (D4)",
-	"CTCSSStates":            "matrix section 1 row 15 — superseded by ToneModes, whose vocabulary has eight values, not three",
 	"TuningSteps":            "additions design D8 — this record predates the receiver extension and carries no tuning-step field",
 	"ProgramTuningStepRange": "additions design D8 — this record carries no programmable tuning-step field",
 	"AttenuatorDB":           "additions design D8 — this record carries no attenuator field",
@@ -77,9 +76,11 @@ var tierFieldsMustBeEmpty = map[string]string{
 // than waived: they must be EMPTY, and the test fails if one is ever filled
 // in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// Twenty-nine top-level fields plus GroupBase and ChannelBase, which
-	// TestBanks_ShapeAndSparseDescriptors audits on the nested sparse bank.
-	const wantFieldCount = 32
+	// Twenty-nine top-level fields (folded to twenty-eight since the
+	// tone vocabularies unified — CTCSSStates deleted) plus GroupBase and
+	// ChannelBase, which TestBanks_ShapeAndSparseDescriptors audits on the
+	// nested sparse bank.
+	const wantFieldCount = 31
 
 	for _, tt := range []struct {
 		name string
@@ -323,6 +324,11 @@ var fieldGrid = []struct {
 	{spec.FieldDTCSPolarity, true, "row 18 — byte (22); nibble assignment ASSUMED, ic905.dtcs_polarity_nibbles, lift ic905-R-08"},
 	{spec.FieldFilter, true, "row 19 — byte (12)"},
 	{spec.FieldDataMode, true, "row 20 — byte (13)"},
+	// The three TS-2000-only Satellite Memory bank fields (v1.10.0): a
+	// different Kenwood row's bank, with no position in this record.
+	{spec.FieldSatBandSwap, false, "v1.10.0: TS-2000-only Satellite Memory bank flag (SA record); no home on this radio"},
+	{spec.FieldSatTrace, false, "v1.10.0: TS-2000-only Satellite Memory bank flag (SA record); no home on this radio"},
+	{spec.FieldSatTraceRev, false, "v1.10.0: TS-2000-only Satellite Memory bank flag (SA record); no home on this radio"},
 }
 
 var deliberatelyUnexpressedFields = map[spec.Field]string{}
@@ -343,10 +349,11 @@ func TestFieldAuditCoversEverySpecField(t *testing.T) {
 // eight written-down zeros, each named in fieldGrid with its row.
 func TestFieldGrid_MatchesTheMatrix(t *testing.T) {
 	// Twenty until the additions design's D8 minted seven receiver
-	// fields (28/08/2026); every one of those is a written-down zero on
-	// this transceiver, graded above.
-	if len(fieldGrid) != 27 {
-		t.Fatalf("fieldGrid has %d rows, want the twenty-seven spec.Fields this project models", len(fieldGrid))
+	// fields (28/08/2026), then twenty-seven until v1.10.0 minted the
+	// TS-2000 satellite bank's three; every one of those ten is a
+	// written-down zero on this transceiver, graded above.
+	if len(fieldGrid) != 30 {
+		t.Fatalf("fieldGrid has %d rows, want the thirty spec.Fields this project models", len(fieldGrid))
 	}
 
 	for _, prof := range []struct {

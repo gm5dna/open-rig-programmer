@@ -16,6 +16,12 @@ import (
 // obligation 1's "fresh baseline": this is a full, uncached re-read of the
 // radio, every time it is called.
 //
+// A bank whose spec.Bank.CurrentChannelOnly is true (its read command has
+// no per-slot address, e.g. the TS-2000 Satellite Memory bank's SA read)
+// is skipped entirely rather than attempted slot by slot: there is no way
+// to enumerate it over CAT, so its absence from the result is the honest
+// answer, not a swallowed error.
+//
 // The returned Codeplug's Radio carries: Model and CATID from the
 // session's capabilities, ReadAt from the injected clock, Port/USBSerial
 // from the session's Identity, Region from the session's optional
@@ -52,12 +58,26 @@ func (s *Service) readAll(ctx context.Context) (*codeplug.Codeplug, error) {
 
 	total := 0
 	for _, bank := range caps.Banks {
+		if bank.CurrentChannelOnly {
+			continue
+		}
 		total += len(bank.Slots)
 	}
 
 	channels := make([]codeplug.Channel, 0, total)
 	done := 0
 	for _, bank := range caps.Banks {
+		if bank.CurrentChannelOnly {
+			// This bank's read command has no per-slot address (e.g.
+			// the TS-2000 Satellite Memory bank's SA read) — it can
+			// only ever answer for whichever slot the radio currently
+			// has selected, so a bulk read cannot enumerate it. Skip it
+			// outright rather than let the inevitable per-slot mismatch
+			// abort the whole read; recorded here for whoever reads
+			// stderr's progress narration.
+			s.progress("skip", done, total, string(bank.ID))
+			continue
+		}
 		for _, slot := range bank.Slots {
 			if err := ctx.Err(); err != nil {
 				return nil, fmt.Errorf("clone: ReadAll: %w", err)

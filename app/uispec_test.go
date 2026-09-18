@@ -899,6 +899,19 @@ var ft1000mpCoreFour = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier, spec.FieldShift,
 }
 
+// ftx1CoreSix is the core set every FTX-1 bank derives, on every profile
+// (core/driver/ftx1/caps.go's bankFields, shared by MEM and PMS):
+// frequency, mode, clarifier, shift, ctcss_state and tag. SAME MEMBERS AS
+// ftdx10CoreSix, AND A SEPARATE VARIABLE ANYWAY, on ft891CoreSeven's own
+// footing: core/driver/ftx1 does not import core/driver/ftdx10, and its
+// bankFields was written from the FTX-1 CAT manual alone. No
+// tag_display: FTX-1's MT form carries no display byte at all
+// (spec.md §3.3/§8 — the zero FieldSupport, unconditionally).
+var ftx1CoreSix = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag,
+}
+
 // ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
 // derives, on every profile — MEM and SCAN alike
 // (core/driver/ts2000/caps.go's bankFields, applied identically to both
@@ -1483,6 +1496,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// this is the first registered Yaesu row with no tone byte at
 		// all.
 		"FT-1000MP": ft1000mpCoreFour,
+		// The FTX-1 (v1.10.0): SIX fields, the ftdx10CoreSix shape — see
+		// ftx1CoreSix's own doc comment.
+		"FTX-1": ftx1CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -1500,8 +1516,37 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 					t.Fatalf("%s: no banks — nothing asserted", profile)
 				}
 				for _, b := range caps.Banks {
+					// BankSatellite (v1.10.0, the TS-2000/2000X/B2000
+					// three) is the one bank whose core set genuinely
+					// differs from the rest of ITS OWN model's banks —
+					// FieldFrequency, FieldMode and FieldScanSkip are
+					// Unsupported there (no frequency, mode or scan
+					// position in the SA/SI record at all), where every
+					// other bank this loop walks shares one uniform set
+					// across the whole model. Asserted separately,
+					// TestBankCoreFields_RegisteredTS2000Trio_SatelliteBank
+					// — the FT-891's own discovered-bank precedent for a
+					// bank this generic loop does not cover.
+					if b.ID == spec.BankSatellite {
+						continue
+					}
 					wantFields(t, model+" "+profile+" bank "+string(b.ID), bankCoreFields(caps, b.ID), wantSet)
 				}
+			}
+		})
+	}
+}
+
+// TestBankCoreFields_RegisteredTS2000Trio_SatelliteBank is the
+// BankSatellite half TestBankCoreFields_EveryRegisteredModel_Membership's
+// own loop skips: this bank has NO frequency, mode or scan-skip position
+// (caps.go's satelliteBankFields — the manual routes frequency through
+// FA/FB instead), so its core set is FieldTag alone, on all three rows.
+func TestBankCoreFields_RegisteredTS2000Trio_SatelliteBank(t *testing.T) {
+	for _, model := range []string{"TS-2000", "TS-2000X", "TS-B2000"} {
+		t.Run(model, func(t *testing.T) {
+			for profile, caps := range registeredProfileCaps(t, model) {
+				wantFields(t, model+" "+profile+" bank SAT", bankCoreFields(caps, spec.BankSatellite), []spec.Field{spec.FieldTag})
 			}
 		})
 	}
@@ -5124,9 +5169,9 @@ func TestGetUISpec_RegisteredFT891_TagDisplayDefaults(t *testing.T) {
 // registered fake.
 //
 // WHAT WOULD FAIL HERE AND NOWHERE ELSE. app/uispec.go builds the picker as
-// `ctcssStateOptions := ctcssStateValues(caps.CTCSSStates)` — through the
+// `ctcssStateOptions := ctcssStateValues(caps.ToneModes)` — through the
 // helper, from the radio's OWN list. A driver or a UI seam that reached for
-// spec.StandardCTCSSStates() instead would still pass every length-agnostic
+// spec.StandardToneModes() instead would still pass every length-agnostic
 // check in this package, and would silently offer this radio's owner three
 // options where its P8 legend prints five (matrix §1.17, §3.7). The ORDER is
 // asserted too, because the picker's order is the legend's order and a set
@@ -5182,9 +5227,9 @@ func TestGetUISpec_RegisteredFT991A_FiveStateVocabularyReachesTheGrid(t *testing
 // makes a piece of REASONING into a checked fact.
 //
 // core/csvio/chirp.go's toneStateFor resolves a CTCSS state BY SEMANTICS —
-// it walks caps.CTCSSStates for the member whose Semantics field matches —
-// and importCHIRPToneCTCSS asks it for exactly three of them: spec.ToneOff
-// for a blank Tone column, spec.ToneEncode for "Tone", spec.ToneEncodeDecode
+// it walks caps.ToneModes for the member whose Semantics field matches —
+// and importCHIRPToneCTCSS asks it for exactly three of them: spec.ToneModeOff
+// for a blank Tone column, spec.ToneModeCTCSS for "Tone", spec.ToneModeCTCSSSquelch
 // for "TSQL". It never asks for either DCS semantics, and "DTCS"/"Cross"
 // rows are refused outright. Therefore a CHIRP import can neither PRODUCE a
 // DCS state nor, since MergeCHIRP replaces only the slots the file names,
@@ -5214,8 +5259,8 @@ func TestImportCHIRP_RegisteredFT991A_BlankToneNeitherClobbersNorInventsADCSStat
 	// The premise: this radio really does declare both DCS states, so the
 	// assertions below are not vacuous.
 	var dcsStates int
-	for _, st := range caps.CTCSSStates {
-		if st.Semantics == spec.ToneDCSEncodeDecode || st.Semantics == spec.ToneDCSEncode {
+	for _, st := range caps.ToneModes {
+		if st.Semantics == spec.ToneModeDCSEncodeDecode || st.Semantics == spec.ToneModeDCSEncode {
 			dcsStates++
 		}
 	}
@@ -5255,7 +5300,7 @@ func TestImportCHIRP_RegisteredFT991A_BlankToneNeitherClobbersNorInventsADCSStat
 		t.Errorf("slot 002 ctcss = %q after a CHIRP import that never named it, want %q — a merge must not disturb a slot the file leaves alone, and on this radio that slot can hold a state the importer cannot even express", got, "DCS-ENC-DEC")
 	}
 	if got := working.Channels[0].Data.CTCSS; got != "OFF" {
-		t.Errorf("slot 001 ctcss = %q after a CHIRP row with a BLANK Tone column, want \"OFF\" — toneStateFor resolves spec.ToneOff BY SEMANTICS, so a five-state vocabulary must still yield the off state and never a DCS one", got)
+		t.Errorf("slot 001 ctcss = %q after a CHIRP row with a BLANK Tone column, want \"OFF\" — toneStateFor resolves spec.ToneModeOff BY SEMANTICS, so a five-state vocabulary must still yield the off state and never a DCS one", got)
 	}
 }
 
@@ -5280,9 +5325,9 @@ func TestFT991A_NativeCSVAndCodeplugRoundTripADCSState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wiring.StaticCapabilities(\"FT-991A\"): unexpected error: %v", err)
 	}
-	stateFor := func(sem spec.ToneSemantics) string {
+	stateFor := func(sem spec.ToneModeSemantics) string {
 		t.Helper()
-		for _, st := range caps.CTCSSStates {
+		for _, st := range caps.ToneModes {
 			if st.Semantics == sem {
 				return st.Value
 			}
@@ -5290,12 +5335,12 @@ func TestFT991A_NativeCSVAndCodeplugRoundTripADCSState(t *testing.T) {
 		t.Fatalf("the registered FT-991A declares no state with semantics %v — this test reads its vocabulary from the radio rather than restating it", sem)
 		return ""
 	}
-	dcsEncDec, dcsEnc := stateFor(spec.ToneDCSEncodeDecode), stateFor(spec.ToneDCSEncode)
+	dcsEncDec, dcsEnc := stateFor(spec.ToneModeDCSEncodeDecode), stateFor(spec.ToneModeDCSEncode)
 
 	channels := []codeplug.Channel{
 		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 145500000, Mode: "FM", CTCSS: dcsEncDec, Shift: "SIMPLEX"}},
 		{Slot: "100", Data: &codeplug.ChannelData{FreqHz: 145600000, Mode: "FM", CTCSS: dcsEnc, Shift: "SIMPLEX"}},
-		{Slot: "117", Data: &codeplug.ChannelData{FreqHz: 145700000, Mode: "FM", CTCSS: stateFor(spec.ToneEncodeDecode), Shift: "SIMPLEX"}},
+		{Slot: "117", Data: &codeplug.ChannelData{FreqHz: 145700000, Mode: "FM", CTCSS: stateFor(spec.ToneModeCTCSSSquelch), Shift: "SIMPLEX"}},
 	}
 
 	// 1. Native CSV.

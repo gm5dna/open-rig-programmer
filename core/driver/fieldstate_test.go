@@ -104,8 +104,8 @@ func TestFieldStateWalk_CoversEveryFieldStateField(t *testing.T) {
 			want = append(want, f)
 		}
 	}
-	if len(want) != 20 {
-		t.Fatalf("spec.AllFields() minus the seven plain fields has %d entries, want 20 — this test's own derivation is wrong, not the walk", len(want))
+	if len(want) != 23 {
+		t.Fatalf("spec.AllFields() minus the seven plain fields has %d entries, want 23 — this test's own derivation is wrong, not the walk", len(want))
 	}
 
 	checks := driver.FieldStateChecks(walkCaps(), codeplug.ChannelData{})

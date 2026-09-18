@@ -49,11 +49,16 @@ var allFields = []spec.Field{
 	spec.FieldIPPlus,
 }
 
-// deliberatelyUnexpressedFields is EMPTY, and that is the decision rather
-// than an omission: this driver's bank maps name every spec.Field, so there
-// is no field whose absence needs a reason (matrix §2 — "All twenty-seven
-// appear explicitly in every bank's map").
-var deliberatelyUnexpressedFields = map[spec.Field]string{}
+// deliberatelyUnexpressedFields carries only the three TS-2000-only
+// Satellite Memory bank flags (v1.10.0); every OTHER spec.Field is named
+// explicitly in this driver's bank maps, so none of THOSE needs a reason
+// here (matrix §2 — "All twenty-seven appear explicitly in every bank's
+// map").
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+}
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
 	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFields, deliberatelyUnexpressedFields)
@@ -89,10 +94,11 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 // whichever profile a composed driver exposes; both must hold regardless.
 //
 // On THIS radio the check has a second edge no sibling's has: spec.Validate
-// admits a five-member CTCSSStates list only while every member's Semantics
-// is a declared value and no two members share one (core/spec/validate.go's
-// tone-state rules). A five-state vocabulary with a repeated semantic — the
-// mistake a copy-paste of the standard three plus two would make — fails
+// admits a five-member ToneModes list only while every member's Semantics
+// is a declared value and no two members share one without a Canonical
+// marker (core/spec/validate.go's tone-mode rules). A five-state
+// vocabulary with a repeated semantic — the mistake a copy-paste of the
+// standard three plus two would make — fails
 // here.
 func TestProfiles_Validate(t *testing.T) {
 	for _, tt := range []struct {
@@ -111,18 +117,19 @@ func TestProfiles_Validate(t *testing.T) {
 }
 
 // tierFieldsMustBeEmpty names the spec.Capabilities fields for which this
-// radio's explicit decision is EMPTY — matrix §1.10 and §1.18-1.28, twelve
-// of them, each with its own reason recorded there. See
-// TestCapabilities_EveryFieldExplicit.
+// radio's explicit decision is EMPTY — matrix §1.10 and §1.20-1.28,
+// thirteen of them, each with its own reason recorded there.
+// spec.Capabilities.ToneModes is NOT in this list: it carries P8's own
+// FIVE-value CTCSS state (three shared with the family, two DCS — see
+// toneModes), since the Yaesu and Icom/Kenwood tone vocabularies unified
+// onto one enum. Two of those five being DCS states still does not make
+// this an Icom radio: FieldCTCSSState (this record's one tone-ish
+// position) is a separate spec.Field from FieldToneMode, which this
+// record does not carry at all. See TestCapabilities_EveryFieldExplicit.
 var tierFieldsMustBeEmpty = map[string]bool{
 	// §1.18: the record expresses repeater shift as P10's three-value
 	// Simplex/Plus/Minus, which is spec.FieldShift, not FieldDuplex.
 	"DuplexOptions": true,
-	// §1.19: the record's tone vocabulary is P8's FIVE-value CTCSS state.
-	// Two of those five are DCS states and that still does not make this an
-	// Icom ToneMode radio — ToneModes is a separate spec.Field with its own
-	// per-channel byte, and this record has one tone-ish position, not two.
-	"ToneModes": true,
 	// §1.20/§1.21: this radio has Table 2 (DCS Code Chart, layout 431-446),
 	// a DCS POLARITY menu (086, layout 622) and a memory record that can
 	// NAME a DCS state — and no per-channel code or polarity field
@@ -191,8 +198,9 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // that reads as a decision nobody took.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// 29 since additions design D4.2 added the transmit declaration
-	// (matrix §1, §5); now 30 with NoTag.
-	const wantFieldCount = 30
+	// (matrix §1, §5); 30 with NoTag; 29 again once the tone vocabularies
+	// unified (CTCSSStates deleted, ToneModes now shared).
+	const wantFieldCount = 29
 
 	for _, tt := range []struct {
 		name string
@@ -375,19 +383,19 @@ func TestBaseline_Shape(t *testing.T) {
 // core/csvio/dcsstate_roundtrip_test.go and app/dcsstate_uispec_test.go —
 // so the driver must use these strings or those tests are false.
 //
-// IT IS NOT spec.StandardCTCSSStates(), and the negative half is asserted
+// IT IS NOT spec.StandardToneModes(), and the negative half is asserted
 // as well as the positive one: every registered sibling prints 0/1/2 only
 // (ftdx10_layout.txt:1197, ftdx101_layout.txt:1291, ft891_layout.txt:977),
 // and the standard three are a PREFIX of this radio's five, so a driver
 // that reached for the shared helper would pass every length-agnostic check
 // and silently publish a three-state vocabulary for a five-state radio.
 func TestCTCSSStates_AreThisRadiosOwnFive(t *testing.T) {
-	want := []spec.ToneState{
-		{Value: "OFF", Semantics: spec.ToneOff},
-		{Value: "ENC-DEC", Semantics: spec.ToneEncodeDecode},
-		{Value: "ENC", Semantics: spec.ToneEncode},
-		{Value: "DCS-ENC-DEC", Semantics: spec.ToneDCSEncodeDecode},
-		{Value: "DCS-ENC", Semantics: spec.ToneDCSEncode},
+	want := []spec.ToneMode{
+		{Value: "OFF", Semantics: spec.ToneModeOff},
+		{Value: "ENC-DEC", Semantics: spec.ToneModeCTCSSSquelch},
+		{Value: "ENC", Semantics: spec.ToneModeCTCSS},
+		{Value: "DCS-ENC-DEC", Semantics: spec.ToneModeDCSEncodeDecode},
+		{Value: "DCS-ENC", Semantics: spec.ToneModeDCSEncode},
 	}
 	for _, tt := range []struct {
 		name string
@@ -397,11 +405,11 @@ func TestCTCSSStates_AreThisRadiosOwnFive(t *testing.T) {
 		{"Simulated", CapabilitiesSimulated()},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if !reflect.DeepEqual(tt.caps.CTCSSStates, want) {
-				t.Errorf("CTCSSStates = %+v, want %+v (matrix §1.17: P8's five values, printed identically on IF 795-796, MR 977-978, MT 1010-1011, MW 1048-1049 and OI 1128-1129)", tt.caps.CTCSSStates, want)
+			if !reflect.DeepEqual(tt.caps.ToneModes, want) {
+				t.Errorf("ToneModes = %+v, want %+v (matrix §1.17: P8's five values, printed identically on IF 795-796, MR 977-978, MT 1010-1011, MW 1048-1049 and OI 1128-1129)", tt.caps.ToneModes, want)
 			}
-			if reflect.DeepEqual(tt.caps.CTCSSStates, spec.StandardCTCSSStates()) {
-				t.Error("CTCSSStates equals spec.StandardCTCSSStates() — this radio's P8 legend prints FIVE values and the shared helper carries three (matrix §1.17)")
+			if reflect.DeepEqual(tt.caps.ToneModes, spec.StandardToneModes()) {
+				t.Error("ToneModes equals spec.StandardToneModes() — this radio's P8 legend prints FIVE values and the shared helper carries three (matrix §1.17)")
 			}
 		})
 	}
@@ -414,10 +422,10 @@ func TestCTCSSStates_AreThisRadiosOwnFive(t *testing.T) {
 // would make the validator demand a Known CTCSSTone for a channel whose
 // tone this programme can never read.
 func TestCTCSSStates_NeitherDCSMemberRequiresATone(t *testing.T) {
-	for _, st := range CapabilitiesUnverified().CTCSSStates {
+	for _, st := range CapabilitiesUnverified().ToneModes {
 		wantTone := st.Value == "ENC" || st.Value == "ENC-DEC"
-		if got := st.RequiresTone(); got != wantTone {
-			t.Errorf("state %q RequiresTone() = %v, want %v — the two DCS members need a CODE this record cannot carry, never a tone (matrix §1.17, §2.4)", st.Value, got, wantTone)
+		if got := st.NeedsTxTone(); got != wantTone {
+			t.Errorf("state %q NeedsTxTone() = %v, want %v — the two DCS members need a CODE this record cannot carry, never a tone (matrix §1.17, §2.4)", st.Value, got, wantTone)
 		}
 	}
 }
@@ -769,7 +777,7 @@ func TestCloneCapabilities_IsADeepCopy(t *testing.T) {
 	cp.Modes[0] = "CLOBBERED"
 	cp.Bauds[0] = -1
 	cp.RequiredSlots[0] = "CLOBBERED"
-	cp.CTCSSStates[0] = spec.ToneState{}
+	cp.ToneModes[0] = spec.ToneMode{}
 	cp.ShiftOptions[0] = spec.ShiftOption{}
 	cp.CTCSSTones[0] = spec.Tone(0)
 

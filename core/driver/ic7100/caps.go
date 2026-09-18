@@ -166,7 +166,6 @@ func capabilities(write spec.Support) spec.Capabilities {
 
 		RequiredSlots: nil,             // Matrix §1 row 14: no never-empty slot.
 		ShiftOptions:  nil,             // Matrix §1 row 15: FieldDuplex replaces this vocabulary.
-		CTCSSStates:   nil,             // Matrix §1 row 16: FieldToneMode replaces this vocabulary.
 		DuplexOptions: duplexOptions(), // Matrix §1 row 17.
 		ToneModes:     toneModes(),     // Matrix §1 row 18.
 		// Matrix §1 row 19.

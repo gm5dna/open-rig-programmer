@@ -137,6 +137,9 @@ func TestReadChannel_APopulatedMEMChannel(t *testing.T) {
 			Preamp:              codeplug.StringField{State: codeplug.Unavailable},
 			Antenna:             codeplug.StringField{State: codeplug.Unavailable},
 			IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
+			SatBandSwap:         codeplug.BoolField{State: codeplug.Unavailable},
+			SatTrace:            codeplug.BoolField{State: codeplug.Unavailable},
+			SatTraceRev:         codeplug.BoolField{State: codeplug.Unavailable},
 		}
 		if !reflect.DeepEqual(*ch.Data, wantData) {
 			t.Errorf("%s: ChannelData =\n %+v\nwant\n %+v", modelNameFor(row), *ch.Data, wantData)

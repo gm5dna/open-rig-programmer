@@ -327,7 +327,7 @@ func bankFields(rw, clar spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // omission: a zero MaxFreqHz reads as "no ceiling" to every validator, a
 // zero TagLen makes core/csvio's CHIRP import truncate every imported name
 // to "", a non-positive Bauds entry reaches SerialConfig.Baud, and an
-// empty ShiftOptions or CTCSSStates fails spec.Validate outright. Where
+// empty ShiftOptions or ToneModes fails spec.Validate outright. Where
 // the honest value is unverified it is populated anyway and doc.go's
 // register carries the provenance (the DefaultBaud 38400,
 // MinFreqHz/MaxFreqHz and RequiredSlots entries).
@@ -476,7 +476,7 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// memory record's P8 has three values and no DCS on all five
 		// blocks that print it.
 		ShiftOptions: spec.StandardShiftOptions(),
-		CTCSSStates:  spec.StandardCTCSSStates(),
+		ToneModes:    spec.StandardToneModes(),
 	}
 }
 

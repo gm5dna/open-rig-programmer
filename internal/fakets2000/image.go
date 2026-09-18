@@ -57,3 +57,15 @@ func DefaultImage() map[recordKey]MemState {
 		{channel: 1, half: HalfRXOrStart}: base,
 	}
 }
+
+// defaultSatelliteChannels is the ten-channel Satellite Memory bank's
+// factory image: every flag OFF, the eight-space name — MemState's own
+// "no information" convention (emptyRecord's doc comment), since no name
+// string is printed anywhere in this document for this bank either.
+func defaultSatelliteChannels() [10]satelliteChannel {
+	var chans [10]satelliteChannel
+	for i := range chans {
+		chans[i] = satelliteChannel{name: "        "}
+	}
+	return chans
+}

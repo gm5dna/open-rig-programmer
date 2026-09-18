@@ -14,6 +14,10 @@ import (
 // — ID read, AI read/set, FV read, TY read, MC read/set, MR read, MW set, EX
 // read — fully re-validated field by field against the same rules the
 // corresponding builder enforces, not merely a two-byte command-name prefix.
+// SA (read/set) and SI (set), v1.10.0's TS-2000 Satellite Memory pair, join
+// them on the SAME re-validation discipline, gated on the Satellite axis
+// (layout.go) so a row whose book has never printed them refuses both
+// outright — see validSACommand's own doc comment.
 //
 // IT IS core/cat's AllowedCommand DISCIPLINE, COPIED RATHER THAN IMPORTED.
 // That gate is hard-coded to seven Yaesu grammars over a cat.Dialect and
@@ -112,9 +116,86 @@ func (l Layout) AllowedCommand(frame []byte) bool {
 		return l.validMWCommand(frame)
 	case "EX":
 		return l.validEXRead(frame)
+	case "SA":
+		return l.validSACommand(frame)
+	case "SI":
+		return l.validSICommand(frame)
 	default:
 		return false
 	}
+}
+
+// satAnswerFrame is the exact width of core/kw/ts2000's ParseSAAnswer
+// shape — restated here as a constant local to the gate rather than
+// imported, since core/kw/ts2000 imports THIS package and a reverse
+// import would cycle.
+const (
+	satReadFrame = "SA;"
+	satSetLen    = 10 // "S A P1 P2 P3 P4 P5 P6 P7 ;"
+	satNameLen   = 12 // "S I P1 P2(x8) ;"
+)
+
+// validSatBoolByte is SA's plain '0'/'1' two-valued convention, shared by
+// P1, P3, P4, P5, P6 and P7 — core/kw/ts2000's own boolDigit read
+// backwards.
+func validSatBoolByte(b byte) bool { return b == '0' || b == '1' }
+
+// validSACommand admits the SA bare READ and core/kw/ts2000's own
+// BuildSASet Set shape, on a layout whose book prints the Satellite
+// Memory commands (l.satellite — the Satellite axis, layout.go). A
+// layout that has never printed SA/SI (every row but the TS-2000/2000X/
+// B2000 three) refuses both shapes outright, exactly as it refuses any
+// other family's grammar: THIS PACKAGE DOES NOT IMPORT core/kw/ts2000
+// (the reverse dependency would cycle), so the check is a self-contained
+// re-validation of that package's own BuildSASet field rules, not a call
+// into it — the same constraint EX's own read validity check states for
+// why it cannot call the generated per-row inventory.
+//
+// The bare read has no variable content once frame[:2] == "SA" and
+// exactlyOneTrailingSemicolon has already passed, so the three-byte case
+// is a literal match. The Set is P1 (a plain bool digit), P2 (a plain
+// channel digit 0-9, with NO space-or-zero convention below 10 the way
+// MC's hundreds digit has — SA's chart prints only "0 ~ 9"), then P3-P7
+// (five more plain bool digits).
+func (l Layout) validSACommand(frame []byte) bool {
+	if !l.satellite {
+		return false
+	}
+	if len(frame) == len(satReadFrame) {
+		return string(frame) == satReadFrame
+	}
+	if len(frame) != satSetLen {
+		return false
+	}
+	if !validSatBoolByte(frame[2]) { // P1
+		return false
+	}
+	if frame[3] < '0' || frame[3] > '9' { // P2
+		return false
+	}
+	for _, off := range [5]int{4, 5, 6, 7, 8} { // P3, P4, P5, P6, P7
+		if !validSatBoolByte(frame[off]) {
+			return false
+		}
+	}
+	return true
+}
+
+// validSICommand admits ONLY core/kw/ts2000's own BuildSISet shape — SI
+// has no Read this codec builds (satellite.go's own doc comment), so
+// nothing shorter is admitted. P1 is the plain channel digit 0-9 SA's P2
+// shares; the eight name bytes carry no further restriction here —
+// BuildSISet itself enforces only the eight-byte WIDTH, never a charset,
+// the same convention as every other Kenwood name field this package's
+// own MW/MC gate leaves unchecked.
+func (l Layout) validSICommand(frame []byte) bool {
+	if !l.satellite {
+		return false
+	}
+	if len(frame) != satNameLen {
+		return false
+	}
+	return frame[2] >= '0' && frame[2] <= '9' // P1
 }
 
 // exactlyOneTrailingSemicolon reports whether frame contains exactly one ';'

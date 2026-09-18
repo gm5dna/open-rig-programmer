@@ -29,7 +29,7 @@ var readChannelGapHook func()
 
 // ctcssNames maps the wire CTCSS state to codeplug's display spelling
 // ("OFF", "ENC-DEC", "ENC" — the strings codeplug.Validate checks for, and
-// the ones this driver's own Capabilities.CTCSSStates advertises).
+// the ones this driver's own Capabilities.ToneModes advertises).
 // Deliberately NOT cat.CTCSSState.String(), whose spellings ("off",
 // "ENC/DEC") are log labels rather than model values.
 //
@@ -651,5 +651,8 @@ func (s *Session) channelData(m cat.MemoryData, sl cat.Slot) (*codeplug.ChannelD
 		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
 		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
 		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
+		SatBandSwap:         codeplug.BoolField{State: codeplug.Unavailable},
+		SatTrace:            codeplug.BoolField{State: codeplug.Unavailable},
+		SatTraceRev:         codeplug.BoolField{State: codeplug.Unavailable},
 	}, nil
 }

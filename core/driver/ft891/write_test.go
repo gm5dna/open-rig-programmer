@@ -893,11 +893,11 @@ func TestNameMaps_AreExactInverses(t *testing.T) {
 	// advertises must be exactly the keys of the write-direction maps, so
 	// neither test above can pass over an empty pair.
 	caps := CapabilitiesSimulated()
-	if len(caps.CTCSSStates) != len(ctcssByName) || len(caps.ShiftOptions) != len(shiftByName) {
+	if len(caps.ToneModes) != len(ctcssByName) || len(caps.ShiftOptions) != len(shiftByName) {
 		t.Fatalf("advertised vocabularies (%d CTCSS states, %d shifts) do not match the write maps (%d, %d)",
-			len(caps.CTCSSStates), len(caps.ShiftOptions), len(ctcssByName), len(shiftByName))
+			len(caps.ToneModes), len(caps.ShiftOptions), len(ctcssByName), len(shiftByName))
 	}
-	for _, st := range caps.CTCSSStates {
+	for _, st := range caps.ToneModes {
 		if _, ok := ctcssByName[st.Value]; !ok {
 			t.Errorf("Capabilities advertises CTCSS state %q, which the write path cannot resolve", st.Value)
 		}
@@ -966,8 +966,8 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 		// Non-vacuity for the tier half: each entry's own predicate must
 		// answer true for SOME channel, or the entry is dead weight the
 		// gate would never consult.
-		if len(tierRequestedFields) != 17 {
-			t.Fatalf("tierRequestedFields has %d entries, want the seventeen codeplug's tierAddedFieldFor carries", len(tierRequestedFields))
+		if len(tierRequestedFields) != 20 {
+			t.Fatalf("tierRequestedFields has %d entries, want the twenty codeplug's tierAddedFieldFor carries", len(tierRequestedFields))
 		}
 		for _, tr := range tierRequestedFields {
 			if tr.Present(*writableChannel().Data) {

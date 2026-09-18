@@ -74,7 +74,6 @@ var deliberatelyZero = map[string]string{
 	"CTCSSTones":             "this radio's tone spans are BCD FREQUENCIES, not indices into a chart (matrix S1 row 11/12). CTCSSToneRange is the declaration (tier ruling T1(2), enabler E3)",
 	"RequiredSlots":          "nothing in this document says any IC-7600 memory or scan edge must stay populated (matrix S1 row 17)",
 	"ShiftOptions":           "the Yaesu repeater-shift vocabulary. The 1A 00 record has no shift field at all (matrix S1 row 18), and FieldShift carries the zero FieldSupport on both banks",
-	"CTCSSStates":            "the Yaesu tone-state vocabulary (matrix S1 row 19). This radio expresses tone through ToneModes, the Icom one",
 	"TuningSteps":            "additions design D8 - not applicable to this transceiver (matrix S1 row 25)",
 	"ProgramTuningStepRange": "additions design D8 (matrix S1 row 26)",
 	"AttenuatorDB":           "additions design D8 (matrix S1 row 27)",

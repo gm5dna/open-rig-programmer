@@ -411,6 +411,13 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	res := driver.WriteResult{Steps: []driver.WriteStep{}}
 
+	// BankSatellite's slots ("0".."9") are not the three-digit shape
+	// parseSlotID expects, so dispatch on bank membership BEFORE it —
+	// satellite.go's own doc comment has the write shape (SA then SI).
+	if bank, ok := s.bankFor(ch.Slot); ok && bank.ID == spec.BankSatellite {
+		return s.writeSatelliteChannel(ctx, ch)
+	}
+
 	number, half, err := parseSlotID(ch.Slot)
 	if err != nil {
 		return res, &UnknownSlotError{Slot: ch.Slot, Model: s.p.name, Reason: err.Error()}

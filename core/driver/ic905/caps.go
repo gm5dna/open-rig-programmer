@@ -212,6 +212,13 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		spec.FieldPreamp:            {},
 		spec.FieldAntenna:           {},
 		spec.FieldIPPlus:            {},
+
+		// The three TS-2000-only Satellite Memory bank fields (v1.10.0):
+		// a different Kenwood row's bank, with no position in this
+		// record.
+		spec.FieldSatBandSwap: {},
+		spec.FieldSatTrace:    {},
+		spec.FieldSatTraceRev: {},
 	}
 }
 
@@ -399,11 +406,6 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// vocabularies never coexist on one model). Mapping four Icom
 		// duplex values onto three Yaesu shift values would lose RPS.
 		ShiftOptions: nil,
-		// §1 row 15 — EMPTY, superseded by ToneModes for the same reason:
-		// StandardCTCSSStates' three semantics cannot express this
-		// record's four split TX/RX combinations or its three DTCS states
-		// without lying about what the radio stores.
-		CTCSSStates: nil,
 		// FOUR duplex values, E5-canonical-marked. PDF p.19 (folio 18),
 		// the ⑭ breakout's LEFT nibble. RPS (Repeater Simplex, DD mode)
 		// is simplex and therefore shares DuplexOff's semantics with OFF,

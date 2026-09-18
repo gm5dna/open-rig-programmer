@@ -219,6 +219,8 @@ var yaesuModels = map[string]bool{
 	// The FT-1000MP (v1.9.0 binary-CAT four, fourth and last row): same
 	// reason.
 	"FT-1000MP": true,
+	// The FTX-1 (v1.10.0): same reason.
+	"FTX-1": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -421,6 +423,8 @@ var ownParticulars = map[string][]string{
 	// mentions "Mark-V", which names no OTHER model this project
 	// registers, so it does not trip the non-borrowing check).
 	"FT-1000MP": {"FT-1000MP"},
+	// v1.10.0: bare name.
+	"FTX-1": {"FTX-1"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -2926,4 +2930,27 @@ func TestRadiotext_FT1000MPVerbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "FT-1000MP", got)
+}
+
+// TestRadiotext_FTX1Verbatim pins the v1.10.0 FTX-1 row's prose
+// byte-for-byte.
+func TestRadiotext_FTX1Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure: "This program sends no memory-clear frame for the FTX-1: no builder for one exists, and no FTX-1 has ever confirmed what a clear command does over its own interface. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		GridLegendNote: "The FTX-1 has no CTCSS tone-frequency chart anywhere in the manual excerpts this build was read from, so this build neither reads nor writes a tone frequency for it; its six-value CTCSS/DCS state (OFF, ENC, ENC-DEC, DCS, PR FREQ, REV TONE) is read and written normally. There is no scan-skip position anywhere in its manual, so this build shows no Scan Skip column for it. This radio's own memory-write command cannot target its 5 MHz band or EMGCH channels at all, so this build treats both banks as read-only, consent included. The wire carries no byte distinguishing the FTX-1 Field body from the FTX-1 Optima: both answer the identical CAT identity, so this build cannot tell them apart.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone: "not read or written over CAT for the FTX-1 — no CTCSS tone-frequency chart was found in this radio's manual",
+		},
+		ProbeFirmwareNote: "The FTX-1 has no firmware-version query in this build — check the radio's own display. The manual states CAT does not work at all before MAIN firmware V1.08; there is no CAT byte this build could use to check that itself, and a pre-V1.08 radio simply will not answer any CAT frame.",
+	}
+
+	got, ok := radiotext.For("FTX-1")
+	if !ok {
+		t.Fatal(`For("FTX-1") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FTX-1\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FTX-1", got)
 }

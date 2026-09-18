@@ -147,7 +147,6 @@ var deliberatelyZero = map[string]string{
 	"CTCSSToneRange":         "matrix §2: the tone field is an INDEX into this row's own chart (Format 14), not a BCD frequency number, so the Icom-style range type does not apply — a CHOICE over the field's shape, not an omission",
 	"RequiredSlots":          "matrix §2: nothing in the command table or the memory-operations chapter states a channel that must never be empty",
 	"ShiftOptions":           "matrix §2: superseded by the Icom-vocabulary pair this row publishes instead (ToneModes) — no shift/duplex/offset byte exists in the 28-byte record",
-	"CTCSSStates":            "matrix §2: same reasoning as ShiftOptions — this row publishes the Icom tone_mode pair, not the Yaesu ctcss_state/ctcss_tone pair",
 	"DuplexOptions":          "matrix §2: no shift/duplex/offset byte anywhere in the 28-byte record",
 	"DTCSPolarities":         "matrix §2: no DCS command, no DCS parameter format, no DCS mention anywhere in the extraction — this radio predates DCS",
 	"DTCSCodes":              "matrix §2: the same — no DCS code table is printed anywhere in this document",

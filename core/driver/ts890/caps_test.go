@@ -284,8 +284,8 @@ func TestBanks_NoSlotInTheUpperClassesIsPublished(t *testing.T) {
 // the same fact.
 func TestBankFields_NameEveryOneOfTheTwentySeven(t *testing.T) {
 	all := spec.AllFields()
-	if len(all) != 27 {
-		t.Fatalf("spec.AllFields() has %d entries, want 27", len(all))
+	if len(all) != 30 {
+		t.Fatalf("spec.AllFields() has %d entries, want 30", len(all))
 	}
 	fields := CapabilitiesUnverified().Banks[0].Fields
 	for _, f := range all {
@@ -369,6 +369,9 @@ func auditedFields() []spec.Field {
 // grades the zero FieldSupport, with the matrix's own reason.
 func unexpressedFields() map[spec.Field]string {
 	return map[spec.Field]string{
+		spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+		spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+		spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 		spec.FieldClarifier:         "§1.7, M-E4/M-E5: no clarifier position over the complete 13-parameter account (890:3164-3209); the radio HAS RIT and XIT (890:4558, 890:5411)",
 		spec.FieldCTCSSState:        "§2.1: tone is a four-value mode selector, which is FieldToneMode",
 		spec.FieldCTCSSTone:         "§2.1: the record carries TWO independent indices (P6, P7) and FieldCTCSSTone is ONE field",
@@ -405,7 +408,6 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"MaxFreqHz":              "§1.14, A15 — as MinFreqHz; a zero DISABLES the ceiling check",
 		"RequiredSlots":          "§1.15 — the book marks no channel mandatory",
 		"ShiftOptions":           "§1.16 — the Yaesu half of the vocabulary pair",
-		"CTCSSStates":            "§1.17 — as ShiftOptions",
 		"DuplexOptions":          "§1.18 — TOTAL absence; this row publishes only one half of the Icom half",
 		"DTCSPolarities":         "§1.20 — DCS appears nowhere in this book",
 		"DTCSCodes":              "§1.21 — as DTCSPolarities",
@@ -421,8 +423,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := CapabilitiesUnverified()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 30 {
-		t.Fatalf("spec.Capabilities has %d fields, want 30 — this test's list is stale", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name
@@ -435,8 +437,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 			t.Errorf("%s is populated but the deliberately-empty list says %q", name, reason)
 		}
 	}
-	if len(deliberatelyEmpty) != 19 {
-		t.Errorf("the deliberately-empty list has %d entries; §1 records eighteen empty cells on this row, plus NoTag", len(deliberatelyEmpty))
+	if len(deliberatelyEmpty) != 18 {
+		t.Errorf("the deliberately-empty list has %d entries; §1 records seventeen empty cells on this row, plus NoTag", len(deliberatelyEmpty))
 	}
 }
 

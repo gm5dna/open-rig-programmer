@@ -139,7 +139,6 @@ var deliberatelyZero = map[string]string{
 	"CTCSSTones":             "this radio's tone spans are BCD FREQUENCIES, not indices into a chart. There is no tone number to index, and spec.Capabilities.Validate refuses a model declaring both a chart and a range. CTCSSToneRange is the declaration (tier ruling T1(2), enabler E3)",
 	"RequiredSlots":          "RequiredSlots names INDIVIDUAL slots that must stay populated, and this radio has no such slot: its 99 regular channels are all clearable and its two scan edges are all non-clearable. The scan edges' rule is a WHOLE-BANK one and is carried by SCAN's NoBlank instead (matrix §1b.3, which sets the two mechanisms against each other explicitly)",
 	"ShiftOptions":           "the Yaesu repeater-shift vocabulary. The 1A 00 record has no shift field at all, and FieldShift carries the zero FieldSupport on both banks, so enabler E5b's anyBankReaches guard makes the empty list lawful",
-	"CTCSSStates":            "the Yaesu tone-state vocabulary. This radio expresses tone through ToneModes, the Icom one; a model declares one or the other",
 	"TuningSteps":            "additions design D8 — the IC-7851 record carries no receiver tuning-step field",
 	"ProgramTuningStepRange": "additions design D8 — the IC-7851 record carries no programmable tuning-step field",
 	"AttenuatorDB":           "additions design D8 — the IC-7851 record carries no attenuator field",

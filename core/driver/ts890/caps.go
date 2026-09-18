@@ -383,6 +383,13 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		// An Icom concept with no position in this frame and no mention
 		// anywhere in this book.
 		spec.FieldIPPlus: {},
+
+		// The three TS-2000-only Satellite Memory bank fields (v1.10.0):
+		// a different Kenwood row's bank, with no position in this
+		// record and no bearing on this book.
+		spec.FieldSatBandSwap: {},
+		spec.FieldSatTrace:    {},
+		spec.FieldSatTraceRev: {},
 	}
 }
 
@@ -558,7 +565,6 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// what spec.Validate's own pair rules are conditional on
 		// (core/spec/validate.go:380, :415).
 		ShiftOptions: nil,
-		CTCSSStates:  nil,
 		// EMPTY (§1.18), AND THIS ROW PUBLISHES ONLY ONE HALF OF THE ICOM
 		// HALF, deliberately: ToneModes below is non-empty and this is not,
 		// because the MA0 grid carries no duplex selector and no offset

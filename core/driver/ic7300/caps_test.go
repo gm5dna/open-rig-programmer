@@ -47,6 +47,9 @@ var allFields = []spec.Field{
 }
 
 var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldTuningStepEnabled: "additions design D8 — the IC-7300 memory frame carries no tuning-step-enabled field",
 	spec.FieldTuningStep:        "additions design D8 — the IC-7300 memory frame carries no tuning-step field",
 	spec.FieldProgramTuningStep: "additions design D8 — the IC-7300 memory frame carries no programmable-tuning-step field",
@@ -180,7 +183,6 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"ClarMaxHz":              "no clarifier/RIT field in the 1A 00 record (matrix §1 row 6, poor fit, graded)",
 		"ClarStepHz":             "as ClarMaxHz (matrix §1 row 7)",
 		"ShiftOptions":           "no shift or duplex field exists on this model (matrix §1 row 14)",
-		"CTCSSStates":            "displaced by ToneModes on Icom models (spec D4; matrix §1 row 15)",
 		"DuplexOptions":          "MANUAL-EVIDENCED absence (matrix §1b, duplex)",
 		"DTCSCodes":              "the record carries no DTCS field at all; MANUAL-EVIDENCED absence (matrix §1b, dtcs_code)",
 		"TuningSteps":            "additions design D8 — this record carries no receiver tuning-step field",
@@ -204,8 +206,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// a NEW capability field arriving with a plausible zero value and no
 	// entry would be caught — but a field REMOVED, or the struct reshaped,
 	// would not, so the exact shape remains pinned alongside the table.
-	if ty.NumField() != 30 {
-		t.Errorf("spec.Capabilities has %d fields, want 30 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
+	if ty.NumField() != 29 {
+		t.Errorf("spec.Capabilities has %d fields, want 29 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name
