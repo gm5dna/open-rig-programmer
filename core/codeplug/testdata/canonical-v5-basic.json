@@ -87,6 +87,15 @@
         "ip_plus": {
           "state": "known",
           "value": true
+        },
+        "sat_band_swap": {
+          "state": ""
+        },
+        "sat_trace": {
+          "state": ""
+        },
+        "sat_trace_rev": {
+          "state": ""
         }
       }
     }

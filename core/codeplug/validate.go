@@ -422,8 +422,9 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 	return issues
 }
 
-// validateTierFields checks the seventeen fields the two Icom model
-// extensions added, and it
+// validateTierFields checks the twenty fields added after the pre-tier
+// ten (the two Icom model extensions, plus v1.10.0's TS-2000 satellite
+// bank three), and it
 // checks each one ONLY when this bank can reach it
 // (spec.FieldSupport.Unreachable false — design D4, adjudication 16).
 //
@@ -545,10 +546,13 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 			}
 			return nil
 		},
-		spec.FieldAttenuator: func() error { return d.AttenuatorDB.Valid(caps.AttenuatorDB) },
-		spec.FieldPreamp:     func() error { return d.Preamp.Valid(caps.PreampOptions) },
-		spec.FieldAntenna:    func() error { return d.Antenna.Valid(caps.AntennaOptions) },
-		spec.FieldIPPlus:     func() error { return d.IPPlus.Valid() },
+		spec.FieldAttenuator:  func() error { return d.AttenuatorDB.Valid(caps.AttenuatorDB) },
+		spec.FieldPreamp:      func() error { return d.Preamp.Valid(caps.PreampOptions) },
+		spec.FieldAntenna:     func() error { return d.Antenna.Valid(caps.AntennaOptions) },
+		spec.FieldIPPlus:      func() error { return d.IPPlus.Valid() },
+		spec.FieldSatBandSwap: func() error { return d.SatBandSwap.Valid() },
+		spec.FieldSatTrace:    func() error { return d.SatTrace.Valid() },
+		spec.FieldSatTraceRev: func() error { return d.SatTraceRev.Valid() },
 	}
 	for _, tf := range TierFields {
 		state := *tf.State(&d)
