@@ -165,6 +165,10 @@ func bankFields(rw spec.FieldSupport, writable bool) map[spec.Field]spec.FieldSu
 		spec.FieldPreamp:            {},
 		spec.FieldAntenna:           {},
 		spec.FieldIPPlus:            {},
+
+		spec.FieldSatBandSwap: {},
+		spec.FieldSatTrace:    {},
+		spec.FieldSatTraceRev: {},
 	}
 }
 
