@@ -170,15 +170,17 @@ func (d Dialect) validAICommand(frame []byte) bool {
 }
 
 // validMRCommand reports whether frame is a legal MR read request: exactly
-// mrReadLen (6) bytes, with a slot this dialect's readableSlot accepts (the
-// same rule BuildMRRead enforces — see Dialect.readableSlot's doc comment,
-// slot.go). MR has no Set form, so anything else with an "MR" prefix —
-// including a 28-byte MR ANSWER frame — is rejected here.
+// d.slotOnlyFrameLen() (6 for a registered 3-digit-slot dialect, 8 for the
+// FTX-1's 5-digit one) bytes, with a slot this dialect's readableSlot
+// accepts (the same rule BuildMRRead enforces — see Dialect.readableSlot's
+// doc comment, slot.go). MR has no Set form, so anything else with an "MR"
+// prefix — including a 28-byte MR ANSWER frame — is rejected here.
 func (d Dialect) validMRCommand(frame []byte) bool {
-	if len(frame) != mrReadLen {
+	n := d.slotDigits()
+	if len(frame) != d.slotOnlyFrameLen() {
 		return false
 	}
-	slot, err := d.ParseSlot(string(frame[2:5]))
+	slot, err := d.ParseSlot(string(frame[2 : 2+n]))
 	if err != nil {
 		return false
 	}
@@ -266,8 +268,9 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // even if a radio turns out to ANSWER short, nothing this package sends is
 // affected.
 func (d Dialect) validMTCommand(frame []byte) bool {
-	if len(frame) == mtReadLen {
-		slot, err := d.ParseSlot(string(frame[2:5]))
+	if len(frame) == d.slotOnlyFrameLen() {
+		n := d.slotDigits()
+		slot, err := d.ParseSlot(string(frame[2 : 2+n]))
 		if err != nil {
 			return false
 		}
@@ -276,21 +279,50 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 
 	switch d.mt.Form {
 	case MTFormShort:
-		if len(frame) < mtAnswerMinLen || len(frame) > d.mtShortAnswerMax() {
+		if len(frame) < d.mtShortAnswerMinLen() || len(frame) > d.mtShortAnswerMax() {
 			return false
 		}
 		if frame[0] != 'M' || frame[1] != 'T' {
 			return false
 		}
-		slot, err := d.ParseSlot(string(frame[2:5]))
+		n := d.slotDigits()
+		slot, err := d.ParseSlot(string(frame[2 : 2+n]))
 		if err != nil || !d.mtSlotValid(slot) {
 			return false
 		}
-		if _, err := parseBoolDigit(frame[5]); err != nil {
+		if _, err := parseBoolDigit(frame[2+n]); err != nil {
 			return false
 		}
-		tag := string(frame[6 : len(frame)-1])
+		tag := string(frame[2+n+1 : len(frame)-1])
 		return d.validMTTag(tag)
+
+	case MTFormShortNoDisplay:
+		// Exact length (mtNoDisplayLen's own doc comment: this form's tag
+		// field is fixed-width, not a variable-length window like the short
+		// form's), "MT" prefix, ';' terminator, a slot mtSlotValid accepts
+		// (the same write-direction policy BuildMTSetNoDisplay enforces),
+		// and the RAW tag field checked per byte with validMTTagByte only —
+		// deliberately not d.validMTTag, mirroring the combined form's own
+		// gate rule (below): this is a WIRE field, always full width on the
+		// wire, and the builder's "no trailing fill" rule is an INPUT rule
+		// on the logical tag, not a property of the frame itself.
+		if want := d.mtNoDisplayLen(); len(frame) != want {
+			return false
+		}
+		if frame[0] != 'M' || frame[1] != 'T' {
+			return false
+		}
+		n := d.slotDigits()
+		slot, err := d.ParseSlot(string(frame[2 : 2+n]))
+		if err != nil || !d.mtSlotValid(slot) {
+			return false
+		}
+		for _, b := range frame[d.mtNoDisplayTagOff() : d.mtNoDisplayTagOff()+d.mt.TagMaxBytes] {
+			if !validMTTagByte(b) {
+				return false
+			}
+		}
+		return true
 
 	case MTFormCombined:
 		// Framing first, in ParseMTAnswerCombined's order: length, prefix,
@@ -372,6 +404,14 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 // one of them admitted by its own gate. See mcSendValid (mc.go) for the
 // full statement of the split.
 func (d Dialect) validMCCommand(frame []byte) bool {
+	// MCSelectsUnsupported closes the gate on EVERY MC frame, including the
+	// fixed read request below — which, unlike the Set branch, consults no
+	// dialect data at all and would otherwise pass this gate regardless of
+	// MCSelects (Codex spec review BLOCKER 3): a dialect that declares no MC
+	// support has no frame this codec may send under the "MC" mnemonic.
+	if d.slots.mcSelects == MCSelectsUnsupported {
+		return false
+	}
 	if string(frame) == mcReadFrame {
 		return true
 	}

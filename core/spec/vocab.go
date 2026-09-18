@@ -210,6 +210,24 @@ const (
 	// but does not require one to open squelch on receive — the DCS
 	// analogue of ToneModeCTCSS.
 	ToneModeDCSEncode
+	// ToneModePRFreq and ToneModeRevTone are the FTX-1's P8 values "4: PR
+	// FREQ" and "5: REV TONE" (FTX-1 spec.md §6) — states with no analogue
+	// anywhere else in this project's tone vocabulary, Yaesu or
+	// Icom/Kenwood side: "PR FREQ" (pseudo-repeater frequency?) and "REV
+	// TONE" (tone-squelch reversal) are printed by the manual with no
+	// further explanation in its CAT chapter.
+	//
+	// APPENDED, not inserted, for ToneModeDCSEncodeDecode's own reason: no
+	// existing constant's value moves.
+	//
+	// NEUTRAL, deliberately: NeedsTxTone, NeedsRxTone and NeedsDTCS all
+	// report false for both, the same treatment the two DCS-state members
+	// get, and for the same reason — a driver mapping FTX-1's P8 byte 4 or
+	// 5 onto one of these round-trips the state without core/codeplug's
+	// validator demanding a FieldToneTx, FieldToneRx or FieldDTCSCode this
+	// project has no evidence either byte actually carries.
+	ToneModePRFreq
+	ToneModeRevTone
 )
 
 // ToneMode is one tone-squelch mode a memory channel's FieldToneMode

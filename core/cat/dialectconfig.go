@@ -75,6 +75,22 @@ type SlotSpace struct {
 	// NoneWire is the "VFO or MT or QMB" form, e.g. "000". "" means absent.
 	NoneWire string
 
+	// SlotDigits is the WIDTH, in bytes, of every wire slot form this
+	// family's P1/P0 fields use: 3 for every registered dialect ("001",
+	// "P1L", "EMG"), 5 for the FTX-1 ("00001", "P-01L", "EMGCH") — the
+	// FTX-1 spec's §4 finding that this family's ENTIRE slot space widened,
+	// not just its memory range.
+	//
+	// The ZERO VALUE MEANS 3, deliberately — the one axis in this file that
+	// defaults rather than refuses an omission, because every dialect
+	// registered before this field existed left it unset and must keep
+	// building the identical 3-byte forms it always has. Consumers read it
+	// through Dialect.slotDigits(), never this field directly, so the
+	// default lives in exactly one place. A value other than 0, 3 or 5 is
+	// refused (V19): nothing in this codec's fixed-width Sprintf renderers
+	// or offset arithmetic has evidence for a third width.
+	SlotDigits int
+
 	// MCSelects is the SEND-side domain of this family's MC (memory channel
 	// recall) command: which of the slots above an MC Set may name.
 	//
@@ -117,13 +133,21 @@ const (
 	// wire, so a numeric-PMS dialect builds and accepts no token form at
 	// all.
 	PMSFormNumeric
+	// PMSFormDashToken is the FTX-1's own token shape, "P-%02d%c" — a
+	// hyphen and a TWO-digit pair number, "P-01L".."P-50U" (FTX-1 spec.md
+	// §4) — not PMSFormToken's single ASCII digit (1-9 only) and not
+	// PMSFormNumeric's consecutive channel numbers either (the pairs keep
+	// the "P-nn" token shape, just wider and two digits). The pair count
+	// ceiling under this form is 50, not PMSFormToken's 9 — see pmsCap.
+	PMSFormDashToken
 )
 
 // String names the form, so a refusal can quote it.
 func (f PMSSlotForm) String() string {
 	return enumName(f, "PMSSlotForm", map[PMSSlotForm]string{
-		PMSFormToken:   "PMSFormToken",
-		PMSFormNumeric: "PMSFormNumeric",
+		PMSFormToken:     "PMSFormToken",
+		PMSFormNumeric:   "PMSFormNumeric",
+		PMSFormDashToken: "PMSFormDashToken",
 	})
 }
 
@@ -151,13 +175,27 @@ const (
 	MCSelectsAll MCSlotPolicy = iota + 1
 	// MCSelectsMemoryPMS is the narrower domain: memory and PMS only.
 	MCSelectsMemoryPMS
+	// MCSelectsUnsupported declares that this family's MC command has NO
+	// representation in this codec at all — the FTX-1's own MC carries a
+	// leading MAIN/SUB port byte before its slot (FTX-1 spec.md §3.4), a
+	// frame shape nothing in this package's "MC" + 3-byte-slot + ";" codec
+	// can build or parse, port byte aside. Declaring one of the other two
+	// policies for such a family would let BuildMCSet/BuildMCRead/
+	// ParseMCAnswer build or accept a frame the radio's own manual does not
+	// document — this value exists so a dialect can instead say "no MC
+	// support" and have every MC entry point (BuildMCSet, ParseMCAnswer,
+	// the outbound gate's validMCCommand) refuse cleanly, rather than
+	// mis-building or mis-parsing a coincidentally-shaped frame. See
+	// Dialect.MCSupported.
+	MCSelectsUnsupported
 )
 
 // String names the policy, so a refusal can quote it.
 func (p MCSlotPolicy) String() string {
 	return enumName(p, "MCSlotPolicy", map[MCSlotPolicy]string{
-		MCSelectsAll:       "MCSelectsAll",
-		MCSelectsMemoryPMS: "MCSelectsMemoryPMS",
+		MCSelectsAll:         "MCSelectsAll",
+		MCSelectsMemoryPMS:   "MCSelectsMemoryPMS",
+		MCSelectsUnsupported: "MCSelectsUnsupported",
 	})
 }
 
@@ -185,13 +223,28 @@ const (
 	// mode and policy sharing has broken down entirely, a sibling codec) —
 	// it is NOT a parameterisation of this one.
 	MTFormCombined
+	// MTFormShortNoDisplay is "MT" + slot(SlotDigits) + tag(TagMaxBytes,
+	// FIXED WIDTH, padded with TagFill) + ";" — the FTX-1's, per FTX-1
+	// spec.md §3.3/§8: "MT" + P0(5) + P1(12, tag) + ";" = 20 bytes, always.
+	// It differs from MTFormShort in TWO ways at once, not one: there is no
+	// display byte at all (the FT-710's short form's byte 6 has no
+	// FTX-1 analogue), and the tag field is fixed-width like the combined
+	// form's rather than short-form's variable-length one — the manual
+	// gives one exact byte count for the whole frame, not a floor/ceiling
+	// window. It reuses the combined form's TagFill mechanism for exactly
+	// that reason (see mtnodisplay.go): ClearTagByte and PadByte are
+	// therefore COMBINED-FORM-shaped under this value too (must be zero;
+	// TagFill required), even though the record itself carries none of the
+	// combined form's shared memory field block or P11 byte.
+	MTFormShortNoDisplay
 )
 
 func (f MTForm) String() string {
 	return enumName(f, "MTForm", map[MTForm]string{
-		MTFormUnspecified: "MTFormUnspecified",
-		MTFormShort:       "MTFormShort",
-		MTFormCombined:    "MTFormCombined",
+		MTFormUnspecified:    "MTFormUnspecified",
+		MTFormShort:          "MTFormShort",
+		MTFormCombined:       "MTFormCombined",
+		MTFormShortNoDisplay: "MTFormShortNoDisplay",
 	})
 }
 
@@ -570,6 +623,23 @@ const (
 	// states plus the two DCS ones. The STATE only — the DCS code itself
 	// is not a field of this record.
 	ToneStatesCTCSSAndDCS
+	// ToneStatesSix is the FTX-1's P8 domain (FTX-1 spec.md §6): SIX
+	// values, '0'-'5' — the three CTCSS states, one UNSPLIT DCS state
+	// ('3', reusing CTCSSDCSEncDec's byte: the manual prints "3: DCS" as a
+	// single value, not the FT-991A's ENC/DEC-vs-ENC split), and two
+	// states with no analogue anywhere else in this codec ('4' "PR FREQ",
+	// '5' "REV TONE").
+	//
+	// BYTES 4 AND 5 CARRY NO NAMED CTCSSState CONSTANT, deliberately: '4'
+	// already names the FT-991A's CTCSSDCSEnc under ToneStatesCTCSSAndDCS,
+	// and CTCSSState's display-name table (ctcssNames) is shared across
+	// every dialect's domain — a second name for the same byte would be a
+	// duplicate map key. Driver-level naming for FTX-1's own '4'/'5'
+	// belongs to the neutral spec.ToneModePRFreq/ToneModeRevTone
+	// (core/spec/vocab.go) instead; this domain's own job is only to let
+	// parseMemoryFields/encodeMemoryFields round-trip the byte, which
+	// CTCSSState(c) already does for any c without needing a name.
+	ToneStatesSix
 )
 
 // String names the domain, so a refusal can quote it.
@@ -577,6 +647,7 @@ func (t ToneStateDomain) String() string {
 	return enumName(t, "ToneStateDomain", map[ToneStateDomain]string{
 		ToneStatesCTCSS:       "ToneStatesCTCSS",
 		ToneStatesCTCSSAndDCS: "ToneStatesCTCSSAndDCS",
+		ToneStatesSix:         "ToneStatesSix",
 	})
 }
 
@@ -755,6 +826,7 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 			pmsNumericLo: cfg.Slots.PMSNumericLo,
 			emgWire:      cfg.Slots.EmergencyWire,
 			noneWire:     cfg.Slots.NoneWire,
+			slotDigits:   cfg.Slots.SlotDigits,
 
 			mcSelects: cfg.Slots.MCSelects,
 		},

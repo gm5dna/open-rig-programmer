@@ -11,20 +11,24 @@ import (
 // + ";". Golden vector G10: "MT001;".
 const mtReadLen = 6
 
-// mtAnswerMinLen is the SHORT form's structural floor: an MT Set/Answer
-// frame with a zero-length tag — "MT"(2) + slot(3) + display(1) + tag(0) +
-// ";"(1). It is a property of the frame GRAMMAR, shared by every short-form
-// dialect, so it stays a constant.
-//
-// The MAXIMUM is not. It was a sibling constant here, sized to the FT-710's
-// own 12-byte tag, with a comment recording that a dialect with a wider tag
-// would need it revisited into a receiver method. M9c-3 is that
-// revision: see mtShortAnswerMax below, which adds THIS dialect's
-// TagMaxBytes to this floor. The prediction held exactly — the constant was
-// never the thing doing the rejecting for either dialect that existed, so
-// deleting it moves no FT-710 byte and no FT-710 error text (12 + 7 = 19,
-// the number the old constant already carried).
+// mtAnswerMinLen is the SHORT form's structural floor UNDER THE REGISTERED
+// (3-digit-slot) SHAPE: an MT Set/Answer frame with a zero-length tag —
+// "MT"(2) + slot(3) + display(1) + tag(0) + ";"(1). KEPT AS A PACKAGE
+// CONSTANT for the same reason memdata.go's offset constants are: fixture
+// code addressing this one canonical shape still can. Since the FTX-1 seam,
+// PRODUCTION code consults mtShortAnswerMinLen (below) instead, which
+// slides with this dialect's own slot width; under slotDigits() 3 it
+// returns exactly this constant.
 const mtAnswerMinLen = 2 + 3 + 1 + 0 + 1
+
+// mtShortAnswerMinLen is THIS DIALECT'S OWN short-form structural floor:
+// "MT"(2) + slot(slotDigits()) + display(1) + tag(0) + ";"(1). It slides
+// with slotDigits() for slotOnlyFrameLen's own reason — a gate consulting
+// the registered family's 3-byte width on every dialect is the shape this
+// seam eliminates. Under slotDigits() 3 this returns exactly mtAnswerMinLen.
+func (d Dialect) mtShortAnswerMinLen() int {
+	return 2 + d.slotDigits() + 1 + 0 + 1
+}
 
 // mtShortAnswerMax is the longest SHORT-form MT Set/Answer frame THIS
 // dialect can produce or accept: the zero-tag floor plus its own tag width.
@@ -40,14 +44,16 @@ const mtAnswerMinLen = 2 + 3 + 1 + 0 + 1
 // It is meaningful only under MTFormShort; both callers refuse any other
 // form before consulting it.
 func (d Dialect) mtShortAnswerMax() int {
-	return mtAnswerMinLen + d.mt.TagMaxBytes
+	return d.mtShortAnswerMinLen() + d.mt.TagMaxBytes
 }
 
 // MTAnswerBounds returns the validated answer-length bounds, in bytes, for
 // this dialect's MT form: [min, max] inclusive. The short form's window is
 // its structural floor plus its own tag width (FT-710: 7-19); the combined
-// form's length is EXACT, so its bounds are equal (29 + TagMaxBytes, 41 for
-// the evidenced 12-byte tag).
+// and no-display forms' lengths are EXACT, so their bounds are equal (29 +
+// TagMaxBytes for combined, 41 for the evidenced 12-byte tag; 2 +
+// slotDigits() + TagMaxBytes + 1 for no-display, 20 for the FTX-1's 5-digit
+// slot and 12-byte tag).
 //
 // An unconfigured dialect gets an ERROR, not zeros. This is the
 // receiver-derived geometry M9c-5's transport spec factories consume
@@ -55,15 +61,18 @@ func (d Dialect) mtShortAnswerMax() int {
 // a driver reading a plausible (0, 0) would build a CommandSpec that admits
 // no answer at all and says nothing about why.
 //
-// It lives here rather than in mtcombined.go because it spans both forms:
-// the whole point is that a caller asks the dialect for its geometry instead
-// of branching on the form itself.
+// It lives here rather than in mtcombined.go/mtnodisplay.go because it spans
+// every form: the whole point is that a caller asks the dialect for its
+// geometry instead of branching on the form itself.
 func (d Dialect) MTAnswerBounds() (min, max int, err error) {
 	switch d.mt.Form {
 	case MTFormShort:
-		return mtAnswerMinLen, d.mtShortAnswerMax(), nil
+		return d.mtShortAnswerMinLen(), d.mtShortAnswerMax(), nil
 	case MTFormCombined:
 		n := d.mtCombinedLen()
+		return n, n, nil
+	case MTFormShortNoDisplay:
+		n := d.mtNoDisplayLen()
 		return n, n, nil
 	default:
 		return 0, 0, newParseError(nil, fmt.Sprintf("MT: no answer bounds for a %v dialect — a form must be configured before its frame geometry can be derived", d.mt.Form))
@@ -293,7 +302,7 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 		tag = d.clearTagForm()
 	}
 
-	frame := make([]byte, 0, mtAnswerMinLen+len(tag))
+	frame := make([]byte, 0, d.mtShortAnswerMinLen()+len(tag))
 	frame = append(frame, 'M', 'T')
 	frame = append(frame, s.Wire()...)
 	frame = append(frame, boolDigit(display))
@@ -386,7 +395,7 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 		}
 		return Command{}, newParseError([]byte(s.Wire()), fmt.Sprintf("MT: slot %q is outside this dialect's MT read domain (%v: memory and PMS only) — its MT block's slot legend prints neither the 5xx nor the EMG bank, which MR reads instead", s.Wire(), d.mt.ReadSlots))
 	}
-	frame := make([]byte, 0, mtReadLen)
+	frame := make([]byte, 0, d.slotOnlyFrameLen())
 	frame = append(frame, 'M', 'T')
 	frame = append(frame, s.Wire()...)
 	frame = append(frame, ';')
@@ -449,8 +458,8 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if d.mt.Form != MTFormShort {
 		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT: short-form answer parsed on a %v dialect — use the combined-form API", d.mt.Form))
 	}
-	if len(frame) < mtAnswerMinLen || len(frame) > d.mtShortAnswerMax() {
-		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT answer must be %d-%d bytes", mtAnswerMinLen, d.mtShortAnswerMax()))
+	if len(frame) < d.mtShortAnswerMinLen() || len(frame) > d.mtShortAnswerMax() {
+		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT answer must be %d-%d bytes", d.mtShortAnswerMinLen(), d.mtShortAnswerMax()))
 	}
 	if frame[0] != 'M' || frame[1] != 'T' {
 		return Slot{}, false, "", newParseError(frame, "MT answer missing \"MT\" prefix")
@@ -458,7 +467,8 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if frame[len(frame)-1] != ';' {
 		return Slot{}, false, "", newParseError(frame, "MT answer missing ';' terminator")
 	}
-	slot, err := d.ParseSlot(string(frame[2:5]))
+	n := d.slotDigits()
+	slot, err := d.ParseSlot(string(frame[2 : 2+n]))
 	if err != nil {
 		return Slot{}, false, "", newParseError(frame, "MT answer: invalid slot field")
 	}
@@ -478,11 +488,11 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if d.classifySlot(slot.Wire()) == slotKindNone {
 		return Slot{}, false, "", newParseError(frame, "MT answer: slot must not be \"000\" (reference MT column: ✗)")
 	}
-	display, err := parseBoolDigit(frame[5])
+	display, err := parseBoolDigit(frame[2+n])
 	if err != nil {
 		return Slot{}, false, "", newParseError(frame, "MT answer: display field must be '0' or '1'")
 	}
-	tag := d.decodeMTTag(string(frame[6 : len(frame)-1]))
+	tag := d.decodeMTTag(string(frame[2+n+1 : len(frame)-1]))
 	return slot, display, tag, nil
 }
 

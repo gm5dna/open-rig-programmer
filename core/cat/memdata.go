@@ -36,16 +36,20 @@ const memoryFrameLen = 28
 // reuses these same offsets and puts its own bytes there instead.
 //
 // KEPT AS PACKAGE CONSTANTS for the same reason as memoryFrameLen above:
-// fixture code exercising only the registered (9-digit) shape still
-// addresses the field block at these fixed, familiar positions. Since the
-// S1 lift, PRODUCTION parsing/building consult the mem*Off METHODS below
-// instead, which derive every offset from THIS DIALECT'S OWN
-// memoryFreqDigits — memSlotOffset and memFreqOffset never move (P1 and P2
-// sit before the digit width that varies), but everything from P3 onward
-// SLIDES by however many bytes narrower or wider P2 is than 9 digits, a
-// pure position slide and not a reordering (ft2000 matrix §1.1). Under
-// memoryFreqDigits 9 — every registered dialect's own declared value — each
-// method returns exactly the constant of the same name.
+// fixture code exercising only the registered (9-digit-frequency,
+// 3-digit-slot) shape still addresses the field block at these fixed,
+// familiar positions. Since the S1 lift, PRODUCTION parsing/building
+// consult the mem*Off METHODS below instead, which derive every offset
+// from THIS DIALECT'S OWN memoryFreqDigits AND slotDigits() —
+// memSlotOffset never moves (P1 sits at the very start of the field
+// block), but since the FTX-1 seam P2 SLIDES with slotDigits() too
+// (memFreqOff, below), and everything from P3 onward slides by however
+// many bytes narrower or wider the SLOT and the FREQUENCY fields are than
+// 3 and 9 digits — a pure position slide and not a reordering (ft2000
+// matrix §1.1, extended to the slot axis by the FTX-1 seam). Under
+// slotDigits() 3 and memoryFreqDigits 9 — every registered dialect's own
+// declared values — each method returns exactly the constant of the same
+// name.
 const (
 	memSlotOffset     = 2  // P1, positions 3-5, 3 bytes
 	memFreqOffset     = 5  // P2, positions 6-14, 9 bytes
@@ -66,12 +70,32 @@ const (
 	memClarMagDigits = 4
 )
 
+// memFreqOff is THIS DIALECT'S OWN offset for P2, the field the package
+// constant memFreqOffset names for the registered (3-digit-slot) shape.
+// Since the FTX-1 seam it SLIDES with slotDigits() exactly as everything
+// from P3 onward already slid with memoryFreqDigits (this file's own
+// offset-constants doc comment): memSlotOffset never moves — P1 sits before
+// the digit width that varies, at the start of the field block — but P2 now
+// sits after memSlotOffset PLUS this dialect's own slot width, not the
+// package constant's fixed 3. Under slotDigits() 3 (every dialect
+// registered before this seam) this returns exactly memFreqOffset, so no
+// registered dialect's bytes moved.
+//
+// Codex spec review BLOCKER 1: before this existed, parseMemoryFields and
+// encodeMemoryFields both read/wrote the P2 field at the package constant
+// memFreqOffset regardless of slot width — for a 5-digit dialect a READ
+// would start two bytes into the slot field's own last two digits, and an
+// ENCODE would clobber them, because encodeMemoryFields writes the slot via
+// m.Slot.Wire() (5 bytes) then the frequency at the OLD fixed offset 5,
+// three bytes short of where the 5-byte slot field actually ends.
+func (d Dialect) memFreqOff() int { return memSlotOffset + d.slotDigits() }
+
 // memClarSignOff, memClarMagOff, memRxClarOff, memTxClarOff, memModeOff,
 // memKindOff, memCTCSSOff, memP9Off, memShiftOff and memTermOff are THIS
 // DIALECT'S OWN offsets for the field block positions the same-named
 // constants above name for the registered (9-digit) shape. See this file's
 // offset-constants doc comment for why both exist.
-func (d Dialect) memClarSignOff() int { return memFreqOffset + int(d.memoryFreqDigits) }
+func (d Dialect) memClarSignOff() int { return d.memFreqOff() + int(d.memoryFreqDigits) }
 func (d Dialect) memClarMagOff() int  { return d.memClarSignOff() + 1 }
 func (d Dialect) memRxClarOff() int   { return d.memClarMagOff() + memClarMagDigits }
 func (d Dialect) memTxClarOff() int   { return d.memRxClarOff() + 1 }
@@ -83,10 +107,10 @@ func (d Dialect) memShiftOff() int    { return d.memP9Off() + 2 }
 func (d Dialect) memTermOff() int     { return d.memShiftOff() + 1 }
 
 // memoryFrameLenFor returns the MR-answer/MW-set frame length a P2 field
-// freqDigits digits wide IMPLIES: memTermOff()+1, computed on a throwaway
-// Dialect carrying only that one axis, so this is the SAME offset chain
-// above rather than a second, hand-derived formula that could drift from
-// it.
+// freqDigits digits wide and a slot field slotDigits bytes wide IMPLY:
+// memTermOff()+1, computed on a throwaway Dialect carrying only those two
+// axes, so this is the SAME offset chain above rather than a second,
+// hand-derived formula that could drift from it.
 //
 // Codex close-review finding P2: before this existed, V17
 // (dialectvalidate.go) checked MemoryFrameLen and MemoryFreqDigits each
@@ -95,8 +119,15 @@ func (d Dialect) memTermOff() int     { return d.memShiftOff() + 1 }
 // mem*Off method above is anchored to memoryFreqDigits alone, so BuildMWSet
 // would then index a 27-byte frame at offsets computed for 9 digits, one
 // byte past the end, and panic rather than build or refuse.
-func memoryFrameLenFor(freqDigits uint8) int {
-	d := Dialect{memoryFreqDigits: freqDigits}
+//
+// THE slotDigits PARAMETER IS THE FTX-1 SEAM'S OWN ADDITION to this same
+// finding: memFreqOff() now slides with slot width too (its own doc
+// comment), so a config's declared MemoryFrameLen must agree with BOTH axes
+// together, not freqDigits alone — a 5-digit-slot dialect declaring the
+// registered 28-byte frame would size BuildMWSet's allocation two bytes
+// short of what its own slot width needs.
+func memoryFrameLenFor(freqDigits uint8, slotDigits int) int {
+	d := Dialect{memoryFreqDigits: freqDigits, slots: slotSpace{slotDigits: slotDigits}}
 	return d.memTermOff() + 1
 }
 
@@ -339,6 +370,17 @@ func (d Dialect) ParseCTCSSState(c byte) (CTCSSState, error) {
 		default:
 			return 0, newParseError([]byte{c}, "invalid CTCSS code: want '0'-'4'")
 		}
+	case ToneStatesSix:
+		// The FTX-1's own six-value P8 domain (ToneStatesSix's own doc
+		// comment, dialectconfig.go): '0'-'5'. Bytes '4' and '5' carry no
+		// named CTCSSState constant — CTCSSState(c) round-trips them
+		// without one.
+		switch c {
+		case '0', '1', '2', '3', '4', '5':
+			return CTCSSState(c), nil
+		default:
+			return 0, newParseError([]byte{c}, "invalid CTCSS code: want '0'-'5'")
+		}
 	case ToneStatesCTCSS:
 		return ParseCTCSSState(c)
 	default:
@@ -519,12 +561,12 @@ func boolDigit(b bool) byte {
 // read vocabulary '0'-'5', exactly as before. A caller whose form documents
 // a narrower vocabulary narrows it AFTER this returns.
 func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData, error) {
-	slot, err := d.ParseSlot(string(frame[memSlotOffset : memSlotOffset+3]))
+	slot, err := d.ParseSlot(string(frame[memSlotOffset : memSlotOffset+d.slotDigits()]))
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: invalid slot field (P1)", wantPrefix))
 	}
 
-	freqField := frame[memFreqOffset : memFreqOffset+int(d.memoryFreqDigits)]
+	freqField := frame[d.memFreqOff() : d.memFreqOff()+int(d.memoryFreqDigits)]
 	if !allDigits(freqField) {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: frequency field (P2) must be %d digits", wantPrefix, d.memoryFreqDigits))
 	}
@@ -692,7 +734,7 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 // TestMemoryP5_ZeroPolicyRefusesRatherThanDefaultingWide.
 func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) error {
 	copy(frame[memSlotOffset:], m.Slot.Wire())
-	copy(frame[memFreqOffset:], fmt.Sprintf("%0*d", int(d.memoryFreqDigits), m.FreqHz))
+	copy(frame[d.memFreqOff():], fmt.Sprintf("%0*d", int(d.memoryFreqDigits), m.FreqHz))
 
 	clarMag := m.ClarHz
 	sign := byte('+')

@@ -92,17 +92,19 @@ func validDuplexDirection(d DuplexDirection) bool {
 	return d >= DuplexOff && d <= DuplexDown
 }
 
-// validToneModeSemantics reports whether s is one of the seven declared,
+// validToneModeSemantics reports whether s is one of the nine declared,
 // meaningful ToneModeSemantics constants. ToneModeUnspecified (the zero
 // value) is deliberately excluded: a ToneMode whose Semantics was simply
 // never set must fail here, not silently read as ToneModeOff.
 //
 // The two DCS members were appended for a radio whose CTCSS-state field
-// names DCS as well as CTCSS (the FT-991A's P8). They widen what a
-// profile MAY declare and nothing else: no existing model's ToneModes
-// moves, and the uniqueness rule below is unchanged.
+// names DCS as well as CTCSS (the FT-991A's P8). ToneModePRFreq and
+// ToneModeRevTone were appended after them for the FTX-1's P8 (§6) — two
+// more NEUTRAL states with no tone/DTCS analogue at all. Every appended
+// pair widens what a profile MAY declare and nothing else: no existing
+// model's ToneModes moves, and the uniqueness rule below is unchanged.
 func validToneModeSemantics(s ToneModeSemantics) bool {
-	return s >= ToneModeOff && s <= ToneModeDCSEncode
+	return s >= ToneModeOff && s <= ToneModeRevTone
 }
 
 // Validate checks c for internal STRUCTURAL consistency — not hardware
