@@ -226,6 +226,12 @@ func (s *Session) writeSatelliteChannel(ctx context.Context, ch codeplug.Channel
 	// mode) — live radio state this record also carries but this bank has
 	// no per-channel Field for (satelliteChannelData's own doc comment
 	// and core/kw/ts2000/satellite.go's).
+	//
+	// TOCTOU WINDOW: a front-panel change to P1/P4/P7 between this read
+	// and the SA Set below reaching the wire is silently overwritten by
+	// the value read here — small (one exchange wide, under s.opMu) but
+	// real, and distinct from writing back a STALE cached read (there is
+	// none: this read is always fresh, immediately before the Set).
 	current, err := s.readSA(ctx)
 	if err != nil {
 		return res, err
