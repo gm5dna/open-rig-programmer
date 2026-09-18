@@ -18,6 +18,10 @@ var allCapabilityFields = []spec.Field{
 }
 
 var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+
 	spec.FieldTagDisplay: "MTFormShortNoDisplay carries no display byte at all (spec.md §3.3/§8) — there is no such flag anywhere on this radio's CAT surface",
 	spec.FieldCTCSSTone:  "no CAT command reads or writes a memory channel's live tone-table index on this radio",
 	spec.FieldScanSkip:   "no scan-skip byte exists in the 27-byte field block (spec.md §3.1's own offset table)",
