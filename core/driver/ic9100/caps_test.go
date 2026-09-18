@@ -48,7 +48,6 @@ var deliberatelyZeroCapabilityFields = map[string]string{
 	"CTCSSTones":             "matrix §1 row 11",
 	"RequiredSlots":          "matrix §1 row 17",
 	"ShiftOptions":           "matrix §1 row 18",
-	"CTCSSStates":            "matrix §1 row 19",
 	"TuningSteps":            "matrix §1 row 25 / §1b D8",
 	"ProgramTuningStepRange": "matrix §1 row 26 / §1b D8",
 	"AttenuatorDB":           "matrix §1 row 27 / §1b D8",
@@ -61,8 +60,8 @@ var deliberatelyZeroCapabilityFields = map[string]string{
 func TestCapabilitiesEveryStructFieldIsExplicitlyNonZeroOrAudited(t *testing.T) {
 	value := reflect.ValueOf(CapabilitiesUnverified())
 	typeOf := value.Type()
-	if typeOf.NumField() != 30 {
-		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 30", typeOf.NumField())
+	if typeOf.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 29", typeOf.NumField())
 	}
 	for i := 0; i < typeOf.NumField(); i++ {
 		name := typeOf.Field(i).Name
@@ -137,8 +136,8 @@ func TestCapabilityValuesFromMatrix(t *testing.T) {
 	if caps.TagLen != 9 || len(caps.TagCharset) != 95 || !caps.TagByteOK(';') || !caps.TagByteOK(' ') {
 		t.Errorf("tag policy = len %d charset %d semicolon=%v space=%v (matrix §1 rows 7/30)", caps.TagLen, len(caps.TagCharset), caps.TagByteOK(';'), caps.TagByteOK(' '))
 	}
-	if caps.ClarMaxHz != 0 || caps.ClarStepHz != 0 || len(caps.CTCSSTones) != 0 || len(caps.ShiftOptions) != 0 || len(caps.CTCSSStates) != 0 {
-		t.Error("deliberately-zero legacy capability fields drifted from matrix §1 rows 9-11/18-19")
+	if caps.ClarMaxHz != 0 || caps.ClarStepHz != 0 || len(caps.CTCSSTones) != 0 || len(caps.ShiftOptions) != 0 {
+		t.Error("deliberately-zero legacy capability fields drifted from matrix §1 rows 9-11/18")
 	}
 	if caps.CTCSSToneRange == nil || *caps.CTCSSToneRange != (spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1}) {
 		t.Errorf("CTCSSToneRange = %+v, want the printed 50-tone chart's own bounds at 0.1 Hz resolution (matrix §1 row 12)", caps.CTCSSToneRange)

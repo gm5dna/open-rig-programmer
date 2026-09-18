@@ -295,7 +295,6 @@ func baseCapabilities(p modelParams, rw spec.FieldSupport) spec.Capabilities {
 		// Both nil (matrix §4, design decision 6): the Icom half is
 		// declared instead (DuplexOptions/ToneModes below).
 		ShiftOptions: nil,
-		CTCSSStates:  nil,
 		// Three of OS's four values (matrix §4); the fourth ("All
 		// E-types") is recorded, not published (matrix §6 item 2).
 		DuplexOptions: duplexOptions(),

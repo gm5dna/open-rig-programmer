@@ -41,7 +41,7 @@ type ChannelData struct {
 	// TxClar is whether the clarifier applies to transmit.
 	TxClar bool `json:"tx_clar,omitempty"`
 	// CTCSS is the CTCSS state, as an OPAQUE STRING from the radio's own
-	// spec.Capabilities.CTCSSStates vocabulary — "OFF", "ENC-DEC" or "ENC"
+	// spec.Capabilities.ToneModes vocabulary — "OFF", "ENC-DEC" or "ENC"
 	// on every model registered before Tier 1's FT-991A, and those three
 	// plus "DCS-ENC-DEC" and "DCS-ENC" on that radio, whose P8 legend
 	// prints five. This package never enumerates the set: Validate checks

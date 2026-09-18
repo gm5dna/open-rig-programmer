@@ -541,15 +541,27 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	// authoritative, driver-populated home, so this now reads it rather
 	// than restating it. ShiftOptions extracts each ShiftOption's Value,
 	// preserving caps' own order; the Direction each option also carries
-	// is not needed by the grid's option list today. CTCSSStateOptions
-	// extracts each ToneState's Value, preserving caps' own order; the
-	// RequiresTone fact each state also carries is not needed by the
-	// grid's option list today.
+	// is not needed by the grid's option list today.
+	//
+	// CTCSSStateOptions extracts each ToneMode's Value from caps.ToneModes
+	// — the vocabulary field CTCSSStates used to carry alone, before the
+	// Yaesu and Icom/Kenwood tone vocabularies unified (spec.ToneMode's
+	// own doc comment) — but ONLY for a radio that expresses
+	// FieldCTCSSState (the Yaesu identity): an Icom/Kenwood radio's
+	// ToneModes serves FieldToneMode instead, a tier field this list has
+	// never described, and populating it from ToneModes unconditionally
+	// would put Icom's TONE/TSQL/DTCS/CROSS spellings in a list named for
+	// the Yaesu field. See ctcssStateValues' own doc comment for the
+	// RequiresTone/NeedsTxTone fact this list still does not carry.
 	shiftOptions := make([]string, len(caps.ShiftOptions))
 	for i, o := range caps.ShiftOptions {
 		shiftOptions[i] = o.Value
 	}
-	ctcssStateOptions := ctcssStateValues(caps.CTCSSStates)
+	var yaesuToneModes []spec.ToneMode
+	if capsExpressesCTCSSState(caps) {
+		yaesuToneModes = caps.ToneModes
+	}
+	ctcssStateOptions := ctcssStateValues(yaesuToneModes)
 
 	// Prose fields (task 41, M9a-5): served from internal/radiotext rather
 	// than hardcoded in this package or the frontend — see UISpecView's
@@ -598,14 +610,33 @@ func (a *App) GetUISpec() (UISpecView, error) {
 //
 // A FUNCTION rather than four lines inline, so the property can be pinned
 // on a vocabulary no registered model declares yet: since the FT-991A's P8
-// legend prints five states, spec.ToneSemantics carries two DCS members,
-// and this list must pass every state its radio declares through unfiltered
-// rather than knowing about the family three. TestCTCSSStateValues_* holds
-// both halves.
-func ctcssStateValues(states []spec.ToneState) []string {
+// legend prints five states, spec.ToneModeSemantics carries two DCS
+// members, and this list must pass every state its radio declares through
+// unfiltered rather than knowing about the family three. Its caller
+// already filters to nil for a radio that does not express
+// FieldCTCSSState (capsExpressesCTCSSState); this function does not
+// re-check that. TestCTCSSStateValues_* holds both halves.
+func ctcssStateValues(states []spec.ToneMode) []string {
 	out := make([]string, len(states))
 	for i, s := range states {
 		out[i] = s.Value
 	}
 	return out
+}
+
+// capsExpressesCTCSSState reports whether ANY bank in caps reaches
+// spec.FieldCTCSSState — this radio's own answer to "is this the Yaesu
+// tone-state identity, or the Icom/Kenwood FieldToneMode one", now that
+// both draw Semantics from the same caps.ToneModes list (see
+// spec.ToneMode's doc comment). Mirrors
+// core/codeplug/validate.go's own capsExpressesCTCSSState, which the two
+// packages cannot share without a new exported seam neither currently
+// needs elsewhere.
+func capsExpressesCTCSSState(caps spec.Capabilities) bool {
+	for _, b := range caps.Banks {
+		if !caps.FieldSupport(b.ID, spec.FieldCTCSSState).Unreachable() {
+			return true
+		}
+	}
+	return false
 }

@@ -177,8 +177,8 @@ var dataModeNames = map[byte]string{0x00: "OFF", 0x01: "ON"}
 var duplexNames = map[byte]string{0x0: "OFF", 0x1: "DUP-", 0x2: "DUP+", 0x3: "RPS"}
 
 // toneModeNames is the RIGHT nibble of the same breakout: eight values,
-// which is why spec.CTCSSStates' three-value vocabulary is left empty on
-// this model and FieldToneMode carries it instead.
+// carried through spec.Capabilities.ToneModes and FieldToneMode, not the
+// Yaesu family's three-value FieldCTCSSState.
 var toneModeNames = map[byte]string{
 	0x0: "OFF", 0x1: "TONE", 0x2: "TSQL", 0x3: "DTCS", 0x4: "DTCS(T)",
 	0x5: "TONE(T)/DTCS(R)", 0x6: "DTCS(T)/TSQL(R)", 0x7: "TONE(T)/TSQL(R)",

@@ -226,9 +226,9 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// gate) — the family-standard three-value vocabulary
 		// (spec.md §Write model step 5; matrix §4 "ShiftOptions").
 		ShiftOptions: spec.StandardShiftOptions(),
-		// CTCSSStates/CTCSSTones/CTCSSToneRange all stay empty: this
+		// ToneModes/CTCSSTones/CTCSSToneRange all stay empty: this
 		// bank grades neither FieldCTCSSState nor FieldCTCSSTone above
-		// Unsupported, so Validate's pairing gate does not require them
+		// Unsupported, so Validate's non-empty gate does not require them
 		// (matrix §2 "Unsupported, not merely absent").
 	}
 }

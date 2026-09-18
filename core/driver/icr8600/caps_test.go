@@ -133,13 +133,13 @@ func TestConsentAndWriteTrialsRemainFailSafe(t *testing.T) {
 
 func TestDeliberatelyZeroAudit(t *testing.T) {
 	typ := reflect.TypeOf(spec.Capabilities{})
-	if typ.NumField() != 30 {
-		t.Fatalf("spec.Capabilities field count = %d, want 30; audit every new field before updating this pin", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities field count = %d, want 29; audit every new field before updating this pin", typ.NumField())
 	}
 	zero := map[string]bool{
 		"ClarMaxHz": true, "ClarStepHz": true, "CTCSSTones": true,
 		"MinFreqHz": true, "MaxFreqHz": true, "RequiredSlots": true,
-		"ShiftOptions": true, "CTCSSStates": true,
+		"ShiftOptions": true,
 		// SimplexTxUnstated: nothing in this receiver's record says what a
 		// simplex channel's transmit frequency holds, and it has no
 		// transmitter at all (the 09/09/2026 CHIRP transmit-disposition design).

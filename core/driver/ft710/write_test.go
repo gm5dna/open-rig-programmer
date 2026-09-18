@@ -521,11 +521,21 @@ func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
 // where a Known VOCABULARY-KEYED tier field is now stopped, and it is a
 // deliberate consequence of the write-gate sweep's item (i) rather than a
 // new rule: the FieldState walk passes each StringField/IntField/ToneField
-// THIS RADIO'S OWN vocabulary or table, and every Icom-tier vocabulary in
-// this driver's capabilities is the EMPTY slice — an FT-710's manual
-// expresses none of it. An empty vocabulary fails CLOSED for every Known
-// value (StringField.Valid's own doc comment), so ToneMode is refused one
-// rung above the capability gate.
+// THIS RADIO'S OWN vocabulary or table, and this driver's FieldToneMode
+// (the Icom/Kenwood tier field, d.ToneMode) has none — an FT-710's manual
+// expresses no such field at all. An empty vocabulary fails CLOSED for
+// every Known value (StringField.Valid's own doc comment), so ToneMode is
+// refused one rung above the capability gate.
+//
+// caps.ToneModes ITSELF IS NOT EMPTY, since the tone vocabularies unified:
+// it carries the family three (OFF/ENC-DEC/ENC), the FT-710's own
+// FieldCTCSSState vocabulary. core/driver.FieldStateChecks knows the
+// difference — it only feeds caps.ToneModes to d.ToneMode's check when
+// this radio does NOT express FieldCTCSSState (fieldstate.go's own
+// comment) — so d.ToneMode still gets the empty vocabulary here, and the
+// coincidence that "OFF"/"ENC-DEC"/"ENC" happen to spell real CTCSS
+// states never leaks into an Icom-field admission this radio has no wire
+// position for.
 //
 // The VERDICT is unchanged and that is the point of asserting it here: the
 // same field is named, the refusal is still typed, and no frame reaches the
@@ -535,8 +545,13 @@ func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
 func TestWriteChannel_KnownTierVocabFieldRefusedByTheFieldStateRung(t *testing.T) {
 	cp, sess := openCountingSession(t, Simulated)
 
-	if len(sess.caps.ToneModes) != 0 {
-		t.Fatalf("caps.ToneModes = %v, want empty — this test's premise is that the FT-710 declares no Icom-tier vocabulary", sess.caps.ToneModes)
+	if len(sess.caps.ToneModes) == 0 {
+		t.Fatal("caps.ToneModes is empty — this test's premise now needs it POPULATED (it is the FT-710's own FieldCTCSSState vocabulary), so the refusal below proves the FieldToneMode gate, not a vacuously empty caps.ToneModes")
+	}
+	for _, b := range sess.caps.Banks {
+		if !sess.caps.FieldSupport(b.ID, spec.FieldToneMode).Unreachable() {
+			t.Fatalf("bank %s reaches FieldToneMode — this test's premise is that the FT-710 declares no Icom-tier tone-mode field at all", b.ID)
+		}
 	}
 
 	ch := writableChannel("010")

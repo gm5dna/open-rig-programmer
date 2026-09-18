@@ -267,7 +267,7 @@ func baseCapabilities(memF, pmsF map[spec.Field]spec.FieldSupport) spec.Capabili
 		// matrix §2.14: the ordinary three-state legacy domain, "0: CTCSS
 		// OFF 1: CTCSS ENC/DEC 2: CTCSS ENC" — NOT ft991a's five-state
 		// DCS-bearing domain.
-		CTCSSStates: spec.StandardCTCSSStates(),
+		ToneModes: spec.StandardToneModes(),
 		// The twelve fields matrix §2.15 finds MANUAL-EVIDENCED ABSENT stay
 		// nil/empty: DuplexOptions, ToneModes, DTCSPolarities, DTCSCodes,
 		// Filters, TuningSteps, ProgramTuningStepRange, AttenuatorDB,

@@ -244,7 +244,7 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		ShiftOptions: spec.StandardShiftOptions(),
 		// matrix §4: the ordinary three-state legacy domain, "0: CTCSS OFF
 		// 1: CTCSS ENC/DEC 2: CTCSS ENC" — no DCS member.
-		CTCSSStates: spec.StandardCTCSSStates(),
+		ToneModes: spec.StandardToneModes(),
 		// The twelve fields the matrix (§4) finds MANUAL-EVIDENCED ABSENT
 		// stay nil/empty: DuplexOptions, ToneModes, DTCSPolarities,
 		// DTCSCodes, Filters, TuningSteps, ProgramTuningStepRange,

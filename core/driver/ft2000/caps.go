@@ -216,7 +216,7 @@ func baseCapabilities(m modelParams, rw spec.FieldSupport) spec.Capabilities {
 		// MANUAL-EVIDENCED (matrix §2.9): the ordinary three-state legacy
 		// domain, "0: CTCSS OFF 1: CTCSS ENC/DEC 2: CTCSS ENC" — NOT the
 		// FT-991A's five-state DCS-bearing domain.
-		CTCSSStates: spec.StandardCTCSSStates(),
+		ToneModes: spec.StandardToneModes(),
 		// The twelve fields the matrix (§2.14) finds MANUAL-EVIDENCED
 		// ABSENT stay nil/empty: DuplexOptions, ToneModes, DTCSPolarities,
 		// DTCSCodes, Filters, TuningSteps, ProgramTuningStepRange,

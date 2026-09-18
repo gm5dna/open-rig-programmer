@@ -502,6 +502,15 @@ func deviantVocabCapabilities() spec.Capabilities {
 				ID:    spec.BankMemory,
 				Label: "Memories",
 				Slots: []string{"001"},
+				// FieldCTCSSState must be GRADED here, not merely left
+				// implicit, now that the CTCSS check is keyed on any bank
+				// reaching the field (capsExpressesCTCSSState) rather than
+				// on caps.CTCSSStates alone — that field is gone; the
+				// vocabulary check now reads caps.ToneModes, the one
+				// vocabulary shared with FieldToneMode (Icom/Kenwood).
+				Fields: map[spec.Field]spec.FieldSupport{
+					spec.FieldCTCSSState: {Read: spec.Supported, Write: spec.Supported},
+				},
 			},
 		},
 		Modes:       []string{"USB"},
@@ -515,9 +524,9 @@ func deviantVocabCapabilities() spec.Capabilities {
 			{Value: "SPLIT-PLUS", Direction: spec.ShiftUp},
 			{Value: "SPLIT-NONE", Direction: spec.ShiftNone},
 		},
-		CTCSSStates: []spec.ToneState{
-			{Value: "DISABLED", Semantics: spec.ToneOff},
-			{Value: "TONE", Semantics: spec.ToneEncode},
+		ToneModes: []spec.ToneMode{
+			{Value: "DISABLED", Semantics: spec.ToneModeOff},
+			{Value: "TONE", Semantics: spec.ToneModeCTCSS},
 		},
 	}
 }
@@ -552,9 +561,9 @@ func deviantChannel(shift, ctcss string, toneKnown bool) *Codeplug {
 
 // TestValidate_ShiftCTCSSVocabFromCaps proves the Shift/CTCSS checks in
 // validateChannelData are driven entirely by caps.ShiftOptions/
-// caps.CTCSSStates, not by any hardcoded literal: a deviant vocabulary
+// caps.ToneModes, not by any hardcoded literal: a deviant vocabulary
 // (see deviantVocabCapabilities) accepts its own values and rejects the
-// FT-710's old literals, and RequiresTone — not the literal string
+// FT-710's old literals, and NeedsTxTone — not the literal string
 // "OFF" — decides whether the CTCSS-tone-pairing warning fires.
 func TestValidate_ShiftCTCSSVocabFromCaps(t *testing.T) {
 	caps := deviantVocabCapabilities()
@@ -576,17 +585,17 @@ func TestValidate_ShiftCTCSSVocabFromCaps(t *testing.T) {
 		}
 	})
 
-	t.Run("disabled state not named OFF: RequiresTone false suppresses the tone-pairing warning", func(t *testing.T) {
+	t.Run("disabled state not named OFF: NeedsTxTone false suppresses the tone-pairing warning", func(t *testing.T) {
 		issues := Validate(deviantChannel("SPLIT-NONE", "DISABLED", false), caps)
 		if hasIssue(issues, SeverityWarning, spec.FieldCTCSSTone, "001", "") {
-			t.Errorf("Validate() = %+v, want no CTCSSTone warning (RequiresTone false, no OFF literal involved)", issues)
+			t.Errorf("Validate() = %+v, want no CTCSSTone warning (NeedsTxTone false, no OFF literal involved)", issues)
 		}
 	})
 
-	t.Run("tone-bearing state without a known tone: RequiresTone true fires the warning", func(t *testing.T) {
+	t.Run("tone-bearing state without a known tone: NeedsTxTone true fires the warning", func(t *testing.T) {
 		issues := Validate(deviantChannel("SPLIT-NONE", "TONE", false), caps)
 		if !hasIssue(issues, SeverityWarning, spec.FieldCTCSSTone, "001", "cannot be set via CAT") {
-			t.Errorf("Validate() = %+v, want a CTCSSTone warning (RequiresTone true, no known tone)", issues)
+			t.Errorf("Validate() = %+v, want a CTCSSTone warning (NeedsTxTone true, no known tone)", issues)
 		}
 	})
 

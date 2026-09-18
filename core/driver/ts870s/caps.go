@@ -38,7 +38,6 @@ var deliberatelyZero = map[string]string{
 	"RequiredSlots": "matrix §1.15: the manual's own vacant-channel sentence names no channel as mandatory",
 
 	"ShiftOptions":  "matrix §1.16/§1.18: no shift/duplex selector exists in the 22-byte record — split is expressed only as the independent P1=1 TX frame (FieldTxFrequency); FieldShift and FieldDuplex both carry the zero FieldSupport, so E5b's anyBankReaches guard makes the empty list lawful",
-	"CTCSSStates":   "matrix §1.16/§1.19: this row expresses the Icom-style tone_mode vocabulary (ToneModes), not the Yaesu ctcss_state one — the two never coexist on one model",
 	"DuplexOptions": "matrix §1.18: no duplex selector or offset-magnitude field exists among the 22 bytes; split is the two P1 frames, which is FieldTxFrequency, not FieldDuplex",
 
 	"DTCSPolarities": "matrix §1.20/§1.21: zero case-insensitive hits for \"dcs\"/\"dtcs\" anywhere in the extraction",
@@ -152,7 +151,7 @@ func capabilities(write spec.Support) spec.Capabilities {
 		MaxFreqHz: 30_000_000, // matrix §1.14
 
 		// The Icom-style pair (design D4): this row expresses ToneModes,
-		// not ShiftOptions/CTCSSStates (matrix §1.16/§1.19).
+		// not ShiftOptions (matrix §1.16/§1.19).
 		ToneModes: []spec.ToneMode{
 			{Value: "OFF", Semantics: spec.ToneModeOff},
 			{Value: "TONE", Semantics: spec.ToneModeCTCSS}, // transmits only, no receive tone (matrix §1.19)

@@ -27,7 +27,7 @@ func testCapabilities() spec.Capabilities {
 		MaxFreqHz:     56000000,
 		RequiredSlots: []string{"001"},
 		ShiftOptions:  spec.StandardShiftOptions(),
-		CTCSSStates:   spec.StandardCTCSSStates(),
+		ToneModes:     spec.StandardToneModes(),
 		Banks: []spec.Bank{
 			{
 				ID:    spec.BankMemory,

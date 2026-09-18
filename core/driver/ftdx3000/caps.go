@@ -174,7 +174,7 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		ShiftOptions: spec.StandardShiftOptions(),
 		// MANUAL-EVIDENCED (matrix §2.9): the ordinary three-state legacy
 		// domain, no DCS member.
-		CTCSSStates: spec.StandardCTCSSStates(),
+		ToneModes: spec.StandardToneModes(),
 		// The twelve fields the matrix (§2.14) finds MANUAL-EVIDENCED
 		// ABSENT stay nil/empty: DuplexOptions, ToneModes, DTCSPolarities,
 		// DTCSCodes, Filters, TuningSteps, ProgramTuningStepRange,

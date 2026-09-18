@@ -151,8 +151,8 @@ func TestCapabilities_MatrixValues(t *testing.T) {
 	if caps.RequiredSlots != nil {
 		t.Errorf("RequiredSlots = %v, want nil (§1.15)", caps.RequiredSlots)
 	}
-	if len(caps.ShiftOptions) != 0 || len(caps.CTCSSStates) != 0 {
-		t.Error("the Yaesu vocabulary half is populated; §1.16/§1.17 require both empty under decision 6")
+	if len(caps.ShiftOptions) != 0 {
+		t.Error("the Yaesu shift vocabulary is populated; §1.16 requires it empty under decision 6")
 	}
 	if len(caps.DuplexOptions) != 0 {
 		t.Errorf("DuplexOptions = %v, want empty (§1.18: no duplex selector in the record)", caps.DuplexOptions)
@@ -204,7 +204,6 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"MaxFreqHz":              "§1.14, M-E6",
 		"RequiredSlots":          "§1.15",
 		"ShiftOptions":           "§1.16",
-		"CTCSSStates":            "§1.17",
 		"DuplexOptions":          "§1.18",
 		"DTCSPolarities":         "§1.20",
 		"DTCSCodes":              "§1.21",
@@ -221,8 +220,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := CapabilitiesSimulated()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 30 {
-		t.Fatalf("spec.Capabilities has %d fields, this test knows 30", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, this test knows 29", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name

@@ -15,7 +15,7 @@ import (
 
 // ctcssNames maps the wire CTCSS state to codeplug's display spelling — the
 // strings codeplug.Validate checks for, and the ones this driver's own
-// Capabilities.CTCSSStates advertises. Deliberately NOT
+// Capabilities.ToneModes advertises. Deliberately NOT
 // cat.CTCSSState.String(), whose spellings ("off", "ENC/DEC", "DCS ENC/DEC")
 // are log labels rather than model values.
 //

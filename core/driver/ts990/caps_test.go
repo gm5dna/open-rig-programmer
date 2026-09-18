@@ -123,7 +123,6 @@ func TestCapabilities_MatrixValues(t *testing.T) {
 	}
 	for name, got := range map[string]int{
 		"ShiftOptions":   len(caps.ShiftOptions),
-		"CTCSSStates":    len(caps.CTCSSStates),
 		"DuplexOptions":  len(caps.DuplexOptions),
 		"DTCSPolarities": len(caps.DTCSPolarities),
 		"DTCSCodes":      len(caps.DTCSCodes),
@@ -172,7 +171,6 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"MaxFreqHz":              "§1.14, A15 — as MinFreqHz; a zero DISABLES the ceiling check",
 		"RequiredSlots":          "§1.15 — this book marks no channel mandatory",
 		"ShiftOptions":           "§1.16 — the Yaesu half of the vocabulary pair (decision 6)",
-		"CTCSSStates":            "§1.17 — as ShiftOptions",
 		"DuplexOptions":          "§1.18 — zero occurrences of \"duplex\" in this book",
 		"DTCSPolarities":         "§1.20 — DCS appears nowhere in this book",
 		"DTCSCodes":              "§1.21 — as DTCSPolarities",
@@ -188,8 +186,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	caps := CapabilitiesUnverified()
 	v := reflect.ValueOf(caps)
 	typ := v.Type()
-	if typ.NumField() != 30 {
-		t.Fatalf("spec.Capabilities has %d fields, want 30 — this test's list is stale", typ.NumField())
+	if typ.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields, want 29 — this test's list is stale", typ.NumField())
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name

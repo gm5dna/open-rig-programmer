@@ -28,7 +28,7 @@ func consentFixture() Capabilities {
 		MaxFreqHz:     56000000,
 		RequiredSlots: []string{"001"},
 		ShiftOptions:  StandardShiftOptions(),
-		CTCSSStates:   StandardCTCSSStates(),
+		ToneModes:     StandardToneModes(),
 		Banks: []Bank{
 			{
 				ID:    BankMemory,
@@ -103,7 +103,7 @@ func TestConsentUnverifiedWrites_WriteSideOnly(t *testing.T) {
 		!reflect.DeepEqual(out.Bauds, in.Bauds) ||
 		!reflect.DeepEqual(out.RequiredSlots, in.RequiredSlots) ||
 		!reflect.DeepEqual(out.ShiftOptions, in.ShiftOptions) ||
-		!reflect.DeepEqual(out.CTCSSStates, in.CTCSSStates) {
+		!reflect.DeepEqual(out.ToneModes, in.ToneModes) {
 		t.Error("a non-Banks slice field's contents changed, want carried across unchanged")
 	}
 	// Bank metadata other than Fields survives too.

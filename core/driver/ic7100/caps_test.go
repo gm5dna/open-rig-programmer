@@ -42,7 +42,6 @@ var deliberatelyZeroCapabilityFields = map[string]string{
 	"CTCSSTones":             "matrix §1 row 8",
 	"RequiredSlots":          "matrix §1 row 14",
 	"ShiftOptions":           "matrix §1 row 15",
-	"CTCSSStates":            "matrix §1 row 16",
 	"TuningSteps":            "matrix §1b D8",
 	"ProgramTuningStepRange": "matrix §1b D8",
 	"AttenuatorDB":           "matrix §1b D8",
@@ -55,8 +54,8 @@ var deliberatelyZeroCapabilityFields = map[string]string{
 func TestCapabilitiesEveryStructFieldIsExplicitlyNonZeroOrAudited(t *testing.T) {
 	value := reflect.ValueOf(CapabilitiesUnverified())
 	typeOf := value.Type()
-	if typeOf.NumField() != 30 {
-		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 30", typeOf.NumField())
+	if typeOf.NumField() != 29 {
+		t.Fatalf("spec.Capabilities has %d fields; this deliberately-zero audit knows 29", typeOf.NumField())
 	}
 	for i := 0; i < typeOf.NumField(); i++ {
 		name := typeOf.Field(i).Name
@@ -131,8 +130,8 @@ func TestCapabilityValuesFromMatrix(t *testing.T) {
 	if caps.TagLen != 16 || len(caps.TagCharset) != 95 || !caps.TagByteOK(';') || !caps.TagByteOK(' ') {
 		t.Errorf("tag policy = len %d charset %d semicolon=%v space=%v (matrix §1 rows 5/22)", caps.TagLen, len(caps.TagCharset), caps.TagByteOK(';'), caps.TagByteOK(' '))
 	}
-	if caps.ClarMaxHz != 0 || caps.ClarStepHz != 0 || len(caps.CTCSSTones) != 0 || len(caps.ShiftOptions) != 0 || len(caps.CTCSSStates) != 0 {
-		t.Error("deliberately-zero legacy capability fields drifted from matrix §1 rows 6–8/15–16")
+	if caps.ClarMaxHz != 0 || caps.ClarStepHz != 0 || len(caps.CTCSSTones) != 0 || len(caps.ShiftOptions) != 0 {
+		t.Error("deliberately-zero legacy capability fields drifted from matrix §1 rows 6–8/15")
 	}
 	if caps.CTCSSToneRange == nil || *caps.CTCSSToneRange != (spec.ToneRange{MinDeciHz: 1, MaxDeciHz: 2999, StepDeciHz: 1}) {
 		t.Errorf("CTCSSToneRange = %+v, want the tone span's own BCD capacity, 000.0–299.9 Hz at 0.1 Hz with the floor raised off zero (matrix §1 row 9; IC-7300 matrix erratum 12)", caps.CTCSSToneRange)
