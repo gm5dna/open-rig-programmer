@@ -22,6 +22,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx3000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx5000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx9000"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftx1"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7200"
@@ -57,6 +58,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx3000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx5000"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeftdx9000"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeftx1"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic705"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7100"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7200"
@@ -568,6 +570,11 @@ var FT900FakeSessionOpts []fakeft900.Option
 // package, one simulator.
 var FT1000MPFakeSessionOpts []fakeft1000mp.Option
 
+// FTX1FakeSessionOpts is the FTX-1's own option source, on the same terms
+// as every single-row model's above — one row, one package
+// (internal/fakeftx1), one simulator.
+var FTX1FakeSessionOpts []fakeftx1.Option
+
 // IC7800FakeSessionOpts is the IC-7800's own option source, on the same
 // terms as every other model's own variable above: internal/fakeic7800
 // simulates the IC-7800 specifically, its Option is a
@@ -791,6 +798,9 @@ var (
 	// v1.9.0 binary-CAT four, fourth and last row: fakeft1000mp's Port()
 	// already returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeft1000mp.Radio)(nil)
+	// v1.10.0, FTX-1 row: fakeftx1's Port() already returns
+	// io.ReadWriteCloser, so no adapter is needed.
+	_ fakeRadio = (*fakeftx1.Radio)(nil)
 	// The IC-7800's (v1.7.0 Icom wave) — via ic7800FakeAdapter, like the
 	// IC-7610's and unlike the four directly-satisfying Icom simulators:
 	// internal/fakeic7800's Port() returns net.Conn.
@@ -1361,6 +1371,11 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	FT1000MPModel: {
 		newDriver: func() driver.Driver { return ft1000mp.New(ft1000mp.Simulated) },
 		newRadio:  func() fakeRadio { return fakeft1000mp.New(FT1000MPFakeSessionOpts...) },
+	},
+	// v1.10.0, FTX-1 row: bare New, no adapter needed.
+	FTX1Model: {
+		newDriver: func() driver.Driver { return ftx1.New(ftx1.Simulated) },
+		newRadio:  func() fakeRadio { return fakeftx1.New(FTX1FakeSessionOpts...) },
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: fakets2000's Port() is already
 	// io.ReadWriteCloser, so no adapter is needed.

@@ -899,6 +899,19 @@ var ft1000mpCoreFour = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier, spec.FieldShift,
 }
 
+// ftx1CoreSix is the core set every FTX-1 bank derives, on every profile
+// (core/driver/ftx1/caps.go's bankFields, shared by MEM and PMS):
+// frequency, mode, clarifier, shift, ctcss_state and tag. SAME MEMBERS AS
+// ftdx10CoreSix, AND A SEPARATE VARIABLE ANYWAY, on ft891CoreSeven's own
+// footing: core/driver/ftx1 does not import core/driver/ftdx10, and its
+// bankFields was written from the FTX-1 CAT manual alone. No
+// tag_display: FTX-1's MT form carries no display byte at all
+// (spec.md §3.3/§8 — the zero FieldSupport, unconditionally).
+var ftx1CoreSix = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag,
+}
+
 // ts2000CoreFour is the core set every TS-2000/TS-2000X/TS-B2000 bank
 // derives, on every profile — MEM and SCAN alike
 // (core/driver/ts2000/caps.go's bankFields, applied identically to both
@@ -1483,6 +1496,9 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// this is the first registered Yaesu row with no tone byte at
 		// all.
 		"FT-1000MP": ft1000mpCoreFour,
+		// The FTX-1 (v1.10.0): SIX fields, the ftdx10CoreSix shape — see
+		// ftx1CoreSix's own doc comment.
+		"FTX-1": ftx1CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {

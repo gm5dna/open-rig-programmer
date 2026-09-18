@@ -1320,6 +1320,16 @@ func ft1000mpLikeCapabilities() spec.Capabilities {
 	return caps
 }
 
+// ftx1LikeCapabilities is the FTX-1's own REGISTERED capabilities
+// (v1.10.0).
+func ftx1LikeCapabilities() spec.Capabilities {
+	caps, err := wiring.StaticCapabilities(wiring.FTX1Model)
+	if err != nil {
+		panic(fmt.Sprintf("chirp_test: wiring.StaticCapabilities(%q): %v", wiring.FTX1Model, err))
+	}
+	return caps
+}
+
 // ft950LikeCapabilities is the FT-950's own REGISTERED capabilities
 // (v1.7.0 Kenwood/Yaesu wave, twelfth and last row).
 func ft950LikeCapabilities() spec.Capabilities {
@@ -3116,6 +3126,8 @@ func chirpFixtures() []spec.Capabilities {
 		ft890LikeCapabilities(),
 		ft900LikeCapabilities(),
 		ft1000mpLikeCapabilities(),
+		// v1.10.0.
+		ftx1LikeCapabilities(),
 		// The eleven pre-v1.7.0 Icom models chirpFixtureExceptions used to
 		// name — debt closed in v1.7.1 (spec.md §B).
 		ic7610LikeCapabilities(),
