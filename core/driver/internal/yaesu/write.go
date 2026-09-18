@@ -95,6 +95,15 @@ var TierRequestedFields = []TierRequestedField{
 	{spec.FieldPreamp, func(d codeplug.ChannelData) bool { return d.Preamp.State == codeplug.Known }},
 	{spec.FieldAntenna, func(d codeplug.ChannelData) bool { return d.Antenna.State == codeplug.Known }},
 	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
+	// The three TS-2000-only Satellite Memory bank flags (v1.10.0). No
+	// Yaesu bank ever reaches them — these predicates are dead weight on
+	// every row that imports this package, same as the seventeen above
+	// were on every pre-tier Yaesu row — but the fleet-wide TierFields
+	// table pins every predicate reachable by SOME channel, so they are
+	// carried here rather than special-cased out.
+	{spec.FieldSatBandSwap, func(d codeplug.ChannelData) bool { return d.SatBandSwap.State == codeplug.Known }},
+	{spec.FieldSatTrace, func(d codeplug.ChannelData) bool { return d.SatTrace.State == codeplug.Known }},
+	{spec.FieldSatTraceRev, func(d codeplug.ChannelData) bool { return d.SatTraceRev.State == codeplug.Known }},
 }
 
 // RequestedFields is the set of spec.Fields a write of data ASKS FOR —

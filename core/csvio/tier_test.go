@@ -45,6 +45,9 @@ func yaesuLikeChannels() []codeplug.Channel {
 		d.Preamp = codeplug.StringField{State: codeplug.Unavailable}
 		d.Antenna = codeplug.StringField{State: codeplug.Unavailable}
 		d.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
+		d.SatBandSwap = codeplug.BoolField{State: codeplug.Unavailable}
+		d.SatTrace = codeplug.BoolField{State: codeplug.Unavailable}
+		d.SatTraceRev = codeplug.BoolField{State: codeplug.Unavailable}
 		return d
 	}
 	return []codeplug.Channel{
@@ -1198,7 +1201,7 @@ func validateImported(t *testing.T, channels []codeplug.Channel, caps spec.Capab
 // codeplug.TierFields, so a disagreement in order between the two would put
 // every cell under the wrong header.
 func TestTierFieldCells_RoundTripEveryField(t *testing.T) {
-	// A value for every one of the seventeen, all Known, none of them
+	// A value for every one of the twenty, all Known, none of them
 	// spelled like a reserved state cell.
 	full := codeplug.ChannelData{
 		TxFreqHz:            codeplug.FreqField{State: codeplug.Known, Value: 145500000},
@@ -1218,6 +1221,9 @@ func TestTierFieldCells_RoundTripEveryField(t *testing.T) {
 		Preamp:              codeplug.StringField{State: codeplug.Known, Value: "P.AMP1"},
 		Antenna:             codeplug.StringField{State: codeplug.Known, Value: "ANT2"},
 		IPPlus:              codeplug.BoolField{State: codeplug.Known, Value: false},
+		SatBandSwap:         codeplug.BoolField{State: codeplug.Known, Value: true},
+		SatTrace:            codeplug.BoolField{State: codeplug.Known, Value: true},
+		SatTraceRev:         codeplug.BoolField{State: codeplug.Known, Value: false},
 	}
 
 	for _, tf := range codeplug.TierFields {

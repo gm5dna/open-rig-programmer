@@ -134,5 +134,8 @@ func tierFieldStates(d *codeplug.ChannelData) []tierFieldState {
 		{"preamp", d.Preamp.State},
 		{"antenna", d.Antenna.State},
 		{"ip_plus", d.IPPlus.State},
+		{"sat_band_swap", d.SatBandSwap.State},
+		{"sat_trace", d.SatTrace.State},
+		{"sat_trace_rev", d.SatTraceRev.State},
 	}
 }

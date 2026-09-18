@@ -167,6 +167,24 @@ type ChannelData struct {
 	Antenna StringField `json:"antenna"`
 	// IPPlus is the per-channel IP+ signal-processing flag.
 	IPPlus BoolField `json:"ip_plus"`
+
+	// The three fields the TS-2000/TS-2000X/TS-B2000 Satellite Memory
+	// bank adds (v1.10.0, spec.BankSatellite). They follow the seventeen
+	// tier fields so schema 5 can remain a frozen prefix for every
+	// codeplug this project has ever written — see TierFields' Receiver
+	// flag, whose doc comment records that these three share the D8
+	// receiver group's schema/CSV bucket by REUSE, not by being receiver
+	// fields themselves. On every non-satellite bank all three read back
+	// Unavailable, the same "field the record cannot reach" convention
+	// as ScanSkip/IPPlus above.
+	// SatBandSwap is the satellite record's uplink/downlink band
+	// assignment (SA's P3).
+	SatBandSwap BoolField `json:"sat_band_swap"`
+	// SatTrace is the satellite record's TRACE on/off flag (SA's P5).
+	SatTrace BoolField `json:"sat_trace"`
+	// SatTraceRev is the satellite record's TRACE REVERSE flag (SA's
+	// P6).
+	SatTraceRev BoolField `json:"sat_trace_rev"`
 }
 
 // tierFieldsRepresentableByOmission reports whether all seventeen fields
@@ -194,8 +212,10 @@ func (d ChannelData) icomTierFieldsRepresentableByOmission() bool {
 }
 
 // receiverFieldsRepresentableByOmission is the D8 half of the
-// lowest-schema rule. An FT-710 read must not become schema 5 merely
-// because it positively says these seven fields are Unavailable.
+// lowest-schema rule (now shared by the three v1.10.0 satellite fields
+// too — TierField's own Receiver doc comment). An FT-710 read must not
+// become schema 5 merely because it positively says these fields are
+// Unavailable.
 func (d ChannelData) receiverFieldsRepresentableByOmission() bool {
 	for _, tf := range TierFields {
 		if tf.Receiver && !tf.State(&d).RepresentableByOmission() {
