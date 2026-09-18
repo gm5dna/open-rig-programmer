@@ -48,6 +48,9 @@ var allFieldsMK2 = []spec.Field{
 }
 
 var deliberatelyUnexpressedFieldsMK2 = map[spec.Field]string{
+	spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldTuningStepEnabled: "additions design D8 — the IC-7300MK2 memory frame carries no tuning-step-enabled field",
 	spec.FieldTuningStep:        "additions design D8 — the IC-7300MK2 memory frame carries no tuning-step field",
 	spec.FieldProgramTuningStep: "additions design D8 — the IC-7300MK2 memory frame carries no programmable-tuning-step field",

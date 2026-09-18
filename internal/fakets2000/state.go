@@ -123,3 +123,46 @@ func (r *Radio) CurrentChannel() int {
 	defer r.mu.Unlock()
 	return r.currentChannel
 }
+
+// satelliteChannel is this fake's own in-memory representation of one
+// Satellite Memory channel (SA/SI, ts2000:11292-11413, PDF p.135). Only
+// the per-channel data SA/SI actually carry is stored here: P1
+// (satellite mode on/off), P4 (CTRL main/sub) and P7 (MULTI/CH control
+// mode) are LIVE RADIO STATE, not per-channel data (core/kw/ts2000's own
+// satellite.go doc comment derives this from the manual), and live on
+// Radio directly (satMode/satCtrl/satMulti below) rather than here.
+type satelliteChannel struct {
+	// swap is P3: false is "Main transceiver (uplink)/Sub-receiver
+	// (downlink)", true is "Main transceiver (downlink)/Sub-receiver
+	// (uplink)" (ts2000:11314-11317).
+	swap bool
+	// trace is P5: TRACE on/off (ts2000:11319-11320).
+	trace bool
+	// traceRev is P6: TRACE REV on/off (ts2000:11320-11321).
+	traceRev bool
+	// name is P8/SI's own P2: the eight-character satellite channel name
+	// (ts2000:11330, 11408-11409), stored verbatim as the eight bytes of
+	// the field — MemState.Name's own convention.
+	name string
+}
+
+// SatelliteChannel returns this fake's current stored state for satellite
+// memory channel, and its eight-character name — a test-inspection API,
+// like ChannelState.
+func (r *Radio) SatelliteChannel(channel int) (swap, trace, traceRev bool, name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ch := r.satChannels[channel]
+	return ch.swap, ch.trace, ch.traceRev, ch.name
+}
+
+// SatelliteSelected returns this fake's live satellite radio state: SA's
+// own P1 (satellite mode on/off), P2 (the currently selected channel,
+// last set by an SA Set — construction-time 0 if none has happened yet)
+// P4 (CTRL main/sub) and P7 (MULTI/CH mode) — the four positions
+// satelliteChannel's own doc comment explains are NOT per-channel.
+func (r *Radio) SatelliteSelected() (satModeOn bool, channel int, ctrlOnSub, multiCHMemoryMode bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.satMode == '1', r.satChannel, r.satCtrl == '1', r.satMulti == '1'
+}

@@ -85,13 +85,22 @@ const (
 // additionally unregistered until Phase 4.
 const writeTrialsComplete = false
 
-// memBankLabel and scanBankLabel are the two banks' display labels, minted
-// as this package's own consts — a CHOICE, not a protocol fact (matrix
-// §1.4.1's precedent).
+// memBankLabel, scanBankLabel and satBankLabel are the three banks'
+// display labels, minted as this package's own consts — a CHOICE, not a
+// protocol fact (matrix §1.4.1's precedent).
 const (
 	memBankLabel  = "Memories"
 	scanBankLabel = "Program Scan"
+	satBankLabel  = "Satellite Memory"
 )
+
+// satSlots is the ten-channel Satellite Memory bank's slot inventory —
+// SA's own P2 domain, "0 ~ 9: Satellite Memory Channel number"
+// (ts2000:11312-11313). Fixed and small enough to spell out rather than
+// loop-build like memSlots/scanSlots.
+func satSlots() []string {
+	return []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+}
 
 // modeNames returns the selectable mode display names this row advertises,
 // derived from the layout rather than transcribed here — see
@@ -240,6 +249,61 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		spec.FieldPreamp:            {},
 		spec.FieldAntenna:           {},
 		spec.FieldIPPlus:            {},
+
+		// The three Satellite Memory bank fields (v1.10.0): a different
+		// bank's record, with no position in this one.
+		spec.FieldSatBandSwap: {},
+		spec.FieldSatTrace:    {},
+		spec.FieldSatTraceRev: {},
+	}
+}
+
+// satelliteBankFields builds the Satellite Memory bank's field support
+// map (v1.10.0, core/kw/ts2000's SA/SI). FOUR FIELDS ARE GRADED: the name
+// (SI) and the three per-channel flags core/kw/ts2000/satellite.go's own
+// doc comment derives from the manual (SA's P3/P5/P6). FieldFrequency is
+// explicitly Unsupported — MANUAL-EVIDENCED ABSENCE: "Use the FA
+// (downlink) or FB (uplink) command to change the frequencies."
+// (ts2000:11330-11331) — this bank carries no frequency of its own at
+// all. Every other field is Unsupported for the same reason the memory
+// bank's own eighteen zeros are: no position in THIS record.
+func satelliteBankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
+	return map[spec.Field]spec.FieldSupport{
+		spec.FieldTag:         rw, // SI, the 8-byte name (ts2000:11404-11413)
+		spec.FieldSatBandSwap: rw, // SA P3 (ts2000:11314-11317)
+		spec.FieldSatTrace:    rw, // SA P5 (ts2000:11319-11320)
+		spec.FieldSatTraceRev: rw, // SA P6 (ts2000:11320-11321)
+
+		// No frequency field in this record at all — see this function's
+		// own doc comment.
+		spec.FieldFrequency: {},
+
+		spec.FieldMode:         {},
+		spec.FieldClarifier:    {},
+		spec.FieldCTCSSState:   {},
+		spec.FieldCTCSSTone:    {},
+		spec.FieldShift:        {},
+		spec.FieldTagDisplay:   {},
+		spec.FieldScanSkip:     {},
+		spec.FieldErase:        {},
+		spec.FieldTxFrequency:  {},
+		spec.FieldDuplex:       {},
+		spec.FieldOffset:       {},
+		spec.FieldToneMode:     {},
+		spec.FieldToneTx:       {},
+		spec.FieldToneRx:       {},
+		spec.FieldDTCSCode:     {},
+		spec.FieldDTCSPolarity: {},
+		spec.FieldFilter:       {},
+		spec.FieldDataMode:     {},
+
+		spec.FieldTuningStepEnabled: {},
+		spec.FieldTuningStep:        {},
+		spec.FieldProgramTuningStep: {},
+		spec.FieldAttenuator:        {},
+		spec.FieldPreamp:            {},
+		spec.FieldAntenna:           {},
+		spec.FieldIPPlus:            {},
 	}
 }
 
@@ -263,6 +327,10 @@ func baseCapabilities(p modelParams, rw spec.FieldSupport) spec.Capabilities {
 			{
 				ID: spec.BankScan, Label: scanBankLabel,
 				Slots: scanSlots(l), NoBlank: false, Fields: bankFields(rw),
+			},
+			{
+				ID: spec.BankSatellite, Label: satBankLabel,
+				Slots: satSlots(), NoBlank: false, Fields: satelliteBankFields(rw),
 			},
 		},
 		Modes: modeNames(l),

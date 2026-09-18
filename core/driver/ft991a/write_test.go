@@ -1218,8 +1218,8 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 		// Non-vacuity for the tier half: each entry's own predicate must
 		// answer true for SOME channel, or the entry is dead weight the
 		// gate would never consult.
-		if len(tierRequestedFields) != 17 {
-			t.Fatalf("tierRequestedFields has %d entries, want the seventeen codeplug's tierAddedFieldFor carries", len(tierRequestedFields))
+		if len(tierRequestedFields) != 20 {
+			t.Fatalf("tierRequestedFields has %d entries, want the twenty codeplug's tierAddedFieldFor carries", len(tierRequestedFields))
 		}
 		for _, tr := range tierRequestedFields {
 			if tr.Present(*writableChannel().Data) {

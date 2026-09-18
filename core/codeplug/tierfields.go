@@ -4,9 +4,10 @@ package codeplug
 
 import "github.com/gm5dna/open-rig-programmer/core/spec"
 
-// TierField describes one of the seventeen tri-state fields the two Icom
-// model extensions added to ChannelData (the ten of design D4, then the
-// seven receiver fields of additions design D8).
+// TierField describes one of the twenty tri-state fields added to
+// ChannelData after the pre-tier ten (the ten of design D4, the seven
+// receiver fields of additions design D8, and the three TS-2000
+// satellite bank fields of v1.10.0).
 //
 // IT EXISTS BECAUSE SIXTEEN FUNCTIONS ENUMERATED THOSE SEVENTEEN FIELDS BY
 // HAND — six in this package, eight in core/csvio, one in core/csvio's
@@ -41,9 +42,13 @@ type TierField struct {
 	// Column is the CSV column name core/csvio reads and writes it under,
 	// e.g. "tx_frequency".
 	Column string
-	// Receiver marks the seven D8 receiver fields, which appear as their
-	// own appended group in both the JSON schema (5, over 4) and the CSV
-	// header (version 3, over 2). The ten D4 fields leave it false.
+	// Receiver marks a field that appears in the SECOND appended group,
+	// in both the JSON schema (5, over 4) and the CSV header (version 3,
+	// over 2) — originally the seven D8 receiver fields, and REUSED
+	// as-is for the three TS-2000 satellite bank fields of v1.10.0 (they
+	// share the bucket, not the anatomy: the name now means "appended
+	// after the ten D4 fields", not "describes a receiver"). The ten D4
+	// fields leave it false.
 	Receiver bool
 	// State returns a POINTER to this field's FieldState within d, so a
 	// caller can read the state of a field it has only a row for.
@@ -63,13 +68,16 @@ type TierField struct {
 	Equal func(before, after ChannelData) bool
 }
 
-// TierFields is the seventeen tier fields in ChannelData's own declaration
-// order — the ten D4 fields, then the seven D8 receiver ones.
+// TierFields is the twenty tier fields in ChannelData's own declaration
+// order — the ten D4 fields, then the seven D8 receiver ones, then the
+// three TS-2000 satellite bank fields of v1.10.0.
 //
 // THE ORDER IS LOAD-BEARING. It is the order a VerifyMismatchError's field
-// list, a BlockReason's field list and a CSV header all render in, and the
-// D8 group comes last so schema 4 and CSV version 2 stay a frozen PREFIX
-// of schema 5 and version 3.
+// list, a BlockReason's field list and a CSV header all render in, and
+// each appended group comes last so an earlier schema/CSV version stays a
+// frozen PREFIX of the next: schema 4 and CSV version 2 of schema 5 and
+// version 3, and now the D8 group plus the satellite three share that one
+// later version between them (Receiver's own doc comment).
 var TierFields = [...]TierField{
 	{
 		Name: "TxFreqHz", Field: spec.FieldTxFrequency, Column: "tx_frequency",
@@ -172,5 +180,29 @@ var TierFields = [...]TierField{
 		State:    func(d *ChannelData) *FieldState { return &d.IPPlus.State },
 		SetState: func(d *ChannelData, s FieldState) { d.IPPlus = BoolField{State: s} },
 		Equal:    func(a, b ChannelData) bool { return a.IPPlus == b.IPPlus },
+	},
+	// The three TS-2000 satellite bank fields (v1.10.0). Receiver: true
+	// REUSES the D8 group's schema-5/CSV-version-3 bucket — the group
+	// stopped being "the seven receiver fields" the moment a third
+	// generation joined it, so the flag now means "one of the fields
+	// appended after the ten D4 ones", not "describes a receiver". See
+	// this struct's own Receiver doc comment.
+	{
+		Name: "SatBandSwap", Field: spec.FieldSatBandSwap, Column: "sat_band_swap", Receiver: true,
+		State:    func(d *ChannelData) *FieldState { return &d.SatBandSwap.State },
+		SetState: func(d *ChannelData, s FieldState) { d.SatBandSwap = BoolField{State: s} },
+		Equal:    func(a, b ChannelData) bool { return a.SatBandSwap == b.SatBandSwap },
+	},
+	{
+		Name: "SatTrace", Field: spec.FieldSatTrace, Column: "sat_trace", Receiver: true,
+		State:    func(d *ChannelData) *FieldState { return &d.SatTrace.State },
+		SetState: func(d *ChannelData, s FieldState) { d.SatTrace = BoolField{State: s} },
+		Equal:    func(a, b ChannelData) bool { return a.SatTrace == b.SatTrace },
+	},
+	{
+		Name: "SatTraceRev", Field: spec.FieldSatTraceRev, Column: "sat_trace_rev", Receiver: true,
+		State:    func(d *ChannelData) *FieldState { return &d.SatTraceRev.State },
+		SetState: func(d *ChannelData, s FieldState) { d.SatTraceRev = BoolField{State: s} },
+		Equal:    func(a, b ChannelData) bool { return a.SatTraceRev == b.SatTraceRev },
 	},
 }

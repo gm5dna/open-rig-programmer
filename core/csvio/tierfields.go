@@ -161,4 +161,25 @@ var tierFieldCells = map[spec.Field]tierFieldCell{
 			return
 		},
 	},
+	spec.FieldSatBandSwap: {
+		Cell: func(d codeplug.ChannelData) string { return exportBoolField(d.SatBandSwap, true) },
+		Parse: func(d *codeplug.ChannelData, cell string) (err error) {
+			d.SatBandSwap, err = parseBoolFieldCell(cell, "sat_band_swap", true)
+			return
+		},
+	},
+	spec.FieldSatTrace: {
+		Cell: func(d codeplug.ChannelData) string { return exportBoolField(d.SatTrace, true) },
+		Parse: func(d *codeplug.ChannelData, cell string) (err error) {
+			d.SatTrace, err = parseBoolFieldCell(cell, "sat_trace", true)
+			return
+		},
+	},
+	spec.FieldSatTraceRev: {
+		Cell: func(d codeplug.ChannelData) string { return exportBoolField(d.SatTraceRev, true) },
+		Parse: func(d *codeplug.ChannelData, cell string) (err error) {
+			d.SatTraceRev, err = parseBoolFieldCell(cell, "sat_trace_rev", true)
+			return
+		},
+	},
 }

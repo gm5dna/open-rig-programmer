@@ -90,6 +90,9 @@ func icomChannelData(freqHz uint64) *ChannelData {
 		Preamp:              StringField{State: Unavailable},
 		Antenna:             StringField{State: Unavailable},
 		IPPlus:              BoolField{State: Unavailable},
+		SatBandSwap:         BoolField{State: Unavailable},
+		SatTrace:            BoolField{State: Unavailable},
+		SatTraceRev:         BoolField{State: Unavailable},
 	}
 }
 
@@ -787,7 +790,7 @@ const v4YaesuBodyNoTierKeys = `{"schema":4,"generator":"test","radio":{"model":"
 	`{"slot":"001","data":{"freq_hz":14250000,"mode":"USB","ctcss":"OFF","ctcss_tone":{"state":"unknown"},"shift":"SIMPLEX","tag":"CALLING","tag_display":{"state":"known"},"scan_skip":{"state":"known"}}},` +
 	`{"slot":"003"}]}`
 
-// tierFieldStates returns d's seventeen tier-added field states in
+// tierFieldStates returns d's twenty tier-added field states in
 // ChannelData's declaration order, for asserting on the set as a whole
 // rather than field by field.
 func tierFieldStates(d *ChannelData) []FieldState {
@@ -798,10 +801,11 @@ func tierFieldStates(d *ChannelData) []FieldState {
 		d.TuningStepEnabled.State, d.TuningStep.State,
 		d.ProgramTuningStepHz.State, d.AttenuatorDB.State,
 		d.Preamp.State, d.Antenna.State, d.IPPlus.State,
+		d.SatBandSwap.State, d.SatTrace.State, d.SatTraceRev.State,
 	}
 }
 
-// allTierStates returns the seventeen-state slice tierFieldStates returns
+// allTierStates returns the twenty-state slice tierFieldStates returns
 // for a channel every one of whose tier fields is in state s.
 func allTierStates(s FieldState) []FieldState {
 	out := make([]FieldState, len(tierFieldNormalisers))
@@ -822,8 +826,8 @@ func allTierStates(s FieldState) []FieldState {
 // The Absent half is pinned in the same breath: on the zero ChannelData
 // every row must report Absent, since the zero FieldState IS Absent.
 func TestTierFieldNormalisers_AgreeWithTheLegacyMigration(t *testing.T) {
-	if len(tierFieldNormalisers) != 17 {
-		t.Fatalf("tierFieldNormalisers has %d rows, want 17 — D4 added ten fields and D8 added seven", len(tierFieldNormalisers))
+	if len(tierFieldNormalisers) != 20 {
+		t.Fatalf("tierFieldNormalisers has %d rows, want 20 — D4 added ten fields, D8 seven, and v1.10.0's TS-2000 satellite bank three", len(tierFieldNormalisers))
 	}
 
 	zero := &ChannelData{}
@@ -893,6 +897,9 @@ var tierFieldToAbsent = []func(*ChannelData){
 	func(d *ChannelData) { d.Preamp = StringField{} },
 	func(d *ChannelData) { d.Antenna = StringField{} },
 	func(d *ChannelData) { d.IPPlus = BoolField{} },
+	func(d *ChannelData) { d.SatBandSwap = BoolField{} },
+	func(d *ChannelData) { d.SatTrace = BoolField{} },
+	func(d *ChannelData) { d.SatTraceRev = BoolField{} },
 }
 
 // TestTierFieldNormalisers_EachRowIsWiredToItsOwnField pins every row of
@@ -911,7 +918,7 @@ var tierFieldToAbsent = []func(*ChannelData){
 // position i is Absent, must be the only one that fires.
 func TestTierFieldNormalisers_EachRowIsWiredToItsOwnField(t *testing.T) {
 	if len(tierFieldToAbsent) != len(tierFieldNormalisers) {
-		t.Fatalf("tierFieldToAbsent has %d entries, tierFieldNormalisers %d — the two walk the same seventeen fields in the same order", len(tierFieldToAbsent), len(tierFieldNormalisers))
+		t.Fatalf("tierFieldToAbsent has %d entries, tierFieldNormalisers %d — the two walk the same twenty fields in the same order", len(tierFieldToAbsent), len(tierFieldNormalisers))
 	}
 
 	for i, n := range tierFieldNormalisers {
@@ -941,10 +948,12 @@ func TestTierFieldNormalisers_EachRowIsWiredToItsOwnField(t *testing.T) {
 // TestNormaliseTierFields_V4YaesuFileWithNoTierKeys is deviation (c)'s
 // headline case: a schema-4 file from a radio that has none of D4's ten
 // fields loads those fields Absent — Load alone cannot know better — while
-// D8's seven fields migrate to Unavailable because schema 4 could not
-// express them. The composition roots' capability-keyed pass resolves the
-// remaining ten to Unavailable, the same answer the schema-1/2/3 loaders
-// reach unconditionally and the same answer a read of that radio gives.
+// D8's seven fields (and v1.10.0's three satellite fields, which share
+// their appended group — TierField's own Receiver doc comment) migrate
+// to Unavailable because schema 4 could not express them. The
+// composition roots' capability-keyed pass resolves the remaining ten to
+// Unavailable, the same answer the schema-1/2/3 loaders reach
+// unconditionally and the same answer a read of that radio gives.
 func TestNormaliseTierFields_V4YaesuFileWithNoTierKeys(t *testing.T) {
 	cp, err := writeAndLoad(t, v4YaesuBodyNoTierKeys)
 	if err != nil {
@@ -962,7 +971,7 @@ func TestNormaliseTierFields_V4YaesuFileWithNoTierKeys(t *testing.T) {
 		wantLoaded[i] = Unavailable
 	}
 	if got := tierFieldStates(cp.Channels[0].Data); !reflect.DeepEqual(got, wantLoaded) {
-		t.Fatalf("straight off Load, tier states = %v, want D4 Absent and D8 Unavailable", got)
+		t.Fatalf("straight off Load, tier states = %v, want D4 Absent and D8/satellite Unavailable", got)
 	}
 
 	NormaliseTierFields(cp, testCapabilities())
@@ -1093,6 +1102,7 @@ func TestNormaliseTierFields_MixedReachability(t *testing.T) {
 		Unavailable, // data_mode
 		Unavailable, Unavailable, Unavailable, Unavailable,
 		Unavailable, Unavailable, Unavailable, // the seven D8 fields
+		Unavailable, Unavailable, Unavailable, // the three satellite fields
 	}
 	if got := tierFieldStates(d); !reflect.DeepEqual(got, want) {
 		t.Errorf("tier states = %v, want %v", got, want)

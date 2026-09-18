@@ -170,7 +170,11 @@ func allFieldsForAudit() []spec.Field {
 	}
 }
 
-var deliberatelyUnexpressedFields = map[spec.Field]string{}
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+}
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
 	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFieldsForAudit", allFieldsForAudit(), deliberatelyUnexpressedFields)

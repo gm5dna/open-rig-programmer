@@ -130,6 +130,14 @@ var tierRequestedFields = []struct {
 	{spec.FieldPreamp, func(d codeplug.ChannelData) bool { return d.Preamp.State == codeplug.Known }},
 	{spec.FieldAntenna, func(d codeplug.ChannelData) bool { return d.Antenna.State == codeplug.Known }},
 	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
+	// The three TS-2000-only Satellite Memory bank fields (v1.10.0). No
+	// FT-710 bank reaches them; carried only because
+	// TestRequestedFields_MembershipAndOrder's "the seventeen are
+	// exactly spec.AllFields()'s tier-added tail" subtest anchors this
+	// table's completeness to spec.AllFields() directly.
+	{spec.FieldSatBandSwap, func(d codeplug.ChannelData) bool { return d.SatBandSwap.State == codeplug.Known }},
+	{spec.FieldSatTrace, func(d codeplug.ChannelData) bool { return d.SatTrace.State == codeplug.Known }},
+	{spec.FieldSatTraceRev, func(d codeplug.ChannelData) bool { return d.SatTraceRev.State == codeplug.Known }},
 }
 
 // WriteChannel implements driver.Session: MW (channel data) then MT

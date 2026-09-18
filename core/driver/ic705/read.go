@@ -329,5 +329,8 @@ func channelDataFrom(rec civ.MemoryRecord, caps spec.Capabilities) (codeplug.Cha
 	d.Preamp = codeplug.StringField{State: codeplug.Unavailable}
 	d.Antenna = codeplug.StringField{State: codeplug.Unavailable}
 	d.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
+	d.SatBandSwap = codeplug.BoolField{State: codeplug.Unavailable}
+	d.SatTrace = codeplug.BoolField{State: codeplug.Unavailable}
+	d.SatTraceRev = codeplug.BoolField{State: codeplug.Unavailable}
 	return d, nil
 }

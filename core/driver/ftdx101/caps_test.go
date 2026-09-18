@@ -38,6 +38,9 @@ var allFields = []spec.Field{
 }
 
 var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
+	spec.FieldSatTraceRev:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldTxFrequency:       "design D4 — the FTdx101 memory frame carries no independent transmit-frequency field",
 	spec.FieldDuplex:            "design D4 — the FTdx101 memory frame carries no Icom duplex field",
 	spec.FieldOffset:            "design D4 — the FTdx101 memory frame carries no per-channel repeater-offset field",

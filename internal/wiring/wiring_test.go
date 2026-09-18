@@ -567,6 +567,19 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 				for _, slot := range bank.Slots {
 					ch, err := sess.ReadChannel(ctx, slot)
 					if err != nil {
+						// BankSatellite is a NAMED, DOCUMENTED exception
+						// (core/kw/ts2000/satellite.go's own doc comment):
+						// its read has no per-channel address at all, so
+						// ReadChannel(slot) succeeds only for whichever
+						// channel the fake currently has selected (slot
+						// "0" at construction) and every other slot
+						// legitimately answers AnswerMismatchError — a
+						// real protocol limitation, not a gap this sweep
+						// should fail on.
+						if bank.ID == spec.BankSatellite && errors.Is(err, driver.ErrAnswerMismatch) {
+							t.Logf("ReadChannel(%q) in bank %s: %v — expected: SA's read has no per-channel address (satellite.go's own doc comment)", slot, bank.ID, err)
+							continue
+						}
 						t.Errorf("ReadChannel(%q) in bank %s: unexpected error: %v", slot, bank.ID, err)
 						continue
 					}
@@ -716,6 +729,7 @@ var wiringTierFields = []spec.Field{
 	spec.FieldDataMode, spec.FieldTuningStepEnabled, spec.FieldTuningStep,
 	spec.FieldProgramTuningStep, spec.FieldAttenuator, spec.FieldPreamp,
 	spec.FieldAntenna, spec.FieldIPPlus,
+	spec.FieldSatBandSwap, spec.FieldSatTrace, spec.FieldSatTraceRev,
 }
 
 // wiringPreTierFields is the ten Field constants core/spec declared

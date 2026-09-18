@@ -194,6 +194,12 @@ func TestRequestedFields_EveryConditionalIsReachable(t *testing.T) {
 			d.Antenna = codeplug.StringField{State: codeplug.Known, Value: "1"}
 		case spec.FieldIPPlus:
 			d.IPPlus = codeplug.BoolField{State: codeplug.Known}
+		case spec.FieldSatBandSwap:
+			d.SatBandSwap = codeplug.BoolField{State: codeplug.Known}
+		case spec.FieldSatTrace:
+			d.SatTrace = codeplug.BoolField{State: codeplug.Known}
+		case spec.FieldSatTraceRev:
+			d.SatTraceRev = codeplug.BoolField{State: codeplug.Known}
 		default:
 			t.Fatalf("%s is conditional and this test has no case for it", r.field)
 		}
