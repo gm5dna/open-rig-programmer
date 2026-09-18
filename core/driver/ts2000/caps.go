@@ -329,8 +329,13 @@ func baseCapabilities(p modelParams, rw spec.FieldSupport) spec.Capabilities {
 				Slots: scanSlots(l), NoBlank: false, Fields: bankFields(rw),
 			},
 			{
+				// CurrentChannelOnly: SA's read has no per-channel
+				// address (satellite.go's own doc comment) — a
+				// whole-radio ReadAll cannot enumerate this bank and
+				// must skip it (core/clone/read.go).
 				ID: spec.BankSatellite, Label: satBankLabel,
 				Slots: satSlots(), NoBlank: false, Fields: satelliteBankFields(rw),
+				CurrentChannelOnly: true,
 			},
 		},
 		Modes: modeNames(l),
