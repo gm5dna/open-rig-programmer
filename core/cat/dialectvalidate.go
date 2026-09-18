@@ -36,7 +36,38 @@ const maxEXDigits = DefaultMaxFrame - 9 // 247
 const maxMTTagBytes = 64
 
 // maxSlotDecimal is the largest value a 3-digit numeric slot can express.
+// Still the operative ceiling for every rule that has no evidence a wider
+// slot space ever reaches it (validatePMSForm's numeric-form ceiling, which
+// no registered or planned numeric-PMS dialect combines with a widened
+// SlotSpace.SlotDigits); slotDigitsOf/maxSlotDecimalFor below are the
+// WIDTH-AWARE pair used by the rules that do have such evidence
+// (validateSlotRange, for the FTX-1's 50001-50020 "5 MHz BAND", which does
+// not fit this constant).
 const maxSlotDecimal = 999
+
+// slotDigitsOf returns s's slot wire-form width, applying SlotSpace.
+// SlotDigits' own zero-means-3 default. The CONFIG-side twin of
+// Dialect.slotDigits (dialect.go): this package's validators run before any
+// Dialect exists, so a config-shaped accessor is needed beside the
+// Dialect-shaped one, both reading the same field and applying the same
+// default.
+func slotDigitsOf(s SlotSpace) int {
+	if s.SlotDigits == 0 {
+		return 3
+	}
+	return s.SlotDigits
+}
+
+// maxSlotDecimalFor returns the largest value a digits-wide numeric slot
+// can express: 10^digits - 1. The width-aware sibling of maxSlotDecimal,
+// which is exactly this function evaluated at 3.
+func maxSlotDecimalFor(digits int) int {
+	max := 1
+	for i := 0; i < digits; i++ {
+		max *= 10
+	}
+	return max - 1
+}
 
 // maxEXComponent is the largest value an EXAddress component may hold
 // UNDER EXAddressTriple AND EXAddressPair, and — under EXAddressSingle —
@@ -94,6 +125,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 	for _, rule := range []func(DialectConfig) error{
 		validateCATID,            // V1
 		validateModeNames,        // V2
+		validateSlotDigits,       // V19 — see its own comment for why it runs HERE
 		validatePMSPairs,         // V3
 		validatePMSForm,          // V15 — see its own comment for why it runs HERE
 		validateSpecialWires,     // V4
@@ -129,6 +161,29 @@ func validateCATID(cfg DialectConfig) error {
 		return fmt.Errorf("cat: CATID %q contains a byte outside printable ASCII 0x20-0x7E excluding ';'", cfg.CATID)
 	}
 	return nil
+}
+
+// validateSlotDigits is V19: SlotSpace.SlotDigits must be 0 (meaning 3), 3
+// or 5 — nothing else.
+//
+// IT RUNS BEFORE EVERY OTHER SLOT-SHAPED RULE (rule position 3, right after
+// V1/V2), because V4, V5, V6, V7, V15 and V17 all consult slotDigitsOf
+// or Dialect.slotDigits downstream of this one: an invalid width reported
+// here, in its own words, is a clearer failure than the same bad
+// configuration surfacing as a confusing length mismatch three rules later.
+//
+// 0 AND 3 ARE BOTH ACCEPTED, deliberately, and mean the same thing — see
+// SlotSpace.SlotDigits' own doc comment for why this is the one axis in
+// this file that defaults an omission instead of refusing it: every
+// dialect registered before this field existed left it at the zero value
+// and must keep building identical bytes.
+func validateSlotDigits(cfg DialectConfig) error {
+	switch cfg.Slots.SlotDigits {
+	case 0, 3, 5:
+		return nil
+	default:
+		return fmt.Errorf("cat: Slots.SlotDigits is %d, want 0 (meaning 3), 3 or 5 — nothing in this codec's fixed-width slot renderers or offset arithmetic has evidence for another width", cfg.Slots.SlotDigits)
+	}
 }
 
 // validateModeNames is V2, which has four clauses.
@@ -193,8 +248,18 @@ func validatePMSPairs(cfg DialectConfig) error {
 	if n < 0 {
 		return fmt.Errorf("cat: Slots.PMSPairs is %d, want >= 0 — a negative pair count describes no slot either form could build", n)
 	}
-	if cfg.Slots.PMSForm != PMSFormNumeric && n > 9 {
-		return fmt.Errorf("cat: Slots.PMSPairs is %d, want 0..9 — the wire form's pair number is a single ASCII digit, so a larger value builds forms this dialect's own ParseSlot rejects", n)
+	switch cfg.Slots.PMSForm {
+	case PMSFormNumeric:
+		// No ceiling here: V15's is the operative one (the range must end
+		// at or below this dialect's own slot-digit ceiling).
+	case PMSFormDashToken:
+		if n > 50 {
+			return fmt.Errorf("cat: Slots.PMSPairs is %d, want 0..50 — the dash-token form's pair number is two ASCII digits (\"01\"-\"50\"), so a larger value builds forms this dialect's own ParseSlot rejects", n)
+		}
+	default: // PMSFormToken, or the zero value (refused by V15 at the next position)
+		if n > 9 {
+			return fmt.Errorf("cat: Slots.PMSPairs is %d, want 0..9 — the wire form's pair number is a single ASCII digit, so a larger value builds forms this dialect's own ParseSlot rejects", n)
+		}
 	}
 	return nil
 }
@@ -224,7 +289,7 @@ func validatePMSPairs(cfg DialectConfig) error {
 func validatePMSForm(cfg DialectConfig) error {
 	s := cfg.Slots
 	switch s.PMSForm {
-	case PMSFormToken:
+	case PMSFormToken, PMSFormDashToken:
 		if s.PMSNumericLo != 0 {
 			return fmt.Errorf("cat: Slots.PMSNumericLo is %d under %v, want exactly 0 — the token form's pairs carry no decimal numbering, so a base here describes nothing this dialect builds", s.PMSNumericLo, s.PMSForm)
 		}
@@ -289,10 +354,12 @@ func validatePMSForm(cfg DialectConfig) error {
 // classifySlot matches these by EXACT STRING before applying any character
 // grammar, so a non-printable byte here reaches the wire: "\x00AB" as an
 // emergency form produces a side-effecting MC frame this dialect's gate
-// admits. A length other than 3 is dead configuration — classifySlot
-// returns slotKindInvalid for every wire form that is not 3 bytes — which
-// fails silently rather than loudly.
+// admits. A length other than this dialect's own slot width (slotDigitsOf,
+// 3 or 5) is dead configuration — classifySlot returns slotKindInvalid for
+// every wire form that is not that width — which fails silently rather
+// than loudly.
 func validateSpecialWires(cfg DialectConfig) error {
+	digits := slotDigitsOf(cfg.Slots)
 	for _, w := range []struct {
 		field, value string
 	}{
@@ -302,8 +369,8 @@ func validateSpecialWires(cfg DialectConfig) error {
 		if w.value == "" {
 			continue // absent, which is legitimate for both
 		}
-		if len(w.value) != 3 {
-			return fmt.Errorf("cat: %s is %q (%d bytes), want exactly 3 or \"\" — classifySlot rejects every other length, so this would never match", w.field, w.value, len(w.value))
+		if len(w.value) != digits {
+			return fmt.Errorf("cat: %s is %q (%d bytes), want exactly %d or \"\" — classifySlot rejects every other length, so this would never match", w.field, w.value, len(w.value), digits)
 		}
 		if !validWireString(w.value) {
 			return fmt.Errorf("cat: %s is %q, which contains a byte outside printable ASCII 0x20-0x7E excluding ';'", w.field, w.value)
@@ -321,7 +388,7 @@ func validateSpecialWires(cfg DialectConfig) error {
 // range. An earlier draft of this rule required MemoryLo >= 1 and would
 // have rejected that fixture outright.
 func validateMemoryRange(cfg DialectConfig) error {
-	return validateSlotRange("Slots.Memory", cfg.Slots.MemoryLo, cfg.Slots.MemoryHi)
+	return validateSlotRange("Slots.Memory", cfg.Slots.MemoryLo, cfg.Slots.MemoryHi, slotDigitsOf(cfg.Slots))
 }
 
 // validateSixtyRange is V6: the same range rule, plus non-overlap — now
@@ -340,7 +407,7 @@ func validateMemoryRange(cfg DialectConfig) error {
 // PMSFormToken there is no interval and these clauses are inert.
 // TestV15_PMSFormRefusals' two overlap cases pin them.
 func validateSixtyRange(cfg DialectConfig) error {
-	if err := validateSlotRange("Slots.Sixty", cfg.Slots.SixtyLo, cfg.Slots.SixtyHi); err != nil {
+	if err := validateSlotRange("Slots.Sixty", cfg.Slots.SixtyLo, cfg.Slots.SixtyHi, slotDigitsOf(cfg.Slots)); err != nil {
 		return err
 	}
 	s := cfg.Slots
@@ -383,12 +450,16 @@ func numericPMSInterval(s SlotSpace) (lo, hi int, ok bool) {
 }
 
 // validateSlotRange is the shared range rule for V5 and V6: absent is
-// exactly (0,0); otherwise 0 <= lo <= hi <= 999.
+// exactly (0,0); otherwise 0 <= lo <= hi <= this dialect's own slot-digit
+// ceiling (maxSlotDecimalFor(digits) — 999 for the registered 3-digit
+// shape, 99999 for the FTX-1's 5-digit one, which needs it: the "5 MHz
+// BAND" special range the Sixty axis also carries for that dialect is
+// 50001-50020, past 999).
 //
 // Requiring exactly (0,0) for absence rejects dead configurations such as
 // (99, 0), which reads as "present" to a human and "absent" to
 // classifySlot, whose activation test is hi > 0.
-func validateSlotRange(field string, lo, hi int) error {
+func validateSlotRange(field string, lo, hi, digits int) error {
 	if lo == 0 && hi == 0 {
 		return nil // absent
 	}
@@ -398,8 +469,8 @@ func validateSlotRange(field string, lo, hi int) error {
 	if lo < 0 || lo > hi {
 		return fmt.Errorf("cat: %s range is %d..%d, want 0 <= Lo <= Hi", field, lo, hi)
 	}
-	if hi > maxSlotDecimal {
-		return fmt.Errorf("cat: %sHi is %d, want <= %d — a slot wire form is 3 digits", field, hi, maxSlotDecimal)
+	if ceiling := maxSlotDecimalFor(digits); hi > ceiling {
+		return fmt.Errorf("cat: %sHi is %d, want <= %d — a slot wire form is %d digits", field, hi, ceiling, digits)
 	}
 	return nil
 }
@@ -426,7 +497,7 @@ func validateShadowing(cfg DialectConfig) error {
 		if w.value == "" {
 			continue
 		}
-		if n, ok := decimalWire(w.value); ok {
+		if n, ok := decimalWire(w.value, slotDigitsOf(s)); ok {
 			if s.MemoryHi > 0 && n >= s.MemoryLo && n <= s.MemoryHi {
 				return fmt.Errorf("cat: %s is %q, which falls inside the memory range %d..%d — classifySlot tests it first, so memory channel %d would be unreachable", w.field, w.value, s.MemoryLo, s.MemoryHi, n)
 			}
@@ -441,14 +512,14 @@ func validateShadowing(cfg DialectConfig) error {
 	return nil
 }
 
-// decimalWire parses a 3-byte all-digit wire form. The bool reports
+// decimalWire parses a digits-byte all-digit wire form. The bool reports
 // whether it was all digits, mirroring classifySlot's own test rather than
 // re-deriving it differently.
-func decimalWire(wire string) (int, bool) {
-	if len(wire) != 3 || !allDigits([]byte(wire)) {
+func decimalWire(wire string, digits int) (int, bool) {
+	if len(wire) != digits || !allDigits([]byte(wire)) {
 		return 0, false
 	}
-	return digitsAt(wire, 0, 3), true
+	return digitsAt(wire, 0, digits), true
 }
 
 // pmsWireInRange reports whether wire is a PMS form a dialect with slot
@@ -460,15 +531,36 @@ func decimalWire(wire string) (int, bool) {
 // for a collision that cannot happen (that dialect builds no token form at
 // all) and would NOT refuse one of "100", which really is the wire form its
 // own PMSSlot builds for pair 1. V7 exists to catch exactly that shadowing.
+// It is also WIDTH-aware (slotDigitsOf), for the FTX-1's 5-byte slot space:
+// form-blind width made this refuse nothing at all for a 5-byte dialect,
+// since neither an all-digit nor a token-shaped 3-byte match could ever
+// equal a 5-byte wire.
 func pmsWireInRange(wire string, s SlotSpace) bool {
-	if s.PMSPairs <= 0 || len(wire) != 3 {
+	if s.PMSPairs <= 0 {
+		return false
+	}
+	digits := slotDigitsOf(s)
+	if len(wire) != digits {
 		return false
 	}
 	if lo, hi, ok := numericPMSInterval(s); ok {
-		n, allDigits := decimalWire(wire)
-		return allDigits && n >= lo && n <= hi
+		n, isDigits := decimalWire(wire, digits)
+		return isDigits && n >= lo && n <= hi
 	}
-	return wire[0] == 'P' &&
+	if s.PMSForm == PMSFormDashToken {
+		if len(wire) != 5 || wire[0] != 'P' || wire[1] != '-' {
+			return false
+		}
+		if wire[2] < '0' || wire[2] > '9' || wire[3] < '0' || wire[3] > '9' {
+			return false
+		}
+		if wire[4] != 'L' && wire[4] != 'U' {
+			return false
+		}
+		pair := digitsAt(wire, 2, 4)
+		return pair >= 1 && pair <= s.PMSPairs
+	}
+	return len(wire) >= 3 && wire[0] == 'P' &&
 		wire[1] >= '1' && wire[1] <= byte('0'+s.PMSPairs) &&
 		(wire[2] == 'L' || wire[2] == 'U')
 }
@@ -602,6 +694,27 @@ func validateMTPolicy(cfg DialectConfig) error {
 		default:
 			return fmt.Errorf("cat: MT.P11 is %v, which is not a policy — declare P11Fixed or P11TagDisplay explicitly (byte 28 of the combined record is a printed-fixed '0' on some radios and a live TAG flag on others, and a live flag is never defaulted)", cfg.MT.P11)
 		}
+	case MTFormShortNoDisplay:
+		// The FTX-1's own shape (dialectconfig.go's MTFormShortNoDisplay doc
+		// comment): no display byte at all, and a FIXED-WIDTH tag field —
+		// TagFill's ownership, copied from MTFormCombined's, not
+		// MTFormShort's ClearTagByte/PadByte pair, because this form
+		// documents no distinct clear encoding either (an empty tag is the
+		// all-TagFill field). P11 has no meaning here — there is no combined
+		// record and no byte 28 — so it takes MTFormShort's own "must be
+		// zero" rule.
+		if cfg.MT.ClearTagByte != 0 {
+			return fmt.Errorf("cat: MT.ClearTagByte %#02x is set under MTFormShortNoDisplay — no distinct clear encoding is documented for this form; an empty tag is the all-TagFill field", cfg.MT.ClearTagByte)
+		}
+		if cfg.MT.PadByte != 0 {
+			return fmt.Errorf("cat: MT.PadByte %#02x is set under MTFormShortNoDisplay — answer trimming is TagFill's job in this form", cfg.MT.PadByte)
+		}
+		if !validWireByte(cfg.MT.TagFill) {
+			return fmt.Errorf("cat: MT.TagFill is %#02x under MTFormShortNoDisplay, want printable ASCII 0x20-0x7E excluding ';' — it fills every outbound tag field, and zero would silently emit NUL", cfg.MT.TagFill)
+		}
+		if cfg.MT.P11 != 0 {
+			return fmt.Errorf("cat: MT.P11 %v is set under MTFormShortNoDisplay — this form has no P11 byte at all; an inapplicable field must be explicitly zero", cfg.MT.P11)
+		}
 	default:
 		return fmt.Errorf("cat: MT.Form %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.MT.Form)
 	}
@@ -724,10 +837,10 @@ func validateEXAddressForm(cfg DialectConfig) error {
 // rule's field reaches AllowedCommand through validMCCommand).
 func validateMCSelects(cfg DialectConfig) error {
 	switch cfg.Slots.MCSelects {
-	case MCSelectsAll, MCSelectsMemoryPMS:
+	case MCSelectsAll, MCSelectsMemoryPMS, MCSelectsUnsupported:
 		return nil
 	default:
-		return fmt.Errorf("cat: Slots.MCSelects is %v, which is not a policy — declare MCSelectsAll or MCSelectsMemoryPMS explicitly (an omitted config semantic is refused, never defaulted; MC's send domain is not always MR's read domain)", cfg.Slots.MCSelects)
+		return fmt.Errorf("cat: Slots.MCSelects is %v, which is not a policy — declare MCSelectsAll, MCSelectsMemoryPMS or MCSelectsUnsupported explicitly (an omitted config semantic is refused, never defaulted; MC's send domain is not always MR's read domain, and a family whose MC frame this codec cannot represent at all must say so)", cfg.Slots.MCSelects)
 	}
 }
 
@@ -769,10 +882,10 @@ func validateMemoryP5(cfg DialectConfig) error {
 // existing rules' order untouched.
 func validateToneStates(cfg DialectConfig) error {
 	switch cfg.ToneStates {
-	case ToneStatesCTCSS, ToneStatesCTCSSAndDCS:
+	case ToneStatesCTCSS, ToneStatesCTCSSAndDCS, ToneStatesSix:
 		return nil
 	default:
-		return fmt.Errorf("cat: ToneStates is %v, which is not a domain — declare ToneStatesCTCSS or ToneStatesCTCSSAndDCS explicitly (P8 prints three states on some radios and five on others, and a state this dialect cannot express must be refused rather than encoded)", cfg.ToneStates)
+		return fmt.Errorf("cat: ToneStates is %v, which is not a domain — declare ToneStatesCTCSS, ToneStatesCTCSSAndDCS or ToneStatesSix explicitly (P8 prints three states on some radios, five on others and six on the FTX-1, and a state this dialect cannot express must be refused rather than encoded)", cfg.ToneStates)
 	}
 }
 
@@ -807,8 +920,8 @@ func validateMemoryFrameShape(cfg DialectConfig) error {
 	if cfg.MemoryFreqDigits == 0 {
 		return fmt.Errorf("cat: MemoryFreqDigits is 0 — declare the P2 frequency field's digit width explicitly (9 for the registered family, 8 for the 27-byte one)")
 	}
-	if want := memoryFrameLenFor(cfg.MemoryFreqDigits); int(cfg.MemoryFrameLen) != want {
-		return fmt.Errorf("cat: MemoryFrameLen %d does not match MemoryFreqDigits %d — a %d-digit P2 field implies a %d-byte frame (28/9 and 27/8 are the only pairs any registered or ft2000-family dialect uses today), and a mismatched pair indexes this codec's own frame at the wrong offsets", cfg.MemoryFrameLen, cfg.MemoryFreqDigits, cfg.MemoryFreqDigits, want)
+	if want := memoryFrameLenFor(cfg.MemoryFreqDigits, slotDigitsOf(cfg.Slots)); int(cfg.MemoryFrameLen) != want {
+		return fmt.Errorf("cat: MemoryFrameLen %d does not match MemoryFreqDigits %d and Slots.SlotDigits %d — this combination implies a %d-byte frame, and a mismatch indexes this codec's own frame at the wrong offsets", cfg.MemoryFrameLen, cfg.MemoryFreqDigits, slotDigitsOf(cfg.Slots), want)
 	}
 	return nil
 }

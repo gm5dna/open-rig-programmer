@@ -112,6 +112,16 @@ func (d Dialect) mcSendValid(s Slot) bool {
 	}
 }
 
+// MCSupported reports whether this dialect can build or parse ANY MC frame
+// at all: false only under MCSelectsUnsupported. A future driver reads this
+// before wiring in an MC-based CurrentMemory/RecallMemory equivalent (the
+// ft710 driver's own shape, core/driver/ft710/mc.go) rather than
+// discovering the refusal only at the first BuildMCSet/BuildMCRead/
+// ParseMCAnswer call.
+func (d Dialect) MCSupported() bool {
+	return d.slots.mcSelects != MCSelectsUnsupported
+}
+
 // BuildMCSet builds an MC (memory channel recall) Set frame for slot s.
 //
 // SIDE EFFECT: sending this to the radio recalls the channel and changes
@@ -120,6 +130,14 @@ func (d Dialect) mcSendValid(s Slot) bool {
 // radio (changes operating state!)." Golden vector G11: "MC099;" -> recall
 // M-99.
 func (d Dialect) BuildMCSet(s Slot) (Command, error) {
+	// MCSelectsUnsupported FIRST, and unconditional: this dialect's MC
+	// frame has no representation in this codec at all (dialectconfig.go's
+	// MCSelectsUnsupported doc comment), so nothing downstream — the
+	// coincidentally-3-byte-shaped "MC"+slot+";" this function would
+	// otherwise build — is a frame the radio's own manual documents.
+	if d.slots.mcSelects == MCSelectsUnsupported {
+		return Command{}, newParseError([]byte(s.Wire()), "MC: this dialect declares no MC support (MCSelectsUnsupported) — its MC frame has no representation in this codec")
+	}
 	// TWO REFUSALS, in this order, because they say different things. The
 	// first is the MC command's own slot space — "000" and anything this
 	// dialect does not classify at all — and its wording is unchanged, which
@@ -170,6 +188,13 @@ func (d Dialect) BuildMCRead() Command {
 // the SEND domain; this is the read direction, and it keeps the full
 // readable space on every dialect — see mcSendValid for the reasoning.
 func (d Dialect) ParseMCAnswer(frame []byte) (Slot, error) {
+	// MCSelectsUnsupported FIRST, for BuildMCSet's own reason: this
+	// dialect's real MC answer has a different shape entirely (a leading
+	// port byte, FTX-1 spec.md §3.4), so a frame that happens to be 6 bytes
+	// long must never be misread as this codec's own "MC"+slot+";" shape.
+	if d.slots.mcSelects == MCSelectsUnsupported {
+		return Slot{}, newParseError(frame, "MC answer: this dialect declares no MC support (MCSelectsUnsupported)")
+	}
 	if len(frame) != mcSetLen {
 		return Slot{}, newParseError(frame, "MC answer must be 6 bytes")
 	}

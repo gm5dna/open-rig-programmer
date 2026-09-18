@@ -120,7 +120,7 @@ func (d Dialect) MemorySlot(n int) (Slot, error) {
 	if n < d.slots.memoryLo || n > d.slots.memoryHi || d.slots.memoryHi == 0 {
 		return Slot{}, newParseError([]byte(fmt.Sprintf("MemorySlot(%d)", n)), fmt.Sprintf("memory channel out of range %d-%d", d.slots.memoryLo, d.slots.memoryHi))
 	}
-	return Slot{wire: fmt.Sprintf("%03d", n), kind: slotKindMemory}, nil
+	return Slot{wire: fmt.Sprintf("%0*d", d.slotDigits(), n), kind: slotKindMemory}, nil
 }
 
 // PMSSlot builds the Slot for PMS pair (1-9), lower or upper, under this
@@ -149,11 +149,14 @@ func (d Dialect) PMSSlot(pair int, upper bool) (Slot, error) {
 		if upper {
 			n++
 		}
-		return Slot{wire: fmt.Sprintf("%03d", n), kind: slotKindPMS}, nil
+		return Slot{wire: fmt.Sprintf("%0*d", d.slotDigits(), n), kind: slotKindPMS}, nil
 	}
 	suffix := byte('L')
 	if upper {
 		suffix = 'U'
+	}
+	if d.slots.pmsForm == PMSFormDashToken {
+		return Slot{wire: fmt.Sprintf("P-%02d%c", pair, suffix), kind: slotKindPMS}, nil
 	}
 	return Slot{wire: fmt.Sprintf("P%d%c", pair, suffix), kind: slotKindPMS}, nil
 }
@@ -176,7 +179,7 @@ func (d Dialect) SixtyMSlot(n int) (Slot, error) {
 	if d.slots.sixtyHi == 0 || n < 1 || n > count {
 		return Slot{}, newParseError([]byte(fmt.Sprintf("SixtyMSlot(%d)", n)), "60m channel out of ASSUMED range 1-99")
 	}
-	return Slot{wire: fmt.Sprintf("%03d", d.slots.sixtyLo+n-1), kind: slotKind60m}, nil
+	return Slot{wire: fmt.Sprintf("%0*d", d.slotDigits(), d.slots.sixtyLo+n-1), kind: slotKind60m}, nil
 }
 
 // EMGSlot returns the Slot for this dialect's Alaska-emergency-equivalent
@@ -327,12 +330,13 @@ func (d Dialect) memoryDomainText() string {
 	if d.slots.memoryHi == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%03d-%03d", d.slots.memoryLo, d.slots.memoryHi)
+	w := d.slotDigits()
+	return fmt.Sprintf("%0*d-%0*d", w, d.slots.memoryLo, w, d.slots.memoryHi)
 }
 
 // pmsDomainText renders this dialect's PMS domain IN THE FORM IT DECLARES —
-// "P1L-P9U" under PMSFormToken, the decimal range under PMSFormNumeric — or
-// "" if it has no pairs.
+// "P1L-P9U" under PMSFormToken, "P-01L-P-50U" under PMSFormDashToken, the
+// decimal range under PMSFormNumeric — or "" if it has no pairs.
 //
 // The pair count comes from pmsCap() and the numeric bounds from
 // numericPMSRange(), which are the same two sources PMSSlot and
@@ -344,7 +348,11 @@ func (d Dialect) pmsDomainText() string {
 		return ""
 	}
 	if lo, hi, ok := d.numericPMSRange(); ok {
-		return fmt.Sprintf("%03d-%03d", lo, hi)
+		w := d.slotDigits()
+		return fmt.Sprintf("%0*d-%0*d", w, lo, w, hi)
+	}
+	if d.slots.pmsForm == PMSFormDashToken {
+		return fmt.Sprintf("P-%02dL-P-%02dU", 1, pc)
 	}
 	return fmt.Sprintf("P1L-P%dU", pc)
 }
@@ -380,10 +388,16 @@ func (d Dialect) pmsDomainText() string {
 func (d Dialect) specialBankText() string {
 	var banks []string
 	if d.slots.sixtyHi > 0 {
-		if d.slots.sixtyLo/100 == d.slots.sixtyHi/100 {
+		// The "%dxx" hundred-block shorthand is a 3-digit-form convention
+		// (S0.2's own reference spelling); a 5-digit dialect's bank (the
+		// FTX-1's 50001-50020 "5 MHz BAND") spells the full range instead,
+		// which keeps every registered (3-digit) dialect's sentence
+		// byte-identical while giving a wider dialect an honest one.
+		if d.slotDigits() == 3 && d.slots.sixtyLo/100 == d.slots.sixtyHi/100 {
 			banks = append(banks, fmt.Sprintf("%dxx", d.slots.sixtyLo/100))
 		} else {
-			banks = append(banks, fmt.Sprintf("%03d-%03d", d.slots.sixtyLo, d.slots.sixtyHi))
+			w := d.slotDigits()
+			banks = append(banks, fmt.Sprintf("%0*d-%0*d", w, d.slots.sixtyLo, w, d.slots.sixtyHi))
 		}
 	}
 	if d.slots.emgWire != "" {

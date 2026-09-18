@@ -25,6 +25,12 @@ type slotSpace struct {
 	pmsForm      PMSSlotForm
 	pmsNumericLo int
 
+	// slotDigits is the WIDTH, in bytes, of every wire slot form this
+	// dialect builds and accepts. 0 means 3 — see SlotSpace.SlotDigits
+	// (dialectconfig.go) and Dialect.slotDigits, the one place the default
+	// is applied.
+	slotDigits int
+
 	// mcSelects is the SEND-side domain of the MC command — which of the
 	// classes above an MC Set may name. It lives here, beside the ranges it
 	// selects from, because it is a statement ABOUT this slot space rather
@@ -475,29 +481,73 @@ func (d Dialect) PMSForm() PMSSlotForm { return d.slots.pmsForm }
 // re-deriving them from a builder it is testing.
 func (d Dialect) PMSNumericLo() int { return d.slots.pmsNumericLo }
 
-// pmsCap returns this dialect's PMS pair count, clamped to 9 UNDER THE
-// TOKEN FORM. The token wire form's pair digit is a single ASCII byte
-// ('1'-'9'), so pmsPairs can never validly exceed 9 there no matter what a
+// slotDigits returns this dialect's slot wire-form width in bytes: 3 for
+// every dialect that leaves SlotSpace.SlotDigits at its zero value (every
+// dialect registered before the FTX-1 seam existed), 5 for a dialect that
+// declares it — see SlotSpace.SlotDigits (dialectconfig.go) for why 0 means
+// 3 rather than being refused like every other axis in that file.
+//
+// EVERY WIDTH-SENSITIVE SITE IN THIS PACKAGE CONSULTS THIS METHOD, never
+// the raw d.slots.slotDigits field or a literal 3: slot.go's Sprintf
+// renderers, classifySlot's length guard and digit decode, memdata.go's
+// slot/frequency field offsets, mr.go/mt.go's read-frame length, and the
+// outbound gate's matching slices in allowlist.go. A site that hardcoded 3
+// instead would build or admit a 3-byte-shaped frame for a dialect that
+// declares 5, silently corrupting or misparsing it — exactly the class of
+// defect V19 (dialectvalidate.go) closes at construction and this method
+// closes at every consumer.
+func (d Dialect) slotDigits() int {
+	if d.slots.slotDigits == 0 {
+		return 3
+	}
+	return d.slots.slotDigits
+}
+
+// slotOnlyFrameLen is the fixed length of a frame carrying nothing but a
+// two-byte command prefix, this dialect's own slot width, and the ';'
+// terminator — the MR-read and MT-read request shape both share
+// byte-for-byte ("MR"/"MT" + slot + ";"). A receiver method rather than a
+// package constant for slotDigits' own reason: it reaches the OUTBOUND
+// WRITE GATE (allowlist.go's validMRCommand and validMTCommand) as well as
+// the two builders, and a gate consulting a fixed 3-byte width on every
+// dialect is the exact shape this seam exists to eliminate.
+func (d Dialect) slotOnlyFrameLen() int {
+	return 2 + d.slotDigits() + 1
+}
+
+// pmsCap returns this dialect's PMS pair count, clamped to the WIRE FORM'S
+// OWN CEILING: 9 under PMSFormToken (a single ASCII digit, '1'-'9') and 50
+// under PMSFormDashToken (two ASCII digits, "01"-"50" — FTX-1 spec.md §4).
+// Both ceilings exist for the same reason: a dialect's pair count can never
+// validly exceed what its own wire form can spell, no matter what a
 // dialect's data configures — codex review Important-2 measured an uncapped
 // pmsPairs building multi-byte wire forms ("P12L") that the SAME dialect's
 // own ParseSlot then rejected. classifySlot and PMSSlot both consume this
-// rather than the raw field, so the cap is expressed exactly once.
+// rather than the raw field, so each cap is expressed exactly once.
 //
 // UNDER PMSFormNumeric THE CLAMP DOES NOT APPLY, because its reason does
 // not: the pair number is never on the wire, the slots are ordinary decimal
 // channel numbers, and the bound that does apply is V15's — the range must
-// end at or below 999. Clamping there would silently give a dialect
-// declaring twelve numeric pairs nine of them, which is the hazard V3
-// refuses (a wrong count is rejected, never clamped) reintroduced one layer
-// down. TestV3_PairBoundIsFormAware pins both halves.
+// end at or below this dialect's own slot-digit ceiling. Clamping there
+// would silently give a dialect declaring twelve numeric pairs nine of
+// them, which is the hazard V3 refuses (a wrong count is rejected, never
+// clamped) reintroduced one layer down. TestV3_PairBoundIsFormAware pins
+// both halves.
 func (d Dialect) pmsCap() int {
-	if d.slots.pmsForm == PMSFormNumeric {
+	switch d.slots.pmsForm {
+	case PMSFormNumeric:
+		return d.slots.pmsPairs
+	case PMSFormDashToken:
+		if d.slots.pmsPairs > 50 {
+			return 50
+		}
+		return d.slots.pmsPairs
+	default: // PMSFormToken (or the zero value, refused at construction by V15)
+		if d.slots.pmsPairs > 9 {
+			return 9
+		}
 		return d.slots.pmsPairs
 	}
-	if d.slots.pmsPairs > 9 {
-		return 9
-	}
-	return d.slots.pmsPairs
 }
 
 // numericPMSRange returns the inclusive decimal range this dialect's PMS
@@ -518,7 +568,7 @@ func (d Dialect) numericPMSRange() (lo, hi int, ok bool) {
 // classifySlot reports what kind of slot, if any, wire represents under
 // this dialect's slot space. Every slot-taking method routes through it.
 func (d Dialect) classifySlot(wire string) slotKind {
-	if len(wire) != 3 {
+	if len(wire) != d.slotDigits() {
 		return slotKindInvalid
 	}
 	if d.slots.noneWire != "" && wire == d.slots.noneWire {
@@ -536,7 +586,7 @@ func (d Dialect) classifySlot(wire string) slotKind {
 		}
 	}
 	if allDigits {
-		n := int(wire[0]-'0')*100 + int(wire[1]-'0')*10 + int(wire[2]-'0')
+		n := digitsAt(wire, 0, len(wire))
 		switch {
 		case d.slots.memoryHi > 0 && n >= d.slots.memoryLo && n <= d.slots.memoryHi:
 			return slotKindMemory
@@ -567,6 +617,20 @@ func (d Dialect) classifySlot(wire string) slotKind {
 		wire[1] >= '1' && wire[1] <= byte('0'+pc) &&
 		(wire[2] == 'L' || wire[2] == 'U') {
 		return slotKindPMS
+	}
+
+	// THE DASH-TOKEN ARM, the FTX-1's own "P-01L".."P-50U" shape
+	// (dialectconfig.go's PMSFormDashToken doc comment). Guarded by the
+	// form for the token arm's own reason: pmsCap() > 0 alone would let a
+	// numeric- or single-digit-token dialect's slot space be shadowed by a
+	// wire form it neither builds nor documents.
+	if pc := d.pmsCap(); d.slots.pmsForm == PMSFormDashToken && pc > 0 &&
+		len(wire) == 5 && wire[0] == 'P' && wire[1] == '-' &&
+		wire[2] >= '0' && wire[2] <= '9' && wire[3] >= '0' && wire[3] <= '9' &&
+		(wire[4] == 'L' || wire[4] == 'U') {
+		if pair := digitsAt(wire, 2, 4); pair >= 1 && pair <= pc {
+			return slotKindPMS
+		}
 	}
 
 	return slotKindInvalid
