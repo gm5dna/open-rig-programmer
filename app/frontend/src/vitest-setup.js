@@ -29,9 +29,9 @@ try {
 	Object.defineProperty(window, 'localStorage', {
 		configurable: true,
 		value: {
-			getItem: (k) => (store.has(k) ? store.get(k) : null),
-			setItem: (k, v) => void store.set(k, String(v)),
-			removeItem: (k) => void store.delete(k),
+			getItem: (/** @type {string} */ k) => (store.has(k) ? store.get(k) : null),
+			setItem: (/** @type {string} */ k, /** @type {unknown} */ v) => void store.set(k, String(v)),
+			removeItem: (/** @type {string} */ k) => void store.delete(k),
 			clear: () => store.clear(),
 		},
 	})
