@@ -61,28 +61,52 @@ func main() {
 		log.Fatalf("parsing %s: %v", p.ManualCSV, err)
 	}
 
-	// A manual-only profile has no observation source; RenderGo requires the
-	// map to be empty for it, and a nil map is empty.
-	//
-	// This branches on ObservedCSV while RenderGo ENFORCES the regime on
-	// p.Observations — two proxies for one fact, safe only because Validate
-	// has already run (ParseCSV above validates p, as every extable API
-	// does) and forces the biconditional: ObservedCSV is non-empty iff
-	// Observations is ObservationsRequired.
-	var observed map[string]extable.Observed
-	if p.ObservedCSV != "" {
-		observedData, err := os.ReadFile(p.ObservedCSV)
-		if err != nil {
-			log.Fatalf("reading %s: %v", p.ObservedCSV, err)
+	// The two renderers take different observation types — RenderGo joins
+	// each model's own hardware READ observations (ObservedCSV), and
+	// RenderWrite (the FT-710-only write-descriptor table, task b2) joins
+	// its Set-width observations (WriteObservedCSV) instead — so each
+	// switch arm reads its own optional input and calls its own render
+	// function, rather than growing a model literal onto one shared call.
+	var out []byte
+	switch p.Renderer {
+	case extable.RenderInventory:
+		// A manual-only profile has no observation source; RenderGo
+		// requires the map to be empty for it, and a nil map is empty.
+		//
+		// This branches on ObservedCSV while RenderGo ENFORCES the regime
+		// on p.Observations — two proxies for one fact, safe only because
+		// Validate has already run (ParseCSV above validates p, as every
+		// extable API does) and forces the biconditional: ObservedCSV is
+		// non-empty iff Observations is ObservationsRequired.
+		var observed map[string]extable.Observed
+		if p.ObservedCSV != "" {
+			observedData, err := os.ReadFile(p.ObservedCSV)
+			if err != nil {
+				log.Fatalf("reading %s: %v", p.ObservedCSV, err)
+			}
+			if observed, err = extable.ParseObservedCSV(p, observedData); err != nil {
+				log.Fatalf("parsing %s: %v", p.ObservedCSV, err)
+			}
 		}
-		if observed, err = extable.ParseObservedCSV(p, observedData); err != nil {
-			log.Fatalf("parsing %s: %v", p.ObservedCSV, err)
+		if out, err = extable.RenderGo(p, rows, observed); err != nil {
+			log.Fatalf("rendering Go: %v", err)
 		}
-	}
-
-	out, err := extable.RenderGo(p, rows, observed)
-	if err != nil {
-		log.Fatalf("rendering Go: %v", err)
+	case extable.RenderWrite:
+		var observed map[string]extable.WriteObserved
+		if p.WriteObservedCSV != "" {
+			writeObservedData, err := os.ReadFile(p.WriteObservedCSV)
+			if err != nil {
+				log.Fatalf("reading %s: %v", p.WriteObservedCSV, err)
+			}
+			if observed, err = extable.ParseWriteObservedCSV(writeObservedData); err != nil {
+				log.Fatalf("parsing %s: %v", p.WriteObservedCSV, err)
+			}
+		}
+		if out, err = extable.RenderWriteGo(rows, observed); err != nil {
+			log.Fatalf("rendering Go: %v", err)
+		}
+	default:
+		log.Fatalf("profile %s: RendererKind %v must be set explicitly", p.Model, p.Renderer)
 	}
 	if err := os.WriteFile(p.OutFile, out, 0o644); err != nil {
 		log.Fatalf("writing %s: %v", p.OutFile, err)
