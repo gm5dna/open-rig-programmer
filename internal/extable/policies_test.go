@@ -314,9 +314,13 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		textWidths    []int
 		ceiling       int
 	}{
-		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
-		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
-		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
+		"ft710": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
+		// ft710write shares table2.csv with ft710 (task b2's own comment on
+		// ft710writeProfile explains why), so it parses the same chart and
+		// declares the identical shape.
+		"ft710write": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
+		"ftdx10":     {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
+		"ftdx101":    {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, []int{12}, MaxDigitsCeiling},
 		// The FT-891's chart prints a four-digit MENU Number, no group
 		// labels and no free-text row: core/cat/ft891/table2.csv's
 		// provenance header records all three as readings of that chart.

@@ -51,6 +51,34 @@ func (o ObservationPolicy) String() string {
 	}
 }
 
+// RendererKind selects which render function internal/extable/gen calls for
+// a profile. Its zero value is deliberately NOT valid, mirroring
+// TypeRefPolicy's rule: an omitted renderer must refuse rather than default
+// to either function.
+type RendererKind int
+
+const (
+	// RenderInventory: RenderGo, joined with the profile's own hardware
+	// READ observations (ObservedCSV). Every profile before this milestone
+	// is this kind.
+	RenderInventory RendererKind = iota + 1
+	// RenderWrite: RenderWriteGo, the FT-710-only write-descriptor table,
+	// joined with WriteObservedCSV instead. Exactly one profile,
+	// "ft710write", declares this.
+	RenderWrite
+)
+
+func (r RendererKind) String() string {
+	switch r {
+	case RenderInventory:
+		return "RenderInventory"
+	case RenderWrite:
+		return "RenderWrite"
+	default:
+		return fmt.Sprintf("RendererKind(%d)", int(r))
+	}
+}
+
 // TypeRefPolicy declares how the generated file refers to EXItem and
 // EXAddress. Its zero value is deliberately NOT a valid policy: emitting
 // into core/cat and emitting elsewhere are both legitimate, so an OMITTED
@@ -335,6 +363,18 @@ type Profile struct {
 	OutFile     string
 	ManualCSV   string
 	ObservedCSV string // must be empty iff Observations is ObservationsAbsent
+	// WriteObservedCSV is the Set-direction counterpart of ObservedCSV — for
+	// the FT-710, table2-write-observed.csv, Session W's hardware Set-width
+	// characterisation. It is empty for every profile except "ft710write":
+	// no other registration has a write-descriptor table to join it
+	// against. Non-empty iff Renderer is RenderWrite.
+	WriteObservedCSV string
+
+	// Renderer selects which render function internal/extable/gen calls:
+	// RenderInventory (RenderGo) for every profile before this milestone,
+	// RenderWrite (RenderWriteGo) for "ft710write" alone. Zero is refused,
+	// as every other omitted semantic on this type is.
+	Renderer RendererKind
 
 	// Addresses, LabelPolicy, TextRowPolicy and ParameterlessPolicy are the
 	// chart-shape policies. Each has no default; see AddressForm, Labels,
@@ -591,6 +631,25 @@ func (p Profile) Validate() error {
 	default:
 		return fmt.Errorf("extable: profile %s: ObservationPolicy %v must be set explicitly", p.Model, p.Observations)
 	}
+	// Renderer and WriteObservedCSV are checked together: the field is the
+	// write-descriptor table's own optional-observation input, so it must
+	// be set iff the profile is the one renderer that reads it, exactly the
+	// biconditional ObservedCSV/ObservationsRequired keeps above.
+	switch p.Renderer {
+	case RenderInventory:
+		if p.WriteObservedCSV != "" {
+			return fmt.Errorf("extable: profile %s: WriteObservedCSV %q is set under RenderInventory", p.Model, p.WriteObservedCSV)
+		}
+	case RenderWrite:
+		if err := checkRelPath("WriteObservedCSV", p.WriteObservedCSV); err != nil {
+			return fmt.Errorf("extable: profile %s: %w (RenderWrite)", p.Model, err)
+		}
+		if strings.EqualFold(p.OutFile, p.WriteObservedCSV) {
+			return fmt.Errorf("extable: profile %s: OutFile %q collides with its WriteObservedCSV %q (compared case-insensitively) — generating would overwrite the source", p.Model, p.OutFile, p.WriteObservedCSV)
+		}
+	default:
+		return fmt.Errorf("extable: profile %s: RendererKind %v must be set explicitly", p.Model, p.Renderer)
+	}
 	if len(p.DocLines) == 0 {
 		return fmt.Errorf("extable: profile %s: DocLines is empty", p.Model)
 	}
@@ -644,6 +703,8 @@ type NamedProfile struct {
 // before M9c-2. TestFT710Profile_MatchesTodaysConstants pins the values, and
 // core/cat's staleness test pins the bytes they produce.
 var ft710Profile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "FT-710",
 	Package:     "cat",
 	Types:       TypesLocal,
@@ -683,6 +744,68 @@ var ft710Profile = Profile{
 	},
 }
 
+// ft710writeProfile is the FT-710's write-descriptor table — task (b2) of
+// the v1.11.0 settings-write milestone. It is a SECOND profile sharing
+// ft710Profile's package and manual CSV, not a second file the ft710
+// profile emits: the ts590 pair (ts590sProfile/ts590sgProfile below) is the
+// working precedent for two profiles, one OutFile each, in one package
+// directory.
+//
+// Package/Types/Addresses/LabelPolicy/TextRowPolicy/ParameterlessPolicy and
+// every numeric bound mirror ft710Profile exactly: both profiles parse the
+// SAME table2.csv with internal/extable.ParseCSV, so both must declare the
+// same chart shape or the parse itself would disagree between them. The two
+// diverge only in what they render: OutFile, VarName, Renderer, and the
+// optional observation input — WriteObservedCSV (Session W's Set-width
+// sweep) here, in place of ObservedCSV (the M8c READ sweep).
+//
+// ManualCSV IS table2.csv, SHARED with ft710Profile: validateRegistry's
+// collision keys are Package+OutFile and Package+VarName
+// (validateRegistry, below) — never a shared source CSV, and this pair
+// reads the one manual transcription for two different generated
+// artefacts, which is not the "wrong radio's chart" mistake the sibling
+// registrations' distinct CSVs guard against. TestRegistry_HoldsEveryModel
+// (profile_test.go) carries the matching test-side exception.
+var ft710writeProfile = Profile{
+	Renderer: RenderWrite,
+
+	Model:            "FT-710",
+	Package:          "cat",
+	Types:            TypesLocal,
+	VarName:          "ft710ExWrite",
+	OutFile:          "exwrite_gen.go",
+	ManualCSV:        "table2.csv",
+	WriteObservedCSV: "table2-write-observed.csv",
+
+	Addresses:           AddressTriple,
+	LabelPolicy:         LabelsRequired,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
+
+	DigitsCeiling:    MaxDigitsCeiling,
+	MinDigits:        1,
+	MaxDigits:        4,
+	TextWidths:       []int{12},
+	MaxObservedWidth: 12,
+	ExpectedRows:     296,
+
+	// ObservationsAbsent: RenderWriteGo does not take ObservedCSV's read
+	// observations at all — see WriteObservedCSV above for the Set-
+	// direction counterpart it does take, gated on Renderer, not on
+	// ObservationPolicy.
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"ft710ExWrite is the FT-710 write-descriptor table, sorted by",
+		"(P1,P2,P3), built from TWO sources of different provenance: the manual",
+		`transcription in table2.csv (the FT-710 CAT manual's Table 2 "MENU Chart"),`,
+		"and Session W's hardware Set-width observations in",
+		"table2-write-observed.csv. It carries one EXWriteItem per row, ALL 296,",
+		"admitted or not: core/cat/exdenylist.go plays no part in this",
+		"generation. Regenerate with `go generate ./core/cat`; do not edit by",
+		"hand.",
+	},
+}
+
 // ftdx10Profile carries the FTdx10's Table 2 transcription facts. It is the
 // registry's first TypesImported entry: the inventory is emitted into
 // core/cat/ftdx10, a model package OUTSIDE core/cat, so EXItem and EXAddress
@@ -700,6 +823,8 @@ var ft710Profile = Profile{
 // what lets core/cat/ftdx10's staleness test select its registration by
 // Package rather than by hardcoding a lookup name.
 var ftdx10Profile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "FTdx10",
 	Package:     "ftdx10",
 	Types:       TypesImported,
@@ -759,6 +884,8 @@ var ftdx10Profile = Profile{
 // stored property is model-conditional; only P4 VALUE ranges differ, and
 // P4 semantics are not stored. Same TypesImported shape as ftdx10.
 var ftdx101Profile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "FTdx101D/MP",
 	Package:     "ftdx101",
 	Types:       TypesImported,
@@ -832,6 +959,8 @@ var ftdx101Profile = Profile{
 // Lookup/RegisteredProfiles, which is what lets core/cat/ft891's staleness
 // test select its registration by Package rather than by a lookup name.
 var ft891Profile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "FT-891",
 	Package:     "ft891",
 	Types:       TypesImported,
@@ -918,6 +1047,8 @@ var ft891Profile = Profile{
 // and ft891 profiles are not: its consumers reach it through
 // Lookup/RegisteredProfiles.
 var ft991aProfile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "FT-991A",
 	Package:     "ft991a",
 	Types:       TypesImported,
@@ -1032,6 +1163,8 @@ var ft991aProfile = Profile{
 // Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
 // and ft891 profiles are not.
 var ts590sProfile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "TS-590S",
 	Package:     "ts590",
 	Types:       TypesImported,
@@ -1125,6 +1258,8 @@ var ts590sProfile = Profile{
 // and ft891 profiles are not: its only consumers reach it through
 // Lookup/RegisteredProfiles.
 var ts590sgProfile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "TS-590SG",
 	Package:     "ts590",
 	Types:       TypesImported,
@@ -1218,6 +1353,8 @@ var ts590sgProfile = Profile{
 // Lookup/RegisteredProfiles, and core/kw/ts480's staleness test selects it by
 // the (Package, VarName) pair rather than by a hardcoded lookup name.
 var ts480Profile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "TS-480",
 	Package:     "ts480",
 	Types:       TypesImported,
@@ -1375,6 +1512,8 @@ var ts480Profile = Profile{
 // Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101,
 // ft891 and ts590 profiles are not.
 var ts890sProfile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "TS-890S",
 	Package:     "ma",
 	Types:       TypesImported,
@@ -1500,6 +1639,8 @@ var ts890sProfile = Profile{
 // Deliberately NOT given a named accessor, for the reason the other
 // TypesImported profiles are not.
 var ts990sProfile = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "TS-990S",
 	Package:     "ma",
 	Types:       TypesImported,
@@ -1552,16 +1693,17 @@ var ts990sProfile = Profile{
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
-	"ft710":   ft710Profile,
-	"ft891":   ft891Profile,
-	"ft991a":  ft991aProfile,
-	"ftdx10":  ftdx10Profile,
-	"ftdx101": ftdx101Profile,
-	"ts480":   ts480Profile,
-	"ts590s":  ts590sProfile,
-	"ts590sg": ts590sgProfile,
-	"ts890s":  ts890sProfile,
-	"ts990s":  ts990sProfile,
+	"ft710":      ft710Profile,
+	"ft710write": ft710writeProfile,
+	"ft891":      ft891Profile,
+	"ft991a":     ft991aProfile,
+	"ftdx10":     ftdx10Profile,
+	"ftdx101":    ftdx101Profile,
+	"ts480":      ts480Profile,
+	"ts590s":     ts590sProfile,
+	"ts590sg":    ts590sgProfile,
+	"ts890s":     ts890sProfile,
+	"ts990s":     ts990sProfile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {
@@ -1634,6 +1776,9 @@ func validateRegistry(m map[string]Profile) error {
 		inputs[p.Package+"/"+strings.ToLower(p.ManualCSV)] = n
 		if p.ObservedCSV != "" {
 			inputs[p.Package+"/"+strings.ToLower(p.ObservedCSV)] = n
+		}
+		if p.WriteObservedCSV != "" {
+			inputs[p.Package+"/"+strings.ToLower(p.WriteObservedCSV)] = n
 		}
 	}
 	// Cross-profile output-vs-input collisions, both registration orders.

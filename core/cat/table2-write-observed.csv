@@ -1,0 +1,24 @@
+# FT-710 EX write (Set) characterisation observations (Session W).
+#
+# HARDWARE EVIDENCE — NOT a manual transcription, and SET DIRECTION ONLY.
+# The manual's own Table 2 transcription lives in table2.csv and is never
+# edited from hardware; the M8c READ characterisation lives in
+# table2-observed.csv and says nothing about Set behaviour. This file
+# records what one radio ACCEPTED to EX Set requests, once Session W (the
+# v1.11.0 settings-write milestone's bench runbook) has run.
+#
+# EMPTY BY DESIGN until Session W: internal/extable.RenderWriteGo renders
+# every one of the 296 rows regardless — see core/cat/exwrite_gen.go's own
+# header — and ObservedSetWidth/ObservedSetShape are the rendered sentinels
+# 0/"" for every address this file has not yet characterised. An empty file
+# is therefore a complete, correct input, not a placeholder needing a stub
+# row.
+#
+# PRIVACY: this file must carry NO setting values — only each address's
+#   observed P4 Set wire width and shape class, on table2-observed.csv's own
+#   privacy rule. Raw captures stay in docs/fixtures-private/ (never
+#   committed).
+#
+# Columns: p1,p2,p3,observed_set_width,observed_set_shape
+#   observed_set_width  bytes of raw P4 accepted by a Set (a sign counts)
+#   observed_set_shape  numeric | signed (leading '+'/'-') | text (12-byte free text)
