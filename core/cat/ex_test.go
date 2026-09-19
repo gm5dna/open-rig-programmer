@@ -295,3 +295,97 @@ func FuzzParseEXAnswer(f *testing.F) {
 		}
 	})
 }
+
+// --- CanSetEX / BuildEXSet ---
+
+// TestCanSetEX_FalseForEveryAddressWithoutAWriteRow is spec A1's named
+// test: with core/cat/table2-write-observed.csv still empty (Session W
+// has not run), every one of the 296 addresses is refused at BOTH
+// CanSetEX and BuildEXSet — the admitted 234 because their write
+// descriptor's Width is the rendered zero sentinel, the denied/held 62
+// because they never reach d.exWrite at all (dialect.go's
+// buildFT710ExWrite). No zero sentinel renders as writable anywhere.
+func TestCanSetEX_FalseForEveryAddressWithoutAWriteRow(t *testing.T) {
+	items := FT710.EXItems()
+	if len(items) != 296 {
+		t.Fatalf("test fixture bug: EXItems() returned %d items, want 296", len(items))
+	}
+	for _, it := range items {
+		if FT710.CanSetEX(it.Addr) {
+			t.Errorf("CanSetEX(%v) = true, want false (table2-write-observed.csv is empty)", it.Addr)
+		}
+		p4 := strings.Repeat("0", it.Digits)
+		if cmd, err := FT710.BuildEXSet(it.Addr, p4); err == nil {
+			t.Errorf("BuildEXSet(%v, %q) = %q, want an error (table2-write-observed.csv is empty)", it.Addr, p4, cmd.Bytes())
+		}
+	}
+}
+
+// TestBuildEXSet_AcceptsCharacterisedAddress is the positive control
+// TestCanSetEX_FalseForEveryAddressWithoutAWriteRow cannot give by
+// itself: a Dialect whose write table HAS a non-zero-Width entry accepts
+// a well-formed value at that width and inside its domain, and refuses
+// one either the wrong width or outside the domain. FT710 itself is left
+// untouched — only a local copy's exWrite is overridden, on
+// TestAllowedCommand_EXAnswersRejectedOutboundAll296's own injection
+// shape below.
+func TestBuildEXSet_AcceptsCharacterisedAddress(t *testing.T) {
+	addr := EXAddress{P1: 1, P2: 3, P3: 21} // TONE FREQ; see table2-observed.csv:82
+	d := FT710
+	d.exWrite = map[EXAddress]exWriteDescriptor{
+		addr: {Domain: Domain{Lo: 0, Hi: 49, Step: 1}, Width: 3},
+	}
+
+	cmd, err := d.BuildEXSet(addr, "007")
+	if err != nil {
+		t.Fatalf("BuildEXSet(%v, %q): unexpected error: %v", addr, "007", err)
+	}
+	want := "EX" + d.EXWire(addr) + "007;"
+	if got := string(cmd.Bytes()); got != want {
+		t.Errorf("BuildEXSet(%v, %q) = %q, want %q", addr, "007", got, want)
+	}
+
+	if _, err := d.BuildEXSet(addr, "07"); err == nil {
+		t.Errorf("BuildEXSet(%v, %q): want error for wrong width, got success", addr, "07")
+	}
+	if _, err := d.BuildEXSet(addr, "099"); err == nil {
+		t.Errorf("BuildEXSet(%v, %q): want error for out-of-domain value, got success", addr, "099")
+	}
+}
+
+// TestDialectExWrite_ExcludesDeniedAndHeld proves buildFT710ExWrite's
+// filter, not just its effect on the shipped, empty-CSV table: a stray
+// write-observed row for a denylisted or held address must never make it
+// into d.exWrite, whatever ft710ExWrite itself says. CAT-1 RATE
+// (03,01,05) is denied (exCATLinkDenied); SHIFT FREQUENCY (01,05,16) is
+// held (exHeldTriples); AF TREBLE GAIN (01,01,01) is admitted, and its
+// row's Width must survive the filter unchanged.
+func TestDialectExWrite_ExcludesDeniedAndHeld(t *testing.T) {
+	deniedAddr := EXAddress{P1: 3, P2: 1, P3: 5}
+	heldAddr := EXAddress{P1: 1, P2: 5, P3: 16}
+	admittedAddr := EXAddress{P1: 1, P2: 1, P3: 1}
+
+	rows := []EXWriteItem{
+		{Addr: deniedAddr, Domain: Domain{Lo: 0, Hi: 9, Step: 1}, ObservedSetWidth: 2},
+		{Addr: heldAddr, Domain: Domain{Lo: 0, Hi: 9, Step: 1}, ObservedSetWidth: 2},
+		{Addr: admittedAddr, Domain: Domain{Lo: -20, Hi: 10, Step: 1, Signed: true}, ObservedSetWidth: 3},
+	}
+	got := buildFT710ExWrite(rows, FT710.EXItems())
+
+	if _, ok := got[deniedAddr]; ok {
+		t.Errorf("buildFT710ExWrite kept denied address %v — a stray write-observed row must never make a denylisted address writable", deniedAddr)
+	}
+	if _, ok := got[heldAddr]; ok {
+		t.Errorf("buildFT710ExWrite kept held address %v", heldAddr)
+	}
+	desc, ok := got[admittedAddr]
+	if !ok {
+		t.Fatalf("buildFT710ExWrite dropped admitted address %v", admittedAddr)
+	}
+	if desc.Width != 3 {
+		t.Errorf("admitted address %v Width = %d, want 3", admittedAddr, desc.Width)
+	}
+	if !desc.Domain.Signed {
+		t.Errorf("admitted address %v Domain.Signed = false, want true", admittedAddr)
+	}
+}

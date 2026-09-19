@@ -2,7 +2,11 @@
 
 package cat
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // exReadLen is the length of an EX read request for THIS DIALECT:
 // "EX"(2) + address(d.EXAddressWidth()) + ";"(1). Reference: the EX
@@ -83,6 +87,71 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 	frame := make([]byte, 0, d.exReadLen())
 	frame = append(frame, 'E', 'X')
 	frame = append(frame, wire...)
+	frame = append(frame, ';')
+	return newCommand(frame), nil
+}
+
+// exSetP4OK is the ONE predicate the write gate's every consumer calls —
+// CanSetEX, BuildEXSet and validEXRead's Set arm (allowlist.go) — so "may I
+// Set this address at all" and "is this particular value legal" can never
+// drift apart (Opus-3 minor 8: the Width != 0 guard drifted once already
+// when more than one place restated it).
+//
+// A missing d.exWrite entry, or a present one with Width == 0 (Session W
+// has not characterised this address, or never will because it was denied
+// or held before construction — dialect.go's buildFT710ExWrite), answers
+// false before anything else runs: no zero sentinel renders as writable
+// anywhere (spec A1). p4 == nil asks only "may I Set here at all" —
+// CanSetEX's own probe. A non-nil p4 additionally requires it to be
+// exactly Width bytes and, parsed as a decimal (sign included), inside the
+// descriptor's Domain.
+func (d Dialect) exSetP4OK(a EXAddress, p4 []byte) bool {
+	desc, ok := d.exWrite[a]
+	if !ok || desc.Width == 0 {
+		return false
+	}
+	if p4 == nil {
+		return true
+	}
+	if len(p4) != desc.Width {
+		return false
+	}
+	v, err := strconv.Atoi(strings.TrimSpace(string(p4)))
+	if err != nil {
+		return false
+	}
+	return desc.Domain.Contains(v)
+}
+
+// CanSetEX reports whether addr is writable on this dialect right now:
+// admitted (not denied, not held) AND characterised (a non-zero
+// ObservedSetWidth — Session W has produced a row for it). It is
+// exSetP4OK's own "may I Set at all" question, asked with no P4 to judge —
+// CanSetEX does not re-implement the guard, it calls the one that owns it.
+func (d Dialect) CanSetEX(addr EXAddress) bool {
+	return d.exSetP4OK(addr, nil)
+}
+
+// BuildEXSet builds this dialect's EX Set frame for addr carrying value —
+// value already rendered to the write descriptor's own width (Session W's
+// ObservedSetWidth), sign included where the domain is Signed. It is the
+// ONE EX Set builder (allowlist.go:25-30,431-433's "cannot drift apart"
+// rule): it calls exSetP4OK exactly as validEXRead's Set arm does, rather
+// than re-checking width or domain membership itself.
+//
+// One call covers every refusal reason pre-wire: unknown address, denied,
+// held, uncharacterised (Width == 0), wrong width, and out-of-domain value
+// all fail exSetP4OK and are reported alike — task (d)'s WriteSetting
+// relies on that to refuse before any bytes reach the transport.
+func (d Dialect) BuildEXSet(addr EXAddress, value string) (Command, error) {
+	p4 := []byte(value)
+	if !d.exSetP4OK(addr, p4) {
+		return Command{}, newParseError([]byte(value), "EX: address is not writable, or value is outside its domain")
+	}
+	frame := make([]byte, 0, 2+d.EXAddressWidth()+len(p4)+1)
+	frame = append(frame, 'E', 'X')
+	frame = append(frame, d.EXWire(addr)...)
+	frame = append(frame, p4...)
 	frame = append(frame, ';')
 	return newCommand(frame), nil
 }
