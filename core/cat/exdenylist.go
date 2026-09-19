@@ -17,12 +17,12 @@ import "strings"
 // future edit to table2.csv that silently moves an address in or out of a
 // class fails the build rather than shipping quietly.
 //
-// NOT WIRED INTO THE GATE YET. Dialect.AllowedCommand's validEXRead still
-// refuses every EX Set/Answer-shaped frame outright (allowlist.go) — these
-// predicates classify addresses for the golden test only. Consulting them
-// from the gate, so an admitted-but-uncharacterised address is refused and a
-// denied one can never reach a Set builder regardless of what the write
-// descriptor table says, is a later task on this milestone.
+// WIRED INTO THE GATE via exWriteDenied (below) and dialect.go's
+// buildFT710ExWrite: task (c)'s single reconciliation point between this
+// file's classification and (b2)'s generated write-descriptor table. An
+// admitted-but-uncharacterised address is refused there by its Width 0
+// sentinel (domain.go); a denied or held one never reaches d.exWrite at
+// all, regardless of what the write descriptor table says.
 //
 // A predicate here matches on BEHAVIOUR — the legend text (what the address
 // actually does) or, where the legend alone does not say enough, the (P1,P2)
@@ -143,4 +143,31 @@ func exHeld(p1, p2, p3 int) bool {
 		}
 	}
 	return false
+}
+
+// exWriteDenied reports whether it (a runtime EXItem, exinventory_gen.go)
+// should be excluded from a dialect's write table — denied by one of the
+// six classes above, or held. It is this file's five name/text/triple
+// predicates applied AT RUNTIME, against EXItem rather than
+// internal/extable.Row, for one reason: EXItem deliberately does not carry
+// the manual's P4 legend text (exinventory.go's own EXItem doc comment),
+// so exKeyingDenied's legend match — the one predicate above that isn't
+// name-based — cannot run here as written.
+//
+// On table2.csv today the twelve items exKeyingDenied's legend match
+// finds are named exactly "PC KEYING" (one) and "RPTT SELECT" (eleven),
+// and nothing else carries that legend — matching by those two names
+// reproduces exKeyingDenied's result without needing the legend text.
+// TestEXDenylist_MatchesTable2ByAddress is the guard: it recomputes every
+// predicate above, including exKeyingDenied against the real legend, and
+// would fail first if a future table2.csv edit broke this equivalence.
+func exWriteDenied(it EXItem) bool {
+	p1, p2, p3 := int(it.Addr.P1), int(it.Addr.P2), int(it.Addr.P3)
+	return exCATLinkDenied(it.Name) ||
+		it.Name == "PC KEYING" || it.Name == "RPTT SELECT" ||
+		exTunerRoutingDenied(it.Name) ||
+		exTXSafetyDenied(p1, p2, p3, it.Name) ||
+		exUnintendedTXSourceDenied(it.Name) ||
+		exTextDenied(it.Text) ||
+		exHeld(p1, p2, p3)
 }

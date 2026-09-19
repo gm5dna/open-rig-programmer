@@ -285,24 +285,49 @@ func TestAllowedCommand_EXPropertyAll296Reads(t *testing.T) {
 	}
 }
 
-// TestAllowedCommand_EXAnswersRejectedOutboundAll296 proves the EX
-// restriction (validEXRead's doc comment, allowlist.go) at inventory
-// scale: for every one of the 296 Table 2 items, the EX Set/Answer-shaped
-// frame -- "EX" + address + a width-correct P4 body (all '0' for numeric
-// items, 12 spaces for the six Text items, per exinventory.go's
-// EXItem.Digits/Text docs) + ";" -- is rejected outbound, even though
-// ParseEXAnswer would happily parse it as a well-formed inbound answer.
+// TestAllowedCommand_EXAnswersRejectedOutboundAll296 proves the EX Set
+// arm (validEXRead's doc comment, allowlist.go) at inventory scale, after
+// the M8d 25/07/2026 no-go's 19/09/2026 reopening (spec v1.11.0 §3).
 //
-// This was written as a phase-scoped invariant (M8a-M8d) expecting a
-// later milestone to rewrite it. The M8d menu-write decision
-// (25/07/2026) went the other way: the menu surface is read-only for
-// v1.x (docs/menu-write-decision.md), so this test now pins shipped
-// policy. Any future reopening would follow MT's set/answer exception --
-// see validEXRead's doc comment and the MT set/answer-shaped ACCEPT
-// entry in TestAllowedCommand_AcceptsAllowlistedSingleFrames.
+// REJECTION ARM (Opus-3 M3): for every one of the 296 Table 2 items
+// except the one address below, the EX Set/Answer-shaped frame -- "EX" +
+// address + a width-correct P4 body sized from the MANUAL's Digits column
+// (all '0' for numeric items, 12 spaces for the six Text items, per
+// exinventory.go's EXItem.Digits/Text docs) + ";" -- is rejected outbound
+// on the real, unmutated FT710, whose table2-write-observed.csv is empty:
+// every admitted address's ObservedSetWidth is the zero sentinel, so
+// exSetP4OK refuses by construction. Sizing from ObservedSetWidth instead
+// would be zero-length with the CSV empty -- byte-identical to the EX
+// READ frame the gate must keep accepting -- and the arm would fail by
+// construction rather than testing anything, which is why it stays
+// pinned to Digits.
+//
+// ACCEPT ARM: (01,03,21) TONE FREQ is the one address this test proves
+// differently. Its manual Digits is 2, but table2-observed.csv:82 records
+// the radio's own read answer at 3 bytes -- the documented Digits-column
+// error table2-corrections.csv also carries. A LOCAL COPY of FT710 (never
+// the package var -- every other test's FT710 stays untouched) gets an
+// injected write descriptor for this one address, ObservedSetWidth 3,
+// standing in for the Session W row real hardware characterisation would
+// produce. A well-formed EX Answer at that width, inside the injected
+// domain, IS a well-formed Set under this copy and passes -- the cost of
+// loosening the gate, stated as a test rather than left as prose.
 func TestAllowedCommand_EXAnswersRejectedOutboundAll296(t *testing.T) {
 	items := FT710.EXItems()
+	if len(items) != 296 {
+		t.Fatalf("test fixture bug: EXItems() returned %d items, want 296", len(items))
+	}
+
+	acceptAddr := EXAddress{P1: 1, P2: 3, P3: 21} // TONE FREQ; table2-observed.csv:82
+	characterised := FT710
+	characterised.exWrite = map[EXAddress]exWriteDescriptor{
+		acceptAddr: {Domain: Domain{Lo: 0, Hi: 49, Step: 1}, Width: 3},
+	}
+
 	for _, it := range items {
+		if it.Addr == acceptAddr {
+			continue // the accept arm, below
+		}
 		var p4 string
 		if it.Text {
 			p4 = strings.Repeat(" ", it.Digits)
@@ -311,10 +336,30 @@ func TestAllowedCommand_EXAnswersRejectedOutboundAll296(t *testing.T) {
 		}
 		frame := "EX" + FT710.EXWire(it.Addr) + p4 + ";"
 		if FT710.AllowedCommand([]byte(frame)) {
-			t.Errorf("AllowedCommand(%q) = true, want false (EX Set/Answer-shaped, phase-scoped rejection) for %v", frame, it.Addr)
+			t.Errorf("AllowedCommand(%q) = true, want false (table2-write-observed.csv is empty) for %v", frame, it.Addr)
 		}
 	}
-	if len(items) != 296 {
-		t.Fatalf("test fixture bug: EXItems() returned %d items, want 296", len(items))
+
+	acceptFrame := "EX" + characterised.EXWire(acceptAddr) + "007" + ";"
+	if !characterised.AllowedCommand([]byte(acceptFrame)) {
+		t.Errorf("AllowedCommand(%q) = false, want true (admitted, characterised address, well-formed Set inside its domain)", acceptFrame)
+	}
+}
+
+// TestValidEXRead_OtherDialectsInheritReadOnly proves the read-only
+// inheritance for every dialect but FT710 is STRUCTURAL -- a nil exWrite
+// map denying by lookup miss -- never a dialect == FT710 literal
+// anywhere in the gate. peerDialect (seconddialect_test.go) is built
+// through the ordinary NewDialect/MustNewDialect path, which never
+// touches exWrite, so it carries the zero (nil) map exactly like every
+// other non-FT710 dialect.
+func TestValidEXRead_OtherDialectsInheritReadOnly(t *testing.T) {
+	addr := EXAddress{P1: 9, P2: 1, P3: 1} // peerEXItems' own member, Digits 3
+	if peerDialect.CanSetEX(addr) {
+		t.Errorf("peerDialect.CanSetEX(%v) = true, want false -- exWrite is nil for every dialect but FT710", addr)
+	}
+	frame := "EX" + peerDialect.EXWire(addr) + "000" + ";"
+	if peerDialect.AllowedCommand([]byte(frame)) {
+		t.Errorf("AllowedCommand(%q) = true, want false -- peerDialect's nil write table denies by lookup miss, never a dialect == FT710 check", frame)
 	}
 }
