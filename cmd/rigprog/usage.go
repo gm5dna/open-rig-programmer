@@ -299,15 +299,17 @@ Usage:
   rigprog settings [--csv OUT] [--model NAME] [--force] FILE
   rigprog settings unverified-writes
   rigprog settings unverified-writes <model> on|off
+  rigprog settings diff-observed [--observed-csv CSV] [--manual-csv CSV] FILE
 
 Flags:
   --csv OUT     also write the snapshot to this CSV file path (optional)
   --model NAME  radio model whose settings descriptor to group by (default: FT-710)
   --force       overwrite --csv if it already exists
 
-"unverified-writes" is a RESERVED first argument — it selects the consent
-sub-mode below, so it can never be read as a FILE to render. A codeplug
-file of that exact name must be given another (any extension will do).
+"unverified-writes" and "diff-observed" are RESERVED first arguments —
+each selects the sub-mode described below, so neither can ever be read as
+a FILE to render. A codeplug file of either exact name must be given
+another (any extension will do).
 
 CONSENT SUB-MODE (no flags; nothing is read from or written to a radio):
 with no further arguments it lists every model this build supports, with
@@ -322,6 +324,12 @@ STORED, not forgotten: withholding consent is a decision, and it is kept
 so nothing asks again. The decisions live in a settings file shared with
 the GUI, whose path the listing prints; a file this build cannot read is
 reported, naming it, and is never overwritten.
+
+DIFF-OBSERVED SUB-MODE: see "rigprog settings diff-observed --help". In
+outline: diffs a "rigprog read --settings" capture's per-address P4 wire
+width/shape against core/cat/table2-observed.csv (Runbook R step 2), a
+WIDTH/SHAPE comparison only — it never prints or compares a setting
+value.
 
 OFFLINE: does not open a radio session — --port/--fake are not accepted.
 Loads FILE strictly, then renders its menu/settings snapshot (captured by
@@ -352,12 +360,53 @@ number of arguments, an unrecognised model, a state word that is neither
 "on" nor "off", or a model whose writes are hardware-verified). Exit
 codes 3/4/5 are not
 used by this command: there is no radio session to block, refuse, or
-abort against.
+abort against. The diff-observed sub-mode has its own exit-code contract
+— see "rigprog settings diff-observed --help".
 `
 
 // printSettingsUsage writes "rigprog settings"'s usage text to w.
 func printSettingsUsage(w io.Writer) {
 	fmt.Fprint(w, settingsUsageText)
+}
+
+// settingsDiffObservedUsageText is "rigprog settings diff-observed"'s own
+// usage text (task-h1 brief; Runbook R step 2). Flags-first, like every
+// other rigprog subcommand: both flags must precede FILE.
+const settingsDiffObservedUsageText = `rigprog settings diff-observed — diff a settings-read file against the FT-710 hardware observation baseline.
+
+Usage:
+  rigprog settings diff-observed [--observed-csv CSV] [--manual-csv CSV] FILE
+
+Flags:
+  --observed-csv CSV  hardware observation CSV to diff FILE against (default: core/cat/table2-observed.csv)
+  --manual-csv CSV    manual Table 2 CSV, consulted only to tell text items from numeric/signed ones (default: core/cat/table2.csv)
+
+OFFLINE: does not open a radio session — --port/--fake are not accepted.
+Loads FILE strictly (a "rigprog read --settings" capture), then for every
+KNOWN entry compares the P4 wire WIDTH (bytes of Value) and SHAPE
+("numeric", "signed", or "text") against --observed-csv's own columns for
+that address. An entry that is not known (unavailable/unsupported), or
+whose address is not in --observed-csv at all, is skipped rather than
+reported as a difference.
+
+PRIVACY: this command never prints or compares a setting VALUE — only its
+measured width and shape class. Output is one line per differing address
+("<id>  observed=<width>/<shape>  file=<width>/<shape>"), followed by
+"Addresses compared: N" and "Differences: N".
+
+Exit codes: 0 FILE was loaded and every compared address's width/shape
+matched --observed-csv; 1 FILE could not be loaded or carries no settings
+snapshot, --observed-csv/--manual-csv could not be read or parsed, an
+entry's raw value did not match its expected lexical shape, or at least
+one address differed; 2 usage (missing FILE, an unrecognised flag, or a
+flag placed after FILE — flags must precede FILE). Exit codes 3/4/5 are
+not used: there is no radio session to block, refuse, or abort against.
+`
+
+// printSettingsDiffObservedUsage writes "rigprog settings diff-observed"'s
+// usage text to w.
+func printSettingsDiffObservedUsage(w io.Writer) {
+	fmt.Fprint(w, settingsDiffObservedUsageText)
 }
 
 // parseArgs runs fs.Parse(args) for "rigprog <name>" and handles the two
