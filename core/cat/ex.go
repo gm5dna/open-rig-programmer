@@ -156,6 +156,37 @@ func (d Dialect) BuildEXSet(addr EXAddress, value string) (Command, error) {
 	return newCommand(frame), nil
 }
 
+// DialectWithEXWriteForTest returns a copy of d whose entire write table
+// is replaced by one entry, addr -> {Domain: domain, Width: width} — a
+// cross-package test seam for driving CanSetEX/BuildEXSet's accepting
+// path from OUTSIDE this package, mirroring this package's own local-copy
+// technique (d := FT710; d.exWrite = map[...]{...}, e.g.
+// TestBuildEXSet_AcceptsCharacterisedAddress, ex_test.go) for a caller
+// that cannot spell an exWriteDescriptor literal itself: exWrite is
+// unexported, so a package such as core/driver/ft710, testing
+// WriteSetting before Session W exists (spec §3,
+// table2-write-observed.csv is empty), has no other way to construct a
+// Dialect whose write table admits anything.
+//
+// An export_test.go alias cannot do this job: a _test.go file's exported
+// names are linked only into ITS OWN package's test binary, never into an
+// importing package's (core/driver/ft710 imports core/cat as an ordinary
+// dependency, built without core/cat's test files — verified against go's
+// own behaviour before adding this, rather than assumed).
+//
+// d itself is never mutated — Dialect is a value type, so d is already
+// this function's own copy — and no registered dialect literal (FT710 or
+// any MustNewDialect model) is ever passed through here in production:
+// every real Dialect value in this codebase is built once, at init, from
+// a fixed literal or config, never reassigned at runtime. Test-only in
+// effect, not in enforcement: it is exported like any other API, but the
+// one thing it is FOR — constructing a Dialect the outbound gate would
+// then trust — has no production call site to reach it through.
+func DialectWithEXWriteForTest(d Dialect, addr EXAddress, domain Domain, width int) Dialect {
+	d.exWrite = map[EXAddress]exWriteDescriptor{addr: {Domain: domain, Width: width}}
+	return d
+}
+
 // ParseEXAnswer parses an EX Answer frame ("EX" + this dialect's address
 // field, six digits, four or three + a raw P4 body of 1 to d.exP4MaxBytes() bytes
 // + ";", reference: the EX grammar block's Answer frame, manual extract

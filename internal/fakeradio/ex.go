@@ -8,11 +8,12 @@ import (
 )
 
 // This file is fakeradio's own, independent model of the FT-710's EX
-// (MENU) command — READ ONLY this phase (see doc.go register: set-shaped
-// bodies are a deliberate phase-scoped gap). It is derived directly from
-// the FT-710 CAT protocol reference's "EX" grammar and "Table 2 (MENU
-// Chart)" — NOT from core/cat — for the same independence reason as
-// parser.go (see doc.go, THE HARD RULE).
+// (MENU) command — reads, and, from task (e), Sets at whatever width
+// exSetWidths characterises for an address (see doc.go register item 24
+// for the phase history: read-only through task (d), Set added here). It
+// is derived directly from the FT-710 CAT protocol reference's "EX"
+// grammar and "Table 2 (MENU Chart)" — NOT from core/cat — for the same
+// independence reason as parser.go (see doc.go, THE HARD RULE).
 //
 // The compact inventory below (exGroups) models WIRE BEHAVIOUR ONLY: how
 // many P3 items each (P1,P2) menu subgroup has, and each item's raw P4
@@ -31,8 +32,9 @@ import (
 // Answer frame: "EX" + address(6) + P4(n) + ";" — P4's width n is
 // per-address: 1-4 raw ASCII digits (a sign counts in the width, e.g.
 // "-20".."+10" is width 3), or a fixed 12-byte text field.
-// Set frame: "EX" + address(6) + P4(n) + ";" — NOT modelled this phase;
-// see handleEX and doc.go register for the deliberate gap.
+// Set frame: "EX" + address(6) + P4(n) + ";" — from task (e), accepted at
+// exSetWidths[address]'s width for any inventory address; see handleEX
+// and doc.go register item 24.
 //
 // The grammar's own P1/P2/P3 ranges ("P1: 01-04, 05"; "P2: 01-05"; "P3:
 // 01-26") are the OUTER bounds seen across every group, not a per-group
@@ -226,6 +228,38 @@ func EXRuntimeDefaults() map[string]string {
 	return out
 }
 
+// exSetWidths is fakeradio's own transcription of the EX Set frame's P4
+// width, per address, from Session W's hardware write-characterisation —
+// deliberately NOT a read of core/cat's ft710ExWrite (exwrite_gen.go),
+// for the identical independence reason exHardwareOverrides gives: the
+// two transcriptions must stay derived from the same evidence without
+// ever consulting each other, or core/transport/ex_crosscheck_test.go's
+// value collapses.
+//
+// It is a SEPARATE table from exHardwareOverrides on purpose: that one
+// carries READ-direction observations (Table 2 default state), this one
+// SET-direction ones (which Session W has not run yet, spec §3), and
+// conflating them would let a read-width fact silently stand in for a
+// write-width one nobody has actually observed.
+//
+// Empty until Session W runs — every address is therefore uncharacterised
+// today, and handleEX refuses every Set-shaped body accordingly (see its
+// own doc comment). Tests inject entries with WithEXSetWidth rather than
+// waiting for that session.
+var exSetWidths = map[string]int{}
+
+// cloneEXSetWidths returns a fresh copy of exSetWidths for a new *Radio to
+// start from — the same independent-copy-per-instance discipline
+// EXRuntimeDefaults gives exSettings, so a WithEXSetWidth option on one
+// Radio can never leak into another's or into the package-level table.
+func cloneEXSetWidths() map[string]int {
+	out := make(map[string]int, len(exSetWidths))
+	for k, v := range exSetWidths {
+		out[k] = v
+	}
+	return out
+}
+
 // --- EX command handler ---
 
 // exAddrLen is the wire length of an EX read body: P1(2) + P2(2) + P3(2).
@@ -257,32 +291,60 @@ func buildEXAnswer(addr, p4 string) []byte {
 }
 
 // handleEX validates and answers an EX body (frame bytes after "EX",
-// before the trailing ';'). READ ONLY this phase (brief, "Behaviour" —
-// see doc.go register): any body that is not exactly 6 ASCII digits
-// naming a KNOWN address is rejected with "?;", state unchanged. This
-// includes both malformed bodies (wrong length, non-digit bytes) and
-// set-shaped bodies (a valid 6-digit address immediately followed by a
-// P4 payload, e.g. "EX0301051;") — the fake does not distinguish a
-// too-long body from an intentional Set; both fall through the same
-// length check to the one generic NAK. This is a deliberate
-// phase-scoped modelling gap, not a claim that real hardware rejects
-// EX-set (doc.go register: KNOWN-DIVERGENT from the documented Set
-// grammar).
+// before the trailing ';'), for both the Read and Set forms — a
+// set-shaped body is accepted from task (e) onward (doc.go register item
+// 24: read-only through task (d)).
+//
+// A body shorter than 6 bytes, or whose first 6 bytes are not ASCII
+// digits, is malformed and refused with "?;", state unchanged — this
+// covers every too-short body and every non-digit address field,
+// regardless of what (if anything) follows.
+//
+// Exactly 6 digits is a Read: a KNOWN address (present in r.exSettings)
+// answers with its stored raw P4; an unknown one — valid-shape but
+// out-of-inventory (e.g. no P1=05 group, or a P3 beyond a group's item
+// count) — is refused "?;", the same generic NAK as MR's out-of-inventory
+// slots (parser.go, handleMR). OBSERVED at M8c against a real radio for
+// six such addresses, including both probed P1=05 ones (doc.go register
+// item 23).
+//
+// More than 6 digits is a Set: "EX" + addr(6) + P4(n) + ";". Accepted at
+// the width exSetWidths[addr] records, for ANY inventory address —
+// admitted or denied or held under core/cat's project policy makes no
+// difference here, because this package never consults that policy (doc.go,
+// THE HARD RULE: fakeradio does not import core/cat) — the fake models
+// wire behaviour, not who is allowed to ask for it. Refused "?;" for an
+// out-of-inventory address (the same membership check the Read form
+// uses), or for an inventory address whose exSetWidths entry is absent
+// (uncharacterised — exSetWidths is empty until Session W runs) or whose
+// payload length does not equal the characterised width. An accepted Set
+// stores the payload verbatim, with no shape/domain validation of its
+// own — that is core/cat's write-descriptor Domain's job, never this
+// package's (exSetP4OK, core/cat/ex.go) — and answers with no reply at
+// all, fire-and-forget, mirroring handleMW's success case.
 func (r *Radio) handleEX(body []byte) []byte {
-	addr := string(body)
-	if !isEXAddr(addr) {
+	if len(body) < exAddrLen || !isEXAddr(string(body[:exAddrLen])) {
 		return rejection
 	}
+	addr := string(body[:exAddrLen])
+	p4Set := body[exAddrLen:]
+
 	r.mu.Lock()
-	p4, ok := r.exSettings[addr]
-	r.mu.Unlock()
-	if !ok {
-		// Valid-shape but out-of-inventory address (e.g. no P1=05 group,
-		// or a P3 beyond a group's item count) — "?;", the same generic
-		// NAK as MR's out-of-inventory slots (parser.go, handleMR).
-		// OBSERVED at M8c against a real radio for six such addresses,
-		// including both probed P1=05 ones (doc.go register item 23).
+	defer r.mu.Unlock()
+	p4, known := r.exSettings[addr]
+	if !known {
 		return rejection
 	}
-	return buildEXAnswer(addr, p4)
+	if len(p4Set) == 0 {
+		return buildEXAnswer(addr, p4)
+	}
+
+	width, characterised := r.exSetWidths[addr]
+	if !characterised || len(p4Set) != width {
+		return rejection
+	}
+	if !r.exSetStuck[addr] {
+		r.exSettings[addr] = string(p4Set)
+	}
+	return nil
 }
