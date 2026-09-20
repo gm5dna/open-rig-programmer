@@ -460,6 +460,29 @@ func TestBlackbox_SettingsUsage(t *testing.T) {
 	})
 }
 
+// TestBlackbox_WriteSettingsUsage pins "rigprog write"'s own usage text at
+// the compiled-binary level (task f2): the new opt-in --settings flag is
+// documented, in both the Flags list and the flags-first synopsis lines
+// (usage_test.go's TestWriteUsageText_FlagsPrecedeFile pins the same
+// synopsis lines in-process; this is the black-box counterpart). "rigprog
+// settings" (offline, unrelated command) stays completely unchanged — see
+// TestBlackbox_SettingsUsage above, unaffected by this task.
+func TestBlackbox_WriteSettingsUsage(t *testing.T) {
+	r := runBinary(t, "", "write", "-h")
+	if r.exitCode != exitSuccess {
+		t.Fatalf("write -h: exit code = %d, want exitSuccess (%d); stderr=%q", r.exitCode, exitSuccess, r.stderr)
+	}
+	for _, want := range []string{
+		"--settings",
+		"rigprog write --port <path> [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
+		"rigprog write --fake [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
+	} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("write -h stdout = %q, want it to contain %q", r.stdout, want)
+		}
+	}
+}
+
 // mutateForDiff loads baselinePath, applies three changes matching
 // task-12 brief §3's example — change one tag (Modified), add a channel
 // in an empty slot (Added), empty a populated slot (Erased, blocked:

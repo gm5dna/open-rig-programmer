@@ -19,8 +19,8 @@ import (
 // BEFORE FILE, and the text must say so explicitly.
 func TestWriteUsageText_FlagsPrecedeFile(t *testing.T) {
 	for _, want := range []string{
-		"rigprog write --port <path> [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
-		"rigprog write --fake [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
+		"rigprog write --port <path> [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
+		"rigprog write --fake [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE",
 	} {
 		if !strings.Contains(writeUsageText, want) {
 			t.Errorf("writeUsageText = %q, want it to contain the flags-first synopsis line %q", writeUsageText, want)
@@ -28,6 +28,15 @@ func TestWriteUsageText_FlagsPrecedeFile(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(writeUsageText), "flags") || !strings.Contains(strings.ToLower(writeUsageText), "precede") {
 		t.Errorf("writeUsageText = %q, want a line stating flags must precede the FILE argument", writeUsageText)
+	}
+}
+
+// TestWriteUsage_MentionsSettings pins task f2's write usage text update:
+// the new opt-in --settings flag must be documented, mirroring read's own
+// --settings wording (TestReadUsage_MentionsSettings).
+func TestWriteUsage_MentionsSettings(t *testing.T) {
+	if !strings.Contains(writeUsageText, "--settings") {
+		t.Errorf("writeUsageText = %q, want it to mention --settings", writeUsageText)
 	}
 }
 

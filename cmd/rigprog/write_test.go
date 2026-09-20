@@ -32,7 +32,7 @@ func TestCountSendable(t *testing.T) {
 			{Slot: "005", Kind: codeplug.DiffErased, Blocked: true},
 		},
 	}
-	if got, want := countSendable(diff), 2; got != want {
+	if got, want := countSendable(diff, 0), 2; got != want {
 		t.Errorf("countSendable = %d, want %d", got, want)
 	}
 }
@@ -42,8 +42,20 @@ func TestCountSendable_Zero(t *testing.T) {
 		{Slot: "001", Kind: codeplug.DiffUnchanged},
 		{Slot: "002", Kind: codeplug.DiffAdded, Blocked: true},
 	}}
-	if got := countSendable(diff); got != 0 {
+	if got := countSendable(diff, 0); got != 0 {
 		t.Errorf("countSendable = %d, want 0", got)
+	}
+}
+
+// TestCountSendable_SettingsCountToward pins task f2: settings deltas
+// count toward sendable even when the channel diff alone is empty — a
+// settings-only diff must still be reported sendable.
+func TestCountSendable_SettingsCountToward(t *testing.T) {
+	diff := codeplug.DiffResult{Entries: []codeplug.DiffEntry{
+		{Slot: "001", Kind: codeplug.DiffUnchanged},
+	}}
+	if got, want := countSendable(diff, 3), 3; got != want {
+		t.Errorf("countSendable(settings=3) = %d, want %d", got, want)
 	}
 }
 
@@ -188,7 +200,7 @@ func TestWritePlanSummary(t *testing.T) {
 		Unchanged: 1,
 	}
 	var buf bytes.Buffer
-	if err := writePlanSummary(&buf, diff, "/snaps/snapshot-1.orp.json", "0123456789abcdef0123456789abcdef"); err != nil {
+	if err := writePlanSummary(&buf, diff, nil, "/snaps/snapshot-1.orp.json", "0123456789abcdef0123456789abcdef"); err != nil {
 		t.Fatalf("writePlanSummary: unexpected error: %v", err)
 	}
 	out := buf.String()
@@ -204,6 +216,36 @@ func TestWritePlanSummary(t *testing.T) {
 	}
 	if strings.Contains(out, "0123456789abcdef0123456789abcdef") {
 		t.Errorf("writePlanSummary output = %q, want the FULL digest not to appear (only the truncated form)", out)
+	}
+	if strings.Contains(out, "Settings:") {
+		t.Errorf("writePlanSummary(nil settings) output = %q, want no \"Settings:\" section", out)
+	}
+}
+
+// TestWritePlanSummary_SettingsBeforeDiff pins task f2: settings deltas
+// render before the channel diff, and the section is omitted entirely
+// when there are none.
+func TestWritePlanSummary_SettingsBeforeDiff(t *testing.T) {
+	diff := codeplug.DiffResult{
+		Entries:   []codeplug.DiffEntry{{Slot: "001", Kind: codeplug.DiffUnchanged}},
+		Unchanged: 1,
+	}
+	settings := []clone.SettingDelta{{ID: "010101", Wanted: "042", Observed: "011"}}
+	var buf bytes.Buffer
+	if err := writePlanSummary(&buf, diff, settings, "/snaps/s.orp.json", "0123456789abcdef"); err != nil {
+		t.Fatalf("writePlanSummary: unexpected error: %v", err)
+	}
+	out := buf.String()
+	settingsIdx := strings.Index(out, "Settings:")
+	diffIdx := strings.Index(out, "No changes.")
+	if settingsIdx == -1 || diffIdx == -1 {
+		t.Fatalf("writePlanSummary output = %q, want both a Settings section and the diff", out)
+	}
+	if settingsIdx > diffIdx {
+		t.Errorf("writePlanSummary output = %q, want the Settings section BEFORE the diff", out)
+	}
+	if !strings.Contains(out, "010101: 011 -> 042") {
+		t.Errorf("writePlanSummary output = %q, want the delta rendered as ID: observed -> wanted", out)
 	}
 }
 
