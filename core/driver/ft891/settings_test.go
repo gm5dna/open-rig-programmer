@@ -16,6 +16,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/extable"
 )
@@ -121,6 +122,11 @@ func TestSettingsDescriptor_ShapeFromTheInventory(t *testing.T) {
 			ID:      catDialect.EXWire(it.Addr),
 			Label:   it.Name,
 			Display: catDialect.EXWire(it.Addr),
+			// This dialect carries no write descriptor at all (only the
+			// FT-710's does — core/cat/dialect.go's buildFT710ExWrite),
+			// so CanSetEX is nil-map false for every one of its items:
+			// Write is spec.Unverified radio-wide, never spec.Supported.
+			Write: spec.Unverified,
 		})
 	}
 	sort.Strings(menuIDs)
@@ -286,7 +292,7 @@ func TestSettingsDescriptor_MenuSeventeenHoldsExactlyOneItem(t *testing.T) {
 		if len(items) != 1 {
 			t.Fatalf("menu 17 holds %d items, want exactly 1 (matrix §3.9)", len(items))
 		}
-		if want := (driver.SettingItem{ID: "1701", Label: "RESET", Display: "1701"}); items[0] != want {
+		if want := (driver.SettingItem{ID: "1701", Label: "RESET", Display: "1701", Write: spec.Unverified}); items[0] != want {
 			t.Errorf("menu 17's only item = %+v, want %+v", items[0], want)
 		}
 		return
