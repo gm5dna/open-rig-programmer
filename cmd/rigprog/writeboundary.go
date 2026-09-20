@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // writeBoundaryArg is the reserved first positional that selects "rigprog
@@ -53,7 +53,9 @@ const writeBoundaryHeader = `# FT-710 EX write-boundary (task h2 — Session W b
 # domain fields are empty (see the bench tool's own README).
 #
 # Columns: id,read_width,width,codes,lo,hi,step,signed
-#   id          6-digit P1P2P3 EX address (e.g. "010101")
+#   id          P1P2P3 EX address, 3, 4, 5 or 6 ASCII digits per
+#               core/codeplug's isSettingIDWidth (the FT-710's own EX ids
+#               are always 6, e.g. "010101")
 #   read_width  the manual's Digits column (core/cat.EXItem.Digits) — a
 #               READ width, never a Set width (core/cat/exinventory.go's
 #               own warning: read width must never size a Set)
@@ -69,52 +71,18 @@ const writeBoundaryHeader = `# FT-710 EX write-boundary (task h2 — Session W b
 // writeBoundaryCSVHeader is the exact, ordered column set.
 const writeBoundaryCSVHeader = "id,read_width,width,codes,lo,hi,step,signed"
 
-// writeBoundaryRow is one admitted address's dump — the same three facts
-// core/cat's write gate itself consults (core/cat/ex.go's exSetP4OK),
-// plus the manual read width the bench tool needs to size its OWN read
-// frames and, absent hardware evidence to the contrary, its candidate Set
-// frames too (see the bench tool's own doc comment on Set-width
-// derivation).
-type writeBoundaryRow struct {
-	id               string
-	readWidth, width int
-	codes            []int
-	lo, hi, step     int
-	signed           bool
-}
-
-// writeBoundaryRows walks d's full 296-address inventory in inventory
-// order and returns one row per address d.EXWriteDescriptor reports
-// admitted — the post-denylist/held-filter set core/cat's own write gate
-// uses, never re-derived by hand here.
-func writeBoundaryRows(d cat.Dialect) []writeBoundaryRow {
-	items := d.EXItems()
-	rows := make([]writeBoundaryRow, 0, len(items))
-	for _, it := range items {
-		domain, width, admitted := d.EXWriteDescriptor(it.Addr)
-		if !admitted {
-			continue
-		}
-		rows = append(rows, writeBoundaryRow{
-			id:        fmt.Sprintf("%02d%02d%02d", it.Addr.P1, it.Addr.P2, it.Addr.P3),
-			readWidth: it.Digits,
-			width:     width,
-			codes:     domain.Codes,
-			lo:        domain.Lo,
-			hi:        domain.Hi,
-			step:      domain.Step,
-			signed:    domain.Signed,
-		})
-	}
-	return rows
-}
-
 // writeBoundaryCSV writes header + rows to w, hand-rolled rather than
 // encoding/csv: every field is either digits, ';'-joined digits, or a
 // fixed "true"/"false" word — nothing here can ever need quoting or
 // escaping, unlike the free-text label columns "rigprog settings" itself
 // writes (writeSettingsCSV).
-func writeBoundaryCSV(w io.Writer, rows []writeBoundaryRow) error {
+//
+// rows is built by core/driver/ft710.WriteBoundaryRows (reached via
+// wiring.FT710WriteBoundaryRows, task h2 guard fix) rather than here: this
+// package may not import core/cat, and deriving a row needs the dialect's
+// own EXItems/EXWriteDescriptor, both core/cat-typed (internal/guards'
+// composition-root discipline).
+func writeBoundaryCSV(w io.Writer, rows []wiring.FT710WriteBoundaryRow) error {
 	if _, err := io.WriteString(w, writeBoundaryHeader); err != nil {
 		return err
 	}
@@ -122,13 +90,13 @@ func writeBoundaryCSV(w io.Writer, rows []writeBoundaryRow) error {
 		return err
 	}
 	for _, r := range rows {
-		codes := make([]string, len(r.codes))
-		for i, c := range r.codes {
+		codes := make([]string, len(r.Codes))
+		for i, c := range r.Codes {
 			codes[i] = strconv.Itoa(c)
 		}
 		if _, err := fmt.Fprintf(w, "%s,%d,%d,%s,%d,%d,%d,%t\n",
-			r.id, r.readWidth, r.width, strings.Join(codes, ";"), r.lo, r.hi, r.step, r.signed); err != nil {
-			return fmt.Errorf("rigprog settings write-boundary: writing row %q: %w", r.id, err)
+			r.ID, r.ReadWidth, r.Width, strings.Join(codes, ";"), r.Lo, r.Hi, r.Step, r.Signed); err != nil {
+			return fmt.Errorf("rigprog settings write-boundary: writing row %q: %w", r.ID, err)
 		}
 	}
 	return nil
@@ -158,7 +126,7 @@ func settingsWriteBoundary(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	rows := writeBoundaryRows(cat.FT710)
+	rows := wiring.FT710WriteBoundaryRows()
 
 	if *out == "" {
 		if err := writeBoundaryCSV(stdout, rows); err != nil {
