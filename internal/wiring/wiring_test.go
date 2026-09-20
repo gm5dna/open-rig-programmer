@@ -353,8 +353,8 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			// package would slip past it (e.g. an IC-7300MK2 fake
 			// constructed with the IC-7300's own address). Resolve the
 			// concrete type fakeDrivers[model].newRadio() actually returns
-			// — unwrapping ic7610FakeAdapter, the one wrapper in this
-			// table (internal/wiring/fake.go) — and require its package to
+			// — unwrapping fakeAdapter[R], the one wrapper type this
+			// table (internal/wiring/fake.go) uses — and require its package to
 			// be the one fakePackageForModel names for this model, mirroring
 			// internal/guards/simulated_tokens_test.go's simulatedProfiles
 			// pairing check from the driver side.
@@ -368,32 +368,20 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			}
 			radio := entry.newRadio()
 			concrete := reflect.ValueOf(radio)
-			// Unwrap the two adapters this table holds
-			// (internal/wiring/fake.go): each re-exposes its embedded
-			// simulator's net.Conn port as an io.ReadWriteCloser and
-			// changes nothing else, so the type this check must resolve
-			// is the EMBEDDED one, not the wrapper's.
-			switch a := radio.(type) {
-			case ic7610FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic7851FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic7760FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic7800FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic7600FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic7410FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic7700FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic9100FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ic7200FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
-			case ts570FakeAdapter:
-				concrete = reflect.ValueOf(a.Radio)
+			// Unwrap fakeAdapter[R] (internal/wiring/fake.go), one
+			// generic type instantiated per simulator package rather
+			// than ten named ones: each re-exposes its wrapped radio's
+			// net.Conn port as an io.ReadWriteCloser and changes
+			// nothing else, so the type this check must resolve is the
+			// WRAPPED one, not the adapter's. FieldByName rather than a
+			// type switch because fakeAdapter[*fakeic7610.Radio] and
+			// fakeAdapter[*fakets570.Radio] are distinct instantiated
+			// types with no common case to switch on; every instance
+			// shares the field name "radio" regardless of R.
+			if concrete.Kind() == reflect.Struct {
+				if f := concrete.FieldByName("radio"); f.IsValid() {
+					concrete = f
+				}
 			}
 			if concrete.Kind() == reflect.Ptr {
 				concrete = concrete.Elem()
