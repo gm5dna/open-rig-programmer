@@ -2,6 +2,8 @@
 
 package cat
 
+import "bytes"
+
 // PrefixLenMatcher returns the ANSWER MATCHER for one CAT read: a
 // predicate reporting whether an arriving frame is the answer to the
 // command the caller is about to send. It is the CAT codec's contribution
@@ -40,10 +42,7 @@ package cat
 // retains it — it is handed the engine's own live receive buffer.
 func PrefixLenMatcher(prefix string, exactLen int) func(frame []byte) bool {
 	return func(frame []byte) bool {
-		if len(frame) < len(prefix) {
-			return false
-		}
-		if string(frame[:len(prefix)]) != prefix {
+		if !bytes.HasPrefix(frame, []byte(prefix)) {
 			return false
 		}
 		if exactLen > 0 && len(frame) != exactLen {

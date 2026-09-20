@@ -3,6 +3,7 @@
 package civ
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 )
@@ -108,7 +109,7 @@ func (p Profile) MemoryAnswerRecord(frame []byte) (ChannelAddress, []byte, error
 	if !p.AcceptsRecordLength(len(record)) {
 		return ChannelAddress{}, nil, &RecordLengthError{Want: p.RecordLengths(), Got: len(record)}
 	}
-	return addr, copyBytes(record), nil
+	return addr, bytes.Clone(record), nil
 }
 
 // ParseMemoryAnswer reads a `1A 00 <address> <record>` answer into a

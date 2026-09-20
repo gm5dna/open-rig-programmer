@@ -199,34 +199,6 @@ var fixedTemplateBytes = [RecordLength]byte{
 	87: ' ', 88: ' ', 89: ' ', 90: ' ', 91: ' ', 92: ' ', 93: ' ', 94: ' ',
 }
 
-// enumSpan is one EncodingEnum field. Nibble selects the half of the byte
-// it occupies; civ.NibbleWhole is the whole byte.
-func enumSpan(id civ.FieldID, offset int, nibble civ.NibbleSel, enum map[byte]string) civ.FieldSpan {
-	return civ.FieldSpan{
-		Field:    id,
-		Offset:   offset,
-		Length:   1,
-		Nibble:   nibble,
-		Encoding: civ.EncodingEnum,
-		Enum:     enum,
-	}
-}
-
-// bcdSpan is one EncodingBCDNumber field. Scale multiplies the wire value
-// to reach the neutral unit: 1 where the wire already carries Hz or
-// tenths of a Hz, 100 where the field's lowest printed digit place is the
-// 100 Hz one.
-func bcdSpan(id civ.FieldID, offset, length int, order civ.ByteOrder, scale uint64) civ.FieldSpan {
-	return civ.FieldSpan{
-		Field:    id,
-		Offset:   offset,
-		Length:   length,
-		Encoding: civ.EncodingBCDNumber,
-		Order:    order,
-		Scale:    scale,
-	}
-}
-
 // recordFields is the 111-byte record, term by term, in record order.
 //
 // Record offset 0 is printed index ④ — leg B's measured data-area
@@ -243,20 +215,20 @@ func recordFields() []civ.FieldSpan {
 	return []civ.FieldSpan{
 		// ④ low nibble. The HIGH nibble is printed as a literal `0` with
 		// the leader label "Fixed" and stays with the template.
-		enumSpan(civ.FieldSelect, 0, civ.NibbleLow, selectNames),
+		civ.EnumSpan(civ.FieldSelect, 0, civ.NibbleLow, selectNames),
 
 		// ⑤~⑨ operating frequency, five packed-BCD bytes, least
 		// significant digit pair first, in Hz. PDF p.14 labels cell n's
 		// halves 10^(2n−1) and 10^(2n−2).
-		bcdSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
+		civ.BCDSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
 
-		enumSpan(civ.FieldMode, 6, civ.NibbleWhole, modeNames),     // ⑩
-		enumSpan(civ.FieldFilter, 7, civ.NibbleWhole, filterNames), // ⑪
-		enumSpan(civ.FieldDataMode, 8, civ.NibbleWhole, dataModeNames),
+		civ.EnumSpan(civ.FieldMode, 6, civ.NibbleWhole, modeNames),     // ⑩
+		civ.EnumSpan(civ.FieldFilter, 7, civ.NibbleWhole, filterNames), // ⑪
+		civ.EnumSpan(civ.FieldDataMode, 8, civ.NibbleWhole, dataModeNames),
 
 		// ⑬, one byte and two independent enums.
-		enumSpan(civ.FieldDuplex, 9, civ.NibbleHigh, duplexNames),
-		enumSpan(civ.FieldToneMode, 9, civ.NibbleLow, toneModeNames),
+		civ.EnumSpan(civ.FieldDuplex, 9, civ.NibbleHigh, duplexNames),
+		civ.EnumSpan(civ.FieldToneMode, 9, civ.NibbleLow, toneModeNames),
 
 		// ⑭ (offset 10) is unmapped.
 
@@ -264,14 +236,14 @@ func recordFields() []civ.FieldSpan {
 		// pair first, in TENTHS of a Hz. PDF p.21 prints the digit
 		// places 100 Hz / 10 Hz / 1 Hz / 0.1 Hz, and ⑮'s two halves are
 		// both a literal "Fixed digit: 0".
-		bcdSpan(civ.FieldToneTX, 11, 3, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldToneRX, 14, 3, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneTX, 11, 3, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneRX, 14, 3, civ.OrderBigEndian, 1),
 
-		enumSpan(civ.FieldDTCSPolarity, 17, civ.NibbleWhole, dtcsPolarityNames), // ㉑
+		civ.EnumSpan(civ.FieldDTCSPolarity, 17, civ.NibbleWhole, dtcsPolarityNames), // ㉑
 		// ㉒㉓, the printed code as a decimal integer. ㉒'s high nibble is
 		// a printed literal "0 (fixed)", which a big-endian BCD field
 		// covers by carrying a leading zero.
-		bcdSpan(civ.FieldDTCSCode, 18, 2, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldDTCSCode, 18, 2, civ.OrderBigEndian, 1),
 
 		// ㉔ (offset 20) is unmapped.
 
@@ -288,7 +260,7 @@ func recordFields() []civ.FieldSpan {
 		// `ic9700-offset-scale-100hz`, doc.go. A wrong choice is a factor
 		// of ten on every offset. LIFTED BY: a hardware capture of one
 		// known offset, read back and compared.
-		bcdSpan(civ.FieldOffset, 21, 3, civ.OrderLittleEndian, 100),
+		civ.BCDSpan(civ.FieldOffset, 21, 3, civ.OrderLittleEndian, 100),
 
 		// ㉘~㉟, ㊱~㊸, ㊹~51 (offsets 24..47) are unmapped.
 
@@ -296,18 +268,18 @@ func recordFields() []civ.FieldSpan {
 		// the filled block repeats its primary's id at +47, which is how
 		// this layout states the printed NOTE's identity claim in a form
 		// the codec enforces.
-		bcdSpan(civ.FieldTXFrequency, 1+d, 5, civ.OrderLittleEndian, 1),
+		civ.BCDSpan(civ.FieldTXFrequency, 1+d, 5, civ.OrderLittleEndian, 1),
 
-		enumSpan(civ.FieldMode, 6+d, civ.NibbleWhole, modeNames),
-		enumSpan(civ.FieldFilter, 7+d, civ.NibbleWhole, filterNames),
-		enumSpan(civ.FieldDataMode, 8+d, civ.NibbleWhole, dataModeNames),
-		enumSpan(civ.FieldDuplex, 9+d, civ.NibbleHigh, duplexNames),
-		enumSpan(civ.FieldToneMode, 9+d, civ.NibbleLow, toneModeNames),
-		bcdSpan(civ.FieldToneTX, 11+d, 3, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldToneRX, 14+d, 3, civ.OrderBigEndian, 1),
-		enumSpan(civ.FieldDTCSPolarity, 17+d, civ.NibbleWhole, dtcsPolarityNames),
-		bcdSpan(civ.FieldDTCSCode, 18+d, 2, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldOffset, 21+d, 3, civ.OrderLittleEndian, 100),
+		civ.EnumSpan(civ.FieldMode, 6+d, civ.NibbleWhole, modeNames),
+		civ.EnumSpan(civ.FieldFilter, 7+d, civ.NibbleWhole, filterNames),
+		civ.EnumSpan(civ.FieldDataMode, 8+d, civ.NibbleWhole, dataModeNames),
+		civ.EnumSpan(civ.FieldDuplex, 9+d, civ.NibbleHigh, duplexNames),
+		civ.EnumSpan(civ.FieldToneMode, 9+d, civ.NibbleLow, toneModeNames),
+		civ.BCDSpan(civ.FieldToneTX, 11+d, 3, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneRX, 14+d, 3, civ.OrderBigEndian, 1),
+		civ.EnumSpan(civ.FieldDTCSPolarity, 17+d, civ.NibbleWhole, dtcsPolarityNames),
+		civ.BCDSpan(civ.FieldDTCSCode, 18+d, 2, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldOffset, 21+d, 3, civ.OrderLittleEndian, 100),
 
 		// 52~67 memory name, sixteen bytes of the profile's own charset.
 		{

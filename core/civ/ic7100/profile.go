@@ -38,14 +38,6 @@ var (
 	dtcsPolarityNames = map[byte]string{0x00: "NN", 0x01: "NR", 0x10: "RN", 0x11: "RR"}
 )
 
-func enumSpan(id civ.FieldID, offset int, nibble civ.NibbleSel, values map[byte]string) civ.FieldSpan {
-	return civ.FieldSpan{Field: id, Offset: offset, Length: 1, Nibble: nibble, Encoding: civ.EncodingEnum, Enum: values}
-}
-
-func bcdSpan(id civ.FieldID, offset, length int, order civ.ByteOrder, scale uint64) civ.FieldSpan {
-	return civ.FieldSpan{Field: id, Offset: offset, Length: length, Encoding: civ.EncodingBCDNumber, Order: order, Scale: scale}
-}
-
 // fixedTemplateBytes is the state of every byte for which the landed neutral
 // record has no FieldID. It is taken from the frozen G vector and is therefore
 // conservative: later write preservation can refuse any record whose DSQL,
@@ -73,37 +65,37 @@ var fixedTemplateBytes = [RecordLength]byte{
 func recordFields() []civ.FieldSpan {
 	const d = duplicateBlockShift
 	return []civ.FieldSpan{
-		enumSpan(civ.FieldSelect, 0, civ.NibbleLow, selectNames),
+		civ.EnumSpan(civ.FieldSelect, 0, civ.NibbleLow, selectNames),
 		// ASSUMED: ic7100-wire-order; TestRecordRoundTrip pins little-endian
 		// frequency bytes and the name's measured record offset.
-		bcdSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
+		civ.BCDSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
 		// ASSUMED: ic7100-dv-mode-code; TestRecordDVModeCode pins 0x17.
-		enumSpan(civ.FieldMode, 6, civ.NibbleWhole, modeNames),
-		enumSpan(civ.FieldFilter, 7, civ.NibbleWhole, filterNames),
-		enumSpan(civ.FieldDataMode, 8, civ.NibbleWhole, dataModeNames),
-		enumSpan(civ.FieldDuplex, 9, civ.NibbleHigh, duplexNames),
-		enumSpan(civ.FieldToneMode, 9, civ.NibbleLow, toneModeNames),
-		bcdSpan(civ.FieldToneTX, 11, 3, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldToneRX, 14, 3, civ.OrderBigEndian, 1),
-		enumSpan(civ.FieldDTCSPolarity, 17, civ.NibbleWhole, dtcsPolarityNames),
-		bcdSpan(civ.FieldDTCSCode, 18, 2, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldOffset, 21, 3, civ.OrderLittleEndian, 100),
+		civ.EnumSpan(civ.FieldMode, 6, civ.NibbleWhole, modeNames),
+		civ.EnumSpan(civ.FieldFilter, 7, civ.NibbleWhole, filterNames),
+		civ.EnumSpan(civ.FieldDataMode, 8, civ.NibbleWhole, dataModeNames),
+		civ.EnumSpan(civ.FieldDuplex, 9, civ.NibbleHigh, duplexNames),
+		civ.EnumSpan(civ.FieldToneMode, 9, civ.NibbleLow, toneModeNames),
+		civ.BCDSpan(civ.FieldToneTX, 11, 3, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneRX, 14, 3, civ.OrderBigEndian, 1),
+		civ.EnumSpan(civ.FieldDTCSPolarity, 17, civ.NibbleWhole, dtcsPolarityNames),
+		civ.BCDSpan(civ.FieldDTCSCode, 18, 2, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldOffset, 21, 3, civ.OrderLittleEndian, 100),
 
 		// The filled ❺–51 block has no internal witness cells, so every
 		// mapped span is derived only by the documented +47 repetition.
 		// ASSUMED: ic7100-tx-block-mandatory; TestGeometryTXDuplicate and
 		// TestRecordDuplicateMismatch pin write equality and read refusal.
-		bcdSpan(civ.FieldTXFrequency, 1+d, 5, civ.OrderLittleEndian, 1),
-		enumSpan(civ.FieldMode, 6+d, civ.NibbleWhole, modeNames),
-		enumSpan(civ.FieldFilter, 7+d, civ.NibbleWhole, filterNames),
-		enumSpan(civ.FieldDataMode, 8+d, civ.NibbleWhole, dataModeNames),
-		enumSpan(civ.FieldDuplex, 9+d, civ.NibbleHigh, duplexNames),
-		enumSpan(civ.FieldToneMode, 9+d, civ.NibbleLow, toneModeNames),
-		bcdSpan(civ.FieldToneTX, 11+d, 3, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldToneRX, 14+d, 3, civ.OrderBigEndian, 1),
-		enumSpan(civ.FieldDTCSPolarity, 17+d, civ.NibbleWhole, dtcsPolarityNames),
-		bcdSpan(civ.FieldDTCSCode, 18+d, 2, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldOffset, 21+d, 3, civ.OrderLittleEndian, 100),
+		civ.BCDSpan(civ.FieldTXFrequency, 1+d, 5, civ.OrderLittleEndian, 1),
+		civ.EnumSpan(civ.FieldMode, 6+d, civ.NibbleWhole, modeNames),
+		civ.EnumSpan(civ.FieldFilter, 7+d, civ.NibbleWhole, filterNames),
+		civ.EnumSpan(civ.FieldDataMode, 8+d, civ.NibbleWhole, dataModeNames),
+		civ.EnumSpan(civ.FieldDuplex, 9+d, civ.NibbleHigh, duplexNames),
+		civ.EnumSpan(civ.FieldToneMode, 9+d, civ.NibbleLow, toneModeNames),
+		civ.BCDSpan(civ.FieldToneTX, 11+d, 3, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneRX, 14+d, 3, civ.OrderBigEndian, 1),
+		civ.EnumSpan(civ.FieldDTCSPolarity, 17+d, civ.NibbleWhole, dtcsPolarityNames),
+		civ.BCDSpan(civ.FieldDTCSCode, 18+d, 2, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldOffset, 21+d, 3, civ.OrderLittleEndian, 100),
 
 		{Field: civ.FieldName, Offset: 95, Length: 16, Encoding: civ.EncodingName},
 	}

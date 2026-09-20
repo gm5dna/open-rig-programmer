@@ -2,6 +2,8 @@
 
 package civ
 
+import "bytes"
+
 // Command is an outbound CI-V command frame whose bytes were produced and
 // validated by a builder in this package. The zero value is invalid; use
 // IsZero to check for it (returned by fallible builders alongside their
@@ -43,7 +45,7 @@ func newCommand(frame []byte) Command {
 // and returns an independent copy: callers may freely mutate what they get
 // back, with no effect on c or on any other copy.
 func (c Command) Bytes() []byte {
-	return copyBytes(c.frame)
+	return bytes.Clone(c.frame)
 }
 
 // String renders c for diagnostics as space-separated hex pairs — the form

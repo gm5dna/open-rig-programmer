@@ -2,6 +2,8 @@
 
 package spec
 
+import "slices"
+
 // ConsentUnverifiedWrites returns a deep copy of caps in which every
 // write-side Unverified label has become ConsentedUnverified — the
 // project's ONE consent transform. Drivers call it at session-capability
@@ -62,8 +64,8 @@ func ConsentUnverifiedWrites(caps Capabilities) Capabilities {
 	// The remaining top-level slices carry no Support labels, but they are
 	// copied so the result shares no storage with caps at all. append to a
 	// nil slice preserves a nil input as nil.
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]Tone(nil), caps.CTCSSTones...)
+	out.Modes = slices.Clone(caps.Modes)
+	out.CTCSSTones = slices.Clone(caps.CTCSSTones)
 	// The tone RANGE is a pointer, so `out := caps` aliased it. ToneRange
 	// has no reference-typed field, so one fresh copy of the struct is a
 	// complete deep copy — and it is what keeps the promise this function
@@ -72,9 +74,9 @@ func ConsentUnverifiedWrites(caps Capabilities) Capabilities {
 		r := *caps.CTCSSToneRange
 		out.CTCSSToneRange = &r
 	}
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]ShiftOption(nil), caps.ShiftOptions...)
+	out.Bauds = slices.Clone(caps.Bauds)
+	out.RequiredSlots = slices.Clone(caps.RequiredSlots)
+	out.ShiftOptions = slices.Clone(caps.ShiftOptions)
 	// The Icom-tier vocabularies (design D4). They carry no Support
 	// labels either, and are copied for the same reason: the result must
 	// share no storage with caps AT ALL, so that a consented session can
@@ -84,20 +86,20 @@ func ConsentUnverifiedWrites(caps Capabilities) Capabilities {
 	// Field is covered by construction — which TestConsentUnverifiedWrites
 	// _CoversTierAddedFields verifies rather than assuming (design D4,
 	// round 2 F9).
-	out.DuplexOptions = append([]DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
+	out.DuplexOptions = slices.Clone(caps.DuplexOptions)
+	out.ToneModes = slices.Clone(caps.ToneModes)
+	out.DTCSPolarities = slices.Clone(caps.DTCSPolarities)
+	out.DTCSCodes = slices.Clone(caps.DTCSCodes)
+	out.Filters = slices.Clone(caps.Filters)
 	// The D8 receiver vocabularies are copied explicitly because the
 	// top-level slices and pointer are not covered by the bank-map walk.
-	out.TuningSteps = append([]string(nil), caps.TuningSteps...)
+	out.TuningSteps = slices.Clone(caps.TuningSteps)
 	if caps.ProgramTuningStepRange != nil {
 		r := *caps.ProgramTuningStepRange
 		out.ProgramTuningStepRange = &r
 	}
-	out.AttenuatorDB = append([]int(nil), caps.AttenuatorDB...)
-	out.PreampOptions = append([]string(nil), caps.PreampOptions...)
-	out.AntennaOptions = append([]string(nil), caps.AntennaOptions...)
+	out.AttenuatorDB = slices.Clone(caps.AttenuatorDB)
+	out.PreampOptions = slices.Clone(caps.PreampOptions)
+	out.AntennaOptions = slices.Clone(caps.AntennaOptions)
 	return out
 }
