@@ -103,7 +103,7 @@ func TestE2E_TheFakesDefaultImageIsExactlyWhatWeClear(t *testing.T) {
 }
 
 // openFake Opens a session of the given profile against a fresh fake.
-func openFake(t *testing.T, profile Profile, drvOpts []Option, fakeOpts ...fakeic905.Option) (*fakeic905.Radio, *Session) {
+func openFake(t *testing.T, profile driver.Profile, drvOpts []Option, fakeOpts ...fakeic905.Option) (*fakeic905.Radio, *Session) {
 	t.Helper()
 	radio := fakeic905.New(fakeOpts...)
 	t.Cleanup(func() { _ = radio.Close() })

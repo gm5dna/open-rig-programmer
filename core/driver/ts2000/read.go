@@ -4,7 +4,6 @@ package ts2000
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -29,14 +28,15 @@ var toneModeNames = map[kw.ToneMode]string{
 
 // ErrUnknownSlot is the sentinel a caller compares against (via errors.Is)
 // when a slot identifier is not one this row publishes.
-var ErrUnknownSlot = errors.New("ts2000: slot is not one this row publishes")
+var ErrUnknownSlot = driver.ErrUnknownSlot
 
 // UnknownSlotError reports a slot identifier that is not in this row's
-// bank — malformed or outside the printed space. No frame is sent.
+// bank — malformed or outside the printed space. No frame is sent. The
+// fields are driver.UnknownSlotError's shared shape (core/driver/errors.go);
+// this package keeps its own Error() because the message's "ts2000:"
+// prefix is a package literal, not a field.
 type UnknownSlotError struct {
-	Slot   string
-	Model  string
-	Reason string
+	driver.UnknownSlotError
 }
 
 func (e *UnknownSlotError) Error() string {
@@ -144,20 +144,20 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	number, half, err := parseSlotID(id)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: s.p.name, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: s.p.name, Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(id)
 	if !ok {
-		return codeplug.Channel{}, &UnknownSlotError{
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{
 			Slot: id, Model: s.p.name,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 	slot, err := s.layout.NewSlot(number, half)
 	if err != nil {
 		// Unreachable for a slot the bank published; see core/driver/ts480's
 		// own ReadChannel for why this is a refusal rather than a panic.
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: s.p.name, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: s.p.name, Reason: err.Error()}}
 	}
 
 	cmd, err := s.layout.BuildMRRead(slot)

@@ -10,10 +10,10 @@ import (
 )
 
 func TestNewProfilesFailSafeAndDoNotExposeSerialFraming(t *testing.T) {
-	for name, profile := range map[string]Profile{
+	for name, profile := range map[string]driver.Profile{
 		"real":      RealHardware,
 		"simulated": Simulated,
-		"unknown":   Profile(99),
+		"unknown":   driver.Profile(99),
 	} {
 		d := New(profile)
 		if d.Model() != "IC-7100" || d.Capabilities().Model != d.Model() {

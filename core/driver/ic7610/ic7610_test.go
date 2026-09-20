@@ -551,7 +551,7 @@ func TestOpen_OneFramingPerEngine(t *testing.T) {
 // through its OWN explicit branch, so a reader can see the fail-safe is a
 // decision rather than a coincidence of writeTrialsComplete's state.
 func TestCapabilitiesSwitch_FailsSafeOnAnUnrecognisedProfile(t *testing.T) {
-	for _, p := range []Profile{RealHardware, Profile(42), Profile(-1)} {
+	for _, p := range []driver.Profile{RealHardware, driver.Profile(42), driver.Profile(-1)} {
 		caps := New(p).Capabilities()
 		if !reflect.DeepEqual(caps, capabilitiesUnverified()) {
 			t.Errorf("Profile(%d) selects a capability set other than the all-Unverified one", p)
@@ -586,7 +586,7 @@ func TestSessionCapabilities_ConsentAppliesOnlyToRecognisedProfiles(t *testing.T
 	}
 
 	q := newScriptedPort(t, occupiedRadio())
-	unrecognised := New(Profile(42), WithConsentedUnverifiedWrites())
+	unrecognised := New(driver.Profile(42), WithConsentedUnverifiedWrites())
 	usess, err := unrecognised.Open(t.Context(), q.Port(), driver.Identity{})
 	if err != nil {
 		t.Fatalf("Open (unrecognised profile): %v", err)

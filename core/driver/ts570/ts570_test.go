@@ -119,7 +119,7 @@ func (img radioImage) reply(frame string) string {
 
 func testTiming() Option { return withTiming(200*time.Millisecond, 5*time.Millisecond) }
 
-func openSession(t *testing.T, m modelParams, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
+func openSession(t *testing.T, m modelParams, profile driver.Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
 	if img.catID == "" {
 		img.catID = m.catID

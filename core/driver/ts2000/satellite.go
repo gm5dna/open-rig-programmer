@@ -74,7 +74,7 @@ func (s *Session) readSA(ctx context.Context) (kwts2000.SatelliteRecord, error) 
 func (s *Session) readSatelliteChannel(ctx context.Context, id string) (codeplug.Channel, error) {
 	channel, err := parseSatelliteSlot(id)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: s.p.name, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: s.p.name, Reason: err.Error()}}
 	}
 	rec, err := s.readSA(ctx)
 	if err != nil {
@@ -165,14 +165,14 @@ func (s *Session) writeSatelliteChannel(ctx context.Context, ch codeplug.Channel
 
 	channel, err := parseSatelliteSlot(ch.Slot)
 	if err != nil {
-		return res, &UnknownSlotError{Slot: ch.Slot, Model: s.p.name, Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Model: s.p.name, Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(ch.Slot)
 	if !ok {
-		return res, &UnknownSlotError{
+		return res, &UnknownSlotError{driver.UnknownSlotError{
 			Slot: ch.Slot, Model: s.p.name,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 
 	if ch.Empty() {

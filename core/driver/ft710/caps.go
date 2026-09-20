@@ -107,24 +107,23 @@ const modelName = "FT-710"
 // linkage and the documented literal.
 var catID = catDialect.CATID()
 
-// Profile selects which capability profile New builds the driver with.
+// driver.Profile selects which capability profile New builds the driver
+// with.
 //
 // The zero value is RealHardware ON PURPOSE: a forgotten or zero-valued
-// Profile always fails towards the real-hardware capability set — whose
-// every write is gated by the clone choreography and was hardware-
+// driver.Profile always fails towards the real-hardware capability set —
+// whose every write is gated by the clone choreography and was hardware-
 // verified at M5b — and NEVER towards the simulator's profile, whose
 // Supported reads (and pre-flip, writes) were never a claim about real
-// hardware. Any OTHER unrecognised Profile value fails harder still, to
-// the all-Unverified fail-safe (see ft710Driver.Capabilities).
-type Profile = driver.Profile
+// hardware. Any OTHER unrecognised driver.Profile value fails harder
+// still, to the all-Unverified fail-safe (see ft710Driver.Capabilities).
 
 // RealHardware and Simulated are this package's own names for the shared
-// profile constants — AN ALIAS AND UNTYPED RE-DECLARATIONS, never a fresh
-// named type. The alias keeps this package's Profile and driver.Profile
-// the SAME type, so driver.Base can be embedded, while the selector
-// internal/wiring names stays this package's own: TestSimulatedProfile
-// TokensConfinement walks for it by package-local name, and that is what
-// confines the fake-only profile to one non-test file in the repository.
+// profile constants — UNTYPED RE-DECLARATIONS, never a fresh named type,
+// so the selector internal/wiring names stays this package's own:
+// TestSimulatedProfileTokensConfinement walks for it by package-local
+// name, and that is what confines the fake-only profile to one non-test
+// file in the repository.
 const (
 	RealHardware = driver.RealHardware
 	Simulated    = driver.Simulated

@@ -126,7 +126,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // core/driver/ts590: this package serves ONE registry row, because the
 // TS-890S and the TS-990S have separate books and separate MA0 grids with
 // nothing to share.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ts890Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

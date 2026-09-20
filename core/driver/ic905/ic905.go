@@ -76,7 +76,7 @@ func WithConsentedUnverifiedWrites() Option {
 // ONE constructor, because there is one radio. core/driver/ftdx101 offers
 // NewD and NewMP because it drives two; this package's model is fixed by
 // the package.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ic905Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

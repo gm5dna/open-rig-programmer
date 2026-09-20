@@ -132,18 +132,18 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	number, err := parseSlotID(ch.Slot)
 	if err != nil {
-		return res, &UnknownSlotError{Slot: ch.Slot, Model: s.model.name, Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Model: s.model.name, Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(ch.Slot)
 	if !ok {
-		return res, &UnknownSlotError{
+		return res, &UnknownSlotError{driver.UnknownSlotError{
 			Slot: ch.Slot, Model: s.model.name,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 	slot, err := s.layout.NewSlot(number, kw.ScanHalfNone)
 	if err != nil {
-		return res, &UnknownSlotError{Slot: ch.Slot, Model: s.model.name, Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Model: s.model.name, Reason: err.Error()}}
 	}
 
 	if ch.Empty() {

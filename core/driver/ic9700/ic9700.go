@@ -115,7 +115,7 @@ func WithConsentedUnverifiedWrites() Option {
 // unrecognised Profile value deliberately selects the same fail-safe: the
 // failure direction for a forged or corrupted Profile is always "nothing
 // writable", never a writable set.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ic9700Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

@@ -11,6 +11,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7760 "github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -240,9 +241,9 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	// deliberately zero (caps.go:375), so no decoded frequency can fall
 	// below it.
 	if freq > MaxEncodableFreqHz {
-		return codeplug.Channel{}, &OutOfDomainError{
+		return codeplug.Channel{}, &OutOfDomainError{driver.OutOfDomainError{
 			Field: spec.FieldFrequency, Value: freq, Max: MaxEncodableFreqHz,
-		}
+		}}
 	}
 	mode, ok := rec.Mode.Get()
 	if !ok {

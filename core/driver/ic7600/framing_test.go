@@ -34,7 +34,7 @@ func TestDriverImplementsSerialFramingReporter(t *testing.T) {
 	}
 	// Every profile reports the same framing: the stop bits are a fact
 	// about the LINK, not about which capability set a caller chose.
-	for _, p := range []Profile{RealHardware, Simulated, Profile(42)} {
+	for _, p := range []driver.Profile{RealHardware, Simulated, driver.Profile(42)} {
 		rp, ok := New(p).(driver.SerialFramingReporter)
 		if !ok {
 			t.Fatalf("Profile(%d) does not implement driver.SerialFramingReporter", p)

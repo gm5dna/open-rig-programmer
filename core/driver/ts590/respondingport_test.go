@@ -161,7 +161,7 @@ func (p *respondingPort) Transcript() []string {
 // (ts590_test.go) delegates to it for every read and settings test in the
 // package, and a reader looking for the session-opening machinery should
 // find it beside the scripted radio it opens against.
-func openWriteSession(t *testing.T, row Row, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
+func openWriteSession(t *testing.T, row Row, profile driver.Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
 	p := newRespondingPort(t, row, img)
 	d := New(row, profile, append([]Option{testTiming()}, opts...)...)

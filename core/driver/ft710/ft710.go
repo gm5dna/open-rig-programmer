@@ -106,7 +106,7 @@ var catDialect = cat.FT710
 // for a forged or corrupted Profile is always "nothing writable", never
 // a writable set. See Profile and writeTrialsComplete. Options:
 // WithTransportLogger, WithConsentedUnverifiedWrites.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ft710Driver{Base: driver.Base{Profile: profile}, dialect: catDialect}
 	for _, opt := range opts {
 		opt(d)

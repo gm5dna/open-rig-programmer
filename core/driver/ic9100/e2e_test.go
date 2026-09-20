@@ -47,7 +47,7 @@ func recordBytes(t *testing.T, rec civ.MemoryRecord) []byte {
 	return append([]byte(nil), b[9:len(b)-1]...)
 }
 
-func openScripted(t *testing.T, img radioImage, profile Profile, opts ...Option) (*Session, *scriptedPort) {
+func openScripted(t *testing.T, img radioImage, profile driver.Profile, opts ...Option) (*Session, *scriptedPort) {
 	t.Helper()
 	p := newScriptedPort(t, img)
 	sess, err := New(profile, opts...).Open(context.Background(), p.Port(), driver.Identity{Port: "/dev/scripted"})

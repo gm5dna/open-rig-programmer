@@ -41,7 +41,7 @@ var testIdentity = driver.Identity{Port: "fake-pipe", USBSerial: "SIM0001"}
 // session over its port with the given profile, and registers cleanup for
 // both. It returns the Radio (for SlotState/fault setup) and the concrete
 // *Session (for Region()).
-func openSession(t *testing.T, profile Profile, opts ...fakeradio.Option) (*fakeradio.Radio, *Session) {
+func openSession(t *testing.T, profile driver.Profile, opts ...fakeradio.Option) (*fakeradio.Radio, *Session) {
 	t.Helper()
 	r := fakeradio.New(opts...)
 	t.Cleanup(func() { _ = r.Close() })
@@ -70,7 +70,7 @@ func openSession(t *testing.T, profile Profile, opts ...fakeradio.Option) (*fake
 // their variadic slot free for driver Options.) dopts is therefore a
 // plain slice in the non-final position, and every existing openSession
 // call site reads exactly as it did.
-func openSessionWithDriverOpts(t *testing.T, profile Profile, dopts []Option, fopts ...fakeradio.Option) (*fakeradio.Radio, *Session) {
+func openSessionWithDriverOpts(t *testing.T, profile driver.Profile, dopts []Option, fopts ...fakeradio.Option) (*fakeradio.Radio, *Session) {
 	t.Helper()
 	r := fakeradio.New(fopts...)
 	t.Cleanup(func() { _ = r.Close() })
@@ -502,12 +502,12 @@ func TestOpen_WrongRadio(t *testing.T) {
 func TestDriver_ModelAndBaseline(t *testing.T) {
 	tests := []struct {
 		name         string
-		profile      Profile
+		profile      driver.Profile
 		wantWritable bool // FieldFrequency on MEM
 	}{
 		{"RealHardware -> hardware-verified (M5b flip)", RealHardware, true},
 		{"Simulated -> Simulated", Simulated, true},
-		{"unrecognised Profile fails safe (all-Unverified, nothing writable)", Profile(99), false},
+		{"unrecognised Profile fails safe (all-Unverified, nothing writable)", driver.Profile(99), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -546,7 +546,7 @@ func (p *countingPort) Close() error { return p.inner.Close() }
 
 // openCountingSession is openSession over a countingPort, for the
 // zero-wire-traffic refusal tests.
-func openCountingSession(t *testing.T, profile Profile, opts ...fakeradio.Option) (*countingPort, *Session) {
+func openCountingSession(t *testing.T, profile driver.Profile, opts ...fakeradio.Option) (*countingPort, *Session) {
 	t.Helper()
 	r := fakeradio.New(opts...)
 	t.Cleanup(func() { _ = r.Close() })
@@ -733,7 +733,7 @@ func TestConsentOption_NoOpOnRealHardware(t *testing.T) {
 // structural FieldErase exemption would refuse that one label
 // independently, even had the gate let the set through.
 func TestConsentOption_UnrecognisedProfileStaysFailSafe(t *testing.T) {
-	_, sess := openSessionWithDriverOpts(t, Profile(99),
+	_, sess := openSessionWithDriverOpts(t, driver.Profile(99),
 		[]Option{WithConsentedUnverifiedWrites()},
 		fakeradio.WithFactoryImage(fakeradio.ImageUS))
 	caps := sess.Capabilities()
@@ -767,11 +767,11 @@ func TestConsentOption_UnrecognisedProfileStaysFailSafe(t *testing.T) {
 func TestProfilesNeverEmitConsented(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		p    Profile
+		p    driver.Profile
 	}{
 		{"Simulated", Simulated},
 		{"RealHardware", RealHardware},
-		{"unrecognised", Profile(99)},
+		{"unrecognised", driver.Profile(99)},
 	} {
 		t.Run("plain/"+tt.name, func(t *testing.T) {
 			if capsContains(New(tt.p).Capabilities(), spec.ConsentedUnverified) {
@@ -814,7 +814,7 @@ func TestProfilesNeverEmitConsented(t *testing.T) {
 func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		p    Profile
+		p    driver.Profile
 	}{
 		{"RealHardware", RealHardware},
 		{"Simulated", Simulated},
@@ -829,9 +829,9 @@ func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
 			}
 		})
 	}
-	for _, p := range []Profile{
+	for _, p := range []driver.Profile{
 		-1, -2, 2, 3, 4, 7, 42, 99, 1000,
-		Profile(math.MinInt), Profile(math.MaxInt),
+		driver.Profile(math.MinInt), driver.Profile(math.MaxInt),
 	} {
 		t.Run(fmt.Sprintf("other/%d", int(p)), func(t *testing.T) {
 			d, ok := New(p).(*ft710Driver)

@@ -76,11 +76,11 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	channel, err := parseSlotID(ch.Slot)
 	if err != nil {
-		return res, &UnknownSlotError{Slot: ch.Slot, Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(ch.Slot)
 	if !ok {
-		return res, &UnknownSlotError{Slot: ch.Slot, Reason: "this row publishes MEM 00-99 only"}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Reason: "this row publishes MEM 00-99 only"}}
 	}
 
 	if ch.Empty() {
