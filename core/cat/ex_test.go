@@ -295,3 +295,174 @@ func FuzzParseEXAnswer(f *testing.F) {
 		}
 	})
 }
+
+// --- CanSetEX / BuildEXSet ---
+
+// TestCanSetEX_FalseForEveryAddressWithoutAWriteRow is spec A1's named
+// test: with core/cat/table2-write-observed.csv still empty (Session W
+// has not run), every one of the 296 addresses is refused at BOTH
+// CanSetEX and BuildEXSet — the admitted 234 because their write
+// descriptor's Width is the rendered zero sentinel, the denied/held 62
+// because they never reach d.exWrite at all (dialect.go's
+// buildFT710ExWrite). No zero sentinel renders as writable anywhere.
+func TestCanSetEX_FalseForEveryAddressWithoutAWriteRow(t *testing.T) {
+	items := FT710.EXItems()
+	if len(items) != 296 {
+		t.Fatalf("test fixture bug: EXItems() returned %d items, want 296", len(items))
+	}
+	for _, it := range items {
+		if FT710.CanSetEX(it.Addr) {
+			t.Errorf("CanSetEX(%v) = true, want false (table2-write-observed.csv is empty)", it.Addr)
+		}
+		p4 := strings.Repeat("0", it.Digits)
+		if cmd, err := FT710.BuildEXSet(it.Addr, p4); err == nil {
+			t.Errorf("BuildEXSet(%v, %q) = %q, want an error (table2-write-observed.csv is empty)", it.Addr, p4, cmd.Bytes())
+		}
+	}
+}
+
+// TestBuildEXSet_AcceptsCharacterisedAddress is the positive control
+// TestCanSetEX_FalseForEveryAddressWithoutAWriteRow cannot give by
+// itself: a Dialect whose write table HAS a non-zero-Width entry accepts
+// a well-formed value at that width and inside its domain, and refuses
+// one either the wrong width or outside the domain. FT710 itself is left
+// untouched — only a local copy's exWrite is overridden, on
+// TestAllowedCommand_EXAnswersRejectedOutboundAll296's own injection
+// shape below.
+func TestBuildEXSet_AcceptsCharacterisedAddress(t *testing.T) {
+	addr := EXAddress{P1: 1, P2: 3, P3: 21} // TONE FREQ; see table2-observed.csv:82
+	d := FT710
+	d.exWrite = map[EXAddress]exWriteDescriptor{
+		addr: {Domain: Domain{Lo: 0, Hi: 49, Step: 1}, Width: 3},
+	}
+
+	cmd, err := d.BuildEXSet(addr, "007")
+	if err != nil {
+		t.Fatalf("BuildEXSet(%v, %q): unexpected error: %v", addr, "007", err)
+	}
+	want := "EX" + d.EXWire(addr) + "007;"
+	if got := string(cmd.Bytes()); got != want {
+		t.Errorf("BuildEXSet(%v, %q) = %q, want %q", addr, "007", got, want)
+	}
+
+	if _, err := d.BuildEXSet(addr, "07"); err == nil {
+		t.Errorf("BuildEXSet(%v, %q): want error for wrong width, got success", addr, "07")
+	}
+	if _, err := d.BuildEXSet(addr, "099"); err == nil {
+		t.Errorf("BuildEXSet(%v, %q): want error for out-of-domain value, got success", addr, "099")
+	}
+}
+
+// TestBuildEXSet_SignedShape is the Codex close-review P2 fix's own
+// test: exSetP4OK must check the P4 WIRE SHAPE the domain requires
+// (explicit sign character for a Signed domain, digits only otherwise)
+// BEFORE parsing it, not just parse whatever is the right width and let
+// strconv.Atoi be permissive about it — table2.csv's "(or +00)" legends
+// mean a Signed item's wire form is never bare digits.
+//
+// (01,01,01) AF TREBLE GAIN (table2.csv:43, Domain -20..10, Signed) gets
+// a Signed width-3 descriptor via DialectWithEXWriteForTest; (04,01,05)
+// DIMMER LED (table2.csv:237, Domain 0..20) gets an unsigned width-2 one.
+// Neither address's REAL exwrite_gen.go entry is touched — each subtest
+// builds its own local Dialect copy, exactly as every other exSetP4OK/
+// BuildEXSet test here does.
+func TestBuildEXSet_SignedShape(t *testing.T) {
+	signedAddr := EXAddress{P1: 1, P2: 1, P3: 1} // AF TREBLE GAIN
+	signedDomain := Domain{Lo: -20, Hi: 10, Step: 1, Signed: true}
+	signed := DialectWithEXWriteForTest(FT710, signedAddr, signedDomain, 3)
+
+	for _, v := range []string{"-20", "+00", "-00", "+10"} {
+		if _, err := signed.BuildEXSet(signedAddr, v); err != nil {
+			t.Errorf("BuildEXSet(%v, %q): unexpected error: %v", signedAddr, v, err)
+		}
+	}
+	for _, v := range []string{"001", "010", " 10", "+1"} {
+		if cmd, err := signed.BuildEXSet(signedAddr, v); err == nil {
+			t.Errorf("BuildEXSet(%v, %q) = %q, want an error (not the Signed wire shape)", signedAddr, v, cmd.Bytes())
+		}
+	}
+
+	unsignedAddr := EXAddress{P1: 4, P2: 1, P3: 5} // DIMMER LED
+	unsignedDomain := Domain{Lo: 0, Hi: 20, Step: 1}
+	unsigned := DialectWithEXWriteForTest(FT710, unsignedAddr, unsignedDomain, 2)
+
+	if _, err := unsigned.BuildEXSet(unsignedAddr, "05"); err != nil {
+		t.Errorf("BuildEXSet(%v, %q): unexpected error: %v", unsignedAddr, "05", err)
+	}
+	for _, v := range []string{"+5", "-5", " 5"} {
+		if cmd, err := unsigned.BuildEXSet(unsignedAddr, v); err == nil {
+			t.Errorf("BuildEXSet(%v, %q) = %q, want an error (unsigned domain, digits only)", unsignedAddr, v, cmd.Bytes())
+		}
+	}
+}
+
+// TestDialectExWrite_ExcludesDeniedAndHeld proves buildFT710ExWrite's
+// filter, not just its effect on the shipped, empty-CSV table: a stray
+// write-observed row for a denylisted or held address must never make it
+// into d.exWrite, whatever ft710ExWrite itself says. CAT-1 RATE
+// (03,01,05) is denied (exCATLinkDenied); SHIFT FREQUENCY (01,05,16) is
+// held (exHeldTriples); AF TREBLE GAIN (01,01,01) is admitted, and its
+// row's Width must survive the filter unchanged.
+func TestDialectExWrite_ExcludesDeniedAndHeld(t *testing.T) {
+	deniedAddr := EXAddress{P1: 3, P2: 1, P3: 5}
+	heldAddr := EXAddress{P1: 1, P2: 5, P3: 16}
+	admittedAddr := EXAddress{P1: 1, P2: 1, P3: 1}
+
+	rows := []EXWriteItem{
+		{Addr: deniedAddr, Domain: Domain{Lo: 0, Hi: 9, Step: 1}, ObservedSetWidth: 2},
+		{Addr: heldAddr, Domain: Domain{Lo: 0, Hi: 9, Step: 1}, ObservedSetWidth: 2},
+		{Addr: admittedAddr, Domain: Domain{Lo: -20, Hi: 10, Step: 1, Signed: true}, ObservedSetWidth: 3},
+	}
+	got := buildFT710ExWrite(rows, FT710.EXItems())
+
+	if _, ok := got[deniedAddr]; ok {
+		t.Errorf("buildFT710ExWrite kept denied address %v — a stray write-observed row must never make a denylisted address writable", deniedAddr)
+	}
+	if _, ok := got[heldAddr]; ok {
+		t.Errorf("buildFT710ExWrite kept held address %v", heldAddr)
+	}
+	desc, ok := got[admittedAddr]
+	if !ok {
+		t.Fatalf("buildFT710ExWrite dropped admitted address %v", admittedAddr)
+	}
+	if desc.Width != 3 {
+		t.Errorf("admitted address %v Width = %d, want 3", admittedAddr, desc.Width)
+	}
+	if !desc.Domain.Signed {
+		t.Errorf("admitted address %v Domain.Signed = false, want true", admittedAddr)
+	}
+}
+
+// TestEXWriteDescriptor_MembershipOnly pins EXWriteDescriptor's contract
+// against the shipped FT710 dialect (table2-write-observed.csv empty):
+// an admitted address is reported present (admitted == true) with its
+// real Domain and the Width 0 sentinel; a denied and a held address are
+// both reported absent, exactly as d.exWrite itself excludes them —
+// task h2's "settings write-boundary" sub-mode is built on this method
+// alone, so its membership boundary must match buildFT710ExWrite's
+// exactly, not merely CanSetEX's (which Width 0 would also make false
+// for the admitted case, collapsing the distinction this method exists
+// to keep).
+func TestEXWriteDescriptor_MembershipOnly(t *testing.T) {
+	admittedAddr := EXAddress{P1: 1, P2: 1, P3: 1} // AF TREBLE GAIN
+	deniedAddr := EXAddress{P1: 3, P2: 1, P3: 5}   // CAT-1 RATE
+	heldAddr := EXAddress{P1: 1, P2: 5, P3: 16}    // SHIFT FREQUENCY
+
+	domain, width, admitted := FT710.EXWriteDescriptor(admittedAddr)
+	if !admitted {
+		t.Errorf("EXWriteDescriptor(%v) admitted = false, want true", admittedAddr)
+	}
+	if width != 0 {
+		t.Errorf("EXWriteDescriptor(%v) width = %d, want 0 (unrun Session W sentinel)", admittedAddr, width)
+	}
+	if !domain.Signed || domain.Lo != -20 || domain.Hi != 10 {
+		t.Errorf("EXWriteDescriptor(%v) domain = %+v, want {-20,10,1,true}", admittedAddr, domain)
+	}
+
+	if _, _, admitted := FT710.EXWriteDescriptor(deniedAddr); admitted {
+		t.Errorf("EXWriteDescriptor(%v) admitted = true, want false (denied)", deniedAddr)
+	}
+	if _, _, admitted := FT710.EXWriteDescriptor(heldAddr); admitted {
+		t.Errorf("EXWriteDescriptor(%v) admitted = true, want false (held)", heldAddr)
+	}
+}

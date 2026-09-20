@@ -30,6 +30,8 @@ type Radio struct {
 	mu             sync.Mutex
 	slots          map[string]MemState
 	exSettings     map[string]string // EX (MENU) address -> raw P4; see ex.go
+	exSetWidths    map[string]int    // EX (MENU) address -> characterised Set P4 width; see ex.go
+	exSetStuck     map[string]bool   // EX (MENU) address -> Set accepted but never stored; test-only, see WithEXSetStuck
 	currentChannel string
 	ai             byte // '0' or '1'; reference: "AI resets to OFF at radio power-off"
 	exchangeN      int
@@ -42,6 +44,7 @@ func New(opts ...Option) *Radio {
 		pipe:           fakepipe.New(),
 		slots:          ImageUK(),
 		exSettings:     EXRuntimeDefaults(),
+		exSetWidths:    cloneEXSetWidths(),
 		currentChannel: "000",
 		ai:             '0',
 	}

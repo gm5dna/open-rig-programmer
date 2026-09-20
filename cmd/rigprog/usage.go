@@ -168,8 +168,8 @@ func printDiffUsage(w io.Writer) {
 const writeUsageText = `rigprog write — send a codeplug file's changes to a radio.
 
 Usage:
-  rigprog write --port <path> [--model NAME] [--yes] [--snapshot-dir DIR] FILE
-  rigprog write --fake [--model NAME] [--yes] [--snapshot-dir DIR] FILE
+  rigprog write --port <path> [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE
+  rigprog write --fake [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE
 
 All flags must precede the FILE argument: stdlib flag parsing stops
 reading flags at the first non-flag argument, so a flag placed after
@@ -178,6 +178,7 @@ FILE is rejected as an unexpected extra argument, not accepted.
 Flags:
   --port PATH           real serial port device path (e.g. /dev/cu.usbserial-XXXX)
   --fake                 use the in-process simulated radio instead of a real port
+  --settings             also diff and write FILE's settings snapshot (opt-in)
   --model NAME           radio model to target (default: FT-710)
   --yes                  skip the interactive confirmation prompt (required for non-interactive runs)
   --snapshot-dir DIR     snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)
@@ -196,6 +197,21 @@ a plan with NOTHING PENDING AT ALL exits 0 ("Nothing to send."); a plan
 whose pending changes are ALL blocked exits 3 instead — never the same
 "nothing to send" message, since the working copy does NOT match the
 radio in that case, only nothing could be honoured.
+
+Without --settings (the default), FILE's settings snapshot (if it carries
+one at all, e.g. from an earlier "rigprog read --settings") is entirely
+ignored: zero settings/EX wire traffic, and the plan/report are
+byte-identical to a run before this flag existed. With --settings, after
+the fresh baseline read, every hardware-characterised, admitted address
+is read once more and diffed against FILE's settings snapshot; any
+disagreeing address is shown before the channel diff and counts toward
+"N change(s)" in the confirmation prompt — a settings-only diff (no
+channel changes at all) still asks for confirmation. Once confirmed, each
+settings delta is written and verified individually, and the outcome of
+every attempted address is printed after execution: accepted-and-verified,
+refused, verify-mismatch, or outcome-unknown. Use "rigprog read --settings"
+first to capture a settings snapshot into FILE, and "rigprog settings"
+(offline) to inspect it beforehand.
 
 Ctrl-C is honoured only BETWEEN slots: an in-flight write+verify pair
 always completes before a cancellation is acted on.
@@ -299,15 +315,18 @@ Usage:
   rigprog settings [--csv OUT] [--model NAME] [--force] FILE
   rigprog settings unverified-writes
   rigprog settings unverified-writes <model> on|off
+  rigprog settings diff-observed [--observed-csv CSV] [--manual-csv CSV] FILE
+  rigprog settings write-boundary [--out FILE] [--force]
 
 Flags:
   --csv OUT     also write the snapshot to this CSV file path (optional)
   --model NAME  radio model whose settings descriptor to group by (default: FT-710)
   --force       overwrite --csv if it already exists
 
-"unverified-writes" is a RESERVED first argument — it selects the consent
-sub-mode below, so it can never be read as a FILE to render. A codeplug
-file of that exact name must be given another (any extension will do).
+"unverified-writes", "diff-observed" and "write-boundary" are RESERVED
+first arguments — each selects the sub-mode described below, so none can
+ever be read as a FILE to render. A codeplug file of any of these exact
+names must be given another (any extension will do).
 
 CONSENT SUB-MODE (no flags; nothing is read from or written to a radio):
 with no further arguments it lists every model this build supports, with
@@ -322,6 +341,19 @@ STORED, not forgotten: withholding consent is a decision, and it is kept
 so nothing asks again. The decisions live in a settings file shared with
 the GUI, whose path the listing prints; a file this build cannot read is
 reported, naming it, and is never overwritten.
+
+DIFF-OBSERVED SUB-MODE: see "rigprog settings diff-observed --help". In
+outline: diffs a "rigprog read --settings" capture's per-address P4 wire
+width/shape against core/cat/table2-observed.csv (Runbook R step 2), a
+WIDTH/SHAPE comparison only — it never prints or compares a setting
+value.
+
+WRITE-BOUNDARY SUB-MODE: see "rigprog settings write-boundary --help". In
+outline: dumps every address admitted to this build's write gate (denied
+and held addresses excluded by construction) with its read width, current
+Set width (0 until Session W) and value domain — the safety-boundary data
+file the out-of-repo Session W bench tool depends on entirely, since that
+tool cannot import core/cat.
 
 OFFLINE: does not open a radio session — --port/--fake are not accepted.
 Loads FILE strictly, then renders its menu/settings snapshot (captured by
@@ -352,12 +384,95 @@ number of arguments, an unrecognised model, a state word that is neither
 "on" nor "off", or a model whose writes are hardware-verified). Exit
 codes 3/4/5 are not
 used by this command: there is no radio session to block, refuse, or
-abort against.
+abort against. The diff-observed and write-boundary sub-modes each have
+their own exit-code contract — see "rigprog settings diff-observed --help"
+and "rigprog settings write-boundary --help".
 `
 
 // printSettingsUsage writes "rigprog settings"'s usage text to w.
 func printSettingsUsage(w io.Writer) {
 	fmt.Fprint(w, settingsUsageText)
+}
+
+// settingsDiffObservedUsageText is "rigprog settings diff-observed"'s own
+// usage text (task-h1 brief; Runbook R step 2). Flags-first, like every
+// other rigprog subcommand: both flags must precede FILE.
+const settingsDiffObservedUsageText = `rigprog settings diff-observed — diff a settings-read file against the FT-710 hardware observation baseline.
+
+Usage:
+  rigprog settings diff-observed [--observed-csv CSV] [--manual-csv CSV] FILE
+
+Flags:
+  --observed-csv CSV  hardware observation CSV to diff FILE against (default: core/cat/table2-observed.csv)
+  --manual-csv CSV    manual Table 2 CSV, consulted only to tell text items from numeric/signed ones (default: core/cat/table2.csv)
+
+OFFLINE: does not open a radio session — --port/--fake are not accepted.
+Loads FILE strictly (a "rigprog read --settings" capture), then for every
+KNOWN entry compares the P4 wire WIDTH (bytes of Value) and SHAPE
+("numeric", "signed", or "text") against --observed-csv's own columns for
+that address. An entry that is not known (unavailable/unsupported), or
+whose address is not in --observed-csv at all, is skipped rather than
+reported as a difference.
+
+PRIVACY: this command never prints or compares a setting VALUE — only its
+measured width and shape class. Output is one line per differing address
+("<id>  observed=<width>/<shape>  file=<width>/<shape>"), followed by
+"Addresses compared: N" and "Differences: N".
+
+Exit codes: 0 FILE was loaded and every compared address's width/shape
+matched --observed-csv; 1 FILE could not be loaded or carries no settings
+snapshot, --observed-csv/--manual-csv could not be read or parsed, an
+entry's raw value did not match its expected lexical shape, or at least
+one address differed; 2 usage (missing FILE, an unrecognised flag, or a
+flag placed after FILE — flags must precede FILE). Exit codes 3/4/5 are
+not used: there is no radio session to block, refuse, or abort against.
+`
+
+// printSettingsDiffObservedUsage writes "rigprog settings diff-observed"'s
+// usage text to w.
+func printSettingsDiffObservedUsage(w io.Writer) {
+	fmt.Fprint(w, settingsDiffObservedUsageText)
+}
+
+// settingsWriteBoundaryUsageText is "rigprog settings write-boundary"'s
+// own usage text (task-h2 brief).
+const settingsWriteBoundaryUsageText = `rigprog settings write-boundary — dump the FT-710 write gate's admitted-address safety boundary.
+
+Usage:
+  rigprog settings write-boundary [--out FILE] [--force]
+
+Flags:
+  --out FILE  write the boundary CSV to this file path instead of stdout
+  --force     overwrite --out if it already exists
+
+OFFLINE: does not open a radio session, does not read a codeplug file, and
+does not read a radio's identity — this dumps a BUILD-time fact, this
+binary's own core/cat write descriptor (core/cat/exwrite_gen.go, filtered
+through core/cat/exdenylist.go's denylist/held predicates), never
+anything captured from hardware.
+
+One row per address ADMITTED to the write gate: every denied (58) and
+held (4) address is absent from the output by construction, not by a
+runtime check anything downstream performs. Columns: id, read_width (the
+manual's Digits column — a READ width, never a Set width), width
+(ObservedSetWidth — 0 until Session W characterises this address), and
+the value domain (codes, lo, hi, step, signed).
+
+THIS OUTPUT IS THE ONLY THING KEEPING THE OUT-OF-REPO SESSION W BENCH
+TOOL (docs/fixtures-private/session-w/, gitignored) OFF THE DENIED/HELD
+ADDRESSES AND OFF ILLEGAL VALUES: that tool cannot import core/cat (spec
+§3) and trusts this file completely. Regenerate with "--out FILE --force"
+immediately before every Session W run; never hand-edit the result.
+
+Exit codes: 0 the boundary was written; 1 --out could not be created or
+written; 2 usage (an unrecognised flag, or a positional argument — this
+sub-mode takes none).
+`
+
+// printSettingsWriteBoundaryUsage writes "rigprog settings
+// write-boundary"'s usage text to w.
+func printSettingsWriteBoundaryUsage(w io.Writer) {
+	fmt.Fprint(w, settingsWriteBoundaryUsageText)
 }
 
 // parseArgs runs fs.Parse(args) for "rigprog <name>" and handles the two

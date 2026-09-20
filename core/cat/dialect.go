@@ -135,6 +135,17 @@ type Dialect struct {
 	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
 	exP4Max    int                  // this dialect's OWN widest P4 answer field, derived from exItems
 
+	// exWrite is this dialect's OWN write-descriptor table: an address
+	// present here is admitted (not denied, not held); Width == 0 means
+	// admitted but not yet characterised by Session W. Nil for every
+	// dialect but FT710 — a lookup miss denies a Set exactly as a lookup
+	// miss denies membership in exMembers, so no dialect == FT710 literal
+	// is ever needed to keep the other dialects read-only. Built ONLY in
+	// the FT710 literal below, from ft710ExWrite (exwrite_gen.go) filtered
+	// through exdenylist.go's denylist and held set — see
+	// buildFT710ExWrite, the one place that filtering happens.
+	exWrite map[EXAddress]exWriteDescriptor
+
 	// modeByName is the inverse of modeNames, derived at construction.
 	// NewDialect rejects duplicate names, so it is total over this
 	// dialect's own table.
@@ -244,6 +255,11 @@ var FT710 = Dialect{
 	exMembers:  buildEXMembers(exItemsGen),
 	exByTriple: buildEXByTriple(exItemsGen),
 	exP4Max:    maxEXP4Bytes(exItemsGen),
+	// The FT-710's own write-descriptor table, task (c)'s reconciliation
+	// of (b2)'s generated ft710ExWrite against (a)'s denylist/held set.
+	// TestDialectExWrite_ExcludesDeniedAndHeld pins that a denied or held
+	// address never reaches this map regardless of what ft710ExWrite says.
+	exWrite:    buildFT710ExWrite(ft710ExWrite, exItemsGen),
 	modeByName: buildModeByName(modeNames),
 
 	// The FT-710's own policy values. The tag width, clear byte, clarifier
@@ -310,6 +326,49 @@ func buildModeByName(names map[Mode]string) map[string]Mode {
 	sort.Ints(keys)
 	for _, k := range keys {
 		out[names[Mode(k)]] = Mode(k)
+	}
+	return out
+}
+
+// exWriteDescriptor is one admitted address's write-gate data: the value
+// Domain and the Set width Session W observed. It carries the same two
+// facts as EXWriteItem's Domain/ObservedSetWidth fields, without Addr (the
+// map key already carries it) or the denied/held rows EXWriteItem's
+// generator emits for every one of the 296 table2.csv rows regardless —
+// buildFT710ExWrite is where those get dropped.
+type exWriteDescriptor struct {
+	Domain Domain
+	Width  int
+}
+
+// buildFT710ExWrite is the ONE place (b2)'s generated write-descriptor
+// table meets (a)'s denylist and held set (B2's second fix, milestone plan
+// task (c)): every ft710ExWrite row whose address is denied or held is
+// dropped; every other row is kept, Width 0 sentinel and all, until
+// Session W fills it in. No other dialect calls this — every other
+// dialect's exWrite field stays the nil zero value, so CanSetEX/BuildEXSet
+// refuse it by map lookup miss, never a dialect == FT710 check.
+//
+// rows with no matching items entry are dropped rather than trusted blind
+// — belt-and-braces (plan risk 4): should be impossible, since both
+// ft710ExWrite and exItemsGen are generated from the same table2.csv, and
+// finding one here would mean a generation bug, not evidence either table
+// alone can be trusted.
+func buildFT710ExWrite(rows []EXWriteItem, items []EXItem) map[EXAddress]exWriteDescriptor {
+	byAddr := make(map[EXAddress]EXItem, len(items))
+	for _, it := range items {
+		byAddr[it.Addr] = it
+	}
+	out := make(map[EXAddress]exWriteDescriptor, len(rows))
+	for _, r := range rows {
+		it, ok := byAddr[r.Addr]
+		if !ok {
+			continue
+		}
+		if exWriteDenied(it) {
+			continue
+		}
+		out[r.Addr] = exWriteDescriptor{Domain: r.Domain, Width: r.ObservedSetWidth}
 	}
 	return out
 }

@@ -7,7 +7,7 @@ import "bytes"
 // AllowedCommand reports whether frame is safe to write to the radio: it
 // is EXACTLY one of the seven command grammars this package knows how to
 // build — ID read, AI read/set, MR read, MW set, MT read/set, MC
-// read/set, EX read — fully re-validated field-by-field against the same
+// read/set, EX read/set — fully re-validated field-by-field against the same
 // rules the corresponding builder enforces, not merely a 2-byte
 // command-name prefix.
 //
@@ -48,15 +48,16 @@ import "bytes"
 // one — see validMTCommand, which enforces it by reusing the builder's own
 // validateCombinedMTFields rather than by a rule of its own.
 //
-// EX is deliberately narrower than the other six: only the EX READ frame
-// is accepted, at exactly this dialect's own read length. EX Set and
-// Answer share an identical wire shape — "EX" prefix, the same address
-// field, just a longer body
-// (manual lines ~630-637) — and are REJECTED here even though they are
-// otherwise syntactically well-formed; see validEXRead's doc comment for
-// the REVIEWED DECISION. This was written as a phase restriction; the
-// M8d menu-write decision (25/07/2026, no-go — docs/menu-write-decision.md)
-// made it the shipped policy.
+// EX is still narrower than the other six, though no longer read-only: the
+// EX READ frame is always accepted, at exactly this dialect's own read
+// length, and an EX Set frame — "EX" prefix, the same address field, just
+// a longer body (manual lines ~630-637), identical in shape to an EX
+// Answer — is accepted ONLY for an admitted, Session-W-characterised
+// address, at exactly its observed width and inside its value domain; see
+// validEXRead's doc comment for the full Set-arm rule and the REVIEWED
+// DECISION that reopened it (milestone spec v1.11.0 §3,
+// docs/menu-write-decision.md's 19/09/2026 paragraph amending the M8d
+// 25/07/2026 no-go).
 //
 // Adding a command, or loosening any check below, is a REVIEWED DECISION:
 // this is the last defence the transport layer relies on before writing
@@ -425,11 +426,11 @@ func (d Dialect) validMCCommand(frame []byte) bool {
 	return d.mcSendValid(slot)
 }
 
-// validEXRead reports whether frame is a legal EX READ: exactly THIS
-// DIALECT'S d.exReadLen() bytes — 9 under EXAddressTriple, 7 under
-// EXAddressPair, 6 under EXAddressSingle — with an address ParseEXAddress
-// accepts, the same membership rule BuildEXRead enforces (shared, not
-// duplicated: the "cannot drift apart" rule).
+// validEXRead reports whether frame is a legal EX READ or a legal EX SET:
+// the read arm is exactly THIS DIALECT'S d.exReadLen() bytes — 9 under
+// EXAddressTriple, 7 under EXAddressPair, 6 under EXAddressSingle — with
+// an address ParseEXAddress accepts, the same membership rule BuildEXRead
+// enforces (shared, not duplicated: the "cannot drift apart" rule).
 //
 // The length and the address slice both come from d.EXAddressWidth(), the
 // same datum the builder measures. Until the FT-891 Stage 0 seam both were
@@ -437,22 +438,38 @@ func (d Dialect) validMCCommand(frame []byte) bool {
 // have refused a four-digit dialect's own builder's output —
 // TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible over pairDialect is
 // what reports that.
-// SHIPPED POLICY, not a phase restriction: EX Set and Answer share an
-// identical wire shape (manual lines ~630–637), and this rejects that
-// entire shape outbound. Originally scoped to M8a–M8d pending the
-// menu-write go/no-go; that decision was taken on 25/07/2026 and the
-// answer was NO — the FT-710 menu surface is read-only for v1.x
-// (docs/menu-write-decision.md). Nothing is scheduled to loosen this.
 //
-// If it is ever reopened, the shape to follow is MT's set/answer
-// exception — see the MT set/answer-shaped entry in
-// TestAllowedCommand_AcceptsAllowlistedSingleFrames (~allowlist_test.go:137)
-// for the precedent — and the classes named in that decision document
-// stay denied regardless. Loosening this is a REVIEWED DECISION.
+// THE SET ARM (milestone spec v1.11.0 §3) is what the M8d menu-write
+// decision (25/07/2026, no-go — docs/menu-write-decision.md) held closed:
+// EX Set and Answer share an identical wire shape (manual lines ~630-637),
+// so this parses frame with d.ParseEXAnswer (same shape-and-membership
+// checks BuildEXRead's read arm shares with it) and then defers the whole
+// write judgement to d.exSetP4OK — the one predicate BuildEXSet also
+// calls, so "what this gate admits" and "what BuildEXSet builds" cannot
+// drift apart either. exSetP4OK refuses by construction for every address
+// outside the write table (unknown/denied/held) and for every admitted one
+// Session W has not yet characterised (Width == 0) — see dialect.go's
+// buildFT710ExWrite and domain.go's EXWriteItem doc comment. Only a
+// well-formed EX Answer for an admitted, characterised address, at exactly
+// its ObservedSetWidth and inside its Domain, is a well-formed Set and
+// passes; every other dialect's nil exWrite map denies everything by
+// lookup miss, so this is structural read-only inheritance, not a
+// dialect == FT710 check anywhere in this path.
+//
+// 19/09/2026 reopened the 25/07/2026 no-go per docs/menu-write-decision.md
+// §3's amendment (spec §9) — this is that reopening, following the MT
+// set/answer exception's own shape (see the MT set/answer-shaped entry in
+// TestAllowedCommand_AcceptsAllowlistedSingleFrames,
+// ~allowlist_test.go:137) rather than inventing a new one. Loosening this
+// further, or narrowing it, remains a REVIEWED DECISION.
 func (d Dialect) validEXRead(frame []byte) bool {
-	if len(frame) != d.exReadLen() {
+	if len(frame) == d.exReadLen() {
+		_, err := d.ParseEXAddress(string(frame[2 : 2+d.EXAddressWidth()]))
+		return err == nil
+	}
+	addr, p4, err := d.ParseEXAnswer(frame)
+	if err != nil {
 		return false
 	}
-	_, err := d.ParseEXAddress(string(frame[2 : 2+d.EXAddressWidth()]))
-	return err == nil
+	return d.exSetP4OK(addr, []byte(p4))
 }

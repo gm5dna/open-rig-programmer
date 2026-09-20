@@ -1,7 +1,11 @@
 # Decision: the menu (EX) settings surface is read-only
 
-**Decided 25/07/2026 by Stuart Henderson (project owner). Status:
-settled for v1.x.**
+**Decided 25/07/2026 by Stuart Henderson (project owner); amended
+05/09/2026 and 19/09/2026 — see "Amendments" below. Status: a
+characterised write subset is being built for v1.11.0 (234 of 296
+addresses, admitted for characterisation, not for immediate write); every
+other address, and the permanently-denied classes, stay read-only with no
+reopening.**
 
 open-rig-programmer reads the FT-710's menu settings and will not write
 them. This document records that decision, the evidence behind it, and
@@ -98,9 +102,12 @@ It is also not a rejection of the safety constraints agreed earlier.
 Regardless of any future reversal, these menu classes stay
 **permanently non-writable** absent a dedicated per-class safety review:
 the CAT link settings (baud rate and interface selection), PTT and
-keying via RTS/DTR, TUN/LIN and CAT-3, TX power, emergency TX, and TX
-inhibit. Changing the CAT link settings over CAT can sever the link
-being used to change them; the rest touch transmit behaviour.
+keying via RTS/DTR/DAKY — including PC KEYING, caught by its legend
+rather than its label — TUN/LIN and CAT-3, TX power, emergency TX, TX
+inhibit, and MOD SOURCE. Changing the CAT link settings over CAT can
+sever the link being used to change them; MOD SOURCE can route an
+unexpected audio source into a VOX-armed transmit path; the rest touch
+transmit behaviour directly.
 
 ## What would make this worth reopening
 
@@ -123,6 +130,47 @@ beep level, LED dimmer and display timeouts — with every other address
 staying read-only. That exercises the whole write path end to end at
 close to zero risk, and it is a far cheaper thing to verify on real
 hardware than 296 typed descriptors.
+
+## Amendments
+
+**05/09/2026 — fleet reframing.** Condition 1 above was written for a
+one-owner, one-radio tool, and asked whether anyone else would ever
+benefit. The project has since become one that ships public releases
+with sixteen registered models and drivers for other people's radios, so
+a settings-write feature serves a user base, not one bench — Stuart's
+ruling, 05/09/2026. His own stated use ("change a few items from the
+app") is one instance of that need. The shape this decision prescribes —
+a small subset first, per-address hardware evidence, the permanently
+denied classes never in scope — is unchanged by the reframing.
+
+**19/09/2026 — scope widening.** v1.11.0 admits more than the
+originally-proposed cosmetic subset: `TX BPF SEL`, `VOX SELECT`, `REF
+FREQ ADJ`, all nineteen `03-03` TX AUDIO items, `CW BK-IN TYPE`, `CW WAVE
+SHAPE`, `METER DETECTOR` (display ballistics only — no RF/power/keying
+path), the `KEYER` group and the `PRESET` survivors — 234 of the 296
+Table 2 addresses in total. All 234 are admitted for characterisation
+only: each stays read-only until its own hardware write-characterisation
+session produces a result for it. Four addresses (`SHIFT FREQUENCY`,
+`QMB CH`, `BAND STACK`, `MEM GROUP`) are held back, neither admitted nor
+denied, pending further evidence. The permanently-denied classes above
+gain two members found on this pass: `PC KEYING` (it shares its legend
+with the RTS/DTR/DAKY keying items, so a name-only rule had missed it)
+and `MOD SOURCE` (an unintended-transmission-source class in its own
+right — alongside an admitted `VOX SELECT`, an unexpected source could
+route into a VOX-armed transmit path).
+
+**19/09/2026 — the reopening conditions.** The three conditions above
+still read as originally written. As written, conditions 1 and 2 remain
+unmet: condition 2 asks for a chart proven trustworthy, or a way to work
+without one, and the FT-710 chart was wrong in both places M8c could
+check it. v1.11.0 does not meet condition 2 in that form. It works
+around it instead: every one of the 234 admitted addresses is
+characterised against real hardware before it becomes writable, rather
+than the chart being trusted at all. Stuart is overriding condition 2's
+original form, dated 19/09/2026 — hardware characterisation stands in
+for chart trust, not a claim that the original condition was met
+unchanged. Condition 1 is carried by the 05/09/2026 fleet reframing
+above; condition 3 was already met.
 
 ## References
 

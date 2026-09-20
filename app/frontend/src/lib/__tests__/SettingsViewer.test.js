@@ -8,17 +8,19 @@
 // facts hardcoded in the component itself.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/svelte'
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte'
 import { appState } from '../state/app.svelte.js'
 import SettingsViewer from '../SettingsViewer.svelte'
 
 vi.mock('../bridge/bindings.js', () => ({
 	readSettingsRadio: vi.fn().mockResolvedValue({ HasSnapshot: true, Descriptor: '', Complete: true, HasLegacy: false, Entries: [] }),
+	writeSetting: vi.fn(),
 }))
 
-import { readSettingsRadio } from '../bridge/bindings.js'
+import { readSettingsRadio, writeSetting } from '../bridge/bindings.js'
 
 const readSettingsRadioMock = vi.mocked(readSettingsRadio)
+const writeSettingMock = vi.mocked(writeSetting)
 
 /** A wholly synthetic SettingsSpecView — none of these labels/IDs are
  * real FT-710 menu/EX vocabulary (task-36 brief: "the vitest fixture is
@@ -35,8 +37,9 @@ const SETTINGS_SPEC = {
 					ID: 'G1',
 					Label: 'GROUP BETA',
 					Items: [
-						{ ID: '990101', Label: 'SYNTH ITEM ONE', Display: '1-01' },
-						{ ID: '990102', Label: 'SYNTH ITEM TWO', Display: '1-02' },
+						{ ID: '990101', Label: 'SYNTH ITEM ONE', Display: '1-01', Editable: false },
+						{ ID: '990102', Label: 'SYNTH ITEM TWO', Display: '1-02', Editable: false },
+						{ ID: '990103', Label: 'SYNTH ITEM EDITABLE', Display: '1-03', Editable: true },
 					],
 				},
 			],
@@ -65,6 +68,7 @@ function settingsFixture(overrides = {}) {
 		Entries: [
 			{ ID: '990101', Value: 'ON', State: 'known' },
 			{ ID: '990102', Value: '', State: 'unavailable' },
+			{ ID: '990103', Value: 'INITIAL', State: 'known' },
 			{ ID: '990201', Value: '', State: 'unsupported' },
 		],
 		...overrides,
@@ -231,6 +235,67 @@ describe('value/state rendering', () => {
 		appState.setSettings(settingsFixture())
 		render(SettingsViewer)
 		expect(screen.queryByText('Unrecognised settings')).not.toBeInTheDocument()
+	})
+})
+
+describe('editable cells (task g2)', () => {
+	beforeEach(() => {
+		appState.settingsSpec = SETTINGS_SPEC
+		appState.setCodeplug(codeplugFixture())
+		appState.setSettings(settingsFixture())
+	})
+
+	it('renders no input for a non-editable item — the Value cell stays plain text', () => {
+		render(SettingsViewer)
+		const row = screen.getByText('SYNTH ITEM TWO').closest('tr')
+		expect(row?.querySelector('input')).toBeNull()
+	})
+
+	it('renders an input, seeded with the entry value, for an editable item', () => {
+		render(SettingsViewer)
+		const row = screen.getByText('SYNTH ITEM EDITABLE').closest('tr')
+		const input = row?.querySelector('input')
+		expect(input).not.toBeNull()
+		expect(input).toHaveValue('INITIAL')
+	})
+
+	it('commits on blur, calling WriteSetting with the id and the typed value', async () => {
+		writeSettingMock.mockResolvedValueOnce({ ID: '990103', Wanted: 'CHANGED', Observed: 'CHANGED', Outcome: 'accepted-and-verified', Err: '' })
+		render(SettingsViewer)
+		const row = screen.getByText('SYNTH ITEM EDITABLE').closest('tr')
+		const input = /** @type {HTMLInputElement} */ (row?.querySelector('input'))
+		await fireEvent.input(input, { target: { value: 'CHANGED' } })
+		await fireEvent.blur(input)
+		expect(writeSettingMock).toHaveBeenCalledWith('990103', 'CHANGED')
+	})
+
+	it('commits on Enter', async () => {
+		writeSettingMock.mockResolvedValueOnce({ ID: '990103', Wanted: 'CHANGED', Observed: 'CHANGED', Outcome: 'accepted-and-verified', Err: '' })
+		render(SettingsViewer)
+		const row = screen.getByText('SYNTH ITEM EDITABLE').closest('tr')
+		const input = /** @type {HTMLInputElement} */ (row?.querySelector('input'))
+		await fireEvent.input(input, { target: { value: 'CHANGED' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+		expect(writeSettingMock).toHaveBeenCalledWith('990103', 'CHANGED')
+	})
+
+	it.each([
+		['accepted-and-verified', ''],
+		['refused', 'the radio refused the write'],
+		['verify-mismatch', 'wrote one value, read back another'],
+		['outcome-unknown', 'no confirmation reached before the link dropped'],
+	])('renders the %s outcome (and its Err when non-empty) after a commit', async (outcome, errText) => {
+		writeSettingMock.mockResolvedValueOnce({ ID: '990103', Wanted: 'CHANGED', Observed: 'CHANGED', Outcome: outcome, Err: errText })
+		render(SettingsViewer)
+		const row = screen.getByText('SYNTH ITEM EDITABLE').closest('tr')
+		const input = /** @type {HTMLInputElement} */ (row?.querySelector('input'))
+		await fireEvent.input(input, { target: { value: 'CHANGED' } })
+		await fireEvent.blur(input)
+
+		await waitFor(() => expect(row?.textContent).toContain(outcome))
+		if (errText) {
+			expect(row?.textContent).toContain(errText)
+		}
 	})
 })
 

@@ -14,6 +14,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/extable"
 )
@@ -244,7 +245,11 @@ func TestSettingsDescriptor_ItemsAreTheInventoryInOrder(t *testing.T) {
 	want := make([]driver.SettingItem, 0, len(items))
 	for _, it := range items {
 		wire := catDialect.EXWire(it.Addr)
-		want = append(want, driver.SettingItem{ID: wire, Label: it.Name, Display: wire})
+		// This dialect carries no write descriptor at all (only the
+		// FT-710's does — core/cat/dialect.go's buildFT710ExWrite), so
+		// CanSetEX is nil-map false for every one of its items: Write is
+		// spec.Unverified radio-wide, never spec.Supported.
+		want = append(want, driver.SettingItem{ID: wire, Label: it.Name, Display: wire, Write: spec.Unverified})
 	}
 	if !reflect.DeepEqual(got, want) {
 		if len(got) != len(want) {

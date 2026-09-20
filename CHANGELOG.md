@@ -11,6 +11,22 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+### Added
+- **FT-710 menu settings gain a write path**, hardware-characterised
+  address by address: `rigprog write --settings FILE` and the app's
+  editable settings cells write only a menu address whose Set
+  behaviour Stuart has confirmed on a real FT-710, then read it back
+  byte-for-byte to check. 58 of the FT-710's 296 menu addresses are
+  permanently read-only — the CAT link settings, PTT and keying over
+  RTS, DTR or DAKY (including PC KEYING), tuner and antenna routing,
+  TX power and safety, MOD SOURCE, and the text fields — and 4 more
+  are held read-only pending further investigation; the rest become
+  writable as each one's hardware characterisation lands. There is no
+  consent step for menu writes, unlike an opt-in radio's channel
+  writes: the manual's own settings chart has already been shown
+  wrong, so only testing on hardware can be trusted. Every other
+  radio's menu settings stay read-only.
+
 ## [1.10.0] - 2026-09-18
 
 ### Added

@@ -6,7 +6,9 @@ spreadsheet, and send them back over the radio's ordinary USB cable.
 A desktop app and a command-line tool, `rigprog`, for macOS, Windows
 and Linux. It imports and exports CSV, including CHIRP's, reads before
 it writes, shows every change for approval, and reads each channel back
-after writing it. Nothing is deleted and no menu setting is changed.
+after writing it. Nothing is deleted, and menu settings stay
+read-only — except on the FT-710, where a hardware-characterised
+address can be written too.
 
 ![The channel grid, connected to the built-in demo radio](docs/images/app-demo.png)
 
@@ -88,6 +90,15 @@ rigprog settings unverified-writes IC-7610 on     # allow writes to the IC-7610
 
 Permission changes what the program may send, not how carefully it
 sends it.
+
+**Menu settings are different.** That consent covers channel
+(memory) writes. On the FT-710, `rigprog write --settings FILE` and
+the app's editable settings cells skip consent entirely: each menu
+address stays read-only until Stuart has confirmed its write
+behaviour on a real radio — set, then read back byte-for-byte to
+check. The manual's own settings chart has already been shown wrong,
+so no consent step could replace testing on hardware. Every other
+radio's menu settings stay read-only.
 
 ## For developers
 

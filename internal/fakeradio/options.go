@@ -70,6 +70,40 @@ func WithEXUnavailable(addr string) Option {
 	}
 }
 
+// WithEXSetWidth overlays one EX (MENU) address's characterised Set P4
+// width for test setup — same overlay semantics as WithEXSetting: applied
+// to whatever exSetWidths already holds (empty by default, since Session
+// W has not run — ex.go's exSetWidths doc comment), for ANY address,
+// including one this package's exGroups does not know about and
+// including one core/cat's denylist would refuse a Set for (handleEX
+// never consults that policy). Without this option every Set-shaped body
+// is refused "?;" as uncharacterised, regardless of its address or
+// payload.
+func WithEXSetWidth(addr string, width int) Option {
+	return func(r *Radio) {
+		r.exSetWidths[addr] = width
+	}
+}
+
+// WithEXSetStuck marks addr so a Set-shaped body at its characterised
+// width is still ACCEPTED on the wire (no rejection, no reply — handleEX
+// cannot and does not distinguish this from an ordinary successful Set)
+// but never actually stored: the address keeps answering whatever it held
+// before. Test-only, with NO hardware claim in either direction — Session
+// W has not probed EX Set at all, so this is not a modelled radio quirk
+// like the MW clarifier's real, HW-CONFIRMED "accepted but ignored"
+// behaviour (parser.go's handleMW), only a deterministic way to drive a
+// genuine write-then-verify MISMATCH through a real Session without a
+// racy mid-call hook (core/driver/ft710's TestWriteSetting_OutcomeMatrix).
+func WithEXSetStuck(addr string) Option {
+	return func(r *Radio) {
+		if r.exSetStuck == nil {
+			r.exSetStuck = make(map[string]bool)
+		}
+		r.exSetStuck[addr] = true
+	}
+}
+
 // WithFault scripts a deterministic misbehaviour into the fake. Faults
 // compose: multiple WithFault options may be given, including several of
 // the same kind (e.g. two FaultSpuriousFrame at different exchange

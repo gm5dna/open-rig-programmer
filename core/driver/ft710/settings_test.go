@@ -189,6 +189,199 @@ func TestSession_ReadSetting_UnknownID_RefusedBeforeWire(t *testing.T) {
 	}
 }
 
+// TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire proves
+// WriteSetting refuses every id/value combination that cannot possibly be
+// legal to Set — before any wire traffic — for each of the reasons
+// s.dialect.BuildEXSet's one gate (core/cat/ex.go's exSetP4OK) folds
+// together. At this milestone's shipped state, table2-write-observed.csv
+// is empty (bootstrap-closed, spec §3): every admitted address's write
+// descriptor Width is still the zero sentinel, so the "uncharacterised",
+// "out-of-domain" and "wrong-width" cases below are refused for the SAME
+// underlying reason (Width == 0) as "denied"/"held" today — exactly the
+// folding exSetP4OK's own doc comment describes — and will diverge once
+// Session W lands a row for 010101 without this test changing at all.
+func TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire(t *testing.T) {
+	tests := []struct {
+		name  string
+		id    string
+		value string
+	}{
+		{"unknown id (malformed shape)", "not-an-address", "0"},
+		{"unknown id (out of inventory)", "050101", "0"},
+		{"denied (CAT-1 RATE)", "030105", "0"},
+		{"held (SHIFT FREQUENCY)", "010516", "0"},
+		{"uncharacterised admitted address, plausible value", "010101", "000"},
+		{"uncharacterised admitted address, out-of-domain-shaped value", "010101", "999"},
+		{"uncharacterised admitted address, wrong-width value", "010101", "00"},
+		{"uncharacterised admitted address, zero-width value", "010101", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cp, sess := openCountingSession(t, Simulated)
+
+			baseline := cp.writes.Load()
+			res, err := sess.WriteSetting(testCtx(t), tt.id, tt.value)
+			if err == nil {
+				t.Fatalf("WriteSetting(%q, %q) = %+v, nil, want a refusal error", tt.id, tt.value, res)
+			}
+			if got := cp.writes.Load(); got != baseline {
+				t.Errorf("refused WriteSetting(%q, %q) produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", tt.id, tt.value, got-baseline)
+			}
+			if res != (driver.SettingWriteResult{}) {
+				t.Errorf("refused WriteSetting(%q, %q) result = %+v, want the zero value", tt.id, tt.value, res)
+			}
+		})
+	}
+}
+
+// withDialectForTest overrides this driver's own dialect BEFORE Open —
+// unlike s.dialect (set per-Session), transport.Engine's outbound gate is
+// bound to d.dialect at ENGINE CONSTRUCTION time (ft710.go's Open doc
+// comment: "the engine is bound to THIS driver's own dialect"), so a
+// Session-only override would leave the gate refusing a Set the codec
+// upstream was willing to build — AllowedCommand and s.dialect must see
+// the SAME injected write table, or the gate refuses before the codec's
+// own answer ever gets a chance to matter. Defined here, not as a
+// production Option: no real caller ever has a reason to swap the
+// FT-710's own dialect for another one.
+func withDialectForTest(dialect cat.Dialect) Option {
+	return func(d *ft710Driver) {
+		d.dialect = dialect
+	}
+}
+
+// TestWriteSetting_OutcomeMatrix pins one real WriteSetting call per
+// driver.SettingWriteOutcome value, all against the SAME address
+// ("010101", AF TREBLE GAIN) with the SAME injected width on both sides
+// of the wire — width alone is never the axis that varies between
+// subtests, since table2-write-observed.csv is still empty (spec §3) and
+// stays that way regardless of this test:
+//
+//   - the DIALECT side: cat.DialectWithEXWriteForTest (task (e)'s
+//     core/cat seam, ex.go) builds a Dialect whose write table admits
+//     "010101" at width 3, domain 0-999 — installed via
+//     withDialectForTest, above, before Open;
+//   - the FAKE side: internal/fakeradio's exSetWidths, injected per
+//     subtest with fakeradio.WithEXSetWidth — task (e)'s own deliverable.
+//
+// What varies is what the WIRE does with that admission:
+//
+//   - accepted: the fake is characterised too (WithEXSetWidth) and
+//     stores whatever is Set, so the paired read matches;
+//   - refused: the fake is NOT characterised (no WithEXSetWidth at all)
+//     even though the dialect thinks it is — exactly the situation this
+//     project will be in for every OTHER address once Session W starts
+//     filling exWrite in one row at a time — so the wire itself answers
+//     "?;" within the Set's error window;
+//   - verify-mismatch: the fake accepts the Set (characterised) but
+//     fakeradio.WithEXSetStuck makes it silently keep its old value, so
+//     the paired read-back returns something other than Wanted — the
+//     smallest deterministic way to produce this without a racy mid-call
+//     hook (WithEXSetStuck's own doc comment, options.go);
+//   - outcome-unknown: reuses write_test.go's own failableWritePort,
+//     armed AFTER Open so it fails the Set's very first wire write with a
+//     transport-level error the host cannot attribute either way — "no
+//     answer within the error window" because no frame ever left at all,
+//     the same "transport-ambiguous MW" shape that test file's own outcome
+//     table already established for WriteChannel.
+func TestWriteSetting_OutcomeMatrix(t *testing.T) {
+	const addr = "010101"
+	exAddr, err := catDialect.ParseEXAddress(addr)
+	if err != nil {
+		t.Fatalf("ParseEXAddress(%q): unexpected error: %v", addr, err)
+	}
+	const width = 3
+	const wanted = "123"
+	domain := cat.Domain{Lo: 0, Hi: 999, Step: 1}
+	characterised := cat.DialectWithEXWriteForTest(catDialect, exAddr, domain, width)
+	dopts := []Option{withDialectForTest(characterised)}
+
+	t.Run(driver.SettingWriteAccepted.String(), func(t *testing.T) {
+		_, sess := openSessionWithDriverOpts(t, Simulated, dopts, fakeradio.WithEXSetWidth(addr, width))
+
+		res, err := sess.WriteSetting(testCtx(t), addr, wanted)
+		if err != nil {
+			t.Fatalf("WriteSetting(%q, %q): unexpected error: %v", addr, wanted, err)
+		}
+		want := driver.SettingWriteResult{
+			ID:       addr,
+			Wanted:   wanted,
+			Observed: wanted,
+			Step:     driver.WriteStep{Command: "EX", Sent: true, Confirmed: true},
+			Outcome:  driver.SettingWriteAccepted,
+		}
+		if res != want {
+			t.Errorf("WriteSetting(%q, %q) = %+v, want %+v", addr, wanted, res, want)
+		}
+	})
+
+	t.Run(driver.SettingWriteRefused.String(), func(t *testing.T) {
+		// No fakeradio.WithEXSetWidth: the fake stays uncharacterised for
+		// addr even though the dialect admits it, so the Set itself draws
+		// "?;" within its error window.
+		_, sess := openSessionWithDriverOpts(t, Simulated, dopts)
+
+		res, err := sess.WriteSetting(testCtx(t), addr, wanted)
+		if !errors.Is(err, cat.ErrRejected) {
+			t.Fatalf("WriteSetting(%q, %q) error = %v, want errors.Is match against cat.ErrRejected", addr, wanted, err)
+		}
+		wantStep := driver.WriteStep{Command: "EX", Sent: true}
+		if res.Step != wantStep || res.Outcome != driver.SettingWriteRefused || res.Observed != "" {
+			t.Errorf("WriteSetting(%q, %q) = %+v, want Step=%+v Outcome=SettingWriteRefused Observed=\"\"", addr, wanted, res, wantStep)
+		}
+	})
+
+	t.Run(driver.SettingWriteVerifyMismatch.String(), func(t *testing.T) {
+		_, sess := openSessionWithDriverOpts(t, Simulated, dopts,
+			fakeradio.WithEXSetWidth(addr, width),
+			fakeradio.WithEXSetStuck(addr),
+		)
+
+		res, err := sess.WriteSetting(testCtx(t), addr, wanted)
+		var mismatch *driver.SettingVerifyMismatchError
+		if !errors.As(err, &mismatch) {
+			t.Fatalf("WriteSetting(%q, %q) error = %v (%T), want *driver.SettingVerifyMismatchError", addr, wanted, err, err)
+		}
+		if mismatch.ID != addr || mismatch.Wanted != wanted {
+			t.Errorf("mismatch = %+v, want ID=%q Wanted=%q", mismatch, addr, wanted)
+		}
+		if mismatch.Observed == wanted {
+			t.Errorf("mismatch.Observed = %q, want something OTHER than Wanted", mismatch.Observed)
+		}
+		if res.Outcome != driver.SettingWriteVerifyMismatch || res.Observed != mismatch.Observed {
+			t.Errorf("WriteSetting(%q, %q) = %+v, want Outcome=SettingWriteVerifyMismatch Observed=%q", addr, wanted, res, mismatch.Observed)
+		}
+	})
+
+	t.Run(driver.SettingWriteOutcomeUnknown.String(), func(t *testing.T) {
+		r := fakeradio.New(fakeradio.WithEXSetWidth(addr, width))
+		t.Cleanup(func() { _ = r.Close() })
+		port := &failableWritePort{inner: r.Port()}
+
+		opened, err := New(Simulated, withDialectForTest(characterised)).Open(testCtx(t), port, testIdentity)
+		if err != nil {
+			t.Fatalf("Open: unexpected error: %v", err)
+		}
+		t.Cleanup(func() { _ = opened.Close() })
+		sess := opened.(*Session)
+		port.armed.Store(true)
+
+		res, err := sess.WriteSetting(testCtx(t), addr, wanted)
+		if err == nil {
+			t.Fatalf("WriteSetting(%q, %q) = nil error, want the injected transport write failure", addr, wanted)
+		}
+		if errors.Is(err, cat.ErrRejected) {
+			t.Fatalf("WriteSetting(%q, %q) = %v, want a transport failure, NOT a radio rejection", addr, wanted, err)
+		}
+		if res.Outcome != driver.SettingWriteOutcomeUnknown {
+			t.Errorf("Outcome = %v, want SettingWriteOutcomeUnknown", res.Outcome)
+		}
+		if res.Step.Sent {
+			t.Error("Step.Sent = true, want false (the write itself never left the host)")
+		}
+	})
+}
+
 // TestParseEXResponse_Table drives the PURE parseEXResponse helper
 // directly with hand-built frames — see its doc comment for why the
 // wrong-address branch can ONLY be exercised this way, not through the

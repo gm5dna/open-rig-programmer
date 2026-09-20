@@ -480,11 +480,38 @@ type UISpecView struct {
 // GetSettings/ReadSettingsRadio's SettingEntryView.ID addresses. Display is
 // the driver's own human-facing rendering of the setting's position (e.g.
 // the FT-710's "01-01-01", driver.SettingItem.Display's own value) — for
-// display only, never re-parsed as an ID.
+// display only, never re-parsed as an ID. Editable mirrors driver.
+// SettingItem.Write == spec.Supported (task g1): true only once a Session
+// W row has hardware-characterised this item's write descriptor (see
+// core/driver/settings.go's doc comment — R1, no consent parameter). The
+// frontend's SettingsViewer renders an editable item's Value cell as an
+// input (task g2); every other item stays plain text.
 type SettingItemView struct {
-	ID      string
-	Label   string
-	Display string
+	ID       string
+	Label    string
+	Display  string
+	Editable bool
+}
+
+// SettingWriteResultView is WriteSetting's return value: the outcome of
+// one setting write against the connected radio. Outcome is one of
+// driver.SettingWriteOutcome's four String() values
+// ("accepted-and-verified", "refused", "verify-mismatch",
+// "outcome-unknown") once the driver's own WriteSetting has run — spec §7
+// requires all four rendered, never collapsed to a boolean. Err is "" only
+// when Outcome is "accepted-and-verified"; for the other three it carries
+// the driver's own error text (e.g. *driver.SettingVerifyMismatchError's
+// message) for display — WriteSetting's Go error return stays nil for all
+// four cases, reserved instead for a pre-flight refusal (not connected,
+// not editable, no SettingsWriter) or a busy reservation, so a caller can
+// tell "refused to attempt" apart from "attempted, and here is what
+// happened" without parsing Err.
+type SettingWriteResultView struct {
+	ID       string
+	Wanted   string
+	Observed string
+	Outcome  string
+	Err      string
 }
 
 // SettingGroupView is one subgroup within a SettingMenuView (e.g. the
