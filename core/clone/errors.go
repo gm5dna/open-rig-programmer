@@ -68,9 +68,7 @@ type CandidateChangedError struct {
 }
 
 // Error implements the error interface.
-func (e *CandidateChangedError) Error() string {
-	return fmt.Sprintf("clone: candidate changed: %s", e.Reason)
-}
+func (e *CandidateChangedError) Error() string { return reasonError("candidate changed", e.Reason) }
 
 // Unwrap lets errors.Is(err, ErrCandidateChanged) match.
 func (e *CandidateChangedError) Unwrap() error { return ErrCandidateChanged }
@@ -94,12 +92,24 @@ type SessionChangedError struct {
 }
 
 // Error implements the error interface.
-func (e *SessionChangedError) Error() string {
-	return fmt.Sprintf("clone: session changed: %s", e.Reason)
-}
+func (e *SessionChangedError) Error() string { return reasonError("session changed", e.Reason) }
 
 // Unwrap lets errors.Is(err, ErrSessionChanged) match.
 func (e *SessionChangedError) Unwrap() error { return ErrSessionChanged }
+
+// reasonError renders this package's uniform "clone: <what>: <reason>"
+// error text, shared by CandidateChangedError and SessionChangedError so
+// the format lives in one place.
+//
+// NOT a merged error type: CandidateChangedError and SessionChangedError
+// stay separate exported struct types, because cmd/rigprog/write_test.go
+// type-switches on *clone.SessionChangedError vs *clone.CandidateChangedError
+// (two case arms; identical underlying types would collide) and builds
+// both with `Reason:`-keyed composite literals — both outside this
+// package, so the exported names and their Reason field are load-bearing.
+func reasonError(what, reason string) string {
+	return fmt.Sprintf("clone: %s: %s", what, reason)
+}
 
 // ErrConfirmationMismatch is the sentinel a caller should compare against
 // (via errors.Is) when Execute's confirmation binding check (obligation 5)

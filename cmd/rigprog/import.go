@@ -33,7 +33,7 @@ func mergeCSV(base *codeplug.Codeplug, imported []codeplug.Channel) error {
 	err := csvmerge.MergeCSV(base, imported)
 	var mismatch *csvmerge.InventoryMismatchError
 	if errors.As(err, &mismatch) {
-		return fmt.Errorf("imported --csv slot inventory differs from --into's inventory (missing: %s; extra: %s)", joinOrNone(mismatch.Missing), joinOrNone(mismatch.Extra))
+		return fmt.Errorf("imported --csv slot inventory differs from --into's inventory (missing: %s; extra: %s)", csvmerge.JoinOrNone(mismatch.Missing), csvmerge.JoinOrNone(mismatch.Extra))
 	}
 	return err
 }
@@ -47,18 +47,6 @@ func mergeCHIRP(base *codeplug.Codeplug, imported []codeplug.Channel) error {
 	// *csvmerge.DuplicateSlotsError's Error() text is already identical
 	// to this command's original wording — passed through unchanged.
 	return err
-}
-
-// joinOrNone renders items as a comma-joined list, or "none" when empty
-// — mergeCSV's own restatement of internal/csvmerge's unexported helper
-// of the same name/shape, needed only to reconstruct this command's
-// original --csv/--into wording from *csvmerge.InventoryMismatchError's
-// structured fields.
-func joinOrNone(items []string) string {
-	if len(items) == 0 {
-		return "none"
-	}
-	return strings.Join(items, ", ")
 }
 
 // writeLossReport renders report to w (task-13 brief §2: "line, column,

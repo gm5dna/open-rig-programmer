@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
@@ -42,7 +43,7 @@ var tierColumns = []string{
 // unchanged order, then the tier's. A version-1 file is therefore a
 // prefix of a version-2 one, which is what lets Import accept both by
 // looking columns up by name.
-var headerV2 = append(append([]string(nil), header...), tierColumns...)
+var headerV2 = slices.Concat(header, tierColumns)
 
 // receiverColumns are version 3's columns, appended after the version-2
 // prefix in ChannelData declaration order: the seven D8 fields, then the
@@ -56,7 +57,7 @@ var receiverColumns = []string{
 }
 
 // headerV3 preserves the complete version-2 header as a prefix.
-var headerV3 = append(append([]string(nil), headerV2...), receiverColumns...)
+var headerV3 = slices.Concat(headerV2, receiverColumns)
 
 // The reserved cell spellings for a tier column. A tier field is
 // TRI-STATE PLUS ABSENT (see codeplug.Absent), so three of the four

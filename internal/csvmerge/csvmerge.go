@@ -31,9 +31,9 @@ func channelSlotSet(channels []codeplug.Channel) map[string]bool {
 	return set
 }
 
-// joinOrNone renders items as a comma-joined list, or "none" when empty —
+// JoinOrNone renders items as a comma-joined list, or "none" when empty —
 // used so a missing/extra slot list reads clearly either way.
-func joinOrNone(items []string) string {
+func JoinOrNone(items []string) string {
 	if len(items) == 0 {
 		return "none"
 	}
@@ -59,7 +59,7 @@ type InventoryMismatchError struct {
 // doc comment for how a caller wanting different wording should use the
 // struct fields instead.
 func (e *InventoryMismatchError) Error() string {
-	return fmt.Sprintf("imported CSV slot inventory differs from the target's inventory (missing: %s; extra: %s)", joinOrNone(e.Missing), joinOrNone(e.Extra))
+	return fmt.Sprintf("imported CSV slot inventory differs from the target's inventory (missing: %s; extra: %s)", JoinOrNone(e.Missing), JoinOrNone(e.Extra))
 }
 
 // MergeCSV replaces base's Channels wholesale with imported (task-13

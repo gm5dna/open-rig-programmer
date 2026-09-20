@@ -110,7 +110,7 @@ func (a *FrameAccumulator) Push(chunk []byte) (frames [][]byte, err error) {
 			a.buf = nil
 			return frames, &FrameTooLongError{DiscardedLen: discarded}
 		}
-		frames = append(frames, copyBytes(raw))
+		frames = append(frames, bytes.Clone(raw))
 		consumed += len(raw)
 	}
 
@@ -119,12 +119,6 @@ func (a *FrameAccumulator) Push(chunk []byte) (frames [][]byte, err error) {
 		return frames, &FrameTooLongError{DiscardedLen: len(rest)}
 	}
 
-	a.buf = copyBytes(rest)
+	a.buf = bytes.Clone(rest)
 	return frames, nil
-}
-
-// copyBytes returns an independent copy of b, so the result never aliases
-// b's backing array.
-func copyBytes(b []byte) []byte {
-	return bytes.Clone(b)
 }

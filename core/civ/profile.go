@@ -3,6 +3,7 @@
 package civ
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 )
@@ -219,7 +220,7 @@ func (p Profile) NameLength() int { return p.nameLength }
 func (p Profile) NamePad() byte { return p.namePad }
 
 // NameCharset returns a fresh copy of every byte a name may carry.
-func (p Profile) NameCharset() []byte { return copyBytes(p.nameCharset) }
+func (p Profile) NameCharset() []byte { return bytes.Clone(p.nameCharset) }
 
 // Discriminator names the rule picking among this profile's accepted
 // record lengths.

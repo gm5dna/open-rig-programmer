@@ -140,7 +140,7 @@ var ErrInvalidSpec = errors.New("transport: invalid CommandSpec")
 // detect this specific failure mode; the underlying cause the failed
 // drain itself returned (typically ErrPortClosed, or the fresh bounded
 // context's own deadline exceeded if traffic kept resetting the quiet
-// timer) is reachable too — see wrapQuarantineFailedErr.
+// timer) is reachable too — see wrapErr.
 var ErrQuarantineFailed = errors.New("transport: entry quarantine drain failed, refusing to transmit")
 
 // ErrDisallowedCommand means cmd.Bytes() failed the Engine's injected
@@ -187,24 +187,17 @@ var ErrNoAllowlist = errors.New("transport: engine has no allowlist, refusing to
 // no gate at all.
 var ErrUnconfiguredDialect = errors.New("transport: engine was given an unconfigured dialect, refusing to construct")
 
-// wrapQuarantineFailedErr builds the error Do returns when its entry-time
-// suspect drain fails, given the error that drain itself returned. If
-// cause is nil (defensive: should not happen in practice), it falls back
-// to the bare sentinel rather than wrapping a nil error.
-func wrapQuarantineFailedErr(cause error) error {
+// wrapErr builds the error Do/DrainToQuiet return for sentinel (either
+// ErrQuarantineFailed — Do's entry-time suspect drain failed — or
+// ErrPortClosed — a closed port, cause the stored closure cause, nil for
+// an explicit Close call), given the specific cause. If cause is nil
+// (defensive for the quarantine case: should not happen in practice), it
+// falls back to the bare sentinel rather than wrapping a nil error.
+func wrapErr(sentinel, cause error) error {
 	if cause == nil {
-		return ErrQuarantineFailed
+		return sentinel
 	}
-	return fmt.Errorf("%w: %w", ErrQuarantineFailed, cause)
-}
-
-// wrapClosedErr builds the error Do/DrainToQuiet return for a closed
-// port, given the stored closure cause (nil for an explicit Close call).
-func wrapClosedErr(cause error) error {
-	if cause == nil {
-		return ErrPortClosed
-	}
-	return fmt.Errorf("%w: %w", ErrPortClosed, cause)
+	return fmt.Errorf("%w: %w", sentinel, cause)
 }
 
 // wrapContaminatedErr builds the error Do/DrainToQuiet return for a

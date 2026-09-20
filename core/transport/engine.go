@@ -646,7 +646,7 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 		err := e.drainToQuietLocked(qctx)
 		cancel()
 		if err != nil {
-			return nil, wrapQuarantineFailedErr(err)
+			return nil, wrapErr(ErrQuarantineFailed, err)
 		}
 		// e.suspect is cleared by drainToQuietLocked itself on success.
 	}
@@ -1454,9 +1454,9 @@ func (e *Engine) closePort(cause error) {
 // Close call).
 func (e *Engine) closedErr() error {
 	if p := e.closeCause.Load(); p != nil {
-		return wrapClosedErr(*p)
+		return wrapErr(ErrPortClosed, *p)
 	}
-	return wrapClosedErr(nil)
+	return wrapErr(ErrPortClosed, nil)
 }
 
 // Close shuts the Engine down: unblocks any in-flight Do/DrainToQuiet call

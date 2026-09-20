@@ -100,7 +100,7 @@ func (p Profile) BuildMemorySet(rec MemoryRecord) (Command, error) {
 		if !ok {
 			return Command{}, fmt.Errorf("civ: %s: mode %q is undeclared", p.model, mode)
 		}
-		length = p.layouts[layoutIndex].Length
+		length = p.BuildRecordLengthFor(mode)
 	}
 	body := make([]byte, 0, 2+len(a)+length)
 	body = append(body, CmdMemory, SubMemoryContents)
