@@ -189,6 +189,84 @@ func TestSession_ReadSetting_UnknownID_RefusedBeforeWire(t *testing.T) {
 	}
 }
 
+// TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire proves
+// WriteSetting refuses every id/value combination that cannot possibly be
+// legal to Set — before any wire traffic — for each of the reasons
+// s.dialect.BuildEXSet's one gate (core/cat/ex.go's exSetP4OK) folds
+// together. At this milestone's shipped state, table2-write-observed.csv
+// is empty (bootstrap-closed, spec §3): every admitted address's write
+// descriptor Width is still the zero sentinel, so the "uncharacterised",
+// "out-of-domain" and "wrong-width" cases below are refused for the SAME
+// underlying reason (Width == 0) as "denied"/"held" today — exactly the
+// folding exSetP4OK's own doc comment describes — and will diverge once
+// Session W lands a row for 010101 without this test changing at all.
+func TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire(t *testing.T) {
+	tests := []struct {
+		name  string
+		id    string
+		value string
+	}{
+		{"unknown id (malformed shape)", "not-an-address", "0"},
+		{"unknown id (out of inventory)", "050101", "0"},
+		{"denied (CAT-1 RATE)", "030105", "0"},
+		{"held (SHIFT FREQUENCY)", "010516", "0"},
+		{"uncharacterised admitted address, plausible value", "010101", "000"},
+		{"uncharacterised admitted address, out-of-domain-shaped value", "010101", "999"},
+		{"uncharacterised admitted address, wrong-width value", "010101", "00"},
+		{"uncharacterised admitted address, zero-width value", "010101", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cp, sess := openCountingSession(t, Simulated)
+
+			baseline := cp.writes.Load()
+			res, err := sess.WriteSetting(testCtx(t), tt.id, tt.value)
+			if err == nil {
+				t.Fatalf("WriteSetting(%q, %q) = %+v, nil, want a refusal error", tt.id, tt.value, res)
+			}
+			if got := cp.writes.Load(); got != baseline {
+				t.Errorf("refused WriteSetting(%q, %q) produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", tt.id, tt.value, got-baseline)
+			}
+			if res != (driver.SettingWriteResult{}) {
+				t.Errorf("refused WriteSetting(%q, %q) result = %+v, want the zero value", tt.id, tt.value, res)
+			}
+		})
+	}
+}
+
+// TestWriteSetting_OutcomeMatrix is meant to pin one WriteSetting call
+// per driver.SettingWriteOutcome value. It cannot, yet: every one of the
+// four outcomes requires s.dialect.BuildEXSet to succeed, which requires
+// a non-zero write-descriptor Width for SOME address — and, today,
+// table2-write-observed.csv is empty (Session W has not run, spec §3's
+// bootstrap-closed gate) AND internal/fakeradio's handleEX has no
+// Set-shaped-body branch at all (task (e)'s own deliverable, ex.go:271's
+// doc comment: "READ ONLY this phase"). Unlike core/cat's own
+// TestBuildEXSet_AcceptsCharacterisedAddress, core/driver/ft710 has no
+// exported seam to build a session against a Dialect whose exWrite carries
+// an injected row: cat.Dialect.exWrite is unexported, s.dialect is fixed
+// to cat.FT710 from this package's own catDialect var, and
+// cat.MustNewDialect's DialectConfig carries no write-descriptor field
+// either. So there is neither a width seam nor a fake Set responder to
+// drive any of the four outcomes through a real *Session today. Each
+// subtest below is skipped with that reason, named per outcome, so the
+// table stands ready for task (e) to un-skip.
+func TestWriteSetting_OutcomeMatrix(t *testing.T) {
+	tests := []struct {
+		outcome driver.SettingWriteOutcome
+	}{
+		{driver.SettingWriteAccepted},
+		{driver.SettingWriteRefused},
+		{driver.SettingWriteVerifyMismatch},
+		{driver.SettingWriteOutcomeUnknown},
+	}
+	for _, tt := range tests {
+		t.Run(tt.outcome.String(), func(t *testing.T) {
+			t.Skip("needs task (e): no characterised address (table2-write-observed.csv is empty) and internal/fakeradio has no EX Set responder yet")
+		})
+	}
+}
+
 // TestParseEXResponse_Table drives the PURE parseEXResponse helper
 // directly with hand-built frames — see its doc comment for why the
 // wrong-address branch can ONLY be exercised this way, not through the

@@ -5,6 +5,8 @@ package driver
 import (
 	"context"
 	"fmt"
+
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // SettingsDescriptor describes a radio's menu/settings surface, radio-
@@ -68,6 +70,16 @@ type SettingItem struct {
 	// setting's position, e.g. the FT-710's "01-01-01" — for UI display
 	// only, never re-parsed as an ID.
 	Display string
+	// Write reports this item's write-gate state: spec.Supported once a
+	// Session W row has characterised it (this radio's write
+	// descriptor's Width != 0 — see cat.Dialect.CanSetEX), spec.
+	// Unverified otherwise (including every setting on a radio with no
+	// write descriptor at all). No other spec.Support value is ever
+	// minted here: a menu setting is not Session-consented
+	// (SettingsWriter has no consent parameter — R1) and never Inert or
+	// Unsupported by construction, since only a known inventory member
+	// reaches BuildDescriptor's loop.
+	Write spec.Support
 }
 
 // Validate checks d's structural invariants: a non-empty Version; at
@@ -223,4 +235,115 @@ type SettingsReader interface {
 	// returns SettingValue{State: SettingUnavailable}, NOT an error —
 	// mirroring the empty-slot rule ReadChannel already established.
 	ReadSetting(ctx context.Context, id string) (SettingValue, error)
+}
+
+// SettingWriteOutcome reports how a WriteSetting call resolved, for
+// display (CLI and GUI show all four — spec §4) and for a caller
+// deciding whether a value landed.
+type SettingWriteOutcome int
+
+const (
+	// SettingWriteAccepted means the Set frame drew no rejection within
+	// its error window AND the paired read-back matched Wanted
+	// byte-for-byte: the value is proven to have landed.
+	SettingWriteAccepted SettingWriteOutcome = iota
+	// SettingWriteRefused means the radio rejected the Set with "?;"
+	// within its error window — an ERROR, unlike ReadSetting's read-only
+	// SettingUnavailable state, because a write that is refused is a
+	// failure a caller must act on, not a fact to display quietly.
+	SettingWriteRefused
+	// SettingWriteVerifyMismatch means the Set drew no rejection but the
+	// paired read-back returned a value other than Wanted.
+	SettingWriteVerifyMismatch
+	// SettingWriteOutcomeUnknown means the Set's own outcome, or the
+	// paired read-back's, could not be attributed — a transport failure
+	// or lost link mid-pair, never a positive claim either way.
+	SettingWriteOutcomeUnknown
+)
+
+// String returns the constant's identifier.
+func (o SettingWriteOutcome) String() string {
+	switch o {
+	case SettingWriteAccepted:
+		return "accepted-and-verified"
+	case SettingWriteRefused:
+		return "refused"
+	case SettingWriteVerifyMismatch:
+		return "verify-mismatch"
+	case SettingWriteOutcomeUnknown:
+		return "outcome-unknown"
+	default:
+		return "SettingWriteOutcome(invalid)"
+	}
+}
+
+// SettingWriteResult is the outcome of one WriteSetting call.
+type SettingWriteResult struct {
+	// ID is the SettingItem.ID this result answers for.
+	ID string
+	// Wanted is the raw value WriteSetting was asked to set.
+	Wanted string
+	// Observed is the paired read-back's raw value. "" when no read-back
+	// was attributable (SettingWriteRefused or SettingWriteOutcomeUnknown
+	// from a Set-side failure).
+	Observed string
+	// Step is the frame-level record of the Set itself — reused from
+	// WriteChannel's choreography type, but not sufficient alone: it
+	// says whether the Set frame went and drew no rejection, never
+	// whether the value it carried actually landed. Only Outcome (backed
+	// by the paired read-back) answers that.
+	Step WriteStep
+	// Outcome is this call's overall resolution.
+	Outcome SettingWriteOutcome
+}
+
+// SettingVerifyMismatchError reports that a WriteSetting call's paired
+// read-back disagreed with the value just written.
+//
+// A DISTINCT type from *clone.VerifyMismatchError (core/clone/errors.go),
+// not a reuse of it: that type is codeplug.Channel-shaped (a Slot and a
+// []spec.Field), and a setting write has neither — one opaque ID and two
+// raw strings is the smallest shape this comparison needs.
+type SettingVerifyMismatchError struct {
+	// ID is the SettingItem.ID that failed verification.
+	ID string
+	// Wanted is the raw value that was written.
+	Wanted string
+	// Observed is the raw value the paired read-back returned.
+	Observed string
+}
+
+// Error implements the error interface.
+func (e *SettingVerifyMismatchError) Error() string {
+	return fmt.Sprintf("driver: WriteSetting %s: wrote %q but read back %q", e.ID, e.Wanted, e.Observed)
+}
+
+// SettingsWriter is an OPTIONAL capability a driver.Session's CONCRETE
+// type may implement: write individual radio settings, mirroring
+// SettingsReader's shape and its reason for staying OUT of driver.Session
+// (see that interface's doc comment) — a plain type assertion,
+// sess.(driver.SettingsWriter), against the concrete session a driver's
+// Open returned. core/driver/ft710.Session is its first implementation.
+//
+// NO CONSENT PARAMETER (ruling R1, spec §4): unlike a channel write,
+// there is no settingsCanWrite predicate and no consented argument here.
+// A radio's write descriptor admits an address the moment its own
+// hardware characterisation (Session W) exists, and FieldSupport.
+// CanWrite's usual second key — ConsentedUnverified, recorded user
+// consent standing in for missing hardware evidence — has nothing to
+// stand on for a menu setting: the only paper source is the manual's
+// Table 2 chart, already proven untrustworthy. WriteSetting therefore
+// gates on one fact alone, a driver-specific equivalent of
+// SettingItem.Write == spec.Supported.
+type SettingsWriter interface {
+	// WriteSetting writes value to the setting named by id, then
+	// verifies it: id that does not name a known item, or a known item
+	// this session cannot currently write (no hardware characterisation
+	// yet, or value outside its domain/width), is refused BEFORE any
+	// wire traffic, with a driver-specific typed error — never a guess.
+	// A known, writable id is set fire-and-forget and read back; the
+	// returned SettingWriteResult.Outcome and error together report
+	// which of the four outcomes resulted (see SettingWriteOutcome). A
+	// verify-mismatch's error is *SettingVerifyMismatchError.
+	WriteSetting(ctx context.Context, id, value string) (SettingWriteResult, error)
 }

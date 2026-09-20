@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -98,10 +99,28 @@ func BuildDescriptor(dialect cat.Dialect, p *Params) driver.SettingsDescriptor {
 			ID:      dialect.EXWire(it.Addr),
 			Label:   it.Name,
 			Display: display(it.Addr),
+			Write:   writeSupport(dialect, it.Addr),
 		})
 	}
 
 	return d
+}
+
+// writeSupport mints a SettingItem's Write field from dialect's own write
+// descriptor (M8: minted HERE, once at init, shared by all five Yaesu
+// drivers — not a per-driver wrapper's job). cat.Dialect.CanSetEX is
+// dialect data, nil-map false for every dialect but the FT-710 today
+// (core/cat/dialect.go's buildFT710ExWrite), so this is benign for the
+// other four: every one of their items mints Unverified, exercised by
+// TestYaesuBuildDescriptor_OtherFourDialectsMintUnverified. It mints
+// nothing above Unverified until a dialect's own write descriptor has a
+// non-zero ObservedSetWidth row for the address — never guessed, never a
+// dialect == FT710 literal.
+func writeSupport(dialect cat.Dialect, addr cat.EXAddress) spec.Support {
+	if dialect.CanSetEX(addr) {
+		return spec.Supported
+	}
+	return spec.Unverified
 }
 
 // EXSpec is the transport spec for an EX read of addr.

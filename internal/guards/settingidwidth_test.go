@@ -200,13 +200,13 @@ var settingIDWidthAllowlist = map[string]string{
 	// shape belongs to every future driver". The sentence's whole point is
 	// that the width is the FT-710's and not the contract's; it is the
 	// opposite of the drift this guard catches.
-	"core/driver/settings.go:20": "SettingsDescriptor's doc comment, naming the FT-710's own width to deny that it is the contract's",
+	"core/driver/settings.go:22": "SettingsDescriptor's doc comment, naming the FT-710's own width to deny that it is the contract's",
 
 	// "A driver mints this however suits its own protocol (the FT-710 uses
 	// its 6-digit EX wire address); callers must treat it as an opaque
 	// token, never parse it." Same shape: one radio named as an example
 	// inside a sentence that forbids parsing the ID at all.
-	"core/driver/settings.go:61": "SettingItem.ID's doc comment, naming the FT-710's own width as an example of an opaque token",
+	"core/driver/settings.go:63": "SettingItem.ID's doc comment, naming the FT-710's own width as an example of an opaque token",
 }
 
 // admittedRe matches a statement of the FOUR admitted widths, in any of
