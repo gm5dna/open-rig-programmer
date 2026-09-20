@@ -245,7 +245,7 @@ func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Reco
 			Got:     len(frame),
 			Want:    rec870Len,
 			reason:  "the TS-870S's own 22-byte grid is a distinct record from the shared kw.Layout family's",
-			Frame:   copyBytes(frame[:n]),
+			Frame:   bytes.Clone(frame[:n]),
 		}
 	}
 	if frame[rec870PrefixOff] != command[0] || frame[rec870PrefixOff+1] != command[1] {

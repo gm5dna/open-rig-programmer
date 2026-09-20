@@ -56,7 +56,6 @@ describe('connection state transitions', () => {
 		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'COM3', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: true, BaselineStale: false })
 		appState.setIssues([{ Slot: '001', Field: 'freq', Severity: 'error', Msg: 'bad' }])
-		appState.dirtyTransferConflicts = true
 		appState.beginTransfer('read')
 
 		appState.clearConnection()
@@ -65,7 +64,6 @@ describe('connection state transitions', () => {
 		expect(appState.codeplug).toBeNull()
 		expect(appState.dirty).toBe(false)
 		expect(appState.issues).toEqual([])
-		expect(appState.dirtyTransferConflicts).toBe(false)
 		expect(appState.transfer.active).toBe(false)
 		expect(appState.transfer.kind).toBeNull()
 	})
@@ -78,14 +76,12 @@ describe('connection state transitions', () => {
 			WorkingPath: '/tmp/edited.json', Dirty: true, BaselineStale: false,
 		})
 		appState.setIssues([{ Slot: '001', Field: 'freq', Severity: 'error', Msg: 'bad' }])
-		appState.dirtyTransferConflicts = true
 		appState.beginTransfer('read')
 
 		appState.disconnectConnection()
 
 		// Connection-scoped state IS cleared.
 		expect(appState.connection).toBeNull()
-		expect(appState.dirtyTransferConflicts).toBe(false)
 		expect(appState.transfer.active).toBe(false)
 		expect(appState.transfer.kind).toBeNull()
 
@@ -215,12 +211,6 @@ describe('canSend pieces', () => {
 		appState.setIssues([{ Slot: '001', Field: 'tone', Severity: 'warning', Msg: 'hmm' }])
 		expect(appState.blockingIssues).toHaveLength(0)
 		expect(appState.canSend).toBe(true)
-	})
-
-	it('is false when dirtyTransferConflicts is set', () => {
-		makeReadyState()
-		appState.dirtyTransferConflicts = true
-		expect(appState.canSend).toBe(false)
 	})
 
 	it('is false while a transfer is active', () => {

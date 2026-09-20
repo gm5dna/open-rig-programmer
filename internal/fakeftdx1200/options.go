@@ -17,14 +17,6 @@ const (
 	fft1NotFittedCATID = "0583"
 )
 
-// WithFFT1NotFitted makes this Radio answer ID as "0583" instead of the
-// default "0582" — the option-split's other value, matrix §2.2. Nothing
-// else about this radio's record, legends or ranges differs between the two
-// IDs.
-func WithFFT1NotFitted() Option {
-	return func(r *Radio) { r.catID = fft1NotFittedCATID }
-}
-
 // WithLatency makes every reply the fake sends wait d before being written
 // to the port. The wait is interruptible — a Close mid-wait abandons the
 // reply (Radio.pipe's own promptness guarantee).

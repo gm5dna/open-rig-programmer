@@ -135,7 +135,7 @@ func (a *FrameAccumulator) NoteSent(frame []byte) {
 		// direction.
 		a.noted = append(a.noted[:0], a.noted[1:]...)
 	}
-	a.noted = append(a.noted, copyBytes(frame))
+	a.noted = append(a.noted, bytes.Clone(frame))
 }
 
 // Stats returns a snapshot of this accumulator's counters.
@@ -188,7 +188,7 @@ func (a *FrameAccumulator) Push(chunk []byte) (frames [][]byte, err error) {
 				a.buf = nil
 				return frames, &FrameTooLongError{DiscardedLen: len(buf) - keep}
 			}
-			a.buf = copyBytes(buf[keep:])
+			a.buf = bytes.Clone(buf[keep:])
 			return frames, nil
 		}
 		a.stats.NoiseBytes += p - i

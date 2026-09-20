@@ -4,11 +4,11 @@ package ts890
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw/ma"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -51,7 +51,7 @@ var toneModeNames = map[byte]string{
 // ErrUnknownSlot is the sentinel a caller compares against (via errors.Is)
 // when a slot identifier is not one this row publishes. The error actually
 // returned is an *UnknownSlotError.
-var ErrUnknownSlot = errors.New("ts890: slot is not one this row publishes")
+var ErrUnknownSlot = driver.ErrUnknownSlot
 
 // UnknownSlotError reports a slot identifier that is not in this row's bank —
 // whether because it is malformed, because it names a channel outside the
@@ -73,11 +73,11 @@ var ErrUnknownSlot = errors.New("ts890: slot is not one this row publishes")
 // nowhere in this book at all (A10). So the twenty are not published, and a
 // read naming one is refused THE SAME SHAPE as any other slot this row does
 // not publish — no invented radio behaviour and no special case in the code.
+// Fields are driver.UnknownSlotError's shared shape (core/driver/errors.go);
+// Model is left unset — this row splices the package's own modelName
+// constant into the message below instead of a struct field.
 type UnknownSlotError struct {
-	// Slot is the identifier that was requested.
-	Slot string
-	// Reason says which of the ways it failed.
-	Reason string
+	driver.UnknownSlotError
 }
 
 // Error implements the error interface.
@@ -211,20 +211,20 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	number, err := parseSlotID(id)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Reason: err.Error()}}
 	}
 	if _, ok := s.caps.BankOf(id); !ok {
-		return codeplug.Channel{}, &UnknownSlotError{
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{
 			Slot:   id,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 	slot, err := s.layout.NewSlot(number)
 	if err != nil {
 		// Unreachable for a slot the bank published, since every published
 		// identifier was rendered by this same layout's NewSlot (caps.go).
 		// Refuse rather than build a frame from a slot the codec disowns.
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Reason: err.Error()}}
 	}
 
 	cmd, err := s.layout.BuildMA0Read(slot)

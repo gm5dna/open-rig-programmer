@@ -19,14 +19,6 @@ func TestNew_DefaultsToFFT1Fitted(t *testing.T) {
 	}
 }
 
-func TestNew_WithFFT1NotFitted(t *testing.T) {
-	r := New(WithFFT1NotFitted())
-	defer r.Close()
-	if r.CATID() != "0583" {
-		t.Errorf("CATID() = %q, want %q", r.CATID(), "0583")
-	}
-}
-
 // roundTrip writes req to the fake's port and returns whatever it replies.
 // Only for a request that actually gets a reply (a Read, ID, or a refused
 // Set) — a SUCCESSFUL Set is fire-and-forget silence (handleEvent) and must

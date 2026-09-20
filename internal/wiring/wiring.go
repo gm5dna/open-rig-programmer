@@ -7,16 +7,14 @@
 //
 // It keeps a deliberate structural-exclusivity shape: two fully
 // self-contained, model-keyed session paths — the REAL one (this file:
-// OpenRealSessionWith, the single implementation, plus OpenRealSessionFor,
-// its zero-option delegate — two exported names over one body) and the
-// SIMULATED one (fake.go's OpenFakeSessionFor) — with no shared helper
-// accepting a profile alongside a port. That absence is the point: it keeps
-// the invalid RealHardware/fake-rig or Simulated/real-port pairings
-// structurally unrepresentable in the code shape, not merely unreached. What
-// a caller may vary on the real path is bounded by SessionOptions, which
-// carries the user's consent and may never carry a profile or a port object
-// — the constraint is about what can be PAIRED, and it is untouched by the
-// second name.
+// OpenRealSessionWith) and the SIMULATED one (fake.go's OpenFakeSessionFor)
+// — with no shared helper accepting a profile alongside a port. That
+// absence is the point: it keeps the invalid RealHardware/fake-rig or
+// Simulated/real-port pairings structurally unrepresentable in the code
+// shape, not merely unreached. What a caller may vary on the real path is
+// bounded by SessionOptions, which carries the user's consent and may
+// never carry a profile or a port object — the constraint is about what
+// can be PAIRED.
 //
 // EACH registered driver's simulated-profile selector — e.g. ft710.Simulated,
 // ftdx10.Simulated, ftdx101.Simulated (one token for both FTDX101 siblings,
@@ -1489,7 +1487,7 @@ func SupportedModels() []string {
 }
 
 // UnknownModelError is returned by every model-keyed lookup in this
-// package (OpenRealSessionFor, OpenFakeSessionFor, StaticCapabilities,
+// package (OpenRealSessionWith, OpenFakeSessionFor, StaticCapabilities,
 // StaticSettingsDescriptor) when model names no registered driver.
 // SynthesiseDiscoveredBanks, whose signature carries no error return,
 // reports the equivalent condition as its bool false instead.
@@ -1563,7 +1561,7 @@ func registerDriver(d driver.Driver) error {
 
 // NewRealDriver builds the ft710 driver for a real-hardware session:
 // profile ft710.RealHardware, the zero value. It is split out from
-// OpenRealSessionFor so the capability set it implies — post-M5b-flip,
+// OpenRealSessionWith so the capability set it implies — post-M5b-flip,
 // write-capable for EXACTLY the six hardware-verified fields and
 // nothing else (ft710.CapabilitiesRealHardware; before the flip,
 // nothing writable at all) — can be pinned by a unit test that never
@@ -1572,9 +1570,8 @@ func NewRealDriver() driver.Driver {
 	return ft710.New(ft710.RealHardware)
 }
 
-// openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
-// too, that being its zero-option delegate): production code always leaves
-// this at transport.OpenSerial, and OpenRealSessionWith calls it
+// openSerial is OpenRealSessionWith's test seam: production code always
+// leaves this at transport.OpenSerial, and OpenRealSessionWith calls it
 // instead of transport.OpenSerial directly. It exists for exactly one
 // property — that the baud handed to the serial layer is the DRIVER's
 // own Capabilities().DefaultBaud rather than transport's package
@@ -1603,8 +1600,8 @@ type SessionOptions struct {
 	// ConsentUnverifiedWrites is the USER's recorded acceptance of writing
 	// this radio's unverified fields, passed to model's driver as that
 	// package's WithConsentedUnverifiedWrites (see realDrivers). FALSE is
-	// the zero value and the default, so OpenRealSessionFor's zero-option
-	// delegation is the pre-consent behaviour exactly.
+	// the zero value and the default, so calling OpenRealSessionWith with
+	// a zero-value SessionOptions is the pre-consent behaviour exactly.
 	//
 	// A BOOL, and this package reads no consent store to fill it: whose
 	// consent it is, where it was recorded and whether it is still current
@@ -1620,15 +1617,14 @@ type SessionOptions struct {
 // transport.OpenSerial, paired with model's own real-hardware driver
 // constructor from realDrivers, built at opts.ConsentUnverifiedWrites.
 //
-// It is the ONE real implementation of this package's real-session path, and
-// OpenRealSessionFor below is its zero-option delegate — two exported names
-// over one body, not two constructors. The structural-exclusivity shape both
-// carry is unchanged and is what SessionOptions is bounded by: neither
-// function, and no helper either reaches, lets a caller supply a driver
-// profile or a port object, so the invalid RealHardware/fakeradio (or
-// Simulated/real-port) pairing stays unrepresentable in the code shape
-// rather than merely unreached. fake.go's OpenFakeSessionFor is the
-// simulated half of that shape and is wholly separate from this one.
+// It is the ONE real implementation of this package's real-session path.
+// The structural-exclusivity shape it carries is what SessionOptions is
+// bounded by: neither this function, nor any helper it reaches, lets a
+// caller supply a driver profile or a port object, so the invalid
+// RealHardware/fakeradio (or Simulated/real-port) pairing stays
+// unrepresentable in the code shape rather than merely unreached.
+// fake.go's OpenFakeSessionFor is the simulated half of that shape and is
+// wholly separate from this one.
 //
 // CONSENT REACHES THE SESSION ALONE. The option transforms the capability
 // set the driver's Open assembles (write-side spec.Unverified becomes
@@ -1695,25 +1691,9 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 	return sess, sess.Close, nil
 }
 
-// OpenRealSessionFor opens a session against a real radio of model, attached
-// at portPath, with NO options: it is OpenRealSessionWith's zero-option
-// delegate and has no body of its own, so a caller that has no consent
-// decision to express — and every caller written before consent existed —
-// gets exactly the pre-consent behaviour, by construction rather than by
-// agreement between two implementations
-// (TestOpenRealSessionFor_DelegatesZeroOptions pins the sessions equal).
-//
-// Its signature is deliberately unchanged. The consent-bearing path is a new
-// NAME, not a new argument on this one: threading a bool through every
-// existing call site would have made every caller state a consent position,
-// including the many that have none.
-func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Session, func() error, error) {
-	return OpenRealSessionWith(ctx, model, portPath, SessionOptions{})
-}
-
 // StaticCapabilities returns model's static baseline capability
 // description — the same value NewRealDriver().Capabilities() reports for
-// DefaultModel — via a registry lookup (mirroring OpenRealSessionFor's own
+// DefaultModel — via a registry lookup (mirroring OpenRealSessionWith's own
 // construction, so Registry.Register's Capabilities().Validate check runs
 // here too) plus Driver.Capabilities(). Fails with *UnknownModelError for
 // an unrecognised model.
@@ -1907,7 +1887,7 @@ func (e *UnsupportedStopBitsError) Error() string {
 	return fmt.Sprintf("wiring: driver %s reports %d stop bits; only 1 or 2 are supported (a driver with no framing evidence must not implement driver.SerialFramingReporter at all — zero is not a request for the default)", e.Model, e.StopBits)
 }
 
-// OpenSerialError is OpenRealSessionFor's typed failure when
+// OpenSerialError is OpenRealSessionWith's typed failure when
 // transport.OpenSerial itself cannot open portPath. See
 // RegisterDriverError's doc comment for why Error() carries this
 // package's own generic wording, and why a caller wanting different
@@ -1923,7 +1903,7 @@ func (e *OpenSerialError) Error() string {
 
 func (e *OpenSerialError) Unwrap() error { return e.Cause }
 
-// OpenSessionError is OpenRealSessionFor's typed failure when the driver's
+// OpenSessionError is OpenRealSessionWith's typed failure when the driver's
 // own Open fails against an already-open serial port. See
 // RegisterDriverError's doc comment.
 type OpenSessionError struct {

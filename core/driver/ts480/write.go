@@ -281,17 +281,17 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	res := driver.WriteResult{Steps: []driver.WriteStep{}}
 
 	if _, err := parseSlotID(ch.Slot); err != nil {
-		return res, &UnknownSlotError{Slot: ch.Slot, Model: modelName, Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Model: modelName, Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(ch.Slot)
 	if !ok {
 		// The same branch, and the same message, that refuses a READ of an
 		// unpublished slot (read.go).
-		return res, &UnknownSlotError{
+		return res, &UnknownSlotError{driver.UnknownSlotError{
 			Slot:   ch.Slot,
 			Model:  modelName,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 
 	if ch.Empty() {

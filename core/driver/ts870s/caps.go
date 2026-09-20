@@ -10,7 +10,6 @@ import (
 // Profile selects the evidence gate used by New. RealHardware is the zero
 // value so an uninitialised profile fails safe — the same shape every
 // other driver package in this tier declares (core/driver/ic7200/caps.go).
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware

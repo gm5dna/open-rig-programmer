@@ -3106,28 +3106,6 @@ func TestGetUISpec_TransmitFollowsRadioCapabilities(t *testing.T) {
 	}
 }
 
-func TestGetUISpec_BudgetUnstatedFollowsBankCapabilities(t *testing.T) {
-	recogniseModelCaps(t, spec.Capabilities{
-		Model: testModel, CATID: "9999", Transmit: spec.ReceiveOnly,
-		Banks: []spec.Bank{{
-			ID: spec.BankMemory, Sparse: true, Groups: 1, PerGroup: 1,
-			BudgetUnstated: true,
-		}},
-	})
-	a, _ := newTestApp(t)
-	a.mu.Lock()
-	a.working = &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Radio: codeplug.RadioInfo{Model: testModel}}
-	a.mu.Unlock()
-
-	got, err := a.GetUISpec()
-	if err != nil {
-		t.Fatalf("GetUISpec: %v", err)
-	}
-	if len(got.Banks) != 1 || !got.Banks[0].BudgetUnstated {
-		t.Errorf("Banks = %+v, want one bank with BudgetUnstated", got.Banks)
-	}
-}
-
 // TestGetUISpec_RegisteredFTdx10_EveryBankUnavailable is M9c-6 D5c — the
 // end-to-end acceptance test for the whole E1 chain, and the first time
 // this project's Unavailable state is produced by a REAL radio's real
@@ -4264,12 +4242,7 @@ func TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture(t *testing.T) {
 // of any length but three unchanged — so this receiver's own bank-letter
 // form is what the app renders and what every accessible name in the JS
 // tests is built from.
-// BudgetUnstated is present here where it is absent from the IC-7610's
-// literal, and it is a fact about this bank rather than noise: the
-// receiver's memory space is sparse with an undocumented capacity
-// (BankView.BudgetUnstated, `json:",omitempty"`), so the key appears only
-// for a bank that says so.
-const icr8600MEMBankJSON = `{"ID":"MEM","Label":"Memories","ReadOnly":false,"BudgetUnstated":true,` +
+const icr8600MEMBankJSON = `{"ID":"MEM","Label":"Memories","ReadOnly":false,` +
 	`"Slots":[{"Slot":"G00-000","Display":"G00-000"},{"Slot":"G00-001","Display":"G00-001"}],` +
 	`"TagDisplayDefault":{"state":"unavailable"},` +
 	`"Fields":["duplex","offset","tone_mode","tone_rx","dtcs_code","dtcs_polarity","filter",` +
@@ -4947,12 +4920,8 @@ func TestGetUISpec_RegisteredICR8600_IsAReceiver(t *testing.T) {
 	if !strings.Contains(offline.GridLegendNote, receiverLegend) {
 		t.Errorf("offline GridLegendNote = %q, want it to contain %q", offline.GridLegendNote, receiverLegend)
 	}
-	// And the one bank must carry the undocumented-capacity flag on the
-	// offline path too: additions spec D3.4 makes BudgetUnstated the
-	// positive declaration of a silence, and a UI that lost it offline
-	// would be back to implying a capacity nobody has printed.
-	if len(offline.Banks) != 1 || !offline.Banks[0].BudgetUnstated {
-		t.Errorf("offline Banks = %+v, want one bank carrying BudgetUnstated", offline.Banks)
+	if len(offline.Banks) != 1 {
+		t.Errorf("offline Banks = %+v, want exactly one bank", offline.Banks)
 	}
 }
 

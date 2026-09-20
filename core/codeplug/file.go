@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -945,7 +946,7 @@ func loadV1(b []byte, path string) (*Codeplug, error) {
 		Channels:  migrateLegacyChannels(v1.Channels),
 	}
 	if migratedMenusPresent(v1.Menus) {
-		cp.Menus = &MenuSnapshot{Legacy: append(json.RawMessage(nil), v1.Menus...)}
+		cp.Menus = &MenuSnapshot{Legacy: slices.Clone(v1.Menus)}
 	}
 	return cp, nil
 }

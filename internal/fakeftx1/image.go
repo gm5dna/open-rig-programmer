@@ -77,10 +77,7 @@ func padTag(s string) string {
 	if len(s) > tagWireLen {
 		panic("fakeftx1: tag fixture longer than the 12-byte wire field")
 	}
-	for len(s) < tagWireLen {
-		s += " "
-	}
-	return s
+	return fmt.Sprintf("%-*s", tagWireLen, s)
 }
 
 // DefaultImage is the image New uses when no WithFactoryImage option is

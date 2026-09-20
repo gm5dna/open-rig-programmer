@@ -5,7 +5,6 @@ package ic7100
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -41,18 +40,6 @@ func TestProbeRejectsWrongRecordLengthContinuously(t *testing.T) {
 	}
 	if wrong.Want != "record 111" || wrong.Got != "record 110" || wrong.WantModel != "" || wrong.GotModel != "" {
 		t.Fatalf("WrongRadioError = %+v, want record lengths and no unsupported model attribution", wrong)
-	}
-}
-
-func TestProbeWrongRecordLengthCanAttributeInjectedSiblingProvisionally(t *testing.T) {
-	p := newRespondingPort(t, withRecordLength(1, 1, 110))
-	_, err := New(RealHardware, WithSiblingRecordLengths(SiblingLengths{110: "Synthetic sibling"})).Open(context.Background(), p.Port(), driver.Identity{})
-	var wrong *driver.WrongRadioError
-	if !errors.As(err, &wrong) {
-		t.Fatalf("Open error = %v, want WrongRadioError", err)
-	}
-	if wrong.WantModel != "IC-7100" || wrong.GotModel != "Synthetic sibling" || !strings.Contains(strings.ToLower(err.Error()), "provisional") {
-		t.Fatalf("Open error = %v; WrongRadioError = %+v, want provisional injected attribution", err, wrong)
 	}
 }
 

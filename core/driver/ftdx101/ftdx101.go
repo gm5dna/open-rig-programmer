@@ -304,11 +304,6 @@ func (d *ftdx101Driver) sessionCapabilities(slots60m []string, emg bool) spec.Ca
 	return d.SessionCaps(effectiveCapabilities(d.model.dialect, d.Capabilities(), slots60m, emg))
 }
 
-// profileRecognised reports whether this driver's profile is one of the
-// declared constants — driver.Base's shared predicate, kept under the
-// name this package's tests put the question by.
-func (d *ftdx101Driver) profileRecognised() bool { return d.Recognised() }
-
 // SynthesiseDiscoveredBanks implements the optional
 // driver.DiscoveredBankSynthesizer capability (core/driver/optional.go): it
 // classifies an OFFLINE slot list — a working codeplug's own slots, with no

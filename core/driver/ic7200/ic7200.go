@@ -13,6 +13,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7200 "github.com/gm5dna/open-rig-programmer/core/civ/ic7200"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -27,7 +28,7 @@ const probeSlotCount = 10
 // NO MODEL ENUM: this family has one member (matrix §4), so which radio a
 // driver is for is fixed by the package rather than by a value a caller
 // could get wrong.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ic7200Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
@@ -85,22 +86,18 @@ type OpenReport struct {
 }
 
 // RecordLengthMismatchError reports that a memory answer carried a record
-// at a length this profile does not declare.
+// at a length this profile does not declare. Fields are
+// icom.RecordLengthMismatchError's shared shape
+// (core/driver/internal/icom/errors.go); Unwrap is promoted from there
+// unchanged, and only Error() is this package's own.
 type RecordLengthMismatchError struct {
-	Err  *civ.RecordLengthError
-	Got  int
-	Want int
-	Slot civ.ChannelAddress
+	icom.RecordLengthMismatchError
 }
 
 func (e *RecordLengthMismatchError) Error() string {
 	return fmt.Sprintf(
 		"ic7200: %s answered a %d-byte memory record, want %d — the expected length is itself an ASSUMED derivation from one document (matrix §3.11/§3.12(iii)), and this refusal names no other model because cross-model record-length distinctness is a tier-level check",
 		e.Slot, e.Got, e.Want)
-}
-
-func (e *RecordLengthMismatchError) Unwrap() []error {
-	return []error{driver.ErrWrongRadio, e.Err}
 }
 
 // AnswerMismatchError reports that a memory answer's decoded channel
@@ -201,7 +198,7 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 	if err != nil {
 		var lengthErr *civ.RecordLengthError
 		if errors.As(err, &lengthErr) {
-			return nil, false, &RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7200.RecordOnlyLength, Slot: a}
+			return nil, false, &RecordLengthMismatchError{icom.RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7200.RecordOnlyLength, Slot: a}}
 		}
 		return nil, false, fmt.Errorf("ic7200: Open: probing %s: %w", a, err)
 	}

@@ -49,9 +49,6 @@ func buildParserCorpus(t *testing.T) []string {
 		id, err := FT710.ParseIDAnswer(f)
 		out = append(out, record("ParseIDAnswer."+in.label, id, err))
 
-		on, err := FT710.ParseAIAnswer(f)
-		out = append(out, record("ParseAIAnswer."+in.label, fmt.Sprintf("%v", on), err))
-
 		slot, err := FT710.ParseMCAnswer(f)
 		out = append(out, record("ParseMCAnswer."+in.label, slotWire(slot), err))
 

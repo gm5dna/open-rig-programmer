@@ -438,7 +438,7 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// index and concluded 9600; the misreading is recorded so it
 		// cannot recur silently here. The legend's first option being 4800
 		// is not evidence either — that is the option list's ordering. It
-		// matters because internal/wiring's OpenRealSessionFor opens a
+		// matters because internal/wiring's OpenRealSessionWith opens a
 		// real radio at exactly this rate and NO baud override exists in
 		// the CLI or the GUI.
 		Bauds:       []int{4800, 9600, 19200, 38400},

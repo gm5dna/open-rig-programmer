@@ -57,7 +57,7 @@ import (
 // The session's Close closes the engine, which closes the port, which
 // closes the radio — so the radio's own Close is registered too, for the
 // paths that never reach a session at all.
-func e2eOpen(t *testing.T, profile Profile, driverOpts []Option, fakeOpts ...fakeic7100.Option) (*fakeic7100.Radio, *Session) {
+func e2eOpen(t *testing.T, profile driver.Profile, driverOpts []Option, fakeOpts ...fakeic7100.Option) (*fakeic7100.Radio, *Session) {
 	t.Helper()
 	radio := fakeic7100.New(fakeOpts...)
 	t.Cleanup(func() { _ = radio.Close() })
@@ -589,7 +589,7 @@ func TestE2E_AWriteTimeoutIsQuarantinedAndTheSetIsNeverRetransmitted(t *testing.
 	e2eAuditGrammars(t, radio, 1)
 }
 
-func TestE2E_AWrongRecordLengthIsRefusedAndCanBeAttributed(t *testing.T) {
+func TestE2E_AWrongRecordLengthIsRefusedUnattributed(t *testing.T) {
 	// 104 bytes is THE near miss, not an arbitrary wrong number: taking the
 	// diagram bar's own (52)~(60) label at face value gives a 107-byte data
 	// area and a 104-byte record, which is where a text-only reading of
@@ -628,44 +628,10 @@ func TestE2E_AWrongRecordLengthIsRefusedAndCanBeAttributed(t *testing.T) {
 	if wrong.Want != "record 111" || wrong.Got != "record 104" {
 		t.Errorf("WrongRadioError = %+v, want the two RECORD-ONLY lengths — the wire also carried three address bytes, and a data-area count would read 107 here", wrong)
 	}
-	// UNATTRIBUTED by default. Cross-model record-length distinctness is a
-	// TIER-level Wave-4 check with its own declared table; this driver
-	// refuses the length and names no model until one is injected.
+	// UNATTRIBUTED. This driver has no cross-model record-length table, so
+	// the refusal names no model.
 	if wrong.WantModel != "" || wrong.GotModel != "" {
-		t.Errorf("the driver attributed the radio to %q against %q with no sibling table", wrong.GotModel, wrong.WantModel)
-	}
-}
-
-func TestE2E_AnInjectedSiblingLengthIsAProvisionalModelNameDiagnostic(t *testing.T) {
-	// The same refusal, with a sibling table supplied by tier integration.
-	// The attribution is a DIAGNOSTIC and says so: both compared lengths
-	// are ASSUMED derivations from printed field widths, so a name here is
-	// provisional until one of them is measured against a radio.
-	const nearMiss = 104
-	radio := fakeic7100.New(
-		fakeic7100.WithSlot(1, 1, make([]byte, nearMiss)),
-		fakeic7100.WithAcceptedRecordLength(nearMiss),
-	)
-	defer radio.Close()
-
-	d := New(Simulated, WithSiblingRecordLengths(SiblingLengths{nearMiss: "Synthetic 104-byte sibling"}))
-	if d.Model() != "IC-7100" || d.Capabilities().Model != "IC-7100" {
-		t.Errorf("Model = %q / %q, want IC-7100 on both", d.Model(), d.Capabilities().Model)
-	}
-	sess, err := d.Open(context.Background(), radio.Port(), driver.Identity{})
-	if err == nil {
-		_ = sess.Close()
-		t.Fatal("Open accepted a radio whose records are 104 bytes")
-	}
-	var wrong *driver.WrongRadioError
-	if !errors.As(err, &wrong) {
-		t.Fatalf("err = %v, want *driver.WrongRadioError", err)
-	}
-	if wrong.WantModel != "IC-7100" || wrong.GotModel != "Synthetic 104-byte sibling" {
-		t.Errorf("WrongRadioError = %+v, want both model names", wrong)
-	}
-	if !strings.Contains(strings.ToUpper(err.Error()), "PROVISIONAL") {
-		t.Errorf("err = %v, want the attribution marked provisional", err)
+		t.Errorf("the driver attributed the radio to %q against %q with no record-length table", wrong.GotModel, wrong.WantModel)
 	}
 }
 

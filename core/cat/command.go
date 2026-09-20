@@ -2,7 +2,10 @@
 
 package cat
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 // Command is an outbound CAT command frame whose bytes were produced and
 // validated by a builder in this package. The zero value is invalid; use
@@ -37,7 +40,7 @@ func newCommand(frame []byte) Command {
 // slice, and mutating one returned copy has no effect on c or on any other
 // copy obtained from a previous or later call.
 func (c Command) Bytes() []byte {
-	return copyBytes(c.frame)
+	return bytes.Clone(c.frame)
 }
 
 // String renders c safely for logs: %q-quoted, so control bytes, embedded

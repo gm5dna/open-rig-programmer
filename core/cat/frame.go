@@ -2,6 +2,8 @@
 
 package cat
 
+import "bytes"
+
 // rejectionFrame is the radio's one and only NAK. Reference golden vector
 // G12: "?;" — rejection reply.
 const rejectionFrame = "?;"
@@ -21,14 +23,8 @@ const rejectionFrame = "?;"
 // rest; SplitFrames never allocates new backing arrays, only subslices of
 // buf.
 func SplitFrames(buf []byte) (frames [][]byte, rest []byte) {
-	start := 0
-	for i, b := range buf {
-		if b == ';' {
-			frames = append(frames, buf[start:i+1])
-			start = i + 1
-		}
-	}
-	return frames, buf[start:]
+	parts := bytes.SplitAfter(buf, []byte{';'})
+	return parts[:len(parts)-1], parts[len(parts)-1]
 }
 
 // IsRejection reports whether frame is exactly the radio's NAK, "?;"

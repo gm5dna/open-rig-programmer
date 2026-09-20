@@ -562,11 +562,11 @@ func TestNew_ModelAndCATID(t *testing.T) {
 // the ZERO Profile — and ANY unrecognised value select the all-Unverified
 // set, never the simulator's (matrix §2.1).
 func TestDriver_ProfileSelection(t *testing.T) {
-	var zero Profile
+	var zero driver.Profile
 	if zero != RealHardware {
 		t.Fatalf("the zero Profile is %v, want RealHardware (matrix §2.1)", zero)
 	}
-	for _, profile := range []Profile{RealHardware, Profile(7), Profile(-1)} {
+	for _, profile := range []driver.Profile{RealHardware, driver.Profile(7), driver.Profile(-1)} {
 		if got := New(profile).Capabilities(); !reflect.DeepEqual(got, CapabilitiesUnverified()) {
 			t.Errorf("profile %v does not select CapabilitiesUnverified", profile)
 		}
@@ -590,7 +590,7 @@ func TestConsent_TransformsTheSessionSetOnly(t *testing.T) {
 		t.Error("a consented session's frequency field is still unwritable; the consent transform did not run")
 	}
 
-	unrecognised := &ts480Driver{Base: driver.Base{Profile: Profile(9), Consented: true}}
+	unrecognised := &ts480Driver{Base: driver.Base{Profile: driver.Profile(9), Consented: true}}
 	if unrecognised.SessionCaps(unrecognised.Capabilities()).FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite() {
 		t.Error("consent widened an UNRECOGNISED profile; the fail-safe direction must survive consent")
 	}

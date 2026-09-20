@@ -59,7 +59,6 @@ const writeTrialsCompleteMK2 = false
 // with every other driver package (core/driver.Profile); this package
 // keeps its own Simulated selector, which
 // internal/guards.TestSimulatedProfileTokensConfinement requires.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware
@@ -581,7 +580,7 @@ type ic7300Driver struct {
 }
 
 // newDriver is the one constructor both exported ones call.
-func newDriver(m modelParams, p Profile, opts ...Option) driver.Driver {
+func newDriver(m modelParams, p driver.Profile, opts ...Option) driver.Driver {
 	d := &ic7300Driver{Base: driver.Base{Profile: p}, m: m}
 	for _, opt := range opts {
 		opt(d)
@@ -600,7 +599,7 @@ func newDriver(m modelParams, p Profile, opts ...Option) driver.Driver {
 // DRIVER, driver.DiagnosticsReporter on the SESSION — are reached by the
 // house's two-result type assertion, never by a concrete type a caller
 // would have to import this package to name.
-func New(p Profile, opts ...Option) driver.Driver {
+func New(p driver.Profile, opts ...Option) driver.Driver {
 	return newDriver(model7300, p, opts...)
 }
 
@@ -608,7 +607,7 @@ func New(p Profile, opts ...Option) driver.Driver {
 // in every respect, including the fail-safe profile arm; the MK2's own
 // write guard is writeTrialsCompleteMK2, and it is false for the MK2's own
 // reasons.
-func NewMK2(p Profile, opts ...Option) driver.Driver {
+func NewMK2(p driver.Profile, opts ...Option) driver.Driver {
 	return newDriver(modelMK2, p, opts...)
 }
 

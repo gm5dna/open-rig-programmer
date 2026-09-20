@@ -106,7 +106,7 @@ var catDialect = cat.FT710
 // for a forged or corrupted Profile is always "nothing writable", never
 // a writable set. See Profile and writeTrialsComplete. Options:
 // WithTransportLogger, WithConsentedUnverifiedWrites.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ft710Driver{Base: driver.Base{Profile: profile}, dialect: catDialect}
 	for _, opt := range opts {
 		opt(d)
@@ -324,11 +324,6 @@ func (d *ft710Driver) open(ctx context.Context, eng *transport.Engine, id driver
 func (d *ft710Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capabilities {
 	return d.SessionCaps(effectiveCapabilities(d.Capabilities(), slots60m, emg))
 }
-
-// profileRecognised reports whether this driver's profile is one of the
-// declared constants — driver.Base's shared predicate, kept under the
-// name this package's tests put the question by.
-func (d *ft710Driver) profileRecognised() bool { return d.Recognised() }
 
 // nopLogger is the fallback transport.Logger when no WithTransportLogger
 // was supplied: it drops everything, mirroring transport's own default.

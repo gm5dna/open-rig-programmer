@@ -441,7 +441,7 @@ func baseCapabilities(m modelParams, memFields, pmsFields map[spec.Field]spec.Fi
 		// 863 is the DIGITS field, exactly how the committed inventory reads
 		// it. This driver's ASSUMED-register entry 3 carries the
 		// provenance and the per-model lift; it matters operationally
-		// because internal/wiring's OpenRealSessionFor opens a real radio at
+		// because internal/wiring's OpenRealSessionWith opens a real radio at
 		// exactly this DefaultBaud.
 		DefaultBaud: 38400,
 		// §1.11 and §1.12 — ASSUMED, one register entry (4) covering the

@@ -89,7 +89,7 @@ func (noSettleClock) Sleep(time.Duration)                    {}
 // false (nothing writable), and ANY unrecognised Profile value
 // deliberately selects the same fail-safe: the failure direction for a
 // forged or corrupted Profile is always "nothing writable".
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

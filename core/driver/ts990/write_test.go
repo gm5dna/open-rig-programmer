@@ -88,7 +88,7 @@ func writeImage(slot, frame string) radioImage {
 // gate is pinned on a session that has already passed that gate, and a test
 // asserting only "refused" would pass on the gate itself with the rung it
 // claims to pin absent from the code.
-func assertPositiveControl(t *testing.T, profile Profile, opts ...Option) {
+func assertPositiveControl(t *testing.T, profile driver.Profile, opts ...Option) {
 	t.Helper()
 	const id = "042"
 	sess, p := openSessionAt(t, profile, writeImage(id, populatedMA0(id)), opts...)

@@ -84,11 +84,11 @@ func TestNew_AnUnsetRowFailsClosed(t *testing.T) {
 // set, never the simulator's (matrix §2.1).
 func TestDriver_ProfileSelection(t *testing.T) {
 	for _, row := range bothRows {
-		var zero Profile
+		var zero driver.Profile
 		if zero != RealHardware {
 			t.Fatalf("the zero Profile is %v, want RealHardware (matrix §2.1)", zero)
 		}
-		for _, profile := range []Profile{RealHardware, Profile(7), Profile(-1)} {
+		for _, profile := range []driver.Profile{RealHardware, driver.Profile(7), driver.Profile(-1)} {
 			got := New(row, profile).Capabilities()
 			if !reflect.DeepEqual(got, CapabilitiesUnverified(row)) {
 				t.Errorf("%s: profile %v does not select CapabilitiesUnverified", modelNameFor(row), profile)
@@ -396,7 +396,7 @@ func TestOpen_ConsentTransformsTheSessionSetOnly(t *testing.T) {
 // survives consent.
 func TestOpen_ConsentIsSkippedForAnUnrecognisedProfile(t *testing.T) {
 	p := newRespondingPort(t, RowSG, radioImage{})
-	d := New(RowSG, Profile(9), testTiming(), WithConsentedUnverifiedWrites())
+	d := New(RowSG, driver.Profile(9), testTiming(), WithConsentedUnverifiedWrites())
 	sess, err := d.Open(context.Background(), p.Port(), driver.Identity{})
 	if err != nil {
 		t.Fatalf("Open: %v", err)

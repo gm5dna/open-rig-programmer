@@ -25,7 +25,7 @@ const memorySetStep = "1A 00"
 
 // ErrUnmappedRegion is the sentinel for ruling E6: the slot's unmapped
 // record regions differ from the profile's Fixed template.
-var ErrUnmappedRegion = errors.New("ic7851: the slot's unmapped record regions differ from this profile's Fixed template")
+var ErrUnmappedRegion = driver.ErrUnmappedRegion
 
 // UnmappedRegionError reports E6's refusal, naming exactly which region
 // disagreed and by how much.
@@ -41,15 +41,11 @@ var ErrUnmappedRegion = errors.New("ic7851: the slot's unmapped record regions d
 // "preserve what was there" is not available to it — that allow-case was
 // STRUCK from E6 REV 2 as unimplementable and as licensing the very
 // corruption the ruling forbids.
+// Fields are driver.UnmappedRegionError's shared shape
+// (core/driver/errors.go); Nibble is "low" or "high" — which half of the
+// byte.
 type UnmappedRegionError struct {
-	// Offset is the 0-based record byte whose unmapped region differed.
-	Offset int
-	// Nibble is "low" or "high" — which half of that byte.
-	Nibble string
-	// Want and Got are that nibble's value in the template and in the
-	// slot's actual record.
-	Want byte
-	Got  byte
+	driver.UnmappedRegionError
 }
 
 func (e *UnmappedRegionError) Error() string {
@@ -78,7 +74,7 @@ func (e *UnmappedRegionError) Unwrap() error { return ErrUnmappedRegion }
 
 // ErrOutOfDomain is the sentinel for a Known value outside what this
 // radio's record can encode.
-var ErrOutOfDomain = errors.New("ic7851: a Known value lies outside what this radio's record can encode")
+var ErrOutOfDomain = driver.ErrOutOfDomain
 
 // OutOfDomainError reports a Known numeric value outside the domain THIS
 // SESSION'S CAPABILITIES declare.
@@ -99,18 +95,10 @@ var ErrOutOfDomain = errors.New("ic7851: a Known value lies outside what this ra
 // the same capability numbers and enabler E3 bounds tones, so every path
 // through the model layer is covered; this refusal closes the driver's own
 // door as well.
+// Fields are driver.OutOfDomainError's shared shape
+// (core/driver/errors.go).
 type OutOfDomainError struct {
-	// Field is the neutral field whose value was refused.
-	Field spec.Field
-	// Value is what was asked for on a write, or what was decoded on a
-	// read, in the field's own neutral unit (hertz for a frequency,
-	// tenths of a hertz for a tone).
-	Value uint64
-	// Min and Max are this session's declared bounds for the field, in
-	// the same unit.
-	Min, Max uint64
-	// Where names the capability the bounds came from, for the message.
-	Where string
+	driver.OutOfDomainError
 }
 
 // Error's wording holds at both call sites: WriteChannel raises this
@@ -143,11 +131,11 @@ func (e *OutOfDomainError) Unwrap() error { return ErrOutOfDomain }
 // nothing.
 func domainRefusal(d codeplug.ChannelData, caps spec.Capabilities) error {
 	if d.FreqHz < caps.MinFreqHz || d.FreqHz > caps.MaxFreqHz {
-		return &OutOfDomainError{
+		return &OutOfDomainError{driver.OutOfDomainError{
 			Field: spec.FieldFrequency, Value: d.FreqHz,
 			Min: caps.MinFreqHz, Max: caps.MaxFreqHz,
 			Where: "spec.Capabilities.MinFreqHz/MaxFreqHz, the receiver coverage printed in the specifications",
-		}
+		}}
 	}
 	r := caps.CTCSSToneRange
 	for _, tt := range []struct {
@@ -162,17 +150,17 @@ func domainRefusal(d codeplug.ChannelData, caps spec.Capabilities) error {
 		}
 		v := uint64(tt.tone.Value)
 		if r == nil {
-			return &OutOfDomainError{
+			return &OutOfDomainError{driver.OutOfDomainError{
 				Field: tt.field, Value: v,
 				Where: "this session declares no CTCSSToneRange at all, so no tone is authorised",
-			}
+			}}
 		}
 		if v < uint64(r.MinDeciHz) || v > uint64(r.MaxDeciHz) {
-			return &OutOfDomainError{
+			return &OutOfDomainError{driver.OutOfDomainError{
 				Field: tt.field, Value: v,
 				Min: uint64(r.MinDeciHz), Max: uint64(r.MaxDeciHz),
 				Where: "spec.Capabilities.CTCSSToneRange, the tone span's BCD capacity (000.0-299.9 Hz)",
-			}
+			}}
 		}
 	}
 	return nil
@@ -551,7 +539,7 @@ func unmappedRegionsDiffer(raw []byte) error {
 	} {
 		want, got := chk.mask(tmpl[chk.offset]), chk.mask(raw[chk.offset])
 		if want != got {
-			return &UnmappedRegionError{Offset: chk.offset, Nibble: chk.nibble, Want: want, Got: got}
+			return &UnmappedRegionError{driver.UnmappedRegionError{Offset: chk.offset, Nibble: chk.nibble, Want: want, Got: got}}
 		}
 	}
 	return nil

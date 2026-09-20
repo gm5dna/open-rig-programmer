@@ -5,7 +5,6 @@ package fakeft1000mp
 import (
 	"io"
 	"testing"
-	"time"
 )
 
 // sendFrame writes one 5-byte frame to the radio's port.
@@ -152,22 +151,5 @@ func TestStoreEnter_RejectsMaskAndOutOfRange(t *testing.T) {
 				t.Fatalf("channel %d byte %d = %#02x, want 0x00 — Mask and out-of-range Store must both be silently ignored", ch, i, b)
 			}
 		}
-	}
-}
-
-func TestFullDumpChunking_ExceedsOneSecond(t *testing.T) {
-	r := New(WithFullDumpChunking(400, 300*time.Millisecond))
-	defer r.Close()
-	port := r.Port()
-
-	start := time.Now()
-	sendFrame(t, port, [4]byte{ufullDump, 0, 0, 0}, opStatusUpdate)
-	got := make([]byte, fullDumpLen)
-	if _, err := io.ReadFull(port, got); err != nil {
-		t.Fatalf("read chunked full dump: %v", err)
-	}
-	elapsed := time.Since(start)
-	if elapsed <= time.Second {
-		t.Errorf("chunked full dump took %v, want > 1s (this test's whole point: exercising a caller's own long-read timeout)", elapsed)
 	}
 }

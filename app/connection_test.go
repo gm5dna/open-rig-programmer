@@ -363,7 +363,7 @@ func TestConnect_UnknownModelRefused(t *testing.T) {
 // threading pin (M9c-5 E4): the ONE model the connect path resolves must
 // reach all THREE of its model-keyed wiring calls —
 // wiring.ResolveSnapshotDir, wiring.OpenFakeSessionFor and
-// wiring.OpenRealSessionFor — rather than each naming wiring.DefaultModel
+// wiring.OpenRealSessionWith — rather than each naming wiring.DefaultModel
 // for itself, which is what a snapshot directory belonging to a different
 // radio than the session writing into it would mean.
 //
@@ -441,7 +441,7 @@ func TestConnect_ResolvedModelThreadsIntoWiring(t *testing.T) {
 		t.Errorf("snapshot directory %s: %v; want it created — ResolveSnapshotDir did not receive the resolved model", wantDir, statErr)
 	}
 
-	// The real path: OpenRealSessionFor's model lookup refuses before any
+	// The real path: OpenRealSessionWith's model lookup refuses before any
 	// port is touched, so this needs no hardware and opens nothing.
 	_, err = a.Connect("/dev/nonexistent-rigprog-test-port", testModel)
 	assertUnknownModel(t, "Connect", err)

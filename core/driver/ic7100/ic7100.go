@@ -40,11 +40,6 @@ const (
 // Option configures the sessions produced by New.
 type Option func(*ic7100Driver)
 
-// SiblingLengths maps a foreign record-only length to a model name. It is
-// empty in Stage 2: the IC-7100 matrix declares no registered sibling, and
-// tier integration owns any later cross-model attribution.
-type SiblingLengths map[int]string
-
 // WithConsentedUnverifiedWrites records user consent for this session only.
 // The static capability set remains Unverified and FieldErase remains zero.
 func WithConsentedUnverifiedWrites() Option {
@@ -53,7 +48,7 @@ func WithConsentedUnverifiedWrites() Option {
 
 // New constructs the IC-7100 driver. It intentionally returns only the
 // neutral driver seam and does not register the model.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ic7100Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
@@ -63,7 +58,6 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 type ic7100Driver struct {
 	driver.Base
-	siblingLengths SiblingLengths
 }
 
 func (d *ic7100Driver) Model() string { return "IC-7100" }
@@ -104,7 +98,7 @@ func (d *ic7100Driver) Open(ctx context.Context, port transport.Port, id driver.
 
 func (d *ic7100Driver) open(ctx context.Context, eng *transport.Engine, stats civ.AccumulatorStatsReporter, id driver.Identity) (*Session, error) {
 	p := civic7100.Profile()
-	s := &Session{eng: eng, stats: stats, profile: p, caps: d.SessionCaps(d.Capabilities()), siblingLengths: d.siblingLengths}
+	s := &Session{eng: eng, stats: stats, profile: p, caps: d.SessionCaps(d.Capabilities())}
 	if err := eng.Init(ctx); err != nil {
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
 			return nil, fmt.Errorf("ic7100: Open: %w", err)
@@ -184,18 +178,13 @@ func (s *Session) probeFingerprint(ctx context.Context) error {
 }
 
 // wrongRecordLength is probe identity classification, not ordinary read
-// parsing. TestProbeRejectsWrongRecordLengthContinuously pins an
-// unattributed WrongRadioError when Stage 2 has no sibling table; the
-// synthetic attribution test pins the tier's explicitly provisional seam.
+// parsing. This driver has no cross-model record-length table, so it
+// always reports an unattributed WrongRadioError.
+// TestProbeRejectsWrongRecordLengthContinuously pins it.
 func (s *Session) wrongRecordLength(lengthErr *civ.RecordLengthError) error {
 	want := fmt.Sprintf("record %d", civic7100.RecordLength)
 	got := fmt.Sprintf("record %d", lengthErr.Got)
 	wrong := &driver.WrongRadioError{Want: want, Got: got}
-	if model, ok := s.siblingLengths[lengthErr.Got]; ok {
-		wrong.WantModel = civic7100.Profile().Model()
-		wrong.GotModel = model
-		return fmt.Errorf("ic7100: Open: record-length fingerprint: %w — attribution is PROVISIONAL because the compared record lengths are ASSUMED derivations", wrong)
-	}
 	return fmt.Errorf("ic7100: Open: record-length fingerprint: %w", wrong)
 }
 
@@ -218,9 +207,6 @@ type Session struct {
 	profile civ.Profile
 	caps    spec.Capabilities
 	id      driver.Identity
-	// siblingLengths is an optional diagnostic table and never widens the
-	// profile's accepted record-length set.
-	siblingLengths SiblingLengths
 
 	mu      sync.Mutex
 	diag    CIVDiagnostics

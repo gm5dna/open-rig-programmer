@@ -382,7 +382,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// RUNG 1 — the identifier's syntax, and nothing about membership.
 	number, err := parseSlotID(ch.Slot)
 	if err != nil {
-		return res, &UnknownSlotError{Slot: ch.Slot, Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Reason: err.Error()}}
 	}
 
 	// RUNG 2 — membership in THIS session's published banks. The same branch,
@@ -392,10 +392,10 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// UnknownSlotError, read.go, and decision 12).
 	bankID, ok := s.caps.BankOf(ch.Slot)
 	if !ok {
-		return res, &UnknownSlotError{
+		return res, &UnknownSlotError{driver.UnknownSlotError{
 			Slot:   ch.Slot,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 
 	// RUNG 3 — AN EMPTY CHANNEL IS AN ERASE REQUEST, AND IT IS REFUSED.
@@ -485,7 +485,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		// Unreachable for a slot the bank published, since every published
 		// identifier was rendered by this same layout's NewSlot (caps.go).
 		// Refuse rather than build a frame from a slot the codec disowns.
-		return res, &UnknownSlotError{Slot: ch.Slot, Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Reason: err.Error()}}
 	}
 	want, err := s.candidate(ch.Slot, slot, data)
 	if err != nil {

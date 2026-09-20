@@ -3,6 +3,7 @@
 package civ
 
 import (
+	"bytes"
 	"errors"
 	"math"
 	"strings"
@@ -478,7 +479,7 @@ func TestFixedTemplateMayCarryAConstantBesideANibbleEnum(t *testing.T) {
 
 	// And the constant is ENFORCED: altering it is a byte no builder would
 	// write, so the gate's re-encode refuses it.
-	mutated := copyBytes(frame)
+	mutated := bytes.Clone(frame)
 	mutated[len(mutated)-2] = 0x18
 	if p.AllowedCommand(mutated) {
 		t.Error("the gate admitted a record whose documented constant was altered — the template nibble is not being re-encoded")

@@ -130,7 +130,7 @@ func imageHolding(t *testing.T, record []byte, slots ...string) fakeic705.Image 
 }
 
 // openFake opens a session against a fake radio and registers both Closes.
-func openFake(t *testing.T, radio *fakeic705.Radio, profile ic705.Profile, opts ...ic705.Option) *ic705.Session {
+func openFake(t *testing.T, radio *fakeic705.Radio, profile driver.Profile, opts ...ic705.Option) *ic705.Session {
 	t.Helper()
 	sess, err := openFakeErr(t, radio, profile, opts...)
 	if err != nil {
@@ -139,7 +139,7 @@ func openFake(t *testing.T, radio *fakeic705.Radio, profile ic705.Profile, opts 
 	return sess
 }
 
-func openFakeErr(t *testing.T, radio *fakeic705.Radio, profile ic705.Profile, opts ...ic705.Option) (*ic705.Session, error) {
+func openFakeErr(t *testing.T, radio *fakeic705.Radio, profile driver.Profile, opts ...ic705.Option) (*ic705.Session, error) {
 	t.Helper()
 	t.Cleanup(func() { _ = radio.Close() })
 	opts = append(opts, ic705.WithNoPacingForTest())

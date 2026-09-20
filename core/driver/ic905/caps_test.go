@@ -217,7 +217,7 @@ func TestProfilesNeverEmitConsented(t *testing.T) {
 		{"Simulated", capabilitiesSimulated()},
 		{"RealHardware via New", New(RealHardware).Capabilities()},
 		{"Simulated via New", New(Simulated).Capabilities()},
-		{"unrecognised Profile via New", New(Profile(99)).Capabilities()},
+		{"unrecognised Profile via New", New(driver.Profile(99)).Capabilities()},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, b := range tt.caps.Banks {
@@ -513,13 +513,13 @@ func TestConsent_RefusesAnUnrecognisedProfile(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
 		name       string
-		profile    Profile
+		profile    driver.Profile
 		recognised bool
 	}{
 		{"RealHardware", RealHardware, true},
 		{"Simulated", Simulated, true},
-		{"an unrecognised value", Profile(99), false},
-		{"a negative value", Profile(-1), false},
+		{"an unrecognised value", driver.Profile(99), false},
+		{"a negative value", driver.Profile(-1), false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			d, ok := New(tt.profile, WithConsentedUnverifiedWrites()).(*ic905Driver)
@@ -547,7 +547,7 @@ func TestConsent_RefusesAnUnrecognisedProfile(t *testing.T) {
 // value, on a radio this tier assumes speaks 8-N-1.
 func TestDriver_ReportsOneStopBit(t *testing.T) {
 	t.Parallel()
-	for _, profile := range []Profile{RealHardware, Simulated, Profile(99)} {
+	for _, profile := range []driver.Profile{RealHardware, Simulated, driver.Profile(99)} {
 		r, ok := New(profile).(driver.SerialFramingReporter)
 		if !ok {
 			t.Fatalf("the driver for profile %d does not implement driver.SerialFramingReporter — internal/wiring would open the port at transport.DefaultStopBits, which is %d", profile, transport.DefaultStopBits)

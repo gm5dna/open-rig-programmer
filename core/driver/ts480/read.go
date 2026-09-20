@@ -4,7 +4,6 @@ package ts480
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -50,7 +49,7 @@ var toneModeNames = map[kw.ToneMode]string{
 // ErrUnknownSlot is the sentinel a caller compares against (via errors.Is)
 // when a slot identifier is not one this row publishes. The error actually
 // returned is an *UnknownSlotError.
-var ErrUnknownSlot = errors.New("ts480: slot is not one this row publishes")
+var ErrUnknownSlot = driver.ErrUnknownSlot
 
 // UnknownSlotError reports a slot identifier that is not in this row's bank —
 // whether because it is malformed or because it names a channel outside the
@@ -64,13 +63,12 @@ var ErrUnknownSlot = errors.New("ts480: slot is not one this row publishes")
 // and "100L" are perfectly good slot identifiers on those rows and are not
 // identifiers at all on this one, whose MC prints neither a hundreds digit nor
 // a section-channel half (480:827, 480:830).
+//
+// Fields are driver.UnknownSlotError's shared shape (core/driver/errors.go);
+// this package keeps its own Error() because the "ts480:" prefix is a
+// package literal, not a field.
 type UnknownSlotError struct {
-	// Slot is the identifier that was requested.
-	Slot string
-	// Model is the row it was requested of.
-	Model string
-	// Reason says how it failed.
-	Reason string
+	driver.UnknownSlotError
 }
 
 // Error implements the error interface.
@@ -308,15 +306,15 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	number, err := parseSlotID(id)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: modelName, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: modelName, Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(id)
 	if !ok {
-		return codeplug.Channel{}, &UnknownSlotError{
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{
 			Slot:   id,
 			Model:  modelName,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 	slot, err := s.layout.NewSlot(number, kw.ScanHalfNone)
 	if err != nil {
@@ -324,7 +322,7 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 		// identifier was rendered from this same layout's NewSlot
 		// (caps.go). Refuse rather than build a frame from a slot the codec
 		// disowns.
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: modelName, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: modelName, Reason: err.Error()}}
 	}
 
 	cmd, err := s.layout.BuildMRRead(slot)

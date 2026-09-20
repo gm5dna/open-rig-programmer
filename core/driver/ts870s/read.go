@@ -39,10 +39,11 @@ func parseSlotID(id string) (int, error) {
 }
 
 // UnknownSlotError reports that a slot id names no channel this row
-// publishes.
+// publishes. Fields are driver.UnknownSlotError's shared shape
+// (core/driver/errors.go); Model is left unset — this row's message
+// carries no model name at all, unlike the other six ts* packages.
 type UnknownSlotError struct {
-	Slot   string
-	Reason string
+	driver.UnknownSlotError
 }
 
 func (e *UnknownSlotError) Error() string {
@@ -50,7 +51,7 @@ func (e *UnknownSlotError) Error() string {
 }
 
 // ErrUnknownSlot is the sentinel a caller compares against.
-var ErrUnknownSlot = fmt.Errorf("ts870s: slot is not one this row publishes")
+var ErrUnknownSlot = driver.ErrUnknownSlot
 
 func (e *UnknownSlotError) Unwrap() error { return ErrUnknownSlot }
 
@@ -91,10 +92,10 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	channel, err := parseSlotID(id)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Reason: err.Error()}}
 	}
 	if _, ok := s.bankFor(id); !ok {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Reason: "this row publishes MEM 00-99 only"}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Reason: "this row publishes MEM 00-99 only"}}
 	}
 
 	cmd, err := s.layout.BuildMRRead(channel)

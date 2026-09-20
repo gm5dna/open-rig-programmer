@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft1000mp"
@@ -84,540 +85,204 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakets990"
 )
 
-// FakeSessionOpts holds extra fakeradio.Option values applied, on top of
-// the always-empty production default, to the FT-710's fake rig on every
-// OpenFakeSessionFor call in this process. It exists solely as a minimal
-// test-only seam (task-12 brief §3, moved verbatim from
-// cmd/rigprog/wiring.go's openFakeSessionOpts by task-15's extraction):
-// an in-process inventory-mismatch case needs a caller to run against a
-// NON-default factory image (e.g. fakeradio.ImageUS) through the EXACT
-// SAME code path a real "--fake"/demo invocation uses, rather than
-// hand-building a session that bypasses this package's constructor
-// entirely.
+// The *FakeSessionOpts variables below are per-model test-only seams
+// (task-12 brief §3): each is read at CALL time inside that model's own
+// newRadio closure below, on top of the always-empty production default,
+// so a test can steer ONE model's fake rig — through the exact code path
+// a real "--fake"/demo invocation uses — without a generic, cross-model
+// option channel that could only be typed by emptying it of meaning
+// (M9c-5 E5). Each variable's element type is that model's own
+// simulator's Option func, deliberately NOT unified: a crossed
+// application is a COMPILE error wherever two models' simulators differ,
+// which is every pairing except the FTdx101, IC-7851/IC-7850, and TS-590
+// siblings, whose shared simulator makes their variables mutually
+// assignable — those pairs are kept apart only by which row's closure
+// reads which variable, each pinned by its own
+// TestOpenFakeSessionFor_*OptionSourceIsItsOwn test rather than the
+// compiler. A model whose simulator's New takes no per-row argument
+// (TS-2000, TS-570, FT-2000 families) shares ONE variable across its
+// several registry rows instead.
 //
-// FT-710-SPECIFIC BY DESIGN, recorded (M9c-5 E5). Its type names
-// internal/fakeradio, which is the FT-710's simulator; it is captured by
-// the FT-710 entry's own newRadio closure below, not applied by
-// OpenFakeSessionFor to whatever rig a model happens to build. A second
-// model's fake rig is a different type with different options, and it
-// gets its own capture in its own closure — deliberately NOT a shared,
-// generic option channel, which could only be typed by emptying it of
-// meaning. The seam stays as narrow as the one test need that justifies
-// it.
-//
-// The FTdx10's registration (M9c-6) is that design's first real test, and
-// it held: FTdx10FakeSessionOpts below is a SEPARATE variable of a
-// different element type ([]fakedx10.Option), read in its own closure. No
-// generic option plumbing was needed, and neither model's options can
-// reach the other's rig.
-//
-// THE DIFFERENT-ELEMENT-TYPE PART OF THAT IS NOT UNIVERSAL, and M9d-2 is
-// where it stopped being: FTdx101DFakeSessionOpts and
-// FTdx101MPFakeSessionOpts (two declarations below) are BOTH
-// []fakedx101.Option, because one simulator serves both FTDX101 siblings.
-// The separate-variable-per-model rule holds there; the compiler-enforced
-// half does not, and tests stand in for it. See FTdx101DFakeSessionOpts'
-// own doc comment.
-//
-// No production flag or GUI control populates this — it does not add a
-// second ft710.Simulated reference to any non-test file:
+// No production flag or GUI control populates any of them — none adds a
+// second <model>.Simulated reference to any non-test file, so
 // TestSimulatedProfileTokensConfinement (internal/guards) keeps passing
-// unchanged. It is analogous to core/clone's Service.openJournal field,
-// which a test in that package overwrites directly for the same reason.
+// unchanged.
 //
-// A test that sets it MUST restore the previous value (e.g. via
+// A test that sets one MUST restore the previous value (e.g. via
 // t.Cleanup) — this is shared, unsynchronised package state, acceptable
 // only because no test using it calls t.Parallel().
+
+// FakeSessionOpts is the FT-710's own option source ([]fakeradio.Option).
 var FakeSessionOpts []fakeradio.Option
 
-// FTdx10FakeSessionOpts is the FTdx10's own option source: extra
-// fakedx10.Option values applied, on top of the always-empty production
-// default, to the FTdx10's fake rig on every OpenFakeSessionFor call in
-// this process. It is FakeSessionOpts' FTdx10 counterpart and NOT a
-// generalisation of it (M9c-5 E5, realised at M9c-6 task 6) — a separate
-// variable, of a different element type, read at CALL time inside the
-// FTdx10 entry's own newRadio closure below.
-//
-// Its element type is the point. internal/fakedx10 simulates the FTdx10;
-// its Option is a func(*fakedx10.Radio) and cannot configure an
-// *fakeradio.Radio, nor the reverse. Two typed variables therefore make a
-// crossed application a COMPILE error, where one shared generically-typed
-// option channel would have made it a silent no-op at runtime.
-//
-// Its users today are a wiring test that opens an FTdx10 fake carrying a
-// populated 5 MHz bank (fakedx10.With5xx) through the very code path a
-// real "--fake --model FTdx10" invocation uses, and app/uispec_test.go's
-// D5c acceptance tests, which reach GetUISpec through the same path with
-// a discovered bank present — the discovery-through-wiring
-// property no default-image session can express, since the default FTdx10
-// image deliberately has no 5xx bank at all.
-//
-// No production flag or GUI control populates this — it adds no second
-// ftdx10.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ftdx10 row keeps passing.
-//
-// A test that sets it MUST restore the previous value (e.g. via
-// t.Cleanup) — this is shared, unsynchronised package state, acceptable
-// only because no test using it calls t.Parallel().
+// FTdx10FakeSessionOpts is the FTdx10's own option source
+// ([]fakedx10.Option).
 var FTdx10FakeSessionOpts []fakedx10.Option
 
-// FTdx101DFakeSessionOpts is the FTDX101D's own option source: extra
-// fakedx101.Option values applied, on top of the always-empty production
-// default, to the FTDX101D's fake rig on every OpenFakeSessionFor call in
-// this process. It is FakeSessionOpts' and FTdx10FakeSessionOpts' FTdx101D
-// counterpart and, like them, NOT a generalisation of anything — a separate
-// variable read at CALL time inside the FTdx101D entry's own newRadio
-// closure below.
-//
-// NO OPTION LEAKAGE ACROSS SIBLINGS (spec A6), and this pair of variables
-// is where that rule is enforced. A test setting options in THIS variable
-// must not steer an FTDX101MP session, and a test setting them in
-// FTdx101MPFakeSessionOpts must not steer a D's: the two models share a
-// driver package, a dialect config and a simulator type, so nothing about
-// their TYPES prevents a crossing the way []fakeradio.Option and
-// []fakedx10.Option prevent theirs. Both vars are []fakedx101.Option, and a
-// crossed application would COMPILE. Separation here is therefore a
-// structural choice enforced by which closure reads which variable, and it
-// is pinned by tests
-// (TestOpenFakeSessionFor_FTdx101DOptionSourceIsItsOwn and its MP sibling)
-// rather than by the compiler — the one place in this file where that is
-// true, and the reason those tests exist at all.
-//
-// No production flag or GUI control populates this — it adds no second
-// ftdx101.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's two ftdx101 rows keep passing.
-//
-// A test that sets it MUST restore the previous value (e.g. via
-// t.Cleanup) — this is shared, unsynchronised package state, acceptable
-// only because no test using it calls t.Parallel().
+// FTdx101DFakeSessionOpts and FTdx101MPFakeSessionOpts are the FTDX101D's
+// and FTDX101MP's own option sources — BOTH []fakedx101.Option, because
+// one simulator serves both rows (spec A6's no-leakage rule).
 var FTdx101DFakeSessionOpts []fakedx101.Option
 
-// FTdx101MPFakeSessionOpts is the FTDX101MP's own option source, on exactly
-// the same terms as FTdx101DFakeSessionOpts — see that variable's doc
-// comment for the no-leakage rule the pair exists to carry, and for why
-// this one is a SECOND variable of the SAME element type rather than a
-// shared one keyed by model.
-//
-// Restated because it is the whole point: setting options here must not
-// steer an FTDX101D session. The two radios differ on the wire in the ID
-// answer alone, so an option that leaked from one sibling to the other
-// would produce a session that looked entirely well-formed and was
-// answering from the wrong rig's inventory.
+// FTdx101MPFakeSessionOpts is the FTDX101MP's own option source. See
+// FTdx101DFakeSessionOpts' own doc comment for the pair's shared-type
+// hazard.
 var FTdx101MPFakeSessionOpts []fakedx101.Option
 
-// IC705FakeSessionOpts is the IC-705's own option source, on the same
-// terms as every other model's own variable above — see
-// FTdx10FakeSessionOpts' doc comment for the shape this restates:
-// internal/fakeic705 simulates the IC-705 specifically, its Option is a
-// func(*fakeic705.Radio), read at CALL time inside the IC705Model entry's
-// own newRadio closure below, and never captured at package init.
-//
-// No production flag or GUI control populates this — it adds no second
-// ic705.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ic705 row keeps passing.
-//
-// A test that sets it MUST restore the previous value (e.g. via
-// t.Cleanup) — this is shared, unsynchronised package state, acceptable
-// only because no test using it calls t.Parallel().
+// IC705FakeSessionOpts is the IC-705's own option source
+// ([]fakeic705.Option).
 var IC705FakeSessionOpts []fakeic705.Option
 
-// IC905FakeSessionOpts is the IC-905's own option source, on the same
-// terms as every other model's own variable above — see
-// FTdx10FakeSessionOpts' doc comment for the shape this restates:
-// internal/fakeic905 simulates the IC-905 specifically, its Option is a
-// func(*fakeic905.Radio) (options.go's WithRecord, WithEmpty and the
-// rest), read at CALL time inside the IC905Model entry's own newRadio
-// closure below, and never captured at package init.
-//
-// LEFT AT ITS NIL ZERO VALUE, THE SESSION STARTS EMPTY. internal/fakeic905's
-// own New builds ten occupied channels in group 0 by default (image.go's
-// defaultImage), but every one of them holds an ALL-ZERO invented record
-// that core/civ/ic905/profile.go's filter refuses to decode (byte 0x00 at
-// offset 7 is not a value that filter defines) — so the IC905Model row
-// below empties all ten with WithEmpty BEFORE appending this variable's
-// options, and an unset IC905FakeSessionOpts therefore leaves NO occupied
-// channel, not the ten-channel default this comment used to describe. A
-// test that wants a populated channel reaches it through this variable
-// exactly as every other model's own seam works — WithRecord after the
-// row's own WithEmpty calls still wins, per options.go's "later one wins"
-// rule.
-//
-// No production flag or GUI control populates this — it adds no second
-// ic905.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ic905 row keeps passing.
-//
-// A test that sets it MUST restore the previous value (e.g. via
-// t.Cleanup) — this is shared, unsynchronised package state, acceptable
-// only because no test using it calls t.Parallel().
+// IC905FakeSessionOpts is the IC-905's own option source
+// ([]fakeic905.Option). internal/fakeic905's own default image seeds ten
+// occupied channels the driver's filter can't decode, so the IC905Model
+// row empties all ten with WithEmpty BEFORE appending this variable's
+// options — left at nil, the session therefore starts with NO occupied
+// channel, not the ten-channel raw default.
 var IC905FakeSessionOpts []fakeic905.Option
 
 // IC7851FakeSessionOpts and IC7850FakeSessionOpts are the IC-7851's and
-// the IC-7850's own option sources, on the same terms as every other
-// model's own variable above — see FTdx10FakeSessionOpts' doc comment for
-// the shape this restates.
-//
-// BOTH ARE []fakeic7851.Option, because ONE simulator serves both rows,
-// and that is the FTdx101D/FTdx101MP hazard again rather than a new one:
-// unlike every other pairing in this file a crossing here would COMPILE.
-// What keeps the two seams apart is that each is read at CALL time inside
-// its OWN row's newRadio closure below, never captured at package init
-// and never shared — exactly as FTdx101DFakeSessionOpts and
-// FTdx101MPFakeSessionOpts are, and pinned the same way
-// (TestOpenFakeSessionFor_IC7851OptionSourceIsItsOwn and its IC-7850
-// sibling).
-//
-// LEFT AT ITS NIL ZERO VALUE THE DEMO RADIO IS EMPTY, and that is
-// internal/fakeic7851's own default rather than anything this file
-// arranges: its defaultConfig seeds no channel at all, so a
-// `--fake --model IC-7851` session opens UNFINGERPRINTED (every probed
-// slot answers FA) and reads each of its 101 slots as an empty channel —
-// which is a decodable answer, not a failure, so
-// TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot
-// passes without this row seeding anything. Contrast the IC905Model row
-// below, whose fake's own default image had to be emptied here.
-//
-// No production flag or GUI control populates either — they add no second
-// ic7851.WithSimulatedProfile reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ic7851 row keeps passing.
-//
-// A test that sets one MUST restore the previous value (e.g. via
-// t.Cleanup) — this is shared, unsynchronised package state, acceptable
-// only because no test using it calls t.Parallel().
+// IC-7850's own option sources — BOTH []fakeic7851.Option, because one
+// simulator serves both rows (the FTdx101 pair's shared-type shape).
+// Left at nil, the demo radio is empty: fakeic7851's own default seeds no
+// channel at all.
 var IC7851FakeSessionOpts []fakeic7851.Option
 
-// IC7850FakeSessionOpts is the IC-7850's own option source, on exactly
-// the same terms as IC7851FakeSessionOpts — see that variable's doc
-// comment, and note in particular that the two are the same TYPE and so
-// mutually assignable: only the two closures below keep them apart.
+// IC7850FakeSessionOpts is the IC-7850's own option source. See
+// IC7851FakeSessionOpts' own doc comment for the pair's shared-type
+// hazard.
 var IC7850FakeSessionOpts []fakeic7851.Option
 
-// FT891FakeSessionOpts is the FT-891's own option source: extra
-// fakeft891.Option values applied, on top of the always-empty production
-// default, to the FT-891's fake rig on every OpenFakeSessionFor call in this
-// process. It is FakeSessionOpts' FT-891 counterpart and, like every
-// variable above, NOT a generalisation of anything — a separate variable, of
-// a different element type, read at CALL time inside the FT891 entry's own
-// newRadio closure below.
-//
-// NO SHARED-TYPE HAZARD, as for the single-model Icom variables above and
-// unlike the FTdx101 and IC-7851 pairs': internal/fakeft891 simulates the
-// FT-891 specifically and its Option is a func(*fakeft891.Radio), so a
-// closure reading another model's variable is a COMPILE ERROR rather than a
-// silent crossing. This row therefore needs no non-interference test of the
-// FTdx101 pair's kind — the type system already carries that proof — and the
-// test it does have (TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn) pins
-// the OTHER half: that this variable actually reaches this model's rig.
-//
-// LEFT AT ITS NIL ZERO VALUE THE DEMO FT-891 SHIPS TWO OCCUPIED MEMORY
-// CHANNELS AND NINE POPULATED PMS PAIRS, and NO 5 MHz or emergency channel
-// at all — internal/fakeft891's own DefaultImage, constrained that way on
-// purpose (plan decision P13). The ">= 1 populated MEM channel" half is what
-// keeps this package's read-every-default-slot fleet pin non-vacuous for
-// this row; the "no 5xx/EMG" half is what keeps a plain `--fake --model
-// FT-891` session's discovery walk finding nothing, so the discovered banks
-// are a thing a test asks for rather than a thing the demo radio happens to
-// have.
-//
-// ITS USERS ARE THE TESTS THAT NEED WHAT THE DEFAULT IMAGE DELIBERATELY
-// WITHHOLDS: fakeft891.With5MHz() / fakeft891.WithEMG() for the discovered
-// banks (this package's own SynthesiseDiscoveredBanks agreement test and
-// app/uispec_test.go's FT-891 discovered-bank test), and
-// fakeft891.WithEXUnavailable / WithEXSetting for the settings legs — each
-// through the very code path a real `--fake --model FT-891` invocation uses.
-//
-// No production flag or GUI control populates this — it adds no second
-// ft891.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ft891 row keeps passing.
-//
-// A test that sets it MUST restore the previous value (e.g. via t.Cleanup) —
-// this is shared, unsynchronised package state, acceptable only because no
-// test using it calls t.Parallel().
+// FT891FakeSessionOpts is the FT-891's own option source
+// ([]fakeft891.Option). Left at nil, the demo FT-891 ships two occupied
+// memory channels and nine populated PMS pairs, and no 5 MHz or
+// emergency channel (plan decision P13) — reached via fakeft891.With5MHz
+// / WithEMG for tests that need them discovered.
 var FT891FakeSessionOpts []fakeft891.Option
 
-// FT991AFakeSessionOpts is the FT-991A's own option source: extra
-// fakeft991a.Option values applied, on top of the always-empty production
-// default, to the FT-991A's fake rig on every OpenFakeSessionFor call in this
-// process. It is FakeSessionOpts' FT-991A counterpart and, like every
-// variable above, NOT a generalisation of anything — a separate variable, of
-// a different element type, read at CALL time inside the FT991A entry's own
-// newRadio closure below.
-//
-// NO SHARED-TYPE HAZARD, as for the FT-891's and the single-model Icom
-// variables above and unlike the FTdx101 and IC-7851 pairs':
-// internal/fakeft991a simulates the FT-991A specifically and its Option is a
-// func(*fakeft991a.Radio), so a closure reading another model's variable is a
-// COMPILE ERROR rather than a silent crossing. This row therefore needs no
-// non-interference test of the FTdx101 pair's kind — the type system already
-// carries that proof — and the test it does have
-// (TestOpenFakeSessionFor_FT991AOptionSourceIsItsOwn) pins the OTHER half:
-// that this variable actually reaches this model's rig.
-//
-// LEFT AT ITS NIL ZERO VALUE THE DEMO FT-991A SHIPS TWO OCCUPIED MEMORY
-// CHANNELS AND TWO POPULATED PMS PAIRS — the first (100/101) and the last
-// (116/117) — and nothing else (internal/fakeft991a's own DefaultImage,
-// constrained that way on purpose, plan decision P14). BOTH halves of that
-// are load-bearing here: the memory channel keeps this package's
-// read-every-default-slot fleet pin non-vacuous for this row, and the PMS
-// pairs keep it non-vacuous on the bank where this radio is unlike every
-// registered sibling — decimal slot numbers where theirs are "P1L".."P9U".
-// There is NO discovered bank to keep empty, unlike the FT-891's row: this
-// radio discovers nothing at Open (matrix §3.4).
-//
-// ITS USERS ARE THE TESTS THAT NEED WHAT THE DEFAULT IMAGE DELIBERATELY
-// WITHHOLDS: fakeft991a.WithDCSChannels() for the five-state P8 legs,
-// fakeft991a.WithSlot for a particular record, and
-// fakeft991a.WithEXUnavailable / WithEXSetting for the settings legs — each
-// through the very code path a real `--fake --model FT-991A` invocation uses.
-//
-// No production flag or GUI control populates this — it adds no second
-// ft991a.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ft991a row keeps passing.
-//
-// A test that sets it MUST restore the previous value (e.g. via t.Cleanup) —
-// this is shared, unsynchronised package state, acceptable only because no
-// test using it calls t.Parallel().
+// FT991AFakeSessionOpts is the FT-991A's own option source
+// ([]fakeft991a.Option). Left at nil, the demo FT-991A ships two occupied
+// memory channels (100/101) and two populated PMS pairs (116/117) and
+// nothing else (plan decision P14) — no discovered bank at all, unlike
+// the FT-891's.
 var FT991AFakeSessionOpts []fakeft991a.Option
 
-// TS590SFakeSessionOpts and TS590SGFakeSessionOpts are the TS-590 pair's own
-// option sources: extra fakets590.Option values applied, on top of the
-// always-empty production default, to each sibling's fake rig on every
-// OpenFakeSessionFor call in this process. They are FakeSessionOpts'
-// TS-590 counterparts and, like every variable above, NOT a generalisation
-// of anything — separate variables, read at CALL time inside each row's own
-// newRadio closure below.
-//
-// A SHARED-TYPE HAZARD, like the FTdx101 and IC-7851 pairs' and unlike the
-// single-model variables above: internal/fakets590 simulates BOTH siblings
-// and its Option is a func(*fakets590.Radio), so a closure reading the other
-// row's variable would COMPILE and quietly seed one demo radio from the
-// other's seam. Reading each variable inside its own row's closure is the
-// only thing keeping the two apart, exactly as it is for the FTdx101 pair,
-// and TestOpenFakeSessionFor_TS590SOptionSourceIsItsOwn and
-// TestOpenFakeSessionFor_TS590SGOptionSourceIsItsOwn pin that each variable
-// reaches its own rig and NOT the sibling's.
-//
-// LEFT AT THEIR NIL ZERO VALUES BOTH DEMO RADIOS SHIP THE SAME FIVE
-// POPULATED RECORDS OVER FOUR CHANNELS — memory channels 000, 001 and 002,
-// one record each, and BOTH HALVES of section-defined channel 100 — which is
-// internal/fakets590's own DefaultImage, every byte of it a printed
-// constant, a printed example or the eight-space name (plan decision P19,
-// that package's PROVENANCE.md). Records and channels are counted separately
-// because 100's two halves are two records at one channel number. The
-// ">= 1 populated MEM channel" half is what keeps this package's
-// read-every-default-slot fleet pin non-vacuous for both rows.
-//
-// NO IMAGE EXISTS FOR THE SG's 110-119 AT ALL, and that is decision row 6
-// rather than an omission — at THIS layer. The CODEC ADMITS those ten slots
-// deliberately (core/kw/ts590/layout.go: the book prints 110-119 for the SG
-// row, so an "MR0115;" answer must parse rather than be refused); what an
-// extension channel IS is never explained (A11), so the DRIVER publishes no
-// bank containing them and the fake therefore has no slot ID for an image to
-// represent. Codec domain and driver publication are two different
-// questions, and it is the second that closes here.
-//
-// No production flag or GUI control populates either — they add no second
-// ts590.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ts590 row keeps passing.
-//
-// A test that sets one MUST restore the previous value (e.g. via
-// t.Cleanup) — this is shared, unsynchronised package state, acceptable
-// only because no test using it calls t.Parallel().
+// TS590SFakeSessionOpts and TS590SGFakeSessionOpts are the TS-590 pair's
+// own option sources — BOTH []fakets590.Option, because one simulator
+// serves both rows (the FTdx101 pair's shared-type shape). Left at nil,
+// both demo radios ship the same five populated records over four
+// channels (plan decision P19); no image exists for the SG's 110-119 at
+// all (decision row 6 — the codec admits those slots, but no driver bank
+// publishes them).
 var (
 	TS590SFakeSessionOpts  []fakets590.Option
 	TS590SGFakeSessionOpts []fakets590.Option
 )
 
 // TS890SFakeSessionOpts and TS990SFakeSessionOpts are the TS-890S's and
-// TS-990S's own option sources: extra fakets890.Option / fakets990.Option
-// values applied, on top of the always-empty production default, to that
-// radio's fake rig on every OpenFakeSessionFor call in this process. They are
-// FakeSessionOpts' Tier-6-second-pair counterparts and, like every variable
-// above, NOT a generalisation of anything — separate variables, read at CALL
-// time inside each row's own newRadio closure below.
-//
-// THE SHARED-TYPE HAZARD THE 590 PAIR CARRIES IS ABSENT HERE, and saying so
-// is worth more than repeating the warning: internal/fakets890 and
-// internal/fakets990 are two packages with two Option types, so a closure
-// reading the other row's variable does not compile. What CAN still go wrong
-// is a copy-paste that builds the 890S TWICE — both rows calling
-// fakets890.New with the 890's variable — which compiles perfectly and gives
-// a "TS-990S" session answering "024". TestOpenFakeSessionFor_TS890SOptionSourceIsItsOwn
-// and its 990S mirror read each variable through OpenFakeSessionFor and
-// assert the SIBLING's session does not see it, which catches that; the
-// identity leg of TestOpenFakeSessionFor_EveryRegisteredModel catches it
-// again from the CAT ID.
-//
-// LEFT AT THEIR NIL ZERO VALUES the two demo radios ship DIFFERENT images,
-// and neither is the other's. internal/fakets890's DefaultImage populates
-// memory channels 000-003 and puts a BLANK record carrying a residual name in
-// 004 (that package's A21 fixture); internal/fakets990's populates 000-003 and
-// has no blank-with-residue slot at all. Every byte of both is a printed
-// constant, a printed example or a printed character (plan decision P19, each
-// package's PROVENANCE.md), and the composition of each RECORD is that
-// package's own A22 entry. The populated channels are what keep this
-// package's read-every-default-slot fleet pin non-vacuous for both rows.
-//
-// NO IMAGE EXISTS FOR SLOTS 100-119 ON EITHER ROW, and that is plan decision
-// P11 rather than an omission: both radios have those channels, neither book
-// prints what selects a section channel's start or end frequency, so the
-// DRIVER publishes no bank containing them and the fake has no slot ID for an
-// image to represent.
-//
-// No production flag or GUI control populates either — they add no second
-// ts890.Simulated or ts990.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's two new rows keep passing.
-//
-// A test that sets one MUST restore the previous value (e.g. via t.Cleanup) —
-// this is shared, unsynchronised package state, acceptable only because no
-// test using it calls t.Parallel().
+// TS-990S's own option sources ([]fakets890.Option / []fakets990.Option —
+// two distinct types, so no compile-time crossing hazard, only a
+// copy-paste one). Left at nil, the two demo radios ship DIFFERENT
+// default images (fakets890's 004 carries a blank record with residual
+// name, fakets990's does not); neither publishes an image for slots
+// 100-119 (plan decision P11).
 var (
 	TS890SFakeSessionOpts []fakets890.Option
 	TS990SFakeSessionOpts []fakets990.Option
 )
 
-// TS2000FakeSessionOpts is the TS-2000 family's own option source: extra
-// fakets2000.Option values applied, on top of the always-empty production
-// default, to the shared fake rig on every OpenFakeSessionFor call. ONE
-// variable for THREE registry rows — internal/fakets2000's New takes no row
-// argument at all (WithModelName is the option form, per fake.md), so there
-// is no per-row variable to keep separate the way the 590 pair's are.
-//
-// A test that sets this MUST restore the previous value (e.g. via
-// t.Cleanup) — shared, unsynchronised package state, acceptable only
-// because no test using it calls t.Parallel().
+// TS2000FakeSessionOpts is the TS-2000 family's own option source
+// ([]fakets2000.Option) — ONE variable for THREE registry rows, since
+// internal/fakets2000's New takes no per-row argument.
 var TS2000FakeSessionOpts []fakets2000.Option
 
-// TS570DFakeSessionOpts is the TS-570 family's own option source: extra
-// fakets570.Option values applied, on top of the always-empty production
-// default, to the shared fake rig on every OpenFakeSessionFor call. ONE
-// variable for THREE registry rows — internal/fakets570's New takes no row
-// argument (WithModelName is the option form, per fake.md), so there is no
-// per-row variable to keep separate the way the 590 pair's are.
-//
-// A test that sets this MUST restore the previous value (e.g. via
-// t.Cleanup) — shared, unsynchronised package state, acceptable only
-// because no test using it calls t.Parallel().
+// TS570DFakeSessionOpts is the TS-570 family's own option source
+// ([]fakets570.Option) — ONE variable for THREE registry rows, since
+// internal/fakets570's New takes no per-row argument.
 var TS570DFakeSessionOpts []fakets570.Option
 
-// TS870SFakeSessionOpts is the TS-870S's own option source: extra
-// fakets870s.Option values applied, on top of the always-empty production
-// default, to its fake rig on every OpenFakeSessionFor call — one row, one
-// package, one simulator, no sibling to share either with.
-//
-// A test that sets this MUST restore the previous value (e.g. via
-// t.Cleanup) — shared, unsynchronised package state, acceptable only
-// because no test using it calls t.Parallel().
+// TS870SFakeSessionOpts is the TS-870S's own option source
+// ([]fakets870s.Option).
 var TS870SFakeSessionOpts []fakets870s.Option
 
-// FT2000FakeSessionOpts is the FT-2000 family's own option source: extra
-// fakeft2000.Option values applied, on top of the always-empty production
-// default, to the shared fake rig on every OpenFakeSessionFor call. ONE
-// variable for TWO registry rows — internal/fakeft2000's New takes no row
-// argument (WithModelName is the option form, per fake.md, a deliberate
-// deviation this package's own doc.go records), so there is no per-row
-// variable to keep separate.
-//
-// A test that sets this MUST restore the previous value (e.g. via
-// t.Cleanup) — shared, unsynchronised package state, acceptable only
-// because no test using it calls t.Parallel().
+// FT2000FakeSessionOpts is the FT-2000 family's own option source
+// ([]fakeft2000.Option) — ONE variable for TWO registry rows, since
+// internal/fakeft2000's New takes no per-row argument (a deliberate
+// deviation this package's own doc.go records).
 var FT2000FakeSessionOpts []fakeft2000.Option
 
-// FTdx5000FakeSessionOpts is the FTdx5000's own option source, on the same
-// terms as every single-row model's above — one row, one package, one
-// simulator.
+// FTdx5000FakeSessionOpts is the FTdx5000's own option source
+// ([]fakeftdx5000.Option).
 var FTdx5000FakeSessionOpts []fakeftdx5000.Option
 
-// FTdx9000FakeSessionOpts is the FTdx9000's own option source, on the same
-// terms as every single-row model's above — one row, one package, one
-// simulator.
+// FTdx9000FakeSessionOpts is the FTdx9000's own option source
+// ([]fakeftdx9000.Option).
 var FTdx9000FakeSessionOpts []fakeftdx9000.Option
 
-// FT950FakeSessionOpts is the FT-950's own option source, on the same
-// terms as every single-row model's above — one row, one package, one
-// simulator.
+// FT950FakeSessionOpts is the FT-950's own option source
+// ([]fakeft950.Option).
 var FT950FakeSessionOpts []fakeft950.Option
 
-// FTdx3000FakeSessionOpts is the FTdx3000's own option source, on the
-// same terms as every single-row model's above — one row, one package,
-// one simulator.
+// FTdx3000FakeSessionOpts is the FTdx3000's own option source
+// ([]fakeftdx3000.Option).
 var FTdx3000FakeSessionOpts []fakeftdx3000.Option
 
-// FTdx1200FakeSessionOpts is the FTdx1200's own option source, on the
-// same terms as every single-row model's above — one row, one package,
-// one simulator.
+// FTdx1200FakeSessionOpts is the FTdx1200's own option source
+// ([]fakeftdx1200.Option).
 var FTdx1200FakeSessionOpts []fakeftdx1200.Option
 
-// FT450DFakeSessionOpts is the FT-450D's own option source, on the same
-// terms as every single-row model's above — one row, one package, one
-// simulator.
+// FT450DFakeSessionOpts is the FT-450D's own option source
+// ([]fakeft450d.Option).
 var FT450DFakeSessionOpts []fakeft450d.Option
 
-// FT890FakeSessionOpts is the FT-890's own option source: internal/fakeft890
-// simulates the FT-890 specifically (a SEPARATE constructor from the
-// FT-900's own fakeft900.New, registered separately, both under the
-// ft890900 driver package's one Simulated token — the FTdx101D/FTdx101MP
-// shape, not the ts2000-family shared-fake one).
+// FT890FakeSessionOpts is the FT-890's own option source
+// ([]fakeft890.Option). internal/fakeft890 is a separate constructor from
+// the FT-900's own fakeft900.New, both registered under the ft890900
+// driver package's one Simulated token (the FTdx101D/FTdx101MP shape,
+// not the TS-2000-family shared-fake one).
 var FT890FakeSessionOpts []fakeft890.Option
 
-// FT900FakeSessionOpts is the FT-900's own option source — internal/fakeft900,
-// a separate package and a separate simulator from FT890's own
-// internal/fakeft890 above, on the same terms as FT890FakeSessionOpts's own
-// doc comment.
+// FT900FakeSessionOpts is the FT-900's own option source
+// ([]fakeft900.Option). See FT890FakeSessionOpts' own doc comment.
 var FT900FakeSessionOpts []fakeft900.Option
 
-// FT1000MPFakeSessionOpts is the FT-1000MP/Mark-V's own option source, on
-// the same terms as every single-row model's above — one row, one
-// package, one simulator.
+// FT1000MPFakeSessionOpts is the FT-1000MP/Mark-V's own option source
+// ([]fakeft1000mp.Option).
 var FT1000MPFakeSessionOpts []fakeft1000mp.Option
 
-// FTX1FakeSessionOpts is the FTX-1's own option source, on the same terms
-// as every single-row model's above — one row, one package
-// (internal/fakeftx1), one simulator.
+// FTX1FakeSessionOpts is the FTX-1's own option source
+// ([]fakeftx1.Option).
 var FTX1FakeSessionOpts []fakeftx1.Option
 
-// IC7800FakeSessionOpts is the IC-7800's own option source, on the same
-// terms as every other model's own variable above: internal/fakeic7800
-// simulates the IC-7800 specifically, its Option is a
-// func(*fakeic7800.Radio), read at CALL time inside the IC7800Model entry's
-// own newRadio closure below, and never captured at package init.
-//
-// LEFT AT ITS NIL ZERO VALUE THE DEMO RADIO IS EMPTY: internal/fakeic7800's
-// own default seeds no channel (its slots map starts empty), the same
-// footing as the IC-7610's and every other single-row Icom fake here.
-//
-// No production flag or GUI control populates this — it adds no second
-// ic7800.Simulated reference to any non-test file, so
-// TestSimulatedProfileTokensConfinement's new ic7800 row keeps passing.
-//
-// A test that sets it MUST restore the previous value (e.g. via
-// t.Cleanup) — this is shared, unsynchronised package state, acceptable
-// only because no test using it calls t.Parallel().
+// IC7800FakeSessionOpts is the IC-7800's own option source
+// ([]fakeic7800.Option). Left at nil, the demo radio is empty:
+// internal/fakeic7800's own default seeds no channel, the same footing
+// as every other single-row Icom fake here.
 var IC7800FakeSessionOpts []fakeic7800.Option
 
-// IC7600FakeSessionOpts is the IC-7600's own option source, on the same
-// terms as IC7800FakeSessionOpts above. Left at its nil zero value the
-// demo radio is empty, the same footing as every other single-row Icom
-// fake here.
+// IC7600FakeSessionOpts is the IC-7600's own option source
+// ([]fakeic7600.Option), on the same nil-is-empty footing as
+// IC7800FakeSessionOpts above.
 var IC7600FakeSessionOpts []fakeic7600.Option
 
-// IC7410FakeSessionOpts is the IC-7410's own option source, on the same
-// terms as IC7800FakeSessionOpts above. Left at its nil zero value the
-// demo radio is empty.
+// IC7410FakeSessionOpts is the IC-7410's own option source
+// ([]fakeic7410.Option), on the same nil-is-empty footing as
+// IC7800FakeSessionOpts above.
 var IC7410FakeSessionOpts []fakeic7410.Option
 
-// IC7700FakeSessionOpts is the IC-7700's own option source, on the same
-// terms as IC7800FakeSessionOpts above. Left at its nil zero value the
-// demo radio is empty.
+// IC7700FakeSessionOpts is the IC-7700's own option source
+// ([]fakeic7700.Option), on the same nil-is-empty footing as
+// IC7800FakeSessionOpts above.
 var IC7700FakeSessionOpts []fakeic7700.Option
 
-// IC9100FakeSessionOpts is the IC-9100's own option source, on the same
-// terms as IC7800FakeSessionOpts above. Left at its nil zero value the
-// demo radio is empty.
+// IC9100FakeSessionOpts is the IC-9100's own option source
+// ([]fakeic9100.Option), on the same nil-is-empty footing as
+// IC7800FakeSessionOpts above.
 var IC9100FakeSessionOpts []fakeic9100.Option
 
-// IC7200FakeSessionOpts is the IC-7200's own option source, on the same
-// terms as IC7800FakeSessionOpts above. Left at its nil zero value the
-// demo radio is empty.
+// IC7200FakeSessionOpts is the IC-7200's own option source
+// ([]fakeic7200.Option), on the same nil-is-empty footing as
+// IC7800FakeSessionOpts above.
 var IC7200FakeSessionOpts []fakeic7200.Option
 
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
@@ -655,9 +320,9 @@ var (
 	// to prove and two table rows that depend on the proof.
 	_ fakeRadio = (*fakedx101.Radio)(nil)
 	// The IC-7610's, the first Icom simulator this table holds — via
-	// ic7610FakeAdapter, not *fakeic7610.Radio directly. See that
-	// adapter's own doc comment for why.
-	_ fakeRadio = ic7610FakeAdapter{}
+	// fakeAdapter[*fakeic7610.Radio], not *fakeic7610.Radio directly. See
+	// fakeAdapter's own doc comment for why.
+	_ fakeRadio = fakeAdapter[*fakeic7610.Radio]{}
 	// The IC-7300's and IC-7300MK2's, the second Icom pair (Wave 4 task
 	// R3) — DIRECTLY, unlike the IC-7610's, and NO ADAPTER IS NEEDED FOR
 	// EITHER: internal/fakeic7300's and internal/fakeic7300mk2's own
@@ -690,19 +355,19 @@ var (
 	// fakeRadio as written, with no adapter needed.
 	_ fakeRadio = (*fakeic905.Radio)(nil)
 	// The IC-7851/IC-7850's, the additions tier's first (Tier 4b) — via
-	// ic7851FakeAdapter, like the IC-7610's and unlike the four Icom
+	// fakeAdapter[*fakeic7851.Radio], like the IC-7610's and unlike the four Icom
 	// simulators between them, because internal/fakeic7851's Port()
 	// returns net.Conn. ONE assertion for the PAIR: fakeic7851.New is a
 	// single constructor serving both rows, so there is one type to
 	// prove and two table rows that depend on the proof — the
 	// *fakedx101.Radio assertion's shape, over the IC-7610's adapter.
-	_ fakeRadio = ic7851FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic7851.Radio]{}
 	// The IC-7760's, the additions tier's second (Tier 4b) — via
-	// ic7760FakeAdapter, like the IC-7610's and the IC-7851 pair's and
+	// fakeAdapter[*fakeic7760.Radio], like the IC-7610's and the IC-7851 pair's and
 	// unlike the four Icom simulators between them, because
 	// internal/fakeic7760's Port() returns net.Conn (checked against that
 	// package's source before this registration, per the task brief).
-	_ fakeRadio = ic7760FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic7760.Radio]{}
 	// The IC-7100's, the additions tier's third (Tier 4b) — DIRECTLY, and
 	// so NO FOURTH ADAPTER IS NEEDED: internal/fakeic7100's own Port()
 	// method is already declared to return io.ReadWriteCloser
@@ -764,7 +429,7 @@ var (
 	// v1.7.0 Kenwood/Yaesu wave, fourth row: internal/fakets570's Port()
 	// returns net.Conn, on the ic7610 footing, not the 590/890/990/2000
 	// rows' direct one.
-	_ fakeRadio = ts570FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakets570.Radio]{}
 	// v1.7.0 Kenwood/Yaesu wave, seventh row: fakets870s's Port() already
 	// returns io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakets870s.Radio)(nil)
@@ -801,142 +466,65 @@ var (
 	// v1.10.0, FTX-1 row: fakeftx1's Port() already returns
 	// io.ReadWriteCloser, so no adapter is needed.
 	_ fakeRadio = (*fakeftx1.Radio)(nil)
-	// The IC-7800's (v1.7.0 Icom wave) — via ic7800FakeAdapter, like the
+	// The IC-7800's (v1.7.0 Icom wave) — via fakeAdapter[*fakeic7800.Radio], like the
 	// IC-7610's and unlike the four directly-satisfying Icom simulators:
 	// internal/fakeic7800's Port() returns net.Conn.
-	_ fakeRadio = ic7800FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic7800.Radio]{}
 	// The IC-7600's, on the same footing — internal/fakeic7600's Port()
 	// also returns net.Conn.
-	_ fakeRadio = ic7600FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic7600.Radio]{}
 	// The IC-7410's, on the same footing — internal/fakeic7410's Port()
 	// also returns net.Conn.
-	_ fakeRadio = ic7410FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic7410.Radio]{}
 	// The IC-7700's, on the same footing — internal/fakeic7700's Port()
 	// also returns net.Conn.
-	_ fakeRadio = ic7700FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic7700.Radio]{}
 	// The IC-9100's, on the same footing — internal/fakeic9100's Port()
 	// also returns net.Conn.
-	_ fakeRadio = ic9100FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic9100.Radio]{}
 	// The IC-7200's, on the same footing — internal/fakeic7200's Port()
 	// also returns net.Conn.
-	_ fakeRadio = ic7200FakeAdapter{}
+	_ fakeRadio = fakeAdapter[*fakeic7200.Radio]{}
 )
 
-// ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
-// net.Conn, since internal/fakeic7610 is written against the net package
-// directly rather than against this package's fakeRadio seam — to the
-// io.ReadWriteCloser fakeRadio itself requires.
+// fakeAdapter narrows a per-model fake simulator's Port() — declared to
+// return net.Conn because that simulator's package (internal/fakeicXXXX,
+// internal/fakets570) is written against the net package directly rather
+// than against this package's fakeRadio seam — to the io.ReadWriteCloser
+// fakeRadio itself requires.
 //
 // A TYPE-IDENTITY GAP, NOT A BEHAVIOUR ONE, and that distinction is why
-// this adapter lives here rather than as an edit to internal/fakeic7610
-// (out of scope for this registration — "never edit ... fake behaviour").
-// Go's interface satisfaction requires each method's result type to match
-// EXACTLY: net.Conn already satisfies io.ReadWriteCloser structurally (it
-// has Read, Write and Close, and more), but a method declared to return
-// net.Conn does not, by itself, implement a method an interface declares
-// to return io.ReadWriteCloser. This adapter closes that gap at the
-// wiring boundary alone, by re-exposing the SAME net.Conn value through a
-// method whose declared result is the interface fakeRadio needs — no
-// byte on the wire, no frame, no state transition changes. Close is
-// promoted unchanged from the embedded *fakeic7610.Radio.
-type ic7610FakeAdapter struct{ *fakeic7610.Radio }
-
-// Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
-// io.ReadWriteCloser. See ic7610FakeAdapter's own doc comment.
-func (a ic7610FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ts570FakeAdapter narrows *fakets570.Radio's Port() — net.Conn — to
-// io.ReadWriteCloser. See ic7610FakeAdapter's own doc comment for the
-// type-identity reasoning; this is the same gap on the TS-570 family's own
-// simulator (v1.7.0 Kenwood/Yaesu wave, fourth row).
-type ts570FakeAdapter struct{ *fakets570.Radio }
-
-// Port implements fakeRadio. See ts570FakeAdapter's own doc comment.
-func (a ts570FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ic7851FakeAdapter narrows *fakeic7851.Radio's Port() — which returns
-// net.Conn, since internal/fakeic7851 is written against the net package
-// directly rather than against this package's fakeRadio seam — to the
-// io.ReadWriteCloser fakeRadio itself requires.
+// this adapter lives here rather than as an edit to the simulator package
+// (out of scope for any one registration — "never edit ... fake
+// behaviour"). Go's interface satisfaction requires each method's result
+// type to match EXACTLY: net.Conn already satisfies io.ReadWriteCloser
+// structurally (it has Read, Write and Close, and more), but a method
+// declared to return net.Conn does not, by itself, implement a method an
+// interface declares to return io.ReadWriteCloser. This adapter closes
+// that gap at the wiring boundary alone, by re-exposing the SAME net.Conn
+// value through a method whose declared result is the interface
+// fakeRadio needs — no byte on the wire, no frame, no state transition
+// changes.
 //
-// THE SAME TYPE-IDENTITY GAP ic7610FakeAdapter closes, for the same
-// reason and with the same limits: see that adapter's own doc comment.
-// It is a second adapter rather than a shared one because each embeds a
-// DIFFERENT concrete simulator type and Go has no way to write one for
-// both; nothing about either radio's behaviour is involved, and no byte,
-// frame or state transition changes. Close is promoted unchanged from the
-// embedded *fakeic7851.Radio.
-//
-// ONE ADAPTER SERVES BOTH ROWS, because one simulator does: the IC-7851
-// and IC-7850 fakeDrivers entries both wrap a fakeic7851.New(...) call,
-// differing only in the WithModelName each passes.
-type ic7851FakeAdapter struct{ *fakeic7851.Radio }
+// R cannot be embedded (Go: "embedded field type cannot be a (pointer
+// to a) type parameter"), so Close is forwarded explicitly rather than
+// promoted; ten near-identical named adapter types (one per simulator
+// package, each embedding a different *fakeXXX.Radio) collapsed into
+// this one generic instantiated per package at each construction site.
+type fakeAdapter[R interface {
+	Port() net.Conn
+	Close() error
+}] struct {
+	radio R
+}
 
-// Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
-// io.ReadWriteCloser. See ic7851FakeAdapter's own doc comment.
-func (a ic7851FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
+// Port implements fakeRadio, narrowing the wrapped radio's net.Conn to
+// io.ReadWriteCloser. See fakeAdapter's own doc comment.
+func (a fakeAdapter[R]) Port() io.ReadWriteCloser { return a.radio.Port() }
 
-// ic7760FakeAdapter narrows *fakeic7760.Radio's Port() — which returns
-// net.Conn, since internal/fakeic7760 is written against the net package
-// directly rather than against this package's fakeRadio seam — to the
-// io.ReadWriteCloser fakeRadio itself requires.
-//
-// THE SAME TYPE-IDENTITY GAP ic7610FakeAdapter closes, for the same
-// reason and with the same limits: see that adapter's own doc comment.
-// It is a THIRD adapter rather than a shared one because each embeds a
-// DIFFERENT concrete simulator type and Go has no way to write one for
-// all three; nothing about any radio's behaviour is involved, and no
-// byte, frame or state transition changes. Close is promoted unchanged
-// from the embedded *fakeic7760.Radio.
-type ic7760FakeAdapter struct{ *fakeic7760.Radio }
-
-// Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
-// io.ReadWriteCloser. See ic7760FakeAdapter's own doc comment.
-func (a ic7760FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ic7800FakeAdapter narrows *fakeic7800.Radio's Port() — which returns
-// net.Conn — to the io.ReadWriteCloser fakeRadio requires. See
-// ic7610FakeAdapter's own doc comment for the type-identity gap this
-// closes; nothing about the radio's behaviour changes.
-type ic7800FakeAdapter struct{ *fakeic7800.Radio }
-
-// Port implements fakeRadio. See ic7800FakeAdapter's own doc comment.
-func (a ic7800FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ic7600FakeAdapter narrows *fakeic7600.Radio's Port() — net.Conn — to
-// io.ReadWriteCloser. See ic7800FakeAdapter's own doc comment.
-type ic7600FakeAdapter struct{ *fakeic7600.Radio }
-
-// Port implements fakeRadio. See ic7600FakeAdapter's own doc comment.
-func (a ic7600FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ic7410FakeAdapter narrows *fakeic7410.Radio's Port() — net.Conn — to
-// io.ReadWriteCloser. See ic7800FakeAdapter's own doc comment.
-type ic7410FakeAdapter struct{ *fakeic7410.Radio }
-
-// Port implements fakeRadio. See ic7410FakeAdapter's own doc comment.
-func (a ic7410FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ic7700FakeAdapter narrows *fakeic7700.Radio's Port() — net.Conn — to
-// io.ReadWriteCloser. See ic7800FakeAdapter's own doc comment.
-type ic7700FakeAdapter struct{ *fakeic7700.Radio }
-
-// Port implements fakeRadio. See ic7700FakeAdapter's own doc comment.
-func (a ic7700FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ic9100FakeAdapter narrows *fakeic9100.Radio's Port() — net.Conn — to
-// io.ReadWriteCloser. See ic7800FakeAdapter's own doc comment.
-type ic9100FakeAdapter struct{ *fakeic9100.Radio }
-
-// Port implements fakeRadio. See ic9100FakeAdapter's own doc comment.
-func (a ic9100FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
-
-// ic7200FakeAdapter narrows *fakeic7200.Radio's Port() — net.Conn — to
-// io.ReadWriteCloser. See ic7800FakeAdapter's own doc comment.
-type ic7200FakeAdapter struct{ *fakeic7200.Radio }
-
-// Port implements fakeRadio. See ic7200FakeAdapter's own doc comment.
-func (a ic7200FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
+// Close implements fakeRadio, forwarded unchanged from the wrapped
+// radio (R cannot be embedded — see fakeAdapter's own doc comment).
+func (a fakeAdapter[R]) Close() error { return a.radio.Close() }
 
 // fakeDriverEntry pairs one model's simulated-profile driver constructor
 // with the fake-rig constructor OpenFakeSessionFor uses to build a live
@@ -1030,7 +618,7 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	},
 	IC7610Model: {
 		newDriver: func() driver.Driver { return ic7610.New(ic7610.Simulated) },
-		newRadio:  func() fakeRadio { return ic7610FakeAdapter{fakeic7610.New()} },
+		newRadio:  func() fakeRadio { return fakeAdapter[*fakeic7610.Radio]{radio: fakeic7610.New()} },
 	},
 	IC7300Model: {
 		newDriver: func() driver.Driver { return ic7300.New(ic7300.Simulated) },
@@ -1105,14 +693,14 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		newDriver: func() driver.Driver { return ic7851.New7851(ic7851.WithSimulatedProfile()) },
 		newRadio: func() fakeRadio {
 			opts := append([]fakeic7851.Option{fakeic7851.WithModelName(IC7851Model)}, IC7851FakeSessionOpts...)
-			return ic7851FakeAdapter{fakeic7851.New(opts...)}
+			return fakeAdapter[*fakeic7851.Radio]{radio: fakeic7851.New(opts...)}
 		},
 	},
 	IC7850Model: {
 		newDriver: func() driver.Driver { return ic7851.New7850(ic7851.WithSimulatedProfile()) },
 		newRadio: func() fakeRadio {
 			opts := append([]fakeic7851.Option{fakeic7851.WithModelName(IC7850Model)}, IC7850FakeSessionOpts...)
-			return ic7851FakeAdapter{fakeic7851.New(opts...)}
+			return fakeAdapter[*fakeic7851.Radio]{radio: fakeic7851.New(opts...)}
 		},
 	},
 	// The IC-7760 (Tier 4b's second registration): ONE row, ONE driver
@@ -1133,7 +721,7 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	// address B2 and NEVER MATCHES it.
 	IC7760Model: {
 		newDriver: func() driver.Driver { return ic7760.New(ic7760.Simulated) },
-		newRadio:  func() fakeRadio { return ic7760FakeAdapter{fakeic7760.New()} },
+		newRadio:  func() fakeRadio { return fakeAdapter[*fakeic7760.Radio]{radio: fakeic7760.New()} },
 	},
 	// The IC-7100 (Tier 4b's third registration): ONE row, ONE driver
 	// package, ONE simulator and ONE profile — the IC-7610's shape again,
@@ -1404,10 +992,10 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		},
 	},
 	// v1.7.0 Kenwood/Yaesu wave, fourth row: fakets570's Port() returns
-	// net.Conn, so it goes through ts570FakeAdapter (like ic7610's).
+	// net.Conn, so it goes through fakeAdapter[*fakets570.Radio] (like ic7610's).
 	TS570DModel: {
 		newDriver: func() driver.Driver { return ts570.NewD(ts570.Simulated) },
-		newRadio:  func() fakeRadio { return ts570FakeAdapter{fakets570.New(TS570DFakeSessionOpts...)} },
+		newRadio:  func() fakeRadio { return fakeAdapter[*fakets570.Radio]{radio: fakets570.New(TS570DFakeSessionOpts...)} },
 	},
 	// v1.7.0 Kenwood/Yaesu wave, fifth row: same shared TS570DFakeSessionOpts
 	// as the TS-570D's own entry above — internal/fakets570's WithModelName
@@ -1416,7 +1004,7 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	TS570SModel: {
 		newDriver: func() driver.Driver { return ts570.NewS(ts570.Simulated) },
 		newRadio: func() fakeRadio {
-			return ts570FakeAdapter{fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570S")}, TS570DFakeSessionOpts...)...)}
+			return fakeAdapter[*fakets570.Radio]{radio: fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570S")}, TS570DFakeSessionOpts...)...)}
 		},
 	},
 	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: same shared
@@ -1424,7 +1012,7 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	TS570DGModel: {
 		newDriver: func() driver.Driver { return ts570.NewDG(ts570.Simulated) },
 		newRadio: func() fakeRadio {
-			return ts570FakeAdapter{fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570DG")}, TS570DFakeSessionOpts...)...)}
+			return fakeAdapter[*fakets570.Radio]{radio: fakets570.New(append([]fakets570.Option{fakets570.WithModelName("TS-570DG")}, TS570DFakeSessionOpts...)...)}
 		},
 	},
 	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New, no adapter needed.
@@ -1455,38 +1043,50 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	// alone.
 	IC7800Model: {
 		newDriver: func() driver.Driver { return ic7800.New(ic7800.Simulated) },
-		newRadio:  func() fakeRadio { return ic7800FakeAdapter{fakeic7800.New(IC7800FakeSessionOpts...)} },
+		newRadio: func() fakeRadio {
+			return fakeAdapter[*fakeic7800.Radio]{radio: fakeic7800.New(IC7800FakeSessionOpts...)}
+		},
 	},
 	// The IC-7600 (v1.7.0 Icom wave's second registration), on IC7800Model's
 	// footing.
 	IC7600Model: {
 		newDriver: func() driver.Driver { return ic7600.New(ic7600.Simulated) },
-		newRadio:  func() fakeRadio { return ic7600FakeAdapter{fakeic7600.New(IC7600FakeSessionOpts...)} },
+		newRadio: func() fakeRadio {
+			return fakeAdapter[*fakeic7600.Radio]{radio: fakeic7600.New(IC7600FakeSessionOpts...)}
+		},
 	},
 	// The IC-7410 (v1.7.0 Icom wave's third registration): bare New with
 	// WithSimulatedProfile(), the IC-7610's own option shape rather than
 	// IC7800Model's/IC7600Model's profile-argument one.
 	IC7410Model: {
 		newDriver: func() driver.Driver { return ic7410.New(ic7410.WithSimulatedProfile()) },
-		newRadio:  func() fakeRadio { return ic7410FakeAdapter{fakeic7410.New(IC7410FakeSessionOpts...)} },
+		newRadio: func() fakeRadio {
+			return fakeAdapter[*fakeic7410.Radio]{radio: fakeic7410.New(IC7410FakeSessionOpts...)}
+		},
 	},
 	// The IC-7700 (v1.7.0 Icom wave's fourth registration), on IC7800Model's
 	// footing.
 	IC7700Model: {
 		newDriver: func() driver.Driver { return ic7700.New(ic7700.Simulated) },
-		newRadio:  func() fakeRadio { return ic7700FakeAdapter{fakeic7700.New(IC7700FakeSessionOpts...)} },
+		newRadio: func() fakeRadio {
+			return fakeAdapter[*fakeic7700.Radio]{radio: fakeic7700.New(IC7700FakeSessionOpts...)}
+		},
 	},
 	// The IC-9100 (v1.7.0 Icom wave's fifth registration), on IC7800Model's
 	// footing.
 	IC9100Model: {
 		newDriver: func() driver.Driver { return ic9100.New(ic9100.Simulated) },
-		newRadio:  func() fakeRadio { return ic9100FakeAdapter{fakeic9100.New(IC9100FakeSessionOpts...)} },
+		newRadio: func() fakeRadio {
+			return fakeAdapter[*fakeic9100.Radio]{radio: fakeic9100.New(IC9100FakeSessionOpts...)}
+		},
 	},
 	// The IC-7200 (v1.7.0 Icom wave's sixth and last registration), on
 	// IC7800Model's footing.
 	IC7200Model: {
 		newDriver: func() driver.Driver { return ic7200.New(ic7200.Simulated) },
-		newRadio:  func() fakeRadio { return ic7200FakeAdapter{fakeic7200.New(IC7200FakeSessionOpts...)} },
+		newRadio: func() fakeRadio {
+			return fakeAdapter[*fakeic7200.Radio]{radio: fakeic7200.New(IC7200FakeSessionOpts...)}
+		},
 	},
 }
 

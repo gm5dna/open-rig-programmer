@@ -120,7 +120,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // frame length, the parameter count, the mode legend, the number of tone
 // tuples, the Main/Sub grammar and the channel-type byte are each on their own
 // sufficient reason for two packages.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ts990Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

@@ -3,6 +3,7 @@
 package civ
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 )
@@ -12,7 +13,7 @@ import (
 // the parsers without a second builder that only tests would need — and,
 // deliberately, it produces a frame the gate must REFUSE.
 func answerFor(frame []byte) []byte {
-	out := copyBytes(frame)
+	out := bytes.Clone(frame)
 	out[2], out[3] = out[3], out[2]
 	return out
 }
@@ -164,7 +165,7 @@ func TestGateRefusesTheUnacceptable(t *testing.T) {
 			// rather than through the builder (which refuses it).
 			_, hi := p.ChannelRange()
 			if hi < maxChannelDecimal {
-				over := copyBytes(read)
+				over := bytes.Clone(read)
 				ch, err := encodeBCDNumber(uint64(hi+1), 2, OrderBigEndian)
 				if err == nil {
 					copy(over[len(over)-1-2:], ch)
@@ -249,7 +250,7 @@ func TestGateAdmitsEveryAcceptedLengthWhileTheBuilderEmitsOne(t *testing.T) {
 		if length != p.BuildRecordLength() {
 			// And it round-trips through the parser too, so the admitted
 			// frame is one this profile can also READ back.
-			answer := copyBytes(frame)
+			answer := bytes.Clone(frame)
 			answer[2], answer[3] = answer[3], answer[2]
 			back, err := p.ParseMemoryAnswer(answer)
 			if err != nil {
@@ -290,7 +291,7 @@ func TestGateRefusesARecordItsOwnBuilderWouldNotHaveWritten(t *testing.T) {
 	// Byte 11's nibbles are the filter and the data mode, and this
 	// profile defines filter values 0..2 only. A 3 in the high nibble
 	// decodes to nothing, so the gate refuses on the enum.
-	unknownEnum := copyBytes(set)
+	unknownEnum := bytes.Clone(set)
 	unknownEnum[6+2+11] = 0x30 | (unknownEnum[6+2+11] & 0x0F)
 	if p.AllowedCommand(unknownEnum) {
 		t.Error("the gate admitted a record carrying a filter value this profile does not define")
@@ -299,14 +300,14 @@ func TestGateRefusesARecordItsOwnBuilderWouldNotHaveWritten(t *testing.T) {
 	// The name field's last byte set to a charset byte that is not the pad
 	// still round-trips, so THAT one must be admitted — the check above
 	// must not be passing because the gate refuses every mutation.
-	nameEnd := copyBytes(set)
+	nameEnd := bytes.Clone(set)
 	nameEnd[6+2+36] = 'Z'
 	if !p.AllowedCommand(nameEnd) {
 		t.Error("the gate refused a record its own builder COULD have written — the re-encode rule is too strict, and the check above proves nothing")
 	}
 
 	// A name byte outside the charset is refused.
-	badName := copyBytes(set)
+	badName := bytes.Clone(set)
 	badName[6+2+27] = 0x01
 	if p.AllowedCommand(badName) {
 		t.Error("the gate admitted a name byte outside this profile's charset")
@@ -372,7 +373,7 @@ func TestParseMemoryAnswer_WrongRecordLengthIsAnError(t *testing.T) {
 	answer := answerFor(setCmd)
 
 	// One byte short: a length no layout claims.
-	short := append(copyBytes(answer[:len(answer)-2]), EndByte)
+	short := append(bytes.Clone(answer[:len(answer)-2]), EndByte)
 	_, err := p.ParseMemoryAnswer(short)
 	if err == nil {
 		t.Fatal("ParseMemoryAnswer accepted a record of an unaccepted length — spec D4 makes this an ERROR, not a partial parse")
@@ -422,7 +423,7 @@ func TestMemoryAnswerRecord(t *testing.T) {
 			// AN ALL-0xFF RECORD: the case that exists. It reaches the
 			// caller as bytes, and it does NOT reach ParseMemoryAnswer as
 			// a record — which is the whole gap this hook closes.
-			empty := copyBytes(answer)
+			empty := bytes.Clone(answer)
 			for i := len(empty) - 1 - length; i < len(empty)-1; i++ {
 				empty[i] = 0xFF
 			}
@@ -450,7 +451,7 @@ func TestMemoryAnswerRecord(t *testing.T) {
 			// under the SHORTEST length any layout declares.
 			shortest := p.RecordLengths()[0]
 			head := answer[:len(answer)-1-length]
-			short := append(copyBytes(head), answer[len(answer)-1-length:len(answer)-1-length+shortest-1]...)
+			short := append(bytes.Clone(head), answer[len(answer)-1-length:len(answer)-1-length+shortest-1]...)
 			short = append(short, EndByte)
 			if _, _, err := p.MemoryAnswerRecord(short); !errors.Is(err, ErrRecordLength) {
 				t.Errorf("MemoryAnswerRecord on an unaccepted length gave %v, want ErrRecordLength — a caller reaching for raw bytes must not be the one caller that skips the probe's fingerprint", err)
@@ -502,14 +503,14 @@ func mustCommand(c Command, err error) Command {
 // withAddresses returns a copy of frame with its `to` and `from` bytes
 // replaced.
 func withAddresses(frame []byte, to, from byte) []byte {
-	out := copyBytes(frame)
+	out := bytes.Clone(frame)
 	out[2], out[3] = to, from
 	return out
 }
 
 // truncateBody removes n bytes from just before the terminator.
 func truncateBody(frame []byte, n int) []byte {
-	out := copyBytes(frame[:len(frame)-1-n])
+	out := bytes.Clone(frame[:len(frame)-1-n])
 	return append(out, EndByte)
 }
 
@@ -537,7 +538,7 @@ func TestGateRefusesARecordByteNoBuilderWouldWrite(t *testing.T) {
 			}
 			recordStart := 6 + p.AddressForm().addressBytes()
 			for _, off := range unmapped {
-				mutated := copyBytes(set)
+				mutated := bytes.Clone(set)
 				mutated[recordStart+off] ^= 0x01
 				if p.AllowedCommand(mutated) {
 					t.Errorf("the gate ADMITTED a record whose unmapped byte %d was altered: %s", off, hexFrame(mutated))

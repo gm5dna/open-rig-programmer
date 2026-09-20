@@ -117,7 +117,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // printed variants (480:1626-1629) are NOT registry rows — the neutral memory
 // model expresses none of the difference between them (decision 4) — so there
 // is nothing for a caller to choose and nothing to fail closed on.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ts480Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

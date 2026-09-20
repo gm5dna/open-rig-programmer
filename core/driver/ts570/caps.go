@@ -12,7 +12,6 @@ import (
 
 // Profile selects the evidence gate used by New{D,S,DG}. RealHardware is
 // the zero value, shared with every other driver package.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware

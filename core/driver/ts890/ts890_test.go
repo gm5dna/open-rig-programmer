@@ -51,15 +51,15 @@ func TestStopBits_IsOne(t *testing.T) {
 // caller said RealHardware, said nothing, or said something this package does
 // not know.
 func TestNew_TheZeroProfileIsRealHardwareAndAnUnrecognisedOneFailsTheSameWay(t *testing.T) {
-	var zero Profile
+	var zero driver.Profile
 	if zero != RealHardware {
 		t.Fatalf("the zero Profile is %v, want RealHardware — a forgotten profile must never select the simulator's Supported writes", zero)
 	}
 	want := CapabilitiesUnverified()
-	for name, profile := range map[string]Profile{
+	for name, profile := range map[string]driver.Profile{
 		"zero":         zero,
 		"realhardware": RealHardware,
-		"unrecognised": Profile(99),
+		"unrecognised": driver.Profile(99),
 	} {
 		caps := New(profile).Capabilities()
 		for _, f := range spec.AllFields() {

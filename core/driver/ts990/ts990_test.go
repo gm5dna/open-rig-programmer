@@ -33,7 +33,7 @@ func TestModel_IsTheRegistryKey(t *testing.T) {
 // §2.1's failure direction: a forgotten Profile must fail towards the
 // all-Unverified set, never towards the simulator's Supported writes.
 func TestCapabilities_TheZeroProfileIsRealHardwareAndAnyOtherFailsSafe(t *testing.T) {
-	var zero Profile
+	var zero driver.Profile
 	if zero != RealHardware {
 		t.Fatalf("the zero Profile is %v, want RealHardware (matrix §2.1)", zero)
 	}
@@ -41,7 +41,7 @@ func TestCapabilities_TheZeroProfileIsRealHardwareAndAnyOtherFailsSafe(t *testin
 	for name, d := range map[string]driver.Driver{
 		"zero":         New(zero),
 		"realhardware": New(RealHardware),
-		"unrecognised": New(Profile(99)),
+		"unrecognised": New(driver.Profile(99)),
 	} {
 		if got := d.Capabilities(); !reflect.DeepEqual(got, unverified) {
 			t.Errorf("%s: Capabilities() is not the all-Unverified fail-safe set", name)

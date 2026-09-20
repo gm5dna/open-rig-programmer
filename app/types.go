@@ -357,10 +357,7 @@ type BankView struct {
 	// bankReadOnly's doc comment. Never true merely because a field is
 	// spec.Unverified.
 	ReadOnly bool
-	// BudgetUnstated tells the UI the sparse capacity is undocumented; it
-	// does not relax the bank's declared address-space boundary.
-	BudgetUnstated bool `json:",omitempty"`
-	Slots          []SlotView
+	Slots    []SlotView
 	// TagDisplayDefault is the codeplug.BoolField a row ADDED in this bank
 	// must carry for tag_display, derived from this bank's own
 	// FieldTagDisplay support — see bankTagDisplayDefault's doc comment

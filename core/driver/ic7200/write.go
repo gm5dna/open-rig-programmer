@@ -24,20 +24,18 @@ const memorySetStep = "1A 00"
 // the slot's unmapped record regions (Split, and the TX-duplicate
 // block's mode/filter/data-mode mirror) differ from the profile's Fixed
 // template.
-var ErrUnmappedRegion = errors.New("ic7200: the slot's unmapped record regions differ from this profile's Fixed template")
+var ErrUnmappedRegion = driver.ErrUnmappedRegion
 
 // UnmappedRegionError reports which unmapped byte disagreed, and by how
 // much. A channel whose Split byte is ON, or whose TX-mirror bytes carry
 // something this driver does not understand, CANNOT be written by this
 // programme at all — it is never silently cleared and never silently
 // rewritten (matrix §3.16 ADDED-1; the same ruling every sibling Icom
-// package in this tier gives its own unmapped regions).
+// package in this tier gives its own unmapped regions). Fields are
+// driver.UnmappedRegionError's shared shape (core/driver/errors.go);
+// Nibble is left unset — this package checks whole bytes.
 type UnmappedRegionError struct {
-	// Offset is the 0-based record byte whose unmapped region differed.
-	Offset int
-	// Want and Got are that byte's value in the template and in the
-	// slot's actual record.
-	Want, Got byte
+	driver.UnmappedRegionError
 }
 
 func (e *UnmappedRegionError) Error() string {
@@ -62,7 +60,7 @@ func (e *UnmappedRegionError) Unwrap() error { return ErrUnmappedRegion }
 
 // ErrOutOfDomain is the sentinel for a Known value outside what this
 // radio's record can encode.
-var ErrOutOfDomain = errors.New("ic7200: a Known value lies outside what this radio's record can encode")
+var ErrOutOfDomain = driver.ErrOutOfDomain
 
 // OutOfDomainError reports a Known numeric value — asked for on a write,
 // or decoded on a read — that this radio's record cannot express.
@@ -71,10 +69,10 @@ var ErrOutOfDomain = errors.New("ic7200: a Known value lies outside what this ra
 // domain, so civ.Profile.AllowedCommand would admit a set carrying
 // 65 MHz. codeplug.Validate already bounds the primary frequency at the
 // capability ceiling; this refusal closes the driver's own door too.
+// Fields are driver.OutOfDomainError's shared shape (core/driver/errors.go);
+// Min and Where are left unset — this package only ever had a ceiling.
 type OutOfDomainError struct {
-	Field spec.Field
-	Value uint64
-	Max   uint64
+	driver.OutOfDomainError
 }
 
 func (e *OutOfDomainError) Error() string {
@@ -204,11 +202,11 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// RUNG 4 — NUMERIC DOMAINS.
 	if d.FreqHz < s.caps.MinFreqHz || d.FreqHz > s.caps.MaxFreqHz {
 		return driver.WriteResult{Steps: []driver.WriteStep{}},
-			&OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: s.caps.MaxFreqHz}
+			&OutOfDomainError{driver.OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: s.caps.MaxFreqHz}}
 	}
 	if d.TxFreqHz.State == codeplug.Known && (d.TxFreqHz.Value < s.caps.MinFreqHz || d.TxFreqHz.Value > s.caps.MaxFreqHz) {
 		return driver.WriteResult{Steps: []driver.WriteStep{}},
-			&OutOfDomainError{Field: spec.FieldTxFrequency, Value: d.TxFreqHz.Value, Max: s.caps.MaxFreqHz}
+			&OutOfDomainError{driver.OutOfDomainError{Field: spec.FieldTxFrequency, Value: d.TxFreqHz.Value, Max: s.caps.MaxFreqHz}}
 	}
 
 	// RUNG 5 — THE ONE READ.
@@ -290,7 +288,7 @@ func unmappedRegionsDiffer(raw []byte) error {
 	}
 	for _, offset := range []int{civic7200.SplitOffset, civic7200.TXModeOffset, civic7200.TXFilterOffset, civic7200.TXDataModeOffset} {
 		if raw[offset] != tmpl[offset] {
-			return &UnmappedRegionError{Offset: offset, Want: tmpl[offset], Got: raw[offset]}
+			return &UnmappedRegionError{driver.UnmappedRegionError{Offset: offset, Want: tmpl[offset], Got: raw[offset]}}
 		}
 	}
 	return nil

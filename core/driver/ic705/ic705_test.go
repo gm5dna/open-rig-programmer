@@ -301,7 +301,7 @@ func TestCapabilityProfilesMatchTheConstructors(t *testing.T) {
 		t.Error("New(Simulated).Capabilities() is not capabilitiesSimulated()")
 	}
 	// Any unrecognised Profile fails safe to the unverified set.
-	if got, want := New(Profile(42)).Capabilities(), capabilitiesUnverified(); !reflect.DeepEqual(got, want) {
+	if got, want := New(driver.Profile(42)).Capabilities(), capabilitiesUnverified(); !reflect.DeepEqual(got, want) {
 		t.Error("an unrecognised Profile did not fail safe to the unverified capability set")
 	}
 }
@@ -329,7 +329,7 @@ func TestConsentIsAppliedOnlyToSessionCapabilities(t *testing.T) {
 
 func TestConsentDoesNotReachAnUnrecognisedProfile(t *testing.T) {
 	r := occupiedRadio(t, "G01-001")
-	d := New(Profile(42), WithConsentedUnverifiedWrites(), withEngineOptions(transport.WithClock(noSettleClock{})))
+	d := New(driver.Profile(42), WithConsentedUnverifiedWrites(), withEngineOptions(transport.WithClock(noSettleClock{})))
 	sess, err := d.Open(context.Background(), r.Port(), driver.Identity{})
 	if err != nil {
 		t.Fatalf("Open: %v", err)

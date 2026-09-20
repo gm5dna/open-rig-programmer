@@ -12,6 +12,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7700 "github.com/gm5dna/open-rig-programmer/core/civ/ic7700"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -33,7 +34,7 @@ const probeSlotCount = 10
 // NO MODEL ENUM: this family has one member (matrix §4, "no registered
 // sibling"), so which radio a driver is for is fixed by the package rather
 // than by a value a caller could get wrong.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ic7700Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
@@ -103,31 +104,9 @@ func (d *ic7700Driver) Capabilities() spec.Capabilities {
 // carries ONE aggregate counter (core/driver/optional.go) and cannot carry
 // any of this, and widening the neutral seam is a tier-shared change five
 // worktrees would want.
-type OpenReport struct {
-	// IDToken is what the radio answered to 19 00, recorded and NEVER
-	// matched: PDF p.204 (folio 14-4)'s command table prints the 19 00
-	// row with no reply value at all (register entry
-	// ic7700-id-token).
-	IDToken []byte
-	// SlotsTried is how many channels the occupied-slot search read
-	// before it stopped.
-	SlotsTried int
-	// Fingerprinted is false when every probed slot was rejected — an
-	// empty radio, opened on address evidence alone (spec D3.2).
-	Fingerprinted bool
-	// RecordLength is the record-only length the fingerprint confirmed,
-	// or 0 when Fingerprinted is false.
-	RecordLength int
-	// InitDrainCapExceeded records that Engine.Init hit its absolute
-	// drain cap and that Open continued anyway — the NONFATAL half of
-	// R9-SPLIT. It can only be true under a CONTROLLER-ADDRESSED flood:
-	// a to=00 broadcast flood never reaches the engine at all.
-	InitDrainCapExceeded bool
-	// WireAtOpen is the adapter's own counter snapshot taken when Open
-	// returned, so a broadcast-saturated line is visible even though the
-	// engine saw nothing.
-	WireAtOpen civ.AccumulatorStats
-}
+// The shared form (icom.OpenReport) has no per-package behaviour, so
+// this package needs no type of its own.
+type OpenReport = icom.OpenReport
 
 // RecordLengthMismatchError reports that a memory answer carried a record
 // at a length this profile does not declare — which is the probe's
@@ -140,29 +119,17 @@ type OpenReport struct {
 // Wave-4 check and this package holds no table of other radios' lengths,
 // so the honest refusal says what was measured, what was expected, and
 // that the expectation is itself ASSUMED.
+// Fields are icom.RecordLengthMismatchError's shared shape
+// (core/driver/internal/icom/errors.go); Unwrap is promoted from there
+// unchanged, and only Error() is this package's own.
 type RecordLengthMismatchError struct {
-	// Err is the codec refusal whose measured and accepted lengths are
-	// retained for errors.As callers.
-	Err *civ.RecordLengthError
-	// Got is the record-only length the radio's answer carried.
-	Got int
-	// Want is the length this profile declares.
-	Want int
-	// Slot is the channel the answer spoke for.
-	Slot civ.ChannelAddress
+	icom.RecordLengthMismatchError
 }
 
 func (e *RecordLengthMismatchError) Error() string {
 	return fmt.Sprintf(
 		"ic7700: %s answered a %d-byte memory record, want %d — the expected length is itself a derivation from one document (matrix §3.11), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check",
 		e.Slot, e.Got, e.Want)
-}
-
-// Unwrap exposes both classifications supported by the four harmonised
-// mismatch wrappers. errors.Unwrap returns nil for this multi-error form;
-// callers use errors.Is and errors.As.
-func (e *RecordLengthMismatchError) Unwrap() []error {
-	return []error{driver.ErrWrongRadio, e.Err}
 }
 
 // ErrAnswerMismatch is the sentinel for tier ruling T2: a memory answer
@@ -372,7 +339,7 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 	if err != nil {
 		var lengthErr *civ.RecordLengthError
 		if errors.As(err, &lengthErr) {
-			return nil, false, &RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7700.RecordOnlyLength, Slot: a}
+			return nil, false, &RecordLengthMismatchError{icom.RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7700.RecordOnlyLength, Slot: a}}
 		}
 		return nil, false, fmt.Errorf("ic7700: Open: probing %s: %w", a, err)
 	}

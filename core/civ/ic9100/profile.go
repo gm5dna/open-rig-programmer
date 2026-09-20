@@ -19,14 +19,6 @@ var (
 	dtcsPolarityNames = map[byte]string{0x00: "NN", 0x01: "NR", 0x10: "RN", 0x11: "RR"}
 )
 
-func enumSpan(id civ.FieldID, offset int, nibble civ.NibbleSel, values map[byte]string) civ.FieldSpan {
-	return civ.FieldSpan{Field: id, Offset: offset, Length: 1, Nibble: nibble, Encoding: civ.EncodingEnum, Enum: values}
-}
-
-func bcdSpan(id civ.FieldID, offset, length int, order civ.ByteOrder, scale uint64) civ.FieldSpan {
-	return civ.FieldSpan{Field: id, Offset: offset, Length: length, Encoding: civ.EncodingBCDNumber, Order: order, Scale: scale}
-}
-
 // fixedTemplateBytes is the state of every byte for which the landed
 // neutral record has no FieldID: the two D-STAR squelch bytes and the
 // three 8-byte call signs (doc.go). Taken from the IC-7100 package's own
@@ -54,27 +46,27 @@ var fixedTemplateBytes = [RecordLength]byte{
 // derivation, term 3 ("r") onward.
 func recordFields() []civ.FieldSpan {
 	return []civ.FieldSpan{
-		enumSpan(civ.FieldSelect, 0, civ.NibbleLow, selectNames),
+		civ.EnumSpan(civ.FieldSelect, 0, civ.NibbleLow, selectNames),
 		// ASSUMED: ic9100-read-request-form / ic9100-wire-order share the
 		// family convention (little-endian packed BCD), matching
 		// IC-7100/IC-7610's own frequency spans.
-		bcdSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
-		enumSpan(civ.FieldMode, 6, civ.NibbleWhole, modeNames),
-		enumSpan(civ.FieldFilter, 7, civ.NibbleWhole, filterNames),
-		enumSpan(civ.FieldDataMode, 8, civ.NibbleWhole, dataModeNames),
-		enumSpan(civ.FieldDuplex, 9, civ.NibbleHigh, duplexNames),
-		enumSpan(civ.FieldToneMode, 9, civ.NibbleLow, toneModeNames),
+		civ.BCDSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
+		civ.EnumSpan(civ.FieldMode, 6, civ.NibbleWhole, modeNames),
+		civ.EnumSpan(civ.FieldFilter, 7, civ.NibbleWhole, filterNames),
+		civ.EnumSpan(civ.FieldDataMode, 8, civ.NibbleWhole, dataModeNames),
+		civ.EnumSpan(civ.FieldDuplex, 9, civ.NibbleHigh, duplexNames),
+		civ.EnumSpan(civ.FieldToneMode, 9, civ.NibbleLow, toneModeNames),
 		// offset 10: DigitalSquelchOffset — unmapped, doc.go.
-		bcdSpan(civ.FieldToneTX, 11, 3, civ.OrderBigEndian, 1),
-		bcdSpan(civ.FieldToneRX, 14, 3, civ.OrderBigEndian, 1),
-		enumSpan(civ.FieldDTCSPolarity, 17, civ.NibbleWhole, dtcsPolarityNames),
-		bcdSpan(civ.FieldDTCSCode, 18, 2, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneTX, 11, 3, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneRX, 14, 3, civ.OrderBigEndian, 1),
+		civ.EnumSpan(civ.FieldDTCSPolarity, 17, civ.NibbleWhole, dtcsPolarityNames),
+		civ.BCDSpan(civ.FieldDTCSCode, 18, 2, civ.OrderBigEndian, 1),
 		// offset 20: DigitalCodeSquelchOffset — unmapped, doc.go.
 		// matrix §1b "offset": three bytes, byte1 = 1kHz|100Hz digit,
 		// byte2 = 100kHz|10kHz digit, byte3 = 10MHz(fixed 0)|1MHz digit —
 		// the same little-endian, scale-100 shape as IC-7100's own
 		// duplex-offset span.
-		bcdSpan(civ.FieldOffset, 21, 3, civ.OrderLittleEndian, 100),
+		civ.BCDSpan(civ.FieldOffset, 21, 3, civ.OrderLittleEndian, 100),
 		// offsets 24-47: the three D-STAR call signs — unmapped, doc.go.
 		{Field: civ.FieldName, Offset: 48, Length: 9, Encoding: civ.EncodingName},
 	}
