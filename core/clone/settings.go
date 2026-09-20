@@ -8,6 +8,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // ReadSettings reads every item in the session's settings descriptor and
@@ -177,4 +178,103 @@ func (s *Service) ReadSettings(ctx context.Context) (*codeplug.MenuSnapshot, err
 	}
 
 	return snapshot, nil
+}
+
+// SettingDelta is one settings address whose fresh live value disagrees
+// with what the candidate codeplug's settings snapshot wants — PrepareSend's
+// settings-side counterpart to a codeplug.DiffEntry (task f1).
+//
+// Deliberately NOT a codeplug.DiffResult/diff.go addition: that shape is
+// shared with `rigprog diff`, and a settings field there would churn every
+// registered model's byte-identity leg for a command that never touches
+// settings at all. SettingDelta is core/clone's own type instead, invisible
+// to diff.go.
+type SettingDelta struct {
+	// ID is the SettingItem.ID this delta answers for.
+	ID string
+	// Wanted is the candidate codeplug's settings snapshot value for ID.
+	Wanted string
+	// Observed is settingsDeltas' fresh live read of ID, taken at
+	// PrepareSend time — the value Execute's write-then-verify pass is
+	// about to overwrite.
+	Observed string
+}
+
+// settingsDeltas computes SendPlan.settings for PrepareSend (task f1): a
+// fresh live read of every settings item this session's driver currently
+// admits for writing — SettingItem.Write == spec.Supported, minted the
+// moment Session W characterises an address (cat.Dialect.CanSetEX; see
+// driver.SettingsWriter's doc comment) — diffed against wanted, the
+// candidate codeplug's own settings snapshot (file.Menus). An item whose
+// Write is anything else (spec.Unverified today, for every address without
+// a Session W row yet, admitted or denied alike: the descriptor draws no
+// distinction between them — see SettingItem.Write's doc comment) is never
+// read here, so it can never appear in the result.
+//
+// wanted may be nil (a candidate carrying no menu data): nothing can be
+// diffed against nothing, so this returns (nil, nil) WITHOUT reading
+// anything — the same "Menus is inert" guarantee
+// TestPrepareSend_PerformsNoSettingsTraffic already pins for the common
+// case, where every registered radio has zero characterised addresses
+// today (table2-write-observed.csv is still empty) and the loop below
+// would find nothing to read regardless.
+//
+// A session whose concrete type does not implement driver.SettingsReader
+// likewise returns (nil, nil): this is an OPPORTUNISTIC diff, not a
+// request for the settings surface — ErrSettingsUnsupported is for a
+// caller that asked for one explicitly (ReadSettings), which PrepareSend
+// never does.
+//
+// Only an item BOTH characterised AND named in wanted (State ==
+// codeplug.MenuKnown) is ever read — the read itself is skipped, not just
+// the resulting delta discarded, so an admitted-uncharacterised or denied
+// address costs this call nothing. A live value that disagrees with
+// SettingUnavailable (the address currently answers "?;") produces no
+// delta either: there is nothing to compare against. A genuine
+// ReadSetting error (a transport failure, never a "?;") aborts the whole
+// call — PrepareSend must never hand back a plan built on an incomplete
+// picture of what it is about to overwrite.
+func (s *Service) settingsDeltas(ctx context.Context, wanted *codeplug.MenuSnapshot) ([]SettingDelta, error) {
+	if wanted == nil {
+		return nil, nil
+	}
+	reader, ok := s.sess.(driver.SettingsReader)
+	if !ok {
+		return nil, nil
+	}
+
+	wantByID := make(map[string]string, len(wanted.Entries))
+	for _, e := range wanted.Entries {
+		if e.State == codeplug.MenuKnown {
+			wantByID[e.ID] = e.Value
+		}
+	}
+
+	descriptor := reader.SettingsDescriptor()
+	var deltas []SettingDelta
+	for _, menu := range descriptor.Menus {
+		for _, group := range menu.Groups {
+			for _, item := range group.Items {
+				if item.Write != spec.Supported {
+					continue
+				}
+				want, ok := wantByID[item.ID]
+				if !ok {
+					continue
+				}
+				if err := ctx.Err(); err != nil {
+					return nil, fmt.Errorf("clone: PrepareSend: settings diff: %w", err)
+				}
+				val, err := reader.ReadSetting(ctx, item.ID)
+				if err != nil {
+					return nil, fmt.Errorf("clone: PrepareSend: settings diff: setting %q: %w", item.ID, err)
+				}
+				if val.State != driver.SettingKnown || val.Raw == want {
+					continue
+				}
+				deltas = append(deltas, SettingDelta{ID: item.ID, Wanted: want, Observed: val.Raw})
+			}
+		}
+	}
+	return deltas, nil
 }

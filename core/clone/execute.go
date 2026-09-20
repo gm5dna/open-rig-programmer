@@ -49,6 +49,12 @@ type Report struct {
 	// Slots details every channel Execute acted on or skipped, in the
 	// order it processed them.
 	Slots []SlotResult
+	// Settings details every settings address Execute's write-then-verify
+	// pass (task f1) attempted, in plan.Settings() order — one
+	// driver.SettingWriteResult per address, whatever its Outcome. Empty
+	// when the plan carried no settings deltas, or the session's driver
+	// does not implement driver.SettingsWriter.
+	Settings []driver.SettingWriteResult
 	// Aborted is true if Execute stopped before processing every delta
 	// entry.
 	Aborted bool
@@ -361,84 +367,92 @@ func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest s
 		}
 	}
 
-	if len(deltas) == 0 {
-		s.journalAppend(journal, "completion", map[string]any{
-			"written": 0, "verified": 0,
-			"skipped_blocked": report.SkippedBlocked, "unchanged": report.Unchanged,
-		})
-		return report, nil
-	}
+	// Channel delta-write loop (obligations 6, 7, 8, 11) — only when there
+	// is at least one unblocked channel delta. Task f1: this is no longer
+	// Execute's only reason to touch the radio, so it can no longer be a
+	// blanket early return — a settings-only diff (zero channel deltas,
+	// at least one settings delta) must still reach the settings pass
+	// below.
+	if len(deltas) > 0 {
+		candidateBySlot := indexChannels(plan.candidate)
 
-	candidateBySlot := indexChannels(plan.candidate)
-
-	// VFOStateRestorer seam (v1.9.0 binary-CAT write model, §Write model):
-	// snapshot VFO-A's live content/selection BEFORE anything else below,
-	// including the memory-selection snapshot right after it — this
-	// family's write choreography overwrites VFO-A to commit a channel,
-	// so unlike obligation 12's MemorySelector there is no safe
-	// best-effort-proceed path: a snapshot failure aborts HERE, before
-	// the first mutating frame. See vfo_state_restorer.go.
-	vfoSnap, hasVFOSnap, err := s.snapshotVFOState(ctx, journal)
-	if err != nil {
-		return s.abort(report, journal, "", fmt.Sprintf("vfo snapshot: %v", err), err)
-	}
-	if hasVFOSnap {
-		defer s.restoreVFOState(journal, vfoSnap)
-	}
-
-	// Obligation 12: snapshot the radio's current memory selection BEFORE
-	// the first write below — MW moves it to the written slot
-	// (HW-CONFIRMED 2026-07-13, M5b write trials, docs/hardware-notes.md)
-	// — and best-effort restore it on the way out, however the loop below
-	// ends (success, abort, or a cancelled ctx): see
-	// snapshotMemorySelection/restoreMemorySelection (memory_selector.go)
-	// for why this is entirely best-effort, never a refusal or an abort
-	// cause. The defer covers every return path below this point,
-	// including every s.abort(...) call inside the loop and writePair.
-	//
-	// Deferred AFTER vfoSnap's restore above so LIFO unwind order runs
-	// this memory-selection restore FIRST, then the VFO-content restore
-	// second — VFOStateRestorer brackets MemorySelector (§Write model:
-	// "VFO content is what steps 1-6 touch; a current-memory pointer, if
-	// any, is separate state").
-	if snap := s.snapshotMemorySelection(ctx, journal); snap != "" {
-		defer s.restoreMemorySelection(journal, snap)
-	}
-
-	// Delta-write loop (obligations 6, 7, 8, 11). Fix 3 (M3 Codex-review
-	// fix wave): each slot's verify-read (obligation 11) runs IMMEDIATELY
-	// before that SAME slot's own write_attempt journal line — not as a
-	// separate up-front phase covering every to-be-written slot before
-	// ANY of them are written. This closes the drift-to-write window down
-	// to as small as physically possible: under the old up-front-phase
-	// design, a slot's baseline was re-checked, but then the radio's
-	// memory could still drift AGAIN while every OTHER delta's verify-read
-	// ran, before that slot's own write finally happened. See
-	// TestExecute_VerifyReadPerSlot_FirstWrittenBeforeSecondDrifts for the
-	// test that pins this down: draining a LATER slot's drift must not
-	// prevent an EARLIER, undrifted slot from having already completed.
-	for i, e := range deltas {
-		if err := ctx.Err(); err != nil {
-			return s.abort(report, journal, "", fmt.Sprintf("context cancelled before slot %q: %v", e.Slot, err), err)
-		}
-
-		// Obligation 11's per-slot check.
-		fresh, err := s.sess.ReadChannel(ctx, e.Slot)
+		// VFOStateRestorer seam (v1.9.0 binary-CAT write model, §Write model):
+		// snapshot VFO-A's live content/selection BEFORE anything else below,
+		// including the memory-selection snapshot right after it — this
+		// family's write choreography overwrites VFO-A to commit a channel,
+		// so unlike obligation 12's MemorySelector there is no safe
+		// best-effort-proceed path: a snapshot failure aborts HERE, before
+		// the first mutating frame. See vfo_state_restorer.go.
+		vfoSnap, hasVFOSnap, err := s.snapshotVFOState(ctx, journal)
 		if err != nil {
-			report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionVerifyReadError, Detail: err.Error()})
-			return s.abort(report, journal, e.Slot, fmt.Sprintf("verify-read: %v", err), err)
+			return s.abort(report, journal, "", fmt.Sprintf("vfo snapshot: %v", err), err)
 		}
-		if !baselineChannelEqual(fresh, e.Before) {
-			stale := &StaleBaselineError{Slot: e.Slot, Reason: "radio's current content no longer matches what PrepareSend read"}
-			report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionVerifyReadDrift, Detail: stale.Error()})
-			return s.abort(report, journal, e.Slot, stale.Error(), stale)
+		if hasVFOSnap {
+			defer s.restoreVFOState(journal, vfoSnap)
 		}
-		s.progress("verify-read", i+1, len(deltas), e.Slot)
 
-		ch := candidateBySlot[e.Slot]
-		if _, err := s.writePair(journal, report, i, len(deltas), e, ch); err != nil {
-			return report, err
+		// Obligation 12: snapshot the radio's current memory selection BEFORE
+		// the first write below — MW moves it to the written slot
+		// (HW-CONFIRMED 2026-07-13, M5b write trials, docs/hardware-notes.md)
+		// — and best-effort restore it on the way out, however the loop below
+		// ends (success, abort, or a cancelled ctx): see
+		// snapshotMemorySelection/restoreMemorySelection (memory_selector.go)
+		// for why this is entirely best-effort, never a refusal or an abort
+		// cause. The defer covers every return path below this point,
+		// including every s.abort(...) call inside the loop and writePair.
+		//
+		// Deferred AFTER vfoSnap's restore above so LIFO unwind order runs
+		// this memory-selection restore FIRST, then the VFO-content restore
+		// second — VFOStateRestorer brackets MemorySelector (§Write model:
+		// "VFO content is what steps 1-6 touch; a current-memory pointer, if
+		// any, is separate state").
+		if snap := s.snapshotMemorySelection(ctx, journal); snap != "" {
+			defer s.restoreMemorySelection(journal, snap)
 		}
+
+		// Fix 3 (M3 Codex-review fix wave): each slot's verify-read
+		// (obligation 11) runs IMMEDIATELY before that SAME slot's own
+		// write_attempt journal line — not as a separate up-front phase
+		// covering every to-be-written slot before ANY of them are written.
+		// This closes the drift-to-write window down to as small as
+		// physically possible: under the old up-front-phase design, a
+		// slot's baseline was re-checked, but then the radio's memory could
+		// still drift AGAIN while every OTHER delta's verify-read ran,
+		// before that slot's own write finally happened. See
+		// TestExecute_VerifyReadPerSlot_FirstWrittenBeforeSecondDrifts for
+		// the test that pins this down: draining a LATER slot's drift must
+		// not prevent an EARLIER, undrifted slot from having already
+		// completed.
+		for i, e := range deltas {
+			if err := ctx.Err(); err != nil {
+				return s.abort(report, journal, "", fmt.Sprintf("context cancelled before slot %q: %v", e.Slot, err), err)
+			}
+
+			// Obligation 11's per-slot check.
+			fresh, err := s.sess.ReadChannel(ctx, e.Slot)
+			if err != nil {
+				report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionVerifyReadError, Detail: err.Error()})
+				return s.abort(report, journal, e.Slot, fmt.Sprintf("verify-read: %v", err), err)
+			}
+			if !baselineChannelEqual(fresh, e.Before) {
+				stale := &StaleBaselineError{Slot: e.Slot, Reason: "radio's current content no longer matches what PrepareSend read"}
+				report.Slots = append(report.Slots, SlotResult{Slot: e.Slot, Action: actionVerifyReadDrift, Detail: stale.Error()})
+				return s.abort(report, journal, e.Slot, stale.Error(), stale)
+			}
+			s.progress("verify-read", i+1, len(deltas), e.Slot)
+
+			ch := candidateBySlot[e.Slot]
+			if _, err := s.writePair(journal, report, i, len(deltas), e, ch); err != nil {
+				return report, err
+			}
+		}
+	}
+
+	// Settings write-then-verify pass (task f1), over plan.Settings() —
+	// runs regardless of whether there were any channel deltas above (a
+	// settings-only diff must still write). See writeSettingsBatch.
+	if err := s.writeSettingsBatch(ctx, journal, report, plan); err != nil {
+		return report, err
 	}
 
 	s.journalAppend(journal, "completion", map[string]any{
@@ -666,4 +680,74 @@ func (s *Service) abort(report *Report, journal journalAppender, slot, reason st
 	report.AbortReason = reason
 	s.journalAppend(journal, "abort", map[string]any{"slot": slot, "reason": reason})
 	return report, &AbortedError{Slot: slot, Reason: reason, Cause: cause}
+}
+
+// writeSettingsBatch runs Execute's per-address settings write-then-verify
+// pass (task f1) over plan.Settings(), mutating report in place.
+//
+// sess.(driver.SettingsWriter) is an OPTIONAL capability, exactly like
+// SettingsReader (see that interface's doc comment): a session whose
+// concrete type does not implement it means this pass is silently
+// skipped — never a refusal, since PrepareSend already only populates
+// plan.settings for a session that answered CanSetEX true, which itself
+// required a SettingsReader; a driver could in principle carry one
+// without the other, and this is where that would be discovered.
+//
+// driver.SettingsWriter.WriteSetting already performs its own Set-then-
+// verify pair internally (core/driver/ft710's implementation runs the Set
+// and the paired read-back in one call) and returns a SettingWriteResult
+// naming which of the four SettingWriteOutcome values resulted — so
+// unlike writePair's channel choreography, this loop's own job is just
+// journalling (fail-safe, "setting_write_attempt" before the call and
+// "setting_write_result" after — mirroring write_attempt/write_result's
+// shape) and aborting via the SAME s.abort machinery on the first non-nil
+// error, naming the address (AbortedError.Slot). Every attempted address's
+// result is appended to report.Settings BEFORE that abort check runs, so a
+// caller can see exactly how far the batch got even when it stopped early.
+//
+// Like writePair (Fix 7), the Set+verify call itself runs under an
+// internal, caller-independent context once its write_attempt is durably
+// journaled: a write without its verify is an unknown state, so a caller's
+// ctx cancelling must not be able to abandon one mid-pair. ctx (the
+// caller's) is honoured only BETWEEN addresses, checked at the top of each
+// iteration — mirroring Execute's own per-slot cancellation contract.
+func (s *Service) writeSettingsBatch(ctx context.Context, journal journalAppender, report *Report, plan *SendPlan) error {
+	if len(plan.settings) == 0 {
+		return nil
+	}
+	writer, ok := s.sess.(driver.SettingsWriter)
+	if !ok {
+		return nil
+	}
+
+	for i, sd := range plan.settings {
+		if err := ctx.Err(); err != nil {
+			_, abortErr := s.abort(report, journal, sd.ID, fmt.Sprintf("context cancelled before setting %q: %v", sd.ID, err), err)
+			return abortErr
+		}
+
+		if jfe := s.appendDeltaJournal(journal, "setting_write_attempt", sd.ID, map[string]any{"id": sd.ID, "wanted": sd.Wanted}); jfe != nil {
+			_, abortErr := s.abort(report, journal, sd.ID, jfe.Error(), jfe)
+			return abortErr
+		}
+
+		pairCtx, cancel := context.WithTimeout(context.Background(), writeVerifyPairTimeout)
+		res, err := writer.WriteSetting(pairCtx, sd.ID, sd.Wanted)
+		cancel()
+		report.Settings = append(report.Settings, res)
+
+		if jfe := s.appendDeltaJournal(journal, "setting_write_result", sd.ID, map[string]any{
+			"id": sd.ID, "wanted": sd.Wanted, "observed": res.Observed,
+			"outcome": res.Outcome.String(), "error": errString(err),
+		}); jfe != nil {
+			_, abortErr := s.abort(report, journal, sd.ID, jfe.Error(), jfe)
+			return abortErr
+		}
+		if err != nil {
+			_, abortErr := s.abort(report, journal, sd.ID, fmt.Sprintf("setting %q: %v", sd.ID, err), err)
+			return abortErr
+		}
+		s.progress("write-setting", i+1, len(plan.settings), sd.ID)
+	}
+	return nil
 }
