@@ -23,7 +23,8 @@ Two words are used throughout:
 Shared by every radio: a channel cannot be deleted from the program
 (the Yaesu radios have no such command; the Icom radios and the
 TS-890S and TS-990S do, and the program deliberately does not use
-it), and menu settings are never written
+it). Menu settings stay read-only on every radio except the FT-710,
+where a hardware-characterised address can be written
 (`docs/menu-write-decision.md`).
 
 ## Yaesu
@@ -31,11 +32,25 @@ it), and menu settings are never written
 ### FT-710 (verified)
 
 Reads and writes the 99 memories and the 9 PMS pairs, and reads every
-menu setting. Writes were proven on a real radio, including creating a
-channel in an empty slot and clearing a tag. Needs firmware V01-10 or
-later; the program cannot ask the radio its version, but memory CAT
-arrived with that firmware, so a radio that answers the read has
-proved it. Nothing is typed in.
+menu setting; a hardware-characterised menu address can be written
+too, set and then read back byte-for-byte to confirm it landed.
+Writes were proven on a real radio, including creating a channel in
+an empty slot and clearing a tag. Needs firmware V01-10 or later; the
+program cannot ask the radio its version, but memory CAT arrived with
+that firmware, so a radio that answers the read has proved it.
+Nothing is typed in.
+
+Menu settings: 58 addresses are permanently read-only by behaviour
+class — the CAT link settings, PTT and keying over RTS, DTR or DAKY
+(including PC KEYING), tuner and antenna routing, TX power and
+safety, MOD SOURCE, and the text fields — and 4 more are held
+read-only pending further investigation. Every other menu address
+becomes writable once its own hardware-characterisation session
+records a Set width for it. There is no consent step for menu
+writes: the manual's own settings chart has already been shown
+wrong, so only testing on hardware can be trusted. See
+`docs/menu-write-decision.md` for the reasoning, and the README's
+*Menu settings are different* for how to send a write.
 
 Refused: tone, scan-skip and clarifier cannot be set over CAT, so an
 edit to any of them is refused rather than silently dropped. The
