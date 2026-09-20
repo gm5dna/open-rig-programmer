@@ -7,6 +7,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/csvio"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // This file holds pure, side-effect-free conversion helpers between
@@ -133,13 +134,29 @@ func descriptorToSpecView(d driver.SettingsDescriptor, live bool) SettingsSpecVi
 		for j, g := range m.Groups {
 			items := make([]SettingItemView, len(g.Items))
 			for k, it := range g.Items {
-				items[k] = SettingItemView{ID: it.ID, Label: it.Label, Display: it.Display}
+				items[k] = SettingItemView{ID: it.ID, Label: it.Label, Display: it.Display, Editable: it.Write == spec.Supported}
 			}
 			groups[j] = SettingGroupView{ID: g.ID, Label: g.Label, Items: items}
 		}
 		menus[i] = SettingMenuView{ID: m.ID, Label: m.Label, Groups: groups}
 	}
 	return SettingsSpecView{Live: live, DescriptorVersion: d.Version, Menus: menus}
+}
+
+// settingWriteResultToView converts one driver.SettingsWriter.WriteSetting
+// call's result to its display shape: Outcome is always res.Outcome.
+// String(), one of the four values spec §7 requires rendered. err is that
+// same call's paired error return (nil only for SettingWriteAccepted, see
+// driver.SettingsWriter's doc comment) — its text becomes Err verbatim,
+// so the frontend has the driver's own wording (e.g.
+// *driver.SettingVerifyMismatchError's message) for any non-accepted
+// result without this package re-deriving it.
+func settingWriteResultToView(res driver.SettingWriteResult, err error) SettingWriteResultView {
+	view := SettingWriteResultView{ID: res.ID, Wanted: res.Wanted, Observed: res.Observed, Outcome: res.Outcome.String()}
+	if err != nil {
+		view.Err = err.Error()
+	}
+	return view
 }
 
 // menuSnapshotToView converts snap (possibly nil) to GetSettings/
