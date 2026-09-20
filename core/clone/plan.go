@@ -45,6 +45,12 @@ type SendPlan struct {
 	diff   codeplug.DiffResult
 	issues []codeplug.Issue
 
+	// settings is PrepareSend's settings-side diff (task f1): every
+	// CanSetEX-characterised address whose fresh live value disagrees with
+	// the candidate's settings snapshot. See Settings() and settingsDeltas
+	// (settings.go).
+	settings []SettingDelta
+
 	snapshotPath string
 }
 
@@ -60,6 +66,14 @@ func (p *SendPlan) Diff() codeplug.DiffResult {
 // the candidate at PrepareSend time.
 func (p *SendPlan) Issues() []codeplug.Issue {
 	return append([]codeplug.Issue(nil), p.issues...)
+}
+
+// Settings returns a defensive copy of this plan's settings deltas — see
+// settingsDeltas (settings.go) for how they are computed. Styled on
+// Issues(): a fresh slice, safe for a caller to hold and mutate freely
+// without affecting the plan.
+func (p *SendPlan) Settings() []SettingDelta {
+	return append([]SettingDelta(nil), p.settings...)
 }
 
 // BaselineDigest returns the digest of the fresh baseline PrepareSend read
@@ -247,6 +261,11 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 		}}}
 	}
 
+	settings, err := s.settingsDeltas(ctx, file.Menus)
+	if err != nil {
+		return nil, fmt.Errorf("clone: PrepareSend: %w", err)
+	}
+
 	plan := &SendPlan{
 		identity:        s.sess.Identity(),
 		generation:      s.generation,
@@ -257,6 +276,7 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 		candidateDigest: diff.CandidateDigest,
 		diff:            diff,
 		issues:          append([]codeplug.Issue(nil), issues...),
+		settings:        settings,
 		snapshotPath:    snapshotPath,
 	}
 
