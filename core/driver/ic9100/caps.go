@@ -12,7 +12,6 @@ import (
 
 // Profile selects the evidence gate used by New. RealHardware is the zero
 // value so an uninitialised profile fails safe.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware

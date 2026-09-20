@@ -35,7 +35,6 @@ const writeTrialsComplete = false
 // while the write-trial guard is false, is the all-Unverified one, nothing
 // writable — and NEVER towards the simulator's, whose Supported writes are
 // a claim about the in-package scripted port and about nothing else.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware

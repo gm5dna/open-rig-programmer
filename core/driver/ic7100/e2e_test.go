@@ -57,7 +57,7 @@ import (
 // The session's Close closes the engine, which closes the port, which
 // closes the radio — so the radio's own Close is registered too, for the
 // paths that never reach a session at all.
-func e2eOpen(t *testing.T, profile Profile, driverOpts []Option, fakeOpts ...fakeic7100.Option) (*fakeic7100.Radio, *Session) {
+func e2eOpen(t *testing.T, profile driver.Profile, driverOpts []Option, fakeOpts ...fakeic7100.Option) (*fakeic7100.Radio, *Session) {
 	t.Helper()
 	radio := fakeic7100.New(fakeOpts...)
 	t.Cleanup(func() { _ = radio.Close() })

@@ -5,7 +5,6 @@ package ft2000
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
@@ -232,20 +231,6 @@ type AnswerMismatchError = driver.AnswerMismatchError[string]
 
 // KindMismatchError reports that an MR answer's P7 kind byte was not one
 // of this radio's accepted read-side values (read.go's acceptedKinds).
-type KindMismatchError struct {
-	// Slot is the canonical wire-form slot that was read.
-	Slot string
-	// Got is the P7 kind byte the answer carried.
-	Got byte
-	// Want lists every kind byte this radio's read side accepts.
-	Want []byte
-}
-
-// Error implements the error interface.
-func (e *KindMismatchError) Error() string {
-	want := make([]string, len(e.Want))
-	for i, k := range e.Want {
-		want[i] = fmt.Sprintf("%q", rune(k))
-	}
-	return fmt.Sprintf("ft2000: MR answer for slot %q carries kind %q, want one of {%s}", e.Slot, rune(e.Got), strings.Join(want, ","))
-}
+// The shared form (yaesu.KindMismatchError) carries the model name so
+// this package needs no typed error of its own.
+type KindMismatchError = yaesu.KindMismatchError

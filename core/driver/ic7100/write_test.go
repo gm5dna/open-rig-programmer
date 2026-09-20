@@ -14,7 +14,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
 
-func openProfileSession(t *testing.T, profile Profile, p *respondingPort, opts ...Option) *Session {
+func openProfileSession(t *testing.T, profile driver.Profile, p *respondingPort, opts ...Option) *Session {
 	t.Helper()
 	sess, err := New(profile, opts...).Open(context.Background(), p.Port(), driver.Identity{Port: "test"})
 	if err != nil {

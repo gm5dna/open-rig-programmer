@@ -48,7 +48,7 @@ func WithSiblingRecordLengths(s SiblingLengths) Option {
 
 // New constructs the IC-9100 driver. It intentionally returns only the
 // neutral driver seam and does not register the model.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ic9100Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -99,7 +100,7 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 // pass before E5b lands, and that is a sequencing fact, not a defect in the
 // capabilities.
 func TestCapabilities_Validate(t *testing.T) {
-	for _, p := range []Profile{RealHardware, Simulated} {
+	for _, p := range []driver.Profile{RealHardware, Simulated} {
 		if err := New(p).Capabilities().Validate(); err != nil {
 			t.Errorf("profile %v: Capabilities().Validate(): %v — if this is the ShiftOptions/DuplexOptions non-empty rule, enabler E5b has not landed and Stage 2 started too early", p, err)
 		}

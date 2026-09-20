@@ -5,6 +5,8 @@ package driver
 import (
 	"errors"
 	"fmt"
+
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // ErrAnswerMismatch is the sentinel for the refusal every driver mints its
@@ -100,4 +102,89 @@ type SettingAnswerMismatchError struct {
 func (e *SettingAnswerMismatchError) Error() string {
 	return fmt.Sprintf("%s: ReadSetting: requested EX address %q but the answer names address %q — refusing to map a reply onto the wrong setting",
 		e.Model, e.Requested, e.Answered)
+}
+
+// ErrUnknownSlot is the sentinel for the refusal every Kenwood ts* driver
+// mints its own copy of: a slot identifier that names no channel the row
+// publishes. Model-neutral like ErrAnswerMismatch — the model lives on the
+// error VALUE (UnknownSlotError.Model), not the class.
+var ErrUnknownSlot = errors.New("driver: slot is not one this row/model publishes")
+
+// UnknownSlotError reports a slot identifier that is not in this row's or
+// model's published set — malformed or outside the printed space. No frame
+// is sent.
+//
+// Seven Kenwood packages (ts2000, ts480, ts570, ts590, ts870s, ts890,
+// ts990) minted this same three-field shape (two of them, ts890 and
+// ts990, leaving Model unset and splicing a package constant into the
+// message instead — this shared type gives every package all three
+// fields so none has to). Their Error() wording differs by package (a
+// literal prefix, and ts870s's shorter template), so each package keeps
+// its own Error() by embedding this struct rather than sharing one
+// method — merging the message would change byte-identical wire-facing
+// text for no reason.
+type UnknownSlotError struct {
+	// Slot is the identifier that was requested.
+	Slot string
+	// Model is the row/model it was requested of, e.g. "TS-2000". Empty
+	// where the owning package instead splices its own constant into the
+	// message (ts890, ts990).
+	Model string
+	// Reason says how it failed.
+	Reason string
+}
+
+// ErrOutOfDomain is the sentinel for the refusal every Icom driver mints
+// its own copy of: a Known value lies outside what this radio's record
+// (or declared capability domain) can encode.
+var ErrOutOfDomain = errors.New("driver: a Known value lies outside what this radio's record can encode")
+
+// OutOfDomainError reports a field value outside what a radio's record or
+// declared domain can encode. Eight Icom packages (ic7200, ic7410,
+// ic7600, ic7610, ic7700, ic7760, ic7800, ic7851) minted this shape in
+// two field widths — {Field,Value,Max} and {Field,Value,Min,Max,Where} —
+// and two message templates, one plain and one adding a gate-domain
+// note; this type unions the fields (Min/Where empty where a package
+// never had them) and each package keeps its own Error() by embedding,
+// since the template differs by package.
+type OutOfDomainError struct {
+	// Field is the neutral field whose value was refused.
+	Field spec.Field
+	// Value is what was asked for on a write, or what was decoded on a
+	// read, in the field's own neutral unit.
+	Value uint64
+	// Max is the largest value this radio's record (or declared domain)
+	// can encode for it.
+	Max uint64
+	// Min is the declared lower bound, where a package has one. Zero
+	// (and unused) for packages that only ever had a ceiling.
+	Min uint64
+	// Where names the capability the bounds came from, for the message.
+	// Empty for packages that never had one.
+	Where string
+}
+
+// ErrUnmappedRegion is the sentinel for the refusal every Icom driver
+// mints its own copy of: a slot's unmapped record regions differ from
+// this profile's Fixed template (the E6-style refusal).
+var ErrUnmappedRegion = errors.New("driver: the slot's unmapped record regions differ from this profile's Fixed template")
+
+// UnmappedRegionError reports that a slot's unmapped record regions do
+// not match this profile's Fixed template. Eight Icom packages (ic7200,
+// ic7410, ic7600, ic7610, ic7700, ic7760, ic7800, ic7851) minted this
+// shape; two (ic7200, ic7410) check whole bytes and have no Nibble field,
+// the other six check nibble-granularity and add one. This type unions
+// them (Nibble empty for the whole-byte two); each package keeps its own
+// Error() by embedding, since wording (and the reasons switch) differs by
+// package.
+type UnmappedRegionError struct {
+	// Offset is the 0-based record byte whose unmapped region differed.
+	Offset int
+	// Nibble is "low", "high" or "whole" — which part of that byte, for
+	// the six packages that check at nibble granularity. Empty for
+	// ic7200 and ic7410, which check the whole byte and never set it.
+	Nibble string
+	// Want and Got are that region's value in the template and in the
+	// slot's actual record.
+	Want, Got byte
 }

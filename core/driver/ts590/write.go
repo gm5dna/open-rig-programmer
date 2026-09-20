@@ -305,7 +305,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	number, half, err := parseSlotID(ch.Slot)
 	if err != nil {
-		return res, &UnknownSlotError{Slot: ch.Slot, Model: modelNameFor(s.row), Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Model: modelNameFor(s.row), Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(ch.Slot)
 	if !ok {
@@ -313,11 +313,11 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		// unpublished slot: the TS-590SG's 110-119 are refused here exactly
 		// as "999" is on both rows, with no special case and no invented
 		// radio behaviour (see UnknownSlotError, read.go).
-		return res, &UnknownSlotError{
+		return res, &UnknownSlotError{driver.UnknownSlotError{
 			Slot:   ch.Slot,
 			Model:  modelNameFor(s.row),
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 
 	if ch.Empty() {
@@ -455,7 +455,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		// Unreachable for a slot the banks published, since every published
 		// identifier was rendered by this same layout's NewSlot (caps.go).
 		// Refuse rather than build a frame from a slot the codec disowns.
-		return res, &UnknownSlotError{Slot: ch.Slot, Model: modelNameFor(s.row), Reason: err.Error()}
+		return res, &UnknownSlotError{driver.UnknownSlotError{Slot: ch.Slot, Model: modelNameFor(s.row), Reason: err.Error()}}
 	}
 	cmd, err := s.buildMWSet(ch.Slot, slot, data, p14)
 	if err != nil {

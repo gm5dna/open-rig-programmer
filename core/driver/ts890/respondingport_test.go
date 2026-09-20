@@ -148,7 +148,7 @@ func testTiming() Option { return withTiming(80*time.Millisecond, time.Milliseco
 // callers is exactly how a ladder of semantic pins goes green with none of
 // the rungs implemented. It is stated here, at T11, so T12's ladder inherits
 // it rather than re-deriving it.
-func openTestSession(t *testing.T, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
+func openTestSession(t *testing.T, profile driver.Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
 	p := newRespondingPort(t, img)
 	d := New(profile, append([]Option{testTiming()}, opts...)...)

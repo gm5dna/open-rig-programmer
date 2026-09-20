@@ -94,7 +94,7 @@ func siblingModelName(id string) string {
 // "ONE ROW, ONE COLUMN"), so which radio a driver is for is fixed by the
 // package rather than by a value a caller could get wrong — the ic7200
 // shape.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ts870sDriver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

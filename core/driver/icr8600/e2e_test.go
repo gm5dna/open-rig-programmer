@@ -78,11 +78,11 @@ var e2eImage = []struct {
 // bounded occupied-slot search makes 199 reads before a session exists, and
 // production deliberately takes the transport defaults until a Stage R
 // capture measures this radio.
-func openFake(t *testing.T, profile Profile, consented bool, opts ...fakeicr8600.Option) (*fakeicr8600.Radio, *Session) {
+func openFake(t *testing.T, profile driver.Profile, consented bool, opts ...fakeicr8600.Option) (*fakeicr8600.Radio, *Session) {
 	return openFakeWithDriverOptions(t, profile, consented, nil, opts...)
 }
 
-func openFakeWithDriverOptions(t *testing.T, profile Profile, consented bool, driverOpts []Option, opts ...fakeicr8600.Option) (*fakeicr8600.Radio, *Session) {
+func openFakeWithDriverOptions(t *testing.T, profile driver.Profile, consented bool, driverOpts []Option, opts ...fakeicr8600.Option) (*fakeicr8600.Radio, *Session) {
 	t.Helper()
 	radio := fakeicr8600.New(opts...)
 	t.Cleanup(func() { _ = radio.Close() })
@@ -94,7 +94,7 @@ func openFakeWithDriverOptions(t *testing.T, profile Profile, consented bool, dr
 	return radio, sess.(*Session)
 }
 
-func newFakeDriver(profile Profile, consented bool, extra ...Option) driver.Driver {
+func newFakeDriver(profile driver.Profile, consented bool, extra ...Option) driver.Driver {
 	opts := append([]Option{fastTiming()}, extra...)
 	if consented {
 		opts = append(opts, WithConsentedUnverifiedWrites())

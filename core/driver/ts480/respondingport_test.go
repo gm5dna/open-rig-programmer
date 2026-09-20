@@ -155,7 +155,7 @@ func (p *respondingPort) Transcript() []string {
 // that gate (Simulated). A helper that chose the profile for its callers is
 // exactly how a ladder of semantic pins goes green with none of the rungs
 // implemented.
-func openSession(t *testing.T, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
+func openSession(t *testing.T, profile driver.Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
 	p := newRespondingPort(t, img)
 	d := New(profile, append([]Option{testTiming()}, opts...)...)

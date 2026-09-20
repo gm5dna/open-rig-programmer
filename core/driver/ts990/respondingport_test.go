@@ -162,7 +162,7 @@ func testTiming() Option { return withTiming(80*time.Millisecond, time.Milliseco
 // exactly how a whole ladder of semantic pins goes green with none of the
 // rungs implemented. T14's write tests are the consumers; the read tests take
 // openTestSession below.
-func openSessionAt(t *testing.T, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
+func openSessionAt(t *testing.T, profile driver.Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
 	p := newRespondingPort(t, img)
 	d := New(profile, append([]Option{testTiming()}, opts...)...)

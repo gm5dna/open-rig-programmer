@@ -25,7 +25,7 @@ const memorySetStep = "1A 00"
 
 // ErrUnmappedRegion is the sentinel for ruling E6: the slot's unmapped
 // record regions differ from the profile's Fixed template.
-var ErrUnmappedRegion = errors.New("ic7600: the slot's unmapped record regions differ from this profile's Fixed template")
+var ErrUnmappedRegion = driver.ErrUnmappedRegion
 
 // UnmappedRegionError reports E6's refusal, naming exactly which region
 // disagreed and by how much.
@@ -41,19 +41,14 @@ var ErrUnmappedRegion = errors.New("ic7600: the slot's unmapped record regions d
 // "preserve what was there" is not available to it — that allow-case was
 // STRUCK from E6 REV 2 as unimplementable and as licensing the very
 // corruption the ruling forbids.
+// Fields are driver.UnmappedRegionError's shared shape
+// (core/driver/errors.go); Nibble is "low", "high" or "whole" — which part
+// of the byte. SelectByteOffset (record byte 0) is checked "whole": this
+// radio's own page prints no nibble split for it (matrix S3.15(a)), unlike
+// the IC-7610's. DataModeNibbleOffset's high nibble is still checked as
+// "high".
 type UnmappedRegionError struct {
-	// Offset is the 0-based record byte whose unmapped region differed.
-	Offset int
-	// Nibble is "low", "high" or "whole" — which part of that byte.
-	// SelectByteOffset (record byte 0) is checked "whole": this radio's
-	// own page prints no nibble split for it (matrix S3.15(a)), unlike
-	// the IC-7610's. DataModeNibbleOffset's high nibble is still checked
-	// as "high".
-	Nibble string
-	// Want and Got are that region's value in the template and in the
-	// slot's actual record.
-	Want byte
-	Got  byte
+	driver.UnmappedRegionError
 }
 
 func (e *UnmappedRegionError) Error() string {
@@ -91,7 +86,7 @@ func (e *UnmappedRegionError) Unwrap() error { return ErrUnmappedRegion }
 
 // ErrOutOfDomain is the sentinel for a Known value outside what this
 // radio's record can encode.
-var ErrOutOfDomain = errors.New("ic7600: a Known value lies outside what this radio's record can encode")
+var ErrOutOfDomain = driver.ErrOutOfDomain
 
 // OutOfDomainError reports a Known numeric value — asked for on a write,
 // or decoded on a read — that this radio's record cannot express.
@@ -103,15 +98,11 @@ var ErrOutOfDomain = errors.New("ic7600: a Known value lies outside what this ra
 // covered; these refusals close the driver's own door as well, and
 // TestNumericRefusalIsDefenceInDepthNotTheGate asserts the gap that
 // remains so that closing it later is a visible test change.
+// Fields are driver.OutOfDomainError's shared shape
+// (core/driver/errors.go); Min and Where are left unset — this package
+// only ever had a ceiling.
 type OutOfDomainError struct {
-	// Field is the neutral field whose value was refused.
-	Field spec.Field
-	// Value is what was asked for on a write, or what was decoded on a
-	// read, in the field's own neutral unit (hertz for a frequency,
-	// tenths of a hertz for a tone).
-	Value uint64
-	// Max is the largest value this radio's record can encode for it.
-	Max uint64
+	driver.OutOfDomainError
 }
 
 // Error's wording holds at both call sites: WriteChannel raises this
@@ -307,7 +298,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// OutOfDomainError and doc.go §6.
 	if d.FreqHz > MaxEncodableFreqHz {
 		return driver.WriteResult{Steps: []driver.WriteStep{}},
-			&OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz}
+			&OutOfDomainError{driver.OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz}}
 	}
 	for _, tt := range []struct {
 		field spec.Field
@@ -318,7 +309,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	} {
 		if tt.tone.State == codeplug.Known && uint64(tt.tone.Value) > MaxToneDeciHz {
 			return driver.WriteResult{Steps: []driver.WriteStep{}},
-				&OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: MaxToneDeciHz}
+				&OutOfDomainError{driver.OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: MaxToneDeciHz}}
 		}
 	}
 
@@ -512,7 +503,7 @@ func unmappedRegionsDiffer(raw []byte) error {
 	} {
 		want, got := chk.mask(tmpl[chk.offset]), chk.mask(raw[chk.offset])
 		if want != got {
-			return &UnmappedRegionError{Offset: chk.offset, Nibble: chk.nibble, Want: want, Got: got}
+			return &UnmappedRegionError{driver.UnmappedRegionError{Offset: chk.offset, Nibble: chk.nibble, Want: want, Got: got}}
 		}
 	}
 	return nil

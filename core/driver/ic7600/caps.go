@@ -33,7 +33,6 @@ const writeTrialsComplete = false
 // Profile must fail TOWARDS the real-hardware capability set - which
 // while writeTrialsComplete is false is the all-Unverified one, nothing
 // writable - and NEVER towards the simulator's.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware
