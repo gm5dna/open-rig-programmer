@@ -1808,6 +1808,24 @@ func StaticSettingsDescriptor(model string) (driver.SettingsDescriptor, bool, er
 	return prov.StaticSettingsDescriptor(), true, nil
 }
 
+// FT710WriteBoundaryRow aliases ft710.WriteBoundaryRow so a caller that
+// may not import core/driver/ft710 directly (cmd/rigprog; internal/
+// guards' composition-root discipline) can still name the type its own
+// variables and function signatures carry.
+type FT710WriteBoundaryRow = ft710.WriteBoundaryRow
+
+// FT710WriteBoundaryRows returns core/driver/ft710's write-boundary dump
+// (ft710.WriteBoundaryRows) — the composition-root route "rigprog settings
+// write-boundary" (task h2) uses to reach it, since cmd/rigprog may not
+// import core/driver/ft710 (or core/cat beneath it) directly (internal/
+// guards' composition-root discipline). Hardcoded to FT-710, not
+// model-keyed like StaticSettingsDescriptor above: the write-boundary
+// sub-mode itself takes no --model flag and dumps only this build's own
+// FT-710 dialect (cmd/rigprog/writeboundary.go's own doc comment).
+func FT710WriteBoundaryRows() []FT710WriteBoundaryRow {
+	return ft710.WriteBoundaryRows()
+}
+
 // SynthesiseDiscoveredBanks classifies an offline slot list into the
 // read-only banks a live session would have discovered for model, via the
 // driver.DiscoveredBankSynthesizer capability (core/driver/optional.go),
