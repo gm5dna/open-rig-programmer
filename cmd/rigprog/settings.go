@@ -75,6 +75,19 @@ func cmdSettings(args []string, stdout, stderr io.Writer) int {
 		return settingsDiffObserved(fs.Args()[1:], stdout, stderr)
 	}
 
+	// write-boundary is reserved on the same precedent as diff-observed: it
+	// takes its own flags (--out), which mean nothing to --csv/--model/
+	// --force, so any outer flag alongside it is refused rather than
+	// silently ignored (task-h2 brief).
+	if fs.NArg() > 0 && fs.Arg(0) == writeBoundaryArg {
+		if fs.NFlag() > 0 {
+			fmt.Fprintf(stderr, "rigprog settings: %s takes its own flags, which must follow it, not --csv/--model/--force\n", writeBoundaryArg)
+			printSettingsUsage(stderr)
+			return exitUsage
+		}
+		return settingsWriteBoundary(fs.Args()[1:], stdout, stderr)
+	}
+
 	if fs.NArg() != 1 {
 		fmt.Fprintln(stderr, "rigprog settings: exactly one FILE argument is required")
 		printSettingsUsage(stderr)

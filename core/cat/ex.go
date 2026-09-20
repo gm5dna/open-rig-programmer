@@ -132,6 +132,23 @@ func (d Dialect) CanSetEX(addr EXAddress) bool {
 	return d.exSetP4OK(addr, nil)
 }
 
+// EXWriteDescriptor reports whether addr is admitted to this dialect's
+// write table AT ALL — present in d.exWrite, whatever its Width — and, if
+// so, its value Domain and current ObservedSetWidth. This is table
+// MEMBERSHIP after buildFT710ExWrite's denylist/held filter, deliberately
+// weaker than CanSetEX (which additionally requires Width != 0): a
+// denied or held address is never present here regardless of Width,
+// because buildFT710ExWrite drops it before construction, while an
+// admitted-but-uncharacterised address IS present, with the rendered
+// Width 0 sentinel, because that is exactly the boundary Session W's
+// bench tool needs to see — "safe to characterise" is a different
+// question from "safe to Set right now" (spec A1; task h2's "settings
+// write-boundary" sub-mode).
+func (d Dialect) EXWriteDescriptor(addr EXAddress) (domain Domain, width int, admitted bool) {
+	desc, ok := d.exWrite[addr]
+	return desc.Domain, desc.Width, ok
+}
+
 // BuildEXSet builds this dialect's EX Set frame for addr carrying value —
 // value already rendered to the write descriptor's own width (Session W's
 // ObservedSetWidth), sign included where the domain is Signed. It is the

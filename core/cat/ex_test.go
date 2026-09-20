@@ -389,3 +389,37 @@ func TestDialectExWrite_ExcludesDeniedAndHeld(t *testing.T) {
 		t.Errorf("admitted address %v Domain.Signed = false, want true", admittedAddr)
 	}
 }
+
+// TestEXWriteDescriptor_MembershipOnly pins EXWriteDescriptor's contract
+// against the shipped FT710 dialect (table2-write-observed.csv empty):
+// an admitted address is reported present (admitted == true) with its
+// real Domain and the Width 0 sentinel; a denied and a held address are
+// both reported absent, exactly as d.exWrite itself excludes them —
+// task h2's "settings write-boundary" sub-mode is built on this method
+// alone, so its membership boundary must match buildFT710ExWrite's
+// exactly, not merely CanSetEX's (which Width 0 would also make false
+// for the admitted case, collapsing the distinction this method exists
+// to keep).
+func TestEXWriteDescriptor_MembershipOnly(t *testing.T) {
+	admittedAddr := EXAddress{P1: 1, P2: 1, P3: 1} // AF TREBLE GAIN
+	deniedAddr := EXAddress{P1: 3, P2: 1, P3: 5}   // CAT-1 RATE
+	heldAddr := EXAddress{P1: 1, P2: 5, P3: 16}    // SHIFT FREQUENCY
+
+	domain, width, admitted := FT710.EXWriteDescriptor(admittedAddr)
+	if !admitted {
+		t.Errorf("EXWriteDescriptor(%v) admitted = false, want true", admittedAddr)
+	}
+	if width != 0 {
+		t.Errorf("EXWriteDescriptor(%v) width = %d, want 0 (unrun Session W sentinel)", admittedAddr, width)
+	}
+	if !domain.Signed || domain.Lo != -20 || domain.Hi != 10 {
+		t.Errorf("EXWriteDescriptor(%v) domain = %+v, want {-20,10,1,true}", admittedAddr, domain)
+	}
+
+	if _, _, admitted := FT710.EXWriteDescriptor(deniedAddr); admitted {
+		t.Errorf("EXWriteDescriptor(%v) admitted = true, want false (denied)", deniedAddr)
+	}
+	if _, _, admitted := FT710.EXWriteDescriptor(heldAddr); admitted {
+		t.Errorf("EXWriteDescriptor(%v) admitted = true, want false (held)", heldAddr)
+	}
+}
