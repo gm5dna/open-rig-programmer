@@ -316,16 +316,17 @@ Usage:
   rigprog settings unverified-writes
   rigprog settings unverified-writes <model> on|off
   rigprog settings diff-observed [--observed-csv CSV] [--manual-csv CSV] FILE
+  rigprog settings write-boundary [--out FILE] [--force]
 
 Flags:
   --csv OUT     also write the snapshot to this CSV file path (optional)
   --model NAME  radio model whose settings descriptor to group by (default: FT-710)
   --force       overwrite --csv if it already exists
 
-"unverified-writes" and "diff-observed" are RESERVED first arguments —
-each selects the sub-mode described below, so neither can ever be read as
-a FILE to render. A codeplug file of either exact name must be given
-another (any extension will do).
+"unverified-writes", "diff-observed" and "write-boundary" are RESERVED
+first arguments — each selects the sub-mode described below, so none can
+ever be read as a FILE to render. A codeplug file of any of these exact
+names must be given another (any extension will do).
 
 CONSENT SUB-MODE (no flags; nothing is read from or written to a radio):
 with no further arguments it lists every model this build supports, with
@@ -346,6 +347,13 @@ outline: diffs a "rigprog read --settings" capture's per-address P4 wire
 width/shape against core/cat/table2-observed.csv (Runbook R step 2), a
 WIDTH/SHAPE comparison only — it never prints or compares a setting
 value.
+
+WRITE-BOUNDARY SUB-MODE: see "rigprog settings write-boundary --help". In
+outline: dumps every address admitted to this build's write gate (denied
+and held addresses excluded by construction) with its read width, current
+Set width (0 until Session W) and value domain — the safety-boundary data
+file the out-of-repo Session W bench tool depends on entirely, since that
+tool cannot import core/cat.
 
 OFFLINE: does not open a radio session — --port/--fake are not accepted.
 Loads FILE strictly, then renders its menu/settings snapshot (captured by
@@ -376,8 +384,9 @@ number of arguments, an unrecognised model, a state word that is neither
 "on" nor "off", or a model whose writes are hardware-verified). Exit
 codes 3/4/5 are not
 used by this command: there is no radio session to block, refuse, or
-abort against. The diff-observed sub-mode has its own exit-code contract
-— see "rigprog settings diff-observed --help".
+abort against. The diff-observed and write-boundary sub-modes each have
+their own exit-code contract — see "rigprog settings diff-observed --help"
+and "rigprog settings write-boundary --help".
 `
 
 // printSettingsUsage writes "rigprog settings"'s usage text to w.
@@ -423,6 +432,47 @@ not used: there is no radio session to block, refuse, or abort against.
 // usage text to w.
 func printSettingsDiffObservedUsage(w io.Writer) {
 	fmt.Fprint(w, settingsDiffObservedUsageText)
+}
+
+// settingsWriteBoundaryUsageText is "rigprog settings write-boundary"'s
+// own usage text (task-h2 brief).
+const settingsWriteBoundaryUsageText = `rigprog settings write-boundary — dump the FT-710 write gate's admitted-address safety boundary.
+
+Usage:
+  rigprog settings write-boundary [--out FILE] [--force]
+
+Flags:
+  --out FILE  write the boundary CSV to this file path instead of stdout
+  --force     overwrite --out if it already exists
+
+OFFLINE: does not open a radio session, does not read a codeplug file, and
+does not read a radio's identity — this dumps a BUILD-time fact, this
+binary's own core/cat write descriptor (core/cat/exwrite_gen.go, filtered
+through core/cat/exdenylist.go's denylist/held predicates), never
+anything captured from hardware.
+
+One row per address ADMITTED to the write gate: every denied (58) and
+held (4) address is absent from the output by construction, not by a
+runtime check anything downstream performs. Columns: id, read_width (the
+manual's Digits column — a READ width, never a Set width), width
+(ObservedSetWidth — 0 until Session W characterises this address), and
+the value domain (codes, lo, hi, step, signed).
+
+THIS OUTPUT IS THE ONLY THING KEEPING THE OUT-OF-REPO SESSION W BENCH
+TOOL (docs/fixtures-private/session-w/, gitignored) OFF THE DENIED/HELD
+ADDRESSES AND OFF ILLEGAL VALUES: that tool cannot import core/cat (spec
+§3) and trusts this file completely. Regenerate with "--out FILE --force"
+immediately before every Session W run; never hand-edit the result.
+
+Exit codes: 0 the boundary was written; 1 --out could not be created or
+written; 2 usage (an unrecognised flag, or a positional argument — this
+sub-mode takes none).
+`
+
+// printSettingsWriteBoundaryUsage writes "rigprog settings
+// write-boundary"'s usage text to w.
+func printSettingsWriteBoundaryUsage(w io.Writer) {
+	fmt.Fprint(w, settingsWriteBoundaryUsageText)
 }
 
 // parseArgs runs fs.Parse(args) for "rigprog <name>" and handles the two
