@@ -259,7 +259,7 @@
 //     OPERATING-manual fact (core/driver/ft710/caps.go:323-327) and the
 //     FTdx10's operating manual is not held by this project, so 38400 is
 //     the same-generation family default, ASSUMED. It matters because
-//     internal/wiring's OpenRealSessionFor opens a real radio at exactly
+//     internal/wiring's OpenRealSessionWith opens a real radio at exactly
 //     this driver's DefaultBaud.
 //     STAGE R LIFTS IT WITH: the baud a FACTORY-CONFIGURED FTdx10's ID
 //     exchange actually answers at — try 38400 first, then the other

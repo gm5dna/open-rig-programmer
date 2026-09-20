@@ -640,7 +640,7 @@ func runWrite(ctx context.Context, model string, sess driver.Session, snapshotDi
 // strictly, open a session, and hand off to runWrite for the actual
 // PrepareSend/confirm/Execute flow. Mirrors cmdRead/cmdDiff's own
 // flag-parsing and session-opening shape exactly (--port XOR --fake,
-// resolveSnapshotDir + MkdirAll before opening a session so a cheap
+// wiring.ResolveSnapshotDir + MkdirAll before opening a session so a cheap
 // failure there never wastes a multi-second ReadAll).
 func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("write", flag.ContinueOnError)
@@ -673,7 +673,7 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return code
 	}
 
-	snapshotDir, err := resolveSnapshotDir(*snapshotDirFlag, *model)
+	snapshotDir, err := wiring.ResolveSnapshotDir(*snapshotDirFlag, *model)
 	if err != nil {
 		fmt.Fprintf(stderr, "rigprog write: %v\n", err)
 		return exitError

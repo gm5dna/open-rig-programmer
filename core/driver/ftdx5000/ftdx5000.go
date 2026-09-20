@@ -147,10 +147,6 @@ func (d *ftdx5000Driver) sessionCapabilities() spec.Capabilities {
 	return d.SessionCaps(d.Capabilities())
 }
 
-// profileRecognised reports whether this driver's profile is one of the
-// declared constants.
-func (d *ftdx5000Driver) profileRecognised() bool { return d.Recognised() }
-
 // Session is the FTdx5000's driver.Session: one open, identity-verified
 // connection. Safe for concurrent use.
 //

@@ -1218,8 +1218,6 @@ const TIER_UI_SPEC = {
 			ID: 'MEM',
 			Label: 'Memories',
 			ReadOnly: false,
-			// Sparse memory space, undocumented capacity.
-			BudgetUnstated: true,
 			Slots: [
 				{ Slot: 'G00-000', Display: 'G00-000' },
 				{ Slot: 'G00-001', Display: 'G00-001' },

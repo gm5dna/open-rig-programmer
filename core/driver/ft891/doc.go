@@ -327,7 +327,7 @@
 //     grounds, and NOTHING IN THIS MANUAL BEARS ON IT. The FT-710's
 //     "same-generation default" justification is expressly withdrawn — the
 //     FT-891 is a 2016 radio. It matters because internal/wiring's
-//     OpenRealSessionFor opens a real radio at exactly this driver's
+//     OpenRealSessionWith opens a real radio at exactly this driver's
 //     DefaultBaud and NO BAUD OVERRIDE EXISTS IN THE CLI OR THE GUI, so a
 //     wrong value here leaves a real FT-891 reachable only by changing
 //     menu 0506 on the radio's own front panel.

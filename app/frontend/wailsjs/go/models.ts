@@ -99,6 +99,9 @@ export namespace codeplug {
 	    preamp: StringField;
 	    antenna: StringField;
 	    ip_plus: BoolField;
+	    sat_band_swap: BoolField;
+	    sat_trace: BoolField;
+	    sat_trace_rev: BoolField;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChannelData(source);
@@ -134,6 +137,9 @@ export namespace codeplug {
 	        this.preamp = this.convertValues(source["preamp"], StringField);
 	        this.antenna = this.convertValues(source["antenna"], StringField);
 	        this.ip_plus = this.convertValues(source["ip_plus"], BoolField);
+	        this.sat_band_swap = this.convertValues(source["sat_band_swap"], BoolField);
+	        this.sat_trace = this.convertValues(source["sat_trace"], BoolField);
+	        this.sat_trace_rev = this.convertValues(source["sat_trace_rev"], BoolField);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -187,6 +193,8 @@ export namespace codeplug {
 		}
 	}
 	
+	
+	
 	export class RadioInfo {
 	    model: string;
 	    cat_id: string;
@@ -232,6 +240,7 @@ export namespace codeplug {
 		    return a;
 		}
 	}
+	
 
 }
 
@@ -255,7 +264,6 @@ export namespace main {
 	    ID: string;
 	    Label: string;
 	    ReadOnly: boolean;
-	    BudgetUnstated: boolean;
 	    Slots: SlotView[];
 	    TagDisplayDefault: codeplug.BoolField;
 	    Fields: string[];
@@ -269,7 +277,6 @@ export namespace main {
 	        this.ID = source["ID"];
 	        this.Label = source["Label"];
 	        this.ReadOnly = source["ReadOnly"];
-	        this.BudgetUnstated = source["BudgetUnstated"];
 	        this.Slots = this.convertValues(source["Slots"], SlotView);
 	        this.TagDisplayDefault = this.convertValues(source["TagDisplayDefault"], codeplug.BoolField);
 	        this.Fields = source["Fields"];
@@ -685,26 +692,6 @@ export namespace main {
 	        this.Editable = source["Editable"];
 	    }
 	}
-	export class SettingWriteResultView {
-	    ID: string;
-	    Wanted: string;
-	    Observed: string;
-	    Outcome: string;
-	    Err: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new SettingWriteResultView(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ID = source["ID"];
-	        this.Wanted = source["Wanted"];
-	        this.Observed = source["Observed"];
-	        this.Outcome = source["Outcome"];
-	        this.Err = source["Err"];
-	    }
-	}
 	export class SettingGroupView {
 	    ID: string;
 	    Label: string;
@@ -773,6 +760,26 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class SettingWriteResultView {
+	    ID: string;
+	    Wanted: string;
+	    Observed: string;
+	    Outcome: string;
+	    Err: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SettingWriteResultView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.Wanted = source["Wanted"];
+	        this.Observed = source["Observed"];
+	        this.Outcome = source["Outcome"];
+	        this.Err = source["Err"];
+	    }
 	}
 	export class SettingsSpecView {
 	    Live: boolean;
@@ -989,3 +996,4 @@ export namespace main {
 	}
 
 }
+
