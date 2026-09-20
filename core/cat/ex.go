@@ -2,7 +2,10 @@
 
 package cat
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // exReadLen is the length of an EX read request for THIS DIALECT:
 // "EX"(2) + address(d.EXAddressWidth()) + ";"(1). Reference: the EX
@@ -85,6 +88,138 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 	frame = append(frame, wire...)
 	frame = append(frame, ';')
 	return newCommand(frame), nil
+}
+
+// exSetP4OK is the ONE predicate the write gate's every consumer calls —
+// CanSetEX, BuildEXSet and validEXRead's Set arm (allowlist.go) — so "may I
+// Set this address at all" and "is this particular value legal" can never
+// drift apart (Opus-3 minor 8: the Width != 0 guard drifted once already
+// when more than one place restated it).
+//
+// A missing d.exWrite entry, or a present one with Width == 0 (Session W
+// has not characterised this address, or never will because it was denied
+// or held before construction — dialect.go's buildFT710ExWrite), answers
+// false before anything else runs: no zero sentinel renders as writable
+// anywhere (spec A1). p4 == nil asks only "may I Set here at all" —
+// CanSetEX's own probe. A non-nil p4 additionally requires it to be
+// exactly Width bytes AND MATCH THE WIRE SHAPE the domain requires before
+// it is parsed at all: Domain.Signed means byte 0 is '+' or '-' and the
+// remaining Width-1 bytes are ASCII digits (spec §2, table2.csv's "(or
+// +00)" legends); an unsigned domain means all Width bytes are ASCII
+// digits, no sign and no surrounding whitespace, because Width is exact,
+// not padding to trim. Only a P4 that already has the right shape is
+// parsed with strconv.Atoi and checked against the descriptor's Domain.
+// "-00" and "+00" both parse to 0 and are both legal, distinct wire forms
+// of the same value (Domain's own doc comment).
+func (d Dialect) exSetP4OK(a EXAddress, p4 []byte) bool {
+	desc, ok := d.exWrite[a]
+	if !ok || desc.Width == 0 {
+		return false
+	}
+	if p4 == nil {
+		return true
+	}
+	if len(p4) != desc.Width {
+		return false
+	}
+	digits := p4
+	if desc.Domain.Signed {
+		if p4[0] != '+' && p4[0] != '-' {
+			return false
+		}
+		digits = p4[1:]
+	}
+	for _, b := range digits {
+		if b < '0' || b > '9' {
+			return false
+		}
+	}
+	v, err := strconv.Atoi(string(p4))
+	if err != nil {
+		return false
+	}
+	return desc.Domain.Contains(v)
+}
+
+// CanSetEX reports whether addr is writable on this dialect right now:
+// admitted (not denied, not held) AND characterised (a non-zero
+// ObservedSetWidth — Session W has produced a row for it). It is
+// exSetP4OK's own "may I Set at all" question, asked with no P4 to judge —
+// CanSetEX does not re-implement the guard, it calls the one that owns it.
+func (d Dialect) CanSetEX(addr EXAddress) bool {
+	return d.exSetP4OK(addr, nil)
+}
+
+// EXWriteDescriptor reports whether addr is admitted to this dialect's
+// write table AT ALL — present in d.exWrite, whatever its Width — and, if
+// so, its value Domain and current ObservedSetWidth. This is table
+// MEMBERSHIP after buildFT710ExWrite's denylist/held filter, deliberately
+// weaker than CanSetEX (which additionally requires Width != 0): a
+// denied or held address is never present here regardless of Width,
+// because buildFT710ExWrite drops it before construction, while an
+// admitted-but-uncharacterised address IS present, with the rendered
+// Width 0 sentinel, because that is exactly the boundary Session W's
+// bench tool needs to see — "safe to characterise" is a different
+// question from "safe to Set right now" (spec A1; task h2's "settings
+// write-boundary" sub-mode).
+func (d Dialect) EXWriteDescriptor(addr EXAddress) (domain Domain, width int, admitted bool) {
+	desc, ok := d.exWrite[addr]
+	return desc.Domain, desc.Width, ok
+}
+
+// BuildEXSet builds this dialect's EX Set frame for addr carrying value —
+// value already rendered to the write descriptor's own width (Session W's
+// ObservedSetWidth), sign included where the domain is Signed. It is the
+// ONE EX Set builder (allowlist.go:25-30,431-433's "cannot drift apart"
+// rule): it calls exSetP4OK exactly as validEXRead's Set arm does, rather
+// than re-checking width or domain membership itself.
+//
+// One call covers every refusal reason pre-wire: unknown address, denied,
+// held, uncharacterised (Width == 0), wrong width, and out-of-domain value
+// all fail exSetP4OK and are reported alike — task (d)'s WriteSetting
+// relies on that to refuse before any bytes reach the transport.
+func (d Dialect) BuildEXSet(addr EXAddress, value string) (Command, error) {
+	p4 := []byte(value)
+	if !d.exSetP4OK(addr, p4) {
+		return Command{}, newParseError([]byte(value), "EX: address is not writable, or value is outside its domain")
+	}
+	frame := make([]byte, 0, 2+d.EXAddressWidth()+len(p4)+1)
+	frame = append(frame, 'E', 'X')
+	frame = append(frame, d.EXWire(addr)...)
+	frame = append(frame, p4...)
+	frame = append(frame, ';')
+	return newCommand(frame), nil
+}
+
+// DialectWithEXWriteForTest returns a copy of d whose entire write table
+// is replaced by one entry, addr -> {Domain: domain, Width: width} — a
+// cross-package test seam for driving CanSetEX/BuildEXSet's accepting
+// path from OUTSIDE this package, mirroring this package's own local-copy
+// technique (d := FT710; d.exWrite = map[...]{...}, e.g.
+// TestBuildEXSet_AcceptsCharacterisedAddress, ex_test.go) for a caller
+// that cannot spell an exWriteDescriptor literal itself: exWrite is
+// unexported, so a package such as core/driver/ft710, testing
+// WriteSetting before Session W exists (spec §3,
+// table2-write-observed.csv is empty), has no other way to construct a
+// Dialect whose write table admits anything.
+//
+// An export_test.go alias cannot do this job: a _test.go file's exported
+// names are linked only into ITS OWN package's test binary, never into an
+// importing package's (core/driver/ft710 imports core/cat as an ordinary
+// dependency, built without core/cat's test files — verified against go's
+// own behaviour before adding this, rather than assumed).
+//
+// d itself is never mutated — Dialect is a value type, so d is already
+// this function's own copy — and no registered dialect literal (FT710 or
+// any MustNewDialect model) is ever passed through here in production:
+// every real Dialect value in this codebase is built once, at init, from
+// a fixed literal or config, never reassigned at runtime. Test-only in
+// effect, not in enforcement: it is exported like any other API, but the
+// one thing it is FOR — constructing a Dialect the outbound gate would
+// then trust — has no production call site to reach it through.
+func DialectWithEXWriteForTest(d Dialect, addr EXAddress, domain Domain, width int) Dialect {
+	d.exWrite = map[EXAddress]exWriteDescriptor{addr: {Domain: domain, Width: width}}
+	return d
 }
 
 // ParseEXAnswer parses an EX Answer frame ("EX" + this dialect's address

@@ -9,6 +9,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
@@ -223,4 +224,109 @@ func (a *App) ReadSettingsRadio() (SettingsView, error) {
 
 	a.emitDone("settings", "ok", nil, "")
 	return view, nil
+}
+
+// settingEditable reports whether id names an item in d whose Write ==
+// spec.Supported — the single fact SettingItemView.Editable (types.go) and
+// WriteSetting's own pre-flight gate both key off (see driver.
+// SettingsWriter's doc comment: no consent parameter, R1 — this is the
+// whole gate). An id absent from d altogether is not editable either.
+func settingEditable(d driver.SettingsDescriptor, id string) bool {
+	for _, m := range d.Menus {
+		for _, g := range m.Groups {
+			for _, it := range g.Items {
+				if it.ID == id {
+					return it.Write == spec.Supported
+				}
+			}
+		}
+	}
+	return false
+}
+
+// SettingNotEditableError is WriteSetting's typed pre-flight refusal for
+// an id that is not currently writable — absent from the connected
+// session's own settings descriptor, or present but not yet
+// hardware-characterised (SettingItem.Write != spec.Supported, R1's
+// no-consent-parameter gate). Returned BEFORE any wire traffic: the
+// driver's own WriteSetting is never called for an id this fails.
+type SettingNotEditableError struct {
+	// ID is the offending setting ID.
+	ID string
+}
+
+func (e *SettingNotEditableError) Error() string {
+	return fmt.Sprintf("app: setting %q is not currently editable (no hardware write characterisation yet)", e.ID)
+}
+
+// WriteSetting writes value to the connected radio's setting id, then
+// verifies it — the single-setting GUI counterpart to Execute's own
+// per-address write-then-verify pass (core/clone/execute.go's
+// writeSettingsBatch), reached directly against the connected session
+// rather than through a send plan. Mirrors ReadSettingsRadio's
+// reservation pattern (reserveOpLocked("WriteSetting")/releaseOp, see
+// ReadSettingsRadio's doc comment and reservation.go) so a WriteSetting
+// call cannot interleave its own wire traffic with a running
+// ReadRadio/PrepareSend/ReadSettingsRadio/another WriteSetting, and is
+// itself excluded by any of those.
+//
+// Requires a connection (ErrNotConnected otherwise). Unlike
+// ReadSettingsRadio, NO working copy is required: a setting write goes
+// straight to the radio and is never merged into a.working.Menus — only
+// a later ReadSettingsRadio (or GetSettings after one) picks up the new
+// value.
+//
+// Two refusals happen BEFORE any wire traffic, exactly like the driver's
+// own gate (core/driver/ft710's WriteSetting doc comment) but checked
+// here first so the misleading zero-value SettingWriteResult a driver-
+// level pre-flight refusal returns (Outcome's zero value equals
+// SettingWriteAccepted) is never reachable via this path:
+//   - id is not editable in the connected session's own descriptor
+//     (settingEditable, above) — *SettingNotEditableError.
+//   - the connected session's concrete driver does not implement the
+//     optional driver.SettingsWriter capability at all (see that
+//     interface's doc comment; every registered model's session
+//     implements it unconditionally today, so this is currently only
+//     reachable with a future, non-FT-710 driver, exactly like
+//     SettingsReader's own equivalent branch) — a clear, typed
+//     *clone.SettingsUnsupportedError, friendlyErr-wrapped, no panic.
+//
+// Past that gate, the driver's own WriteSetting performs its Set-then-
+// verify pair and returns a SettingWriteResult naming which of the four
+// SettingWriteOutcome values resulted, together with an error that is
+// nil ONLY for SettingWriteAccepted (see driver.SettingsWriter's doc
+// comment). WriteSetting surfaces ALL FOUR outcomes as a normal (non-
+// error) return: the returned SettingWriteResultView.Outcome is always
+// one of the four String() values once the driver call itself completed,
+// and the Go error return is nil in that case — refused/verify-mismatch/
+// outcome-unknown are DATA for the caller to render, not something wails
+// should turn into a thrown JS exception, unlike the two pre-flight
+// refusals above (and the reservation refusal), which ARE returned as
+// the Go error.
+func (a *App) WriteSetting(id, value string) (SettingWriteResultView, error) {
+	a.mu.Lock()
+	conn := a.conn
+	if conn == nil {
+		a.mu.Unlock()
+		return SettingWriteResultView{}, ErrNotConnected
+	}
+	if err := a.reserveOpLocked("WriteSetting"); err != nil {
+		a.mu.Unlock()
+		return SettingWriteResultView{}, err
+	}
+	d, _ := currentSettingsDescriptor(conn, a.working)
+	a.mu.Unlock()
+	defer a.releaseOp()
+
+	if !settingEditable(d, id) {
+		return SettingWriteResultView{}, &SettingNotEditableError{ID: id}
+	}
+
+	writer, ok := conn.session.(driver.SettingsWriter)
+	if !ok {
+		return SettingWriteResultView{}, friendlyErr(&clone.SettingsUnsupportedError{Model: conn.session.Capabilities().Model})
+	}
+
+	res, err := writer.WriteSetting(a.ctx, id, value)
+	return settingWriteResultToView(res, err), nil
 }

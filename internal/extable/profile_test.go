@@ -18,6 +18,8 @@ import (
 // defect. It is deliberately NOT registered, so no staleness consumer goes
 // looking for a generated file that does not exist.
 var fixtureRequired = Profile{
+	Renderer: RenderInventory,
+
 	Model:       "FIXTURE",
 	Package:     "ftdx10",
 	Types:       TypesImported,
@@ -532,7 +534,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ft891", "ft991a", "ftdx10", "ftdx101", "ts480", "ts590s", "ts590sg", "ts890s", "ts990s"}
+	want := []string{"ft710", "ft710write", "ft891", "ft991a", "ftdx10", "ftdx101", "ts480", "ts590s", "ts590sg", "ts890s", "ts990s"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -541,7 +543,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "TS-480", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"}
+	wantModels := []string{"FT-710", "FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "TS-480", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
@@ -614,11 +616,24 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 			for _, k := range []struct{ key, av, bv string }{
 				{"OutFile", strings.ToLower(a.Profile.OutFile), strings.ToLower(b.Profile.OutFile)},
 				{"VarName", a.Profile.VarName, b.Profile.VarName},
-				{"ManualCSV", strings.ToLower(a.Profile.ManualCSV), strings.ToLower(b.Profile.ManualCSV)},
 			} {
 				if k.av == k.bv {
 					out = append(out, fmt.Sprintf("profiles %q and %q both emit into package %q and share %s %q",
 						a.Name, b.Name, a.Profile.Package, k.key, k.av))
+				}
+			}
+			// ManualCSV carries ONE exception: ft710 and ft710write
+			// deliberately read the same table2.csv — one profile renders
+			// the read inventory, the other the write-descriptor table,
+			// both for the FT-710 from the one manual transcription, which
+			// is not the "wrong radio's chart" bug this check exists to
+			// catch (milestone plan.md, task b2). Every other pair is
+			// still checked exactly as before.
+			if av, bv := strings.ToLower(a.Profile.ManualCSV), strings.ToLower(b.Profile.ManualCSV); av == bv {
+				exempt := (a.Name == "ft710" && b.Name == "ft710write") || (a.Name == "ft710write" && b.Name == "ft710")
+				if !exempt {
+					out = append(out, fmt.Sprintf("profiles %q and %q both emit into package %q and share %s %q",
+						a.Name, b.Name, a.Profile.Package, "ManualCSV", av))
 				}
 			}
 			// ObservedCSV is checked separately, with an empty-string guard

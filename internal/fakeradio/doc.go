@@ -303,22 +303,31 @@
 //     a survey: the generalisation to every other out-of-inventory
 //     address is still this fake's assumption. (ex.go, handleEX)
 //
-//  24. EX Set is NOT modelled this phase: handleEX rejects every body that
-//     is not exactly 6 ASCII digits with "?;", including a well-formed
-//     Set body (a valid 6-digit address immediately followed by a raw P4
-//     payload, e.g. "EX0301051;") — state is left unchanged. This is a
-//     deliberate, phase-scoped modelling gap, not a hardware claim, and
-//     is KNOWN-DIVERGENT from the manual's own documented grammar (the
-//     "EX" section, lines ~628-642, plainly documents a Set form).
-//     Real per-address EX-set behaviour (which addresses are writable at
-//     all, what a write does to related items, whether out-of-range P4
-//     values are rejected or clamped) is unknown pending hardware
-//     evidence; a later milestone implements EX-set once that evidence
-//     exists. M8c did NOT provide that evidence: it was read-only by
-//     construction (the outbound allowlist accepts EX in the 9-byte read
-//     shape only) and probed no Set frame, so this remains an unmodelled
-//     gap with no hardware evidence in either direction. (ex.go,
-//     handleEX)
+//  24. EX Set, from task (e): handleEX accepts a well-formed Set body (a
+//     valid 6-digit address immediately followed by a raw P4 payload,
+//     e.g. "EX0301051;") for ANY inventory address at the width
+//     exSetWidths[address] records, storing the payload verbatim and
+//     answering with no reply — fire-and-forget, mirroring handleMW's
+//     success case. core/cat's write-gate policy (denied/held/
+//     uncharacterised/domain) is NEVER consulted: this fake models wire
+//     behaviour only (THE HARD RULE). Refused "?;", state unchanged, for
+//     a malformed body, an out-of-inventory address, or a payload whose
+//     length does not equal the characterised width — including every
+//     address today, since exSetWidths is EMPTY until Session W runs
+//     (spec §3, table2-write-observed.csv). Tests inject widths with
+//     WithEXSetWidth rather than waiting for that session.
+//
+//     Through task (d) this was a deliberate, phase-scoped gap
+//     (KNOWN-DIVERGENT from the manual's own documented Set grammar, "EX"
+//     section lines ~628-642): every Set-shaped body fell through the
+//     same 6-digit length check as a malformed one. M8c did not probe Set
+//     at all (read-only by construction: the outbound allowlist accepted
+//     EX in the 9-byte read shape only) and still provides no evidence
+//     about WHICH addresses a real Set accepts, what a write does to
+//     related items, or whether out-of-range P4 values are rejected or
+//     clamped — exSetWidths and its empty state are this file's honest
+//     record of that gap, not a claim it has been closed. (ex.go,
+//     handleEX, exSetWidths)
 //
 //  25. P1=06-not-05 anomaly — EVIDENCE AT M8c (24/07/2026), consistent
 //     with the reading this fake already followed. The EX grammar's own

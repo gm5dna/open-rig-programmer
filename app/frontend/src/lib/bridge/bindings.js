@@ -561,6 +561,20 @@ export async function readSettingsRadio() {
 	}
 }
 
+/** Task g2: single-setting write-then-verify (app/settings.go's
+ * WriteSetting) — the SettingsViewer's editable Value cells call this to
+ * commit an edit. Returns the SettingWriteResultView as-is: all four
+ * driver.SettingWriteOutcome values render as DATA (see its own doc
+ * comment), so this wrapper does nothing with them. `call()` only
+ * alerts/rethrows on the pre-flight refusals Go itself returns as a real
+ * error (not connected, not editable, a busy reservation) — exactly like
+ * every other wrapper here.
+ * @param {string} id @param {string} value
+ * @returns {Promise<import('../../../wailsjs/go/models').main.SettingWriteResultView>} */
+export async function writeSetting(id, value) {
+	return call('writing setting', () => App.WriteSetting(id, value))
+}
+
 /** See this module's doc comment: does NOT clear `active` on success —
  * only the eventual transfer:done (Kind "send") event does that. `call()`
  * already reports on rejection, so the catch here only needs to clear

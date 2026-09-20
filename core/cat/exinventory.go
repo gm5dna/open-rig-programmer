@@ -3,6 +3,7 @@
 package cat
 
 //go:generate go run github.com/gm5dna/open-rig-programmer/internal/extable/gen -profile ft710
+//go:generate go run github.com/gm5dna/open-rig-programmer/internal/extable/gen -profile ft710write
 
 import (
 	"fmt"

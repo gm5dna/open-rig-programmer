@@ -113,3 +113,7 @@ export function UpdateChannels(arg1) {
 export function Validate() {
   return window['go']['main']['App']['Validate']();
 }
+
+export function WriteSetting(arg1, arg2) {
+  return window['go']['main']['App']['WriteSetting'](arg1, arg2);
+}

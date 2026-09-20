@@ -273,7 +273,7 @@ func TestRunWrite_RoundTripAndUnchangedSlots_Interactive(t *testing.T) {
 	snapshotDir := t.TempDir()
 	stdin := strings.NewReader("yes\n")
 	var stdout, stderr bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, false, true, stdin, &stdout, &stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, false, false, true, stdin, &stdout, &stderr)
 	if got != exitSuccess {
 		t.Fatalf("runWrite = %d, want exitSuccess (%d); stdout=%q stderr=%q", got, exitSuccess, stdout.String(), stderr.String())
 	}
@@ -363,7 +363,7 @@ func TestRunWrite_VerifyMismatch_Aborts(t *testing.T) {
 
 	snapshotDir := t.TempDir()
 	var stdout bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, false, strings.NewReader(""), &stdout, stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, false, true, false, strings.NewReader(""), &stdout, stderr)
 	if got != exitAborted {
 		t.Fatalf("runWrite = %d, want exitAborted (%d); stdout=%q stderr=%q", got, exitAborted, stdout.String(), stderr.String())
 	}
@@ -405,7 +405,7 @@ func TestRunWrite_MidTransferDisconnect_Aborts(t *testing.T) {
 
 	snapshotDir := t.TempDir()
 	var stdout bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, false, strings.NewReader(""), &stdout, stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, false, true, false, strings.NewReader(""), &stdout, stderr)
 	if got != exitAborted {
 		t.Fatalf("runWrite = %d, want exitAborted (%d); stdout=%q stderr=%q", got, exitAborted, stdout.String(), stderr.String())
 	}
@@ -463,7 +463,7 @@ func TestRunWrite_FailingStdout_AbortsBeforeExecute(t *testing.T) {
 	snapshotDir := t.TempDir()
 	fw := &failingWriter{err: errors.New("simulated broken stdout")}
 	var stderr bytes.Buffer
-	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, true, false, strings.NewReader(""), fw, &stderr)
+	got := runWrite(testCtx(t), "FT-710", sess, snapshotDir, file, false, true, false, strings.NewReader(""), fw, &stderr)
 	if got != exitError {
 		t.Fatalf("runWrite(failing stdout, --yes) = %d, want exitError (%d); stderr=%q", got, exitError, stderr.String())
 	}

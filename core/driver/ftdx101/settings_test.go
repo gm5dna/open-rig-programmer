@@ -12,6 +12,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -201,6 +202,11 @@ func TestSettingsDescriptor_ShapeFromTheInventory(t *testing.T) {
 			ID:      modelD.dialect.EXWire(it.Addr),
 			Label:   it.Name,
 			Display: fmt.Sprintf("%02d-%02d-%02d", it.Addr.P1, it.Addr.P2, it.Addr.P3),
+			// This dialect carries no write descriptor at all (only the
+			// FT-710's does — core/cat/dialect.go's buildFT710ExWrite),
+			// so CanSetEX is nil-map false for every one of its items:
+			// Write is spec.Unverified radio-wide, never spec.Supported.
+			Write: spec.Unverified,
 		})
 	}
 	sort.Strings(menuIDs)
@@ -401,7 +407,7 @@ func TestSettingsDescriptor_TheOneTextItem(t *testing.T) {
 	if found == nil {
 		t.Fatalf("no descriptor item has ID %q — the Text item is missing from the tree", textSettingAddr)
 	}
-	want := driver.SettingItem{ID: textSettingAddr, Label: got.Name, Display: "04-01-01"}
+	want := driver.SettingItem{ID: textSettingAddr, Label: got.Name, Display: "04-01-01", Write: spec.Unverified}
 	if *found != want {
 		t.Errorf("the Text item's descriptor entry = %+v, want %+v", *found, want)
 	}
@@ -409,14 +415,24 @@ func TestSettingsDescriptor_TheOneTextItem(t *testing.T) {
 		t.Errorf("the Text item sits in group %q, want %q", inGroup, textSettingAddr[0:4])
 	}
 
-	// The shape-invisibility claim, structurally.
+	// The shape-invisibility claim, structurally. Milestone v1.11.0 task
+	// (d) added ONE field beyond the three this test used to require —
+	// Write spec.Support, minted radio-wide from cat.Dialect.CanSetEX,
+	// which is nil-map false for this dialect (it carries no write
+	// descriptor at all; only the FT-710's does) — so the count moves to
+	// 4 and Write is the one field this loop does not require to be a
+	// string.
 	st := reflect.TypeOf(driver.SettingItem{})
-	if st.NumField() != 3 {
-		t.Errorf("driver.SettingItem has %d fields, want 3 (ID, Label, Display) — a width/shape/text field would need a decision about this inventory's one 12-byte Text item, and this driver's descriptor makes none", st.NumField())
+	if st.NumField() != 4 {
+		t.Errorf("driver.SettingItem has %d fields, want 4 (ID, Label, Display, Write) — a width/shape/text field would need a decision about this inventory's one 12-byte Text item, and this driver's descriptor makes none", st.NumField())
 	}
 	for i := 0; i < st.NumField(); i++ {
-		if st.Field(i).Type.Kind() != reflect.String {
-			t.Errorf("driver.SettingItem.%s is a %s, want a string — see this test's doc comment", st.Field(i).Name, st.Field(i).Type.Kind())
+		f := st.Field(i)
+		if f.Name == "Write" {
+			continue
+		}
+		if f.Type.Kind() != reflect.String {
+			t.Errorf("driver.SettingItem.%s is a %s, want a string — see this test's doc comment", f.Name, f.Type.Kind())
 		}
 	}
 }

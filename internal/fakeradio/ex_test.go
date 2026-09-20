@@ -90,22 +90,100 @@ func TestEXRead_CaseInsensitiveCommandName(t *testing.T) {
 	}
 }
 
-// --- Set-shaped bodies: rejected this phase ---
+// --- Set-shaped bodies (task e) ---
 
-// TestEXSetShaped_RejectedThisPhase: doc.go register (EX set-shaped ->
-// "?;" is a KNOWN-DIVERGENT phase placeholder, not a hardware claim — the
-// manual documents a Set form; this fake deliberately does not implement
-// it yet). "EX0301051;" is shaped like a real Set frame (address "030105"
-// + a P4 digit "1"), but handleEX rejects any non-6-digit body uniformly,
-// so it is rejected -- and, critically, WITHOUT applying the write.
-func TestEXSetShaped_RejectedThisPhase(t *testing.T) {
-	r, conn := newTestRadio(t)
-	writeFrame(t, conn, "EX0301051;")
-	if got, want := mustReadFrame(t, conn), "?;"; got != want {
-		t.Errorf("EX0301051; (set-shaped) -> %q, want %q", got, want)
+// TestHandleEX_AcceptsSetForAnyInventoryAddressAtCharacterisedWidth pins
+// the headline behaviour task (e) adds: once WithEXSetWidth gives an
+// inventory address a characterised Set width, a well-formed Set-shaped
+// body at exactly that width is accepted — no reply at all
+// (fire-and-forget, mirroring handleMW's success case) — and the stored
+// value changes, so the paired read returns it.
+//
+// "030105" (CAT-1 RATE) is deliberately used for the second case: that
+// address is one of core/cat's permanently-denied ones
+// (core/cat/exdenylist.go's exCATLinkDenied) — this fake has no way to
+// know that (doc.go, THE HARD RULE: fakeradio never imports core/cat) and
+// does not consult it even by analogy. Accepting the Set here is the
+// proof: the fake models wire behaviour only, never core/cat's project
+// policy.
+func TestHandleEX_AcceptsSetForAnyInventoryAddressAtCharacterisedWidth(t *testing.T) {
+	tests := []struct {
+		name  string
+		addr  string
+		width int
+		value string
+	}{
+		{"ordinary admitted address", "010101", 3, "007"},
+		{"denied-in-core/cat address (fake does not consult it)", "030105", 1, "9"},
 	}
-	if got, ok := r.EXState("030105"); !ok || got != "0" {
-		t.Errorf("EXState(\"030105\") after rejected set-shaped body = %q, %v, want \"0\", true (state unchanged)", got, ok)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, conn := newTestRadio(t, WithEXSetWidth(tt.addr, tt.width))
+
+			writeFrame(t, conn, "EX"+tt.addr+tt.value+";")
+			assertNoReply(t, conn)
+
+			if got, ok := r.EXState(tt.addr); !ok || got != tt.value {
+				t.Errorf("EXState(%q) after accepted Set = %q, %v, want %q, true", tt.addr, got, ok, tt.value)
+			}
+
+			writeFrame(t, conn, "EX"+tt.addr+";")
+			want := "EX" + tt.addr + tt.value + ";"
+			if got := mustReadFrame(t, conn); got != want {
+				t.Errorf("EX%s; after Set -> %q, want %q (the paired read must return the just-Set value)", tt.addr, got, want)
+			}
+		})
+	}
+}
+
+// TestHandleEX_RefusesSetWrongWidth covers every way a Set-shaped body's
+// payload can fail to match exSetWidths[addr]: too short, too long, and
+// — the default state of every address today, since exSetWidths is empty
+// until Session W runs (doc.go register item 24) — uncharacterised, no
+// entry at all. Every case refuses "?;" with state unchanged.
+func TestHandleEX_RefusesSetWrongWidth(t *testing.T) {
+	tests := []struct {
+		name    string
+		opts    []Option
+		wireSet string // full Set frame's body after "EX"
+	}{
+		{"uncharacterised: no exSetWidths entry at all", nil, "0301051"},
+		{"too short for the characterised width", []Option{WithEXSetWidth("010101", 3)}, "01010107"},
+		{"too long for the characterised width", []Option{WithEXSetWidth("010101", 3)}, "0101010007"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, conn := newTestRadio(t, tt.opts...)
+			addr := tt.wireSet[:exAddrLen]
+			before, beforeOK := r.EXState(addr)
+
+			writeFrame(t, conn, "EX"+tt.wireSet+";")
+			if got, want := mustReadFrame(t, conn), "?;"; got != want {
+				t.Errorf("EX%s; -> %q, want %q", tt.wireSet, got, want)
+			}
+			if got, ok := r.EXState(addr); ok != beforeOK || got != before {
+				t.Errorf("EXState(%q) after refused Set = %q, %v, want unchanged %q, %v", addr, got, ok, before, beforeOK)
+			}
+		})
+	}
+}
+
+// TestHandleEX_RefusesSetOutOfInventory proves the inventory-membership
+// check (the same one the Read form uses) runs, and wins, ahead of the
+// width check: injecting a Set width for an out-of-inventory address
+// (WithEXSetWidth sets it unconditionally, with no membership check of
+// its own) still refuses "?;", because handleEX never reaches
+// exSetWidths for an address r.exSettings does not have at all.
+func TestHandleEX_RefusesSetOutOfInventory(t *testing.T) {
+	const addr = "050101" // no P1=05 group in Table 2 — doc.go register item 23/25
+	r, conn := newTestRadio(t, WithEXSetWidth(addr, 1))
+
+	writeFrame(t, conn, "EX"+addr+"1;")
+	if got, want := mustReadFrame(t, conn), "?;"; got != want {
+		t.Errorf("EX%s1; -> %q, want %q", addr, got, want)
+	}
+	if _, ok := r.EXState(addr); ok {
+		t.Errorf("EXState(%q) = ok, want absent (out-of-inventory address must never become answerable via Set)", addr)
 	}
 }
 

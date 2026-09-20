@@ -46,7 +46,8 @@ func cmdSettings(args []string, stdout, stderr io.Writer) int {
 	// reserved in printSettingsUsage: a codeplug file called
 	// "unverified-writes" (no extension) cannot be rendered by this command
 	// and must be given another name — a price paid once, in the usage text,
-	// against a sub-mode a user can find.
+	// against a sub-mode a user can find. "diff-observed" (below) is
+	// reserved on the same precedent.
 	if fs.NArg() > 0 && fs.Arg(0) == unverifiedWritesArg {
 		if fs.NFlag() > 0 {
 			// --csv/--model/--force describe a codeplug file's settings
@@ -58,6 +59,33 @@ func cmdSettings(args []string, stdout, stderr io.Writer) int {
 			return exitUsage
 		}
 		return settingsUnverifiedWrites(fs.Args()[1:], stdout, stderr)
+	}
+
+	// diff-observed is reserved the same way: it takes its OWN flags
+	// (--observed-csv/--manual-csv), which mean nothing to --csv/--model/
+	// --force above, so any outer flag alongside it is refused rather than
+	// silently ignored — the same reasoning as unverified-writes' own
+	// refusal just above.
+	if fs.NArg() > 0 && fs.Arg(0) == diffObservedArg {
+		if fs.NFlag() > 0 {
+			fmt.Fprintf(stderr, "rigprog settings: %s takes its own flags, which must follow it, not --csv/--model/--force\n", diffObservedArg)
+			printSettingsUsage(stderr)
+			return exitUsage
+		}
+		return settingsDiffObserved(fs.Args()[1:], stdout, stderr)
+	}
+
+	// write-boundary is reserved on the same precedent as diff-observed: it
+	// takes its own flags (--out), which mean nothing to --csv/--model/
+	// --force, so any outer flag alongside it is refused rather than
+	// silently ignored (task-h2 brief).
+	if fs.NArg() > 0 && fs.Arg(0) == writeBoundaryArg {
+		if fs.NFlag() > 0 {
+			fmt.Fprintf(stderr, "rigprog settings: %s takes its own flags, which must follow it, not --csv/--model/--force\n", writeBoundaryArg)
+			printSettingsUsage(stderr)
+			return exitUsage
+		}
+		return settingsWriteBoundary(fs.Args()[1:], stdout, stderr)
 	}
 
 	if fs.NArg() != 1 {
