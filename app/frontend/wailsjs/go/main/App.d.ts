@@ -58,3 +58,5 @@ export function UpdateChannel(arg1:codeplug.Channel):Promise<main.EditResult>;
 export function UpdateChannels(arg1:Array<codeplug.Channel>):Promise<main.EditResult>;
 
 export function Validate():Promise<main.ValidationView>;
+
+export function WriteSetting(arg1:string,arg2:string):Promise<main.SettingWriteResultView>;
