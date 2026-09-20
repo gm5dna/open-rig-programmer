@@ -353,6 +353,49 @@ func TestBuildEXSet_AcceptsCharacterisedAddress(t *testing.T) {
 	}
 }
 
+// TestBuildEXSet_SignedShape is the Codex close-review P2 fix's own
+// test: exSetP4OK must check the P4 WIRE SHAPE the domain requires
+// (explicit sign character for a Signed domain, digits only otherwise)
+// BEFORE parsing it, not just parse whatever is the right width and let
+// strconv.Atoi be permissive about it — table2.csv's "(or +00)" legends
+// mean a Signed item's wire form is never bare digits.
+//
+// (01,01,01) AF TREBLE GAIN (table2.csv:43, Domain -20..10, Signed) gets
+// a Signed width-3 descriptor via DialectWithEXWriteForTest; (04,01,05)
+// DIMMER LED (table2.csv:237, Domain 0..20) gets an unsigned width-2 one.
+// Neither address's REAL exwrite_gen.go entry is touched — each subtest
+// builds its own local Dialect copy, exactly as every other exSetP4OK/
+// BuildEXSet test here does.
+func TestBuildEXSet_SignedShape(t *testing.T) {
+	signedAddr := EXAddress{P1: 1, P2: 1, P3: 1} // AF TREBLE GAIN
+	signedDomain := Domain{Lo: -20, Hi: 10, Step: 1, Signed: true}
+	signed := DialectWithEXWriteForTest(FT710, signedAddr, signedDomain, 3)
+
+	for _, v := range []string{"-20", "+00", "-00", "+10"} {
+		if _, err := signed.BuildEXSet(signedAddr, v); err != nil {
+			t.Errorf("BuildEXSet(%v, %q): unexpected error: %v", signedAddr, v, err)
+		}
+	}
+	for _, v := range []string{"001", "010", " 10", "+1"} {
+		if cmd, err := signed.BuildEXSet(signedAddr, v); err == nil {
+			t.Errorf("BuildEXSet(%v, %q) = %q, want an error (not the Signed wire shape)", signedAddr, v, cmd.Bytes())
+		}
+	}
+
+	unsignedAddr := EXAddress{P1: 4, P2: 1, P3: 5} // DIMMER LED
+	unsignedDomain := Domain{Lo: 0, Hi: 20, Step: 1}
+	unsigned := DialectWithEXWriteForTest(FT710, unsignedAddr, unsignedDomain, 2)
+
+	if _, err := unsigned.BuildEXSet(unsignedAddr, "05"); err != nil {
+		t.Errorf("BuildEXSet(%v, %q): unexpected error: %v", unsignedAddr, "05", err)
+	}
+	for _, v := range []string{"+5", "-5", " 5"} {
+		if cmd, err := unsigned.BuildEXSet(unsignedAddr, v); err == nil {
+			t.Errorf("BuildEXSet(%v, %q) = %q, want an error (unsigned domain, digits only)", unsignedAddr, v, cmd.Bytes())
+		}
+	}
+}
+
 // TestDialectExWrite_ExcludesDeniedAndHeld proves buildFT710ExWrite's
 // filter, not just its effect on the shipped, empty-CSV table: a stray
 // write-observed row for a denylisted or held address must never make it

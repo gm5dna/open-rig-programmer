@@ -5,7 +5,6 @@ package cat
 import (
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 // exReadLen is the length of an EX read request for THIS DIALECT:
@@ -103,8 +102,15 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 // false before anything else runs: no zero sentinel renders as writable
 // anywhere (spec A1). p4 == nil asks only "may I Set here at all" —
 // CanSetEX's own probe. A non-nil p4 additionally requires it to be
-// exactly Width bytes and, parsed as a decimal (sign included), inside the
-// descriptor's Domain.
+// exactly Width bytes AND MATCH THE WIRE SHAPE the domain requires before
+// it is parsed at all: Domain.Signed means byte 0 is '+' or '-' and the
+// remaining Width-1 bytes are ASCII digits (spec §2, table2.csv's "(or
+// +00)" legends); an unsigned domain means all Width bytes are ASCII
+// digits, no sign and no surrounding whitespace, because Width is exact,
+// not padding to trim. Only a P4 that already has the right shape is
+// parsed with strconv.Atoi and checked against the descriptor's Domain.
+// "-00" and "+00" both parse to 0 and are both legal, distinct wire forms
+// of the same value (Domain's own doc comment).
 func (d Dialect) exSetP4OK(a EXAddress, p4 []byte) bool {
 	desc, ok := d.exWrite[a]
 	if !ok || desc.Width == 0 {
@@ -116,7 +122,19 @@ func (d Dialect) exSetP4OK(a EXAddress, p4 []byte) bool {
 	if len(p4) != desc.Width {
 		return false
 	}
-	v, err := strconv.Atoi(strings.TrimSpace(string(p4)))
+	digits := p4
+	if desc.Domain.Signed {
+		if p4[0] != '+' && p4[0] != '-' {
+			return false
+		}
+		digits = p4[1:]
+	}
+	for _, b := range digits {
+		if b < '0' || b > '9' {
+			return false
+		}
+	}
+	v, err := strconv.Atoi(string(p4))
 	if err != nil {
 		return false
 	}
