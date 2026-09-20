@@ -320,26 +320,3 @@ func TestFTX1Seam_SixStateToneRoundTrip(t *testing.T) {
 		t.Errorf("CTCSS round-tripped as %v, want CTCSSState('4')", got.CTCSS)
 	}
 }
-
-// TestCTCSSStateString_SixStateDomainNamesBytesFourAndFive pins
-// Dialect.CTCSSStateString: under ToneStatesSix it must name '4'/'5' from
-// the FTX-1's own P8 legend ("PR FREQ"/"REV TONE"), not fall back to the
-// shared ctcssNames table's FT-991A label ("DCS ENC", CTCSSDCSEnc's byte)
-// — and every OTHER domain must defer to CTCSSState.String() unchanged,
-// so the FT-991A's own diagnostic label is untouched by this seam.
-func TestCTCSSStateString_SixStateDomainNamesBytesFourAndFive(t *testing.T) {
-	six := MustNewDialect(ftx1LikeDialectConfig())
-	if got := six.CTCSSStateString(CTCSSState('4')); got != "PR FREQ" {
-		t.Errorf("CTCSSStateString('4') under ToneStatesSix = %q, want \"PR FREQ\"", got)
-	}
-	if got := six.CTCSSStateString(CTCSSState('5')); got != "REV TONE" {
-		t.Errorf("CTCSSStateString('5') under ToneStatesSix = %q, want \"REV TONE\"", got)
-	}
-
-	cfg := pmsFormBaseConfig()
-	cfg.ToneStates = ToneStatesCTCSSAndDCS
-	fiveState := MustNewDialect(cfg)
-	if got := fiveState.CTCSSStateString(CTCSSDCSEnc); got != "DCS ENC" {
-		t.Errorf("CTCSSStateString(CTCSSDCSEnc) under ToneStatesCTCSSAndDCS = %q, want \"DCS ENC\" — the FT-991A label must survive this seam", got)
-	}
-}

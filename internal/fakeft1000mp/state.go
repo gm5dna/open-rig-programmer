@@ -5,7 +5,6 @@ package fakeft1000mp
 import (
 	"io"
 	"sync"
-	"time"
 
 	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
@@ -73,10 +72,6 @@ type Radio struct {
 	// 1-based override): memories[0] is channel 1, memories[112] is QMB5.
 	// Zero until a Store/Enter targets it.
 	memories [numMemories][recordLen]byte
-
-	// fullDumpChunk/fullDumpGap: see options.go WithFullDumpChunking.
-	fullDumpChunk int
-	fullDumpGap   time.Duration
 }
 
 // Option configures a *Radio at construction time. See New.

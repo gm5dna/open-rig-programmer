@@ -22,18 +22,6 @@ import (
 // Session its Open call establishes. See WithConsentedUnverifiedWrites.
 type Option func(*ic905Driver)
 
-// SiblingLengths maps a record length to the model that accepts it: the
-// seam through which a Wave-4 tier check can teach this driver to
-// ATTRIBUTE a foreign record length to the radio that produced it.
-//
-// EMPTY IN WAVE 3, and TestProbe_TheSiblingTableIsEmptyInWaveThree pins
-// it so. This worktree does not know any other model's accepted set —
-// cross-model record-length distinctness is a tier-level check, and this
-// driver claims none — so with no table EVERY unrecognised length takes
-// the unattributed branch, which is the honest one for a driver that
-// cannot name what it found.
-type SiblingLengths map[int]string
-
 // WithFullInventoryWalk makes Open discover the WHOLE 100 × 100 memory
 // space instead of the bounded default walk.
 //
@@ -99,9 +87,6 @@ func New(profile Profile, opts ...Option) driver.Driver {
 // ic905Driver implements driver.Driver for the Icom IC-905.
 type ic905Driver struct {
 	driver.Base
-	// siblingLengths is the Wave-4 attribution table — see
-	// SiblingLengths. Nil is the Wave-3 default.
-	siblingLengths SiblingLengths
 	// fullInventoryWalk opts out of the bounded default discovery walk —
 	// see WithFullInventoryWalk. FALSE is the zero value and the default.
 	fullInventoryWalk bool
@@ -318,7 +303,7 @@ func (d *ic905Driver) open(ctx context.Context, eng *transport.Engine, profile c
 		return nil, fmt.Errorf("ic905: Open: 19 00 identity probe: %w", err)
 	}
 
-	if err := s.fingerprint(ctx, d.siblingLengths); err != nil {
+	if err := s.fingerprint(ctx); err != nil {
 		return nil, err
 	}
 
@@ -371,14 +356,9 @@ const (
 // members — 64 and 65 — because its frequency field is documented at two
 // widths. Either confirms; the observed one is recorded for diagnostics.
 //
-// The three other outcomes:
+// The two other outcomes:
 //
-//   - A length in the SIBLING TABLE is a wrong radio WITH provisional
-//     attribution. The word "provisional" is this driver's own, added by
-//     the wrapper below, because driver.WrongRadioError's two rendered
-//     formats are fixed in core/driver and the ID-only one is
-//     baseline-pinned.
-//   - Any OTHER length is a wrong radio WITHOUT attribution: both model
+//   - Any other length is a wrong radio WITHOUT attribution: both model
 //     fields empty, which is the honest value for a driver that cannot
 //     name what it found.
 //   - ALL FA is an EMPTY RADIO, not a wrong one. The session opens on
@@ -386,13 +366,13 @@ const (
 //     what stops an unfingerprinted open being mistaken for a confirmed
 //     one. That FA means "empty" is ASSUMED: D5 entry 2(a), lift
 //     ic905-R-14.
-func (s *Session) fingerprint(ctx context.Context, siblings SiblingLengths) error {
+func (s *Session) fingerprint(ctx context.Context) error {
 	for _, addr := range probeCandidates() {
 		record, present, err := s.recordAt(ctx, addr)
 		if err != nil {
 			var rle *civ.RecordLengthError
 			if errors.As(err, &rle) {
-				return s.wrongRecordLength(rle, siblings)
+				return s.wrongRecordLength(rle)
 			}
 			return fmt.Errorf("ic905: Open: record-length fingerprint: %w", err)
 		}
@@ -422,18 +402,15 @@ func probeCandidates() []civ.ChannelAddress {
 // wrongRecordLength turns an observed, undeclared record length into the
 // refusal spec D3.2 calls for.
 //
-// THE ATTRIBUTION IS PROVISIONAL AND SAYS SO, IN THIS DRIVER'S OWN WORDS.
-// driver.WrongRadioError.Error() has two fixed formats and the ID-only
-// one is baseline-pinned, so neither may be edited to carry the
-// qualification; the wrapper is where it goes, and the test asserts both
-// the wrapped chain and the word.
-//
-// Want and Got carry the LENGTHS rather than CAT IDs, because on this
-// tier the accepted record-length set IS the identity evidence — there is
-// no four-character ID to compare (spec D3.2). They are spelled "record
-// N" so the rendered "CAT ID" wording cannot be read as a number this
-// radio ever printed.
-func (s *Session) wrongRecordLength(rle *civ.RecordLengthError, siblings SiblingLengths) error {
+// NO ATTRIBUTION: both model fields stay empty, so Error() renders its
+// ID-only text and cmd/rigprog's probe formatter — which keys on GotModel
+// alone — agrees with it. This driver has no cross-model record-length
+// table (see fingerprint's doc comment); Want and Got carry the LENGTHS
+// rather than CAT IDs, because on this tier the accepted record-length
+// set IS the identity evidence — there is no four-character ID to compare
+// (spec D3.2). They are spelled "record N" so the rendered "CAT ID"
+// wording cannot be read as a number this radio ever printed.
+func (s *Session) wrongRecordLength(rle *civ.RecordLengthError) error {
 	want := make([]string, 0, len(rle.Want))
 	for _, n := range rle.Want {
 		want = append(want, strconv.Itoa(n))
@@ -442,19 +419,7 @@ func (s *Session) wrongRecordLength(rle *civ.RecordLengthError, siblings Sibling
 		Want: "record " + strings.Join(want, "/"),
 		Got:  "record " + strconv.Itoa(rle.Got),
 	}
-	model, known := siblings[rle.Got]
-	if !known {
-		// Branch (b): no attribution. BOTH model fields stay empty, so
-		// Error() renders its ID-only text and cmd/rigprog's probe
-		// formatter — which keys on GotModel alone — agrees with it.
-		return fmt.Errorf("ic905: Open: record-length fingerprint: %w", wre)
-	}
-	// Branch (a): the length belongs to a model the caller taught this
-	// driver about. BOTH fields are populated, because Error() renders
-	// its named form only when both are.
-	wre.WantModel = civic905.Model
-	wre.GotModel = model
-	return fmt.Errorf("ic905: Open: record-length fingerprint: %w — attribution is PROVISIONAL: the record lengths this tier compares are themselves ASSUMED derivations, never captured from a radio", wre)
+	return fmt.Errorf("ic905: Open: record-length fingerprint: %w", wre)
 }
 
 // memoryReadSpec is the transport spec for a 1A 00 memory read, assembled

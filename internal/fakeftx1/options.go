@@ -28,14 +28,8 @@ func WithSlot(addr string, s MemState) Option {
 	return func(r *Radio) { r.slots[addr] = s }
 }
 
-// WithTag overlays one address's MT tag state onto whatever image is
-// already present. No validation is applied — see WithSlot.
-func WithTag(addr string, tag string) Option {
-	return func(r *Radio) { r.tags[addr] = tag }
-}
-
 // WithFactoryImage REPLACES the fake's entire slot AND tag maps with img's
-// output. Pass it before any WithSlot/WithTag option in the same New
+// output. Pass it before any WithSlot option in the same New
 // call, or the image will overwrite them. Without this option, New
 // defaults to DefaultImage.
 func WithFactoryImage(img Image) Option {

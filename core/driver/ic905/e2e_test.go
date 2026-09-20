@@ -363,10 +363,10 @@ func TestE2E_AChannelWithASelectTagOrACallSignIsRefusedNotCorrupted(t *testing.T
 	}
 }
 
-// TestE2E_AnUndeclaredRecordLengthIsRefusedWithoutAttribution is the
-// Wave-3 default branch: with no sibling table, EVERY unrecognised length
-// is refused with BOTH model fields empty, which is the honest value for
-// a driver that cannot name what it found.
+// TestE2E_AnUndeclaredRecordLengthIsRefusedWithoutAttribution: this
+// driver has no cross-model record-length table, so EVERY unrecognised
+// length is refused with BOTH model fields empty, which is the honest
+// value for a driver that cannot name what it found.
 func TestE2E_AnUndeclaredRecordLengthIsRefusedWithoutAttribution(t *testing.T) {
 	t.Parallel()
 	radio := fakeic905.New(e2eImage(fakeic905.WithRecord(0, 0, make([]byte, 63)))...)
@@ -384,33 +384,7 @@ func TestE2E_AnUndeclaredRecordLengthIsRefusedWithoutAttribution(t *testing.T) {
 		t.Errorf("WantModel = %q, GotModel = %q — both must be EMPTY", wre.WantModel, wre.GotModel)
 	}
 	if strings.Contains(err.Error(), "PROVISIONAL") {
-		t.Errorf("error = %q — branch (b) attributes nothing, so it has no attribution to qualify", err)
-	}
-}
-
-// TestE2E_ASiblingRecordLengthIsAProvisionalWrongRadio is the
-// wrong-sibling case proper. Wave 4 populates the table from the registry
-// in the same commit that registers the tier's models; Wave 3 proves the
-// branch works with a synthetic one.
-func TestE2E_ASiblingRecordLengthIsAProvisionalWrongRadio(t *testing.T) {
-	t.Parallel()
-	radio := fakeic905.New(e2eImage(fakeic905.WithRecord(0, 0, make([]byte, 39)))...)
-	t.Cleanup(func() { _ = radio.Close() })
-
-	_, err := New(RealHardware, WithSiblingRecordLengths(SiblingLengths{39: "IC-7300"})).
-		Open(context.Background(), radio.Port(), driver.Identity{})
-	if err == nil {
-		t.Fatal("Open succeeded against a radio answering a foreign record length")
-	}
-	var wre *driver.WrongRadioError
-	if !errors.As(err, &wre) {
-		t.Fatalf("error = %v, want a *driver.WrongRadioError", err)
-	}
-	if wre.GotModel != "IC-7300" || wre.WantModel != "IC-905" {
-		t.Errorf("WantModel/GotModel = %q/%q, want IC-905/IC-7300", wre.WantModel, wre.GotModel)
-	}
-	if !strings.Contains(err.Error(), "PROVISIONAL") {
-		t.Errorf("error = %q, want it to say the attribution is PROVISIONAL — the record lengths this tier compares are themselves ASSUMED derivations", err)
+		t.Errorf("error = %q — this driver attributes nothing, so it has no attribution to qualify", err)
 	}
 }
 

@@ -58,63 +58,9 @@ func TestProbe_BothDeclaredLengthsConfirm(t *testing.T) {
 	}
 }
 
-// TestProbe_AKnownSiblingLengthIsAWrongRadioWithProvisionalAttribution.
-//
-// TWO DIFFERENT BRANCHES, and REV 1 conflated them (Codex 8, Fable
-// F11(c)). Spec D3.2 distinguishes:
-//
-//	(a) a length equal to a DIFFERENT REGISTERED MODEL's accepted set ->
-//	    WrongRadioError with PROVISIONAL found-model attribution.
-//	(b) any OTHER length -> refusal WITHOUT attribution.
-//
-// BRANCH (a) IS EXERCISED THROUGH A SEAM, and the seam is why a Wave-3
-// driver can test it at all: this worktree does not know any other
-// model's accepted set — cross-model distinctness is a Wave-4 tier check
-// and this driver claims none — so the table is an Option, EMPTY BY
-// DEFAULT, which Wave 4 populates from the registry in the same commit
-// that registers the models.
-//
-// THE WORD "provisional" COMES FROM THIS DRIVER'S OWN WRAPPER, NOT FROM
-// core/driver: WrongRadioError.Error()'s two formats are fixed there and
-// the ID-only one is BASELINE-PINNED, so neither may be edited to add it.
-// The test asserts errors.As on the wrapped chain AND the word in the
-// outer message, so a future unwrapping breaks it.
-func TestProbe_AKnownSiblingLengthIsAWrongRadioWithProvisionalAttribution(t *testing.T) {
-	t.Parallel()
-	img := radioImage{
-		idToken: testToken,
-		// A 39-byte record: not this model's, and declared here as some
-		// other model's. The number is the TEST's, not a claim.
-		records: map[wireAddr][]byte{{0, 0}: make([]byte, 39)},
-	}
-	p := newRespondingPort(t, img)
-	_, err := New(RealHardware, WithSiblingRecordLengths(SiblingLengths{39: "IC-7300"})).
-		Open(context.Background(), p.Port(), driver.Identity{})
-	if err == nil {
-		t.Fatal("Open succeeded against a radio answering a foreign record length")
-	}
-
-	var wre *driver.WrongRadioError
-	if !errors.As(err, &wre) {
-		t.Fatalf("error = %v, want a *driver.WrongRadioError in the chain", err)
-	}
-	if !errors.Is(err, driver.ErrWrongRadio) {
-		t.Errorf("error = %v, does not satisfy errors.Is(err, driver.ErrWrongRadio)", err)
-	}
-	if wre.GotModel != "IC-7300" {
-		t.Errorf("GotModel = %q, want %q — branch (a) ATTRIBUTES the length", wre.GotModel, "IC-7300")
-	}
-	if wre.WantModel != "IC-905" {
-		t.Errorf("WantModel = %q, want %q — the named format renders only when BOTH are set", wre.WantModel, "IC-905")
-	}
-	if !strings.Contains(err.Error(), "PROVISIONAL") {
-		t.Errorf("error = %q, want it to say the attribution is PROVISIONAL — the record lengths this tier compares are themselves ASSUMED derivations, never captured from a radio", err)
-	}
-}
-
-// TestProbe_AnUnknownLengthIsRefusedWithoutAttribution is branch (b),
-// which is what a Wave-3 driver with no sibling table takes for EVERY
-// unrecognised length.
+// TestProbe_AnUnknownLengthIsRefusedWithoutAttribution: this driver has
+// no cross-model record-length table (spec D3.2), so EVERY unrecognised
+// length is refused without attribution.
 //
 // WrongRadioError's model fields are OPTIONAL, and empty is the honest
 // value for a driver that cannot name what it found.
@@ -138,20 +84,7 @@ func TestProbe_AnUnknownLengthIsRefusedWithoutAttribution(t *testing.T) {
 		t.Errorf("WantModel = %q, GotModel = %q — both must be EMPTY: this driver cannot name what answered", wre.WantModel, wre.GotModel)
 	}
 	if strings.Contains(err.Error(), "PROVISIONAL") {
-		t.Errorf("error = %q — branch (b) attributes nothing, so it has no attribution to qualify", err)
-	}
-}
-
-// TestProbe_TheSiblingTableIsEmptyInWaveThree, so nobody ships a table by
-// accident. With no table, EVERY unrecognised length takes branch (b).
-func TestProbe_TheSiblingTableIsEmptyInWaveThree(t *testing.T) {
-	t.Parallel()
-	d, ok := New(RealHardware).(*ic905Driver)
-	if !ok {
-		t.Fatalf("New returned %T", New(RealHardware))
-	}
-	if len(d.siblingLengths) != 0 {
-		t.Errorf("the default sibling table holds %d entries, want none — cross-model record-length distinctness is a Wave-4 tier check and this plan claims none", len(d.siblingLengths))
+		t.Errorf("error = %q — this driver attributes nothing, so it has no attribution to qualify", err)
 	}
 }
 

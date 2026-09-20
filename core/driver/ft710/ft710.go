@@ -325,11 +325,6 @@ func (d *ft710Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capa
 	return d.SessionCaps(effectiveCapabilities(d.Capabilities(), slots60m, emg))
 }
 
-// profileRecognised reports whether this driver's profile is one of the
-// declared constants — driver.Base's shared predicate, kept under the
-// name this package's tests put the question by.
-func (d *ft710Driver) profileRecognised() bool { return d.Recognised() }
-
 // nopLogger is the fallback transport.Logger when no WithTransportLogger
 // was supplied: it drops everything, mirroring transport's own default.
 type nopLogger struct{}

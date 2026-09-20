@@ -14,7 +14,7 @@ import (
 )
 
 // openRealSession/openFakeSession open a session via internal/wiring's
-// model-keyed OpenRealSessionFor/OpenFakeSessionFor (returning
+// model-keyed OpenRealSessionWith/OpenFakeSessionFor (returning
 // driver.Session, never a concrete *ft710.Session, so this file needs no
 // core/driver/ft710 import), translating its typed errors back to this
 // command's own wording — see openRealSession's doc comment.
@@ -81,7 +81,7 @@ func sessionOptionsFor(model string) (wiring.SessionOptions, error) {
 }
 
 // openRealSession opens a session against a real radio of model, attached
-// at portPath. See internal/wiring's OpenRealSessionFor. Translates
+// at portPath. See internal/wiring's OpenRealSessionWith. Translates
 // internal/wiring's typed errors back to this command's ORIGINAL,
 // pre-extraction wording (Fix 7, adjudicated LOW, Codex M6 #7: the
 // task-15 extraction's stated contract was unchanged user-facing
@@ -89,7 +89,7 @@ func sessionOptionsFor(model string) (wiring.SessionOptions, error) {
 // see RegisterDriverError's doc comment — so it is reconstructed here via
 // errors.As against the structured Cause). The registry failure can also
 // arise transitively via internal/wiring.NewRegistry inside
-// OpenRealSessionFor itself — that path returns wiring's OWN wording, so
+// OpenRealSessionWith itself — that path returns wiring's OWN wording, so
 // it is translated again here alongside the serial-open/session-open
 // cases. Returns the driver.Session interface — never a concrete
 // *ft710.Session — so this file (and every caller of it) needs no
@@ -131,7 +131,7 @@ func openFakeSession(ctx context.Context, model string) (driver.Session, func() 
 // see openRealSession's doc comment for the full rationale). Shared by
 // openRealSession/openFakeSession: only RegisterDriverError is common to
 // both (the registry failure can arise transitively via
-// internal/wiring.NewRegistry inside either OpenRealSessionFor or
+// internal/wiring.NewRegistry inside either OpenRealSessionWith or
 // OpenFakeSessionFor) — checking every case unconditionally is harmless,
 // since a fake session never produces OpenSerialError/OpenSessionError,
 // and a real one never produces OpenFakeSessionError. Returns err
@@ -164,7 +164,7 @@ func translateWiringErr(err error) error {
 // "Unknown model -> usage-style error, exit 2, message names supported
 // models") — before any side-effecting step (a directory created, a
 // session opened) — rather than relying on the eventual
-// OpenRealSessionFor/OpenFakeSessionFor/StaticCapabilities/
+// OpenRealSessionWith/OpenFakeSessionFor/StaticCapabilities/
 // StaticSettingsDescriptor call's own *wiring.UnknownModelError, which
 // would surface the same failure only after that step had already run.
 // Returns true when model is supported (the caller proceeds unchanged).

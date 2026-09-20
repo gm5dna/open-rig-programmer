@@ -59,9 +59,7 @@
 //
 // WHAT THIS PACKAGE THEREFORE DOES. The probe refuses a foreign record length
 // with a driver.WrongRadioError carrying the two RECORD-ONLY lengths and NO
-// model name. A name appears only when tier integration injects one through
-// WithSiblingRecordLengths, and the error then says the attribution is
-// PROVISIONAL in the same sentence.
+// model name, because this driver has no cross-model record-length table.
 //
 // WHAT THIS PACKAGE DOES NOT CLAIM. There is no tier-wide record-shape
 // distinctness check here, no declared table of every model's accepted

@@ -234,8 +234,8 @@ func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
 		if !ok {
 			t.Fatal("New did not return a *ftdx5000Driver")
 		}
-		if !d.profileRecognised() {
-			t.Errorf("profileRecognised() = false for declared Profile %v", p)
+		if !d.Recognised() {
+			t.Errorf("Recognised() = false for declared Profile %v", p)
 		}
 	}
 	for _, p := range []Profile{-1, 2, 3, 42, 99, Profile(math.MinInt), Profile(math.MaxInt)} {
@@ -243,8 +243,8 @@ func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
 		if !ok {
 			t.Fatal("New did not return a *ftdx5000Driver")
 		}
-		if d.profileRecognised() {
-			t.Errorf("profileRecognised() = true for Profile(%d), which this package does not declare", int(p))
+		if d.Recognised() {
+			t.Errorf("Recognised() = true for Profile(%d), which this package does not declare", int(p))
 		}
 	}
 }

@@ -1380,7 +1380,7 @@ func assertFTdx101DiscoveredBanks(t *testing.T, model string, want bool) {
 // port-open failure as a plain error (not a panic), for a path that
 // cannot possibly exist.
 func TestOpenRealSessionFor_BadPort(t *testing.T) {
-	sess, closeAll, err := OpenRealSessionFor(testCtx(t), DefaultModel, "/dev/nonexistent-rigprog-test-port")
+	sess, closeAll, err := OpenRealSessionWith(testCtx(t), DefaultModel, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if err == nil {
 		t.Fatal("OpenRealSessionFor: expected an error opening a nonexistent port, got nil")
 	}
@@ -1444,7 +1444,7 @@ func (d baudFixtureDriver) Open(context.Context, transport.Port, driver.Identity
 func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
 	got := recordSerialConfig(t)
 
-	_, _, err := OpenRealSessionFor(testCtx(t), DefaultModel, "/dev/nonexistent-rigprog-test-port")
+	_, _, err := OpenRealSessionWith(testCtx(t), DefaultModel, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error (the seam must have been consulted)", err)
 	}
@@ -1556,7 +1556,7 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 
 	got := recordSerialConfig(t)
 
-	_, _, err := OpenRealSessionFor(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port")
+	_, _, err := OpenRealSessionWith(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error", err)
 	}
@@ -1569,7 +1569,7 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 // with a typed *UnknownModelError BEFORE any port is touched — the error
 // must name the supported list, not merely "unknown".
 func TestOpenRealSessionFor_UnknownModel(t *testing.T) {
-	sess, closeAll, err := OpenRealSessionFor(testCtx(t), "FT-NONEXISTENT", "/dev/nonexistent-rigprog-test-port")
+	sess, closeAll, err := OpenRealSessionWith(testCtx(t), "FT-NONEXISTENT", "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if sess != nil || closeAll != nil {
 		t.Errorf("OpenRealSessionFor(unknown model): expected nil session/closeAll, got sess=%v closeAllIsNil=%v", sess, closeAll == nil)
 	}
@@ -2504,40 +2504,6 @@ func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
 	}
 }
 
-// TestOpenRealSessionFor_DelegatesZeroOptions pins the delegation: the
-// session OpenRealSessionFor returns must be indistinguishable from the one
-// OpenRealSessionWith returns for zero options — same capability set, and no
-// consent anywhere in it. The FTdx10 alone is enough here, because what is
-// being pinned is the DELEGATION (one real implementation, one zero-option
-// caller of it), not any per-model behaviour; the per-model leg is the test
-// above.
-func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
-	fakePortSeam(t, FTdx10Model)
-	viaFor, closeFor, err := OpenRealSessionFor(testCtx(t), FTdx10Model, "test-port")
-	if err != nil {
-		t.Fatalf("OpenRealSessionFor(%q): unexpected error: %v", FTdx10Model, err)
-	}
-	forCaps := viaFor.Capabilities()
-	if err := closeFor(); err != nil {
-		t.Errorf("closing the OpenRealSessionFor session: %v", err)
-	}
-
-	fakePortSeam(t, FTdx10Model)
-	viaWith, closeWith, err := OpenRealSessionWith(testCtx(t), FTdx10Model, "test-port", SessionOptions{})
-	if err != nil {
-		t.Fatalf("OpenRealSessionWith(%q, zero options): unexpected error: %v", FTdx10Model, err)
-	}
-	withCaps := viaWith.Capabilities()
-	if err := closeWith(); err != nil {
-		t.Errorf("closing the OpenRealSessionWith session: %v", err)
-	}
-
-	if !reflect.DeepEqual(forCaps, withCaps) {
-		t.Errorf("OpenRealSessionFor's session capabilities differ from OpenRealSessionWith(zero options)':\n for  = %#v\n with = %#v", forCaps, withCaps)
-	}
-	assertNoConsentAnywhere(t, "OpenRealSessionFor session", forCaps)
-}
-
 // TestRealDriverFor_DefaultPathByteIdentical is the no-change pin: with
 // consent false — every existing caller's path, and OpenRealSessionFor's own
 // — realDriverFor must build exactly what the pinned zero-argument
@@ -3316,7 +3282,7 @@ func TestOpenRealSessionFor_StopBitsFollowAReportingDriver(t *testing.T) {
 
 	got := recordSerialConfig(t)
 
-	_, _, err := OpenRealSessionFor(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port")
+	_, _, err := OpenRealSessionWith(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error", err)
 	}
@@ -3342,7 +3308,7 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 
 			got := recordSerialConfig(t)
 
-			sess, closeAll, err := OpenRealSessionFor(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port")
+			sess, closeAll, err := OpenRealSessionWith(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 			if errors.Is(err, errSeamRefused) {
 				t.Fatalf("the port was opened at StopBits %d — an unsupported report must be refused before any port is touched", got.StopBits)
 			}
@@ -3757,7 +3723,7 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 			}
 
 			got := recordSerialConfig(t)
-			_, _, err = OpenRealSessionFor(testCtx(t), model, "/dev/nonexistent-rigprog-test-port")
+			_, _, err = OpenRealSessionWith(testCtx(t), model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 			if !errors.Is(err, errSeamRefused) {
 				t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", model, err)
 			}
@@ -3929,7 +3895,7 @@ func TestOpenRealSessionFor_IC7610OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7610Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7610Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7610Model, err)
 	}
@@ -3959,7 +3925,7 @@ func TestOpenRealSessionFor_IC7300OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7300Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7300Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7300Model, err)
 	}
@@ -3990,7 +3956,7 @@ func TestOpenRealSessionFor_IC7300MK2OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7300MK2Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7300MK2Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7300MK2Model, err)
 	}
@@ -4020,7 +3986,7 @@ func TestOpenRealSessionFor_IC705OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC705Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC705Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC705Model, err)
 	}
@@ -4051,7 +4017,7 @@ func TestOpenRealSessionFor_IC9700OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC9700Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC9700Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC9700Model, err)
 	}
@@ -4086,7 +4052,7 @@ func TestOpenRealSessionFor_IC905OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC905Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC905Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC905Model, err)
 	}
@@ -4125,7 +4091,7 @@ func TestOpenRealSessionFor_IC7851AndIC7850OpenAtEightNOne(t *testing.T) {
 			}
 
 			got := recordSerialConfig(t)
-			_, _, err = OpenRealSessionFor(testCtx(t), model, "/dev/nonexistent-rigprog-test-port")
+			_, _, err = OpenRealSessionWith(testCtx(t), model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 			if !errors.Is(err, errSeamRefused) {
 				t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", model, err)
 			}
@@ -4239,7 +4205,7 @@ func TestOpenRealSessionFor_IC7760OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7760Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7760Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7760Model, err)
 	}
@@ -4278,7 +4244,7 @@ func TestOpenRealSessionFor_IC7100OpensAtEightNTwo(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7100Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7100Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7100Model, err)
 	}
@@ -4328,7 +4294,7 @@ func TestOpenRealSessionFor_ICR8600OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), ICR8600Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), ICR8600Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", ICR8600Model, err)
 	}
@@ -4357,7 +4323,7 @@ func TestOpenRealSessionFor_IC7800OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7800Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7800Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7800Model, err)
 	}
@@ -4383,7 +4349,7 @@ func TestOpenRealSessionFor_IC7600OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7600Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7600Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7600Model, err)
 	}
@@ -4409,7 +4375,7 @@ func TestOpenRealSessionFor_IC7410OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7410Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7410Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7410Model, err)
 	}
@@ -4435,7 +4401,7 @@ func TestOpenRealSessionFor_IC7700OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7700Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7700Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7700Model, err)
 	}
@@ -4460,7 +4426,7 @@ func TestOpenRealSessionFor_IC9100OpensAtEightNTwo(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC9100Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC9100Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC9100Model, err)
 	}
@@ -4488,7 +4454,7 @@ func TestOpenRealSessionFor_IC7200OpensAtEightNOne(t *testing.T) {
 	}
 
 	got := recordSerialConfig(t)
-	_, _, err = OpenRealSessionFor(testCtx(t), IC7200Model, "/dev/nonexistent-rigprog-test-port")
+	_, _, err = OpenRealSessionWith(testCtx(t), IC7200Model, "/dev/nonexistent-rigprog-test-port", SessionOptions{})
 	if !errors.Is(err, errSeamRefused) {
 		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7200Model, err)
 	}
