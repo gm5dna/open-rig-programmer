@@ -168,8 +168,8 @@ func printDiffUsage(w io.Writer) {
 const writeUsageText = `rigprog write — send a codeplug file's changes to a radio.
 
 Usage:
-  rigprog write --port <path> [--model NAME] [--yes] [--snapshot-dir DIR] FILE
-  rigprog write --fake [--model NAME] [--yes] [--snapshot-dir DIR] FILE
+  rigprog write --port <path> [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE
+  rigprog write --fake [--settings] [--model NAME] [--yes] [--snapshot-dir DIR] FILE
 
 All flags must precede the FILE argument: stdlib flag parsing stops
 reading flags at the first non-flag argument, so a flag placed after
@@ -178,6 +178,7 @@ FILE is rejected as an unexpected extra argument, not accepted.
 Flags:
   --port PATH           real serial port device path (e.g. /dev/cu.usbserial-XXXX)
   --fake                 use the in-process simulated radio instead of a real port
+  --settings             also diff and write FILE's settings snapshot (opt-in)
   --model NAME           radio model to target (default: FT-710)
   --yes                  skip the interactive confirmation prompt (required for non-interactive runs)
   --snapshot-dir DIR     snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)
@@ -196,6 +197,21 @@ a plan with NOTHING PENDING AT ALL exits 0 ("Nothing to send."); a plan
 whose pending changes are ALL blocked exits 3 instead — never the same
 "nothing to send" message, since the working copy does NOT match the
 radio in that case, only nothing could be honoured.
+
+Without --settings (the default), FILE's settings snapshot (if it carries
+one at all, e.g. from an earlier "rigprog read --settings") is entirely
+ignored: zero settings/EX wire traffic, and the plan/report are
+byte-identical to a run before this flag existed. With --settings, after
+the fresh baseline read, every hardware-characterised, admitted address
+is read once more and diffed against FILE's settings snapshot; any
+disagreeing address is shown before the channel diff and counts toward
+"N change(s)" in the confirmation prompt — a settings-only diff (no
+channel changes at all) still asks for confirmation. Once confirmed, each
+settings delta is written and verified individually, and the outcome of
+every attempted address is printed after execution: accepted-and-verified,
+refused, verify-mismatch, or outcome-unknown. Use "rigprog read --settings"
+first to capture a settings snapshot into FILE, and "rigprog settings"
+(offline) to inspect it beforehand.
 
 Ctrl-C is honoured only BETWEEN slots: an in-flight write+verify pair
 always completes before a cancellation is acted on.

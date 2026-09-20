@@ -58,8 +58,17 @@ func (e *errTrackingWriter) Write(p []byte) (int, error) {
 // always marks Blocked (no CAT erase exists — see hasBlockedErase's doc
 // comment). runWrite below distinguishes the two rather than reporting
 // "Nothing to send." for both.
-func countSendable(diff codeplug.DiffResult) int {
-	n := 0
+//
+// settings (task f2) is plan.Settings()'s own count — every
+// CanSetEX-characterised address whose live value disagrees with FILE's
+// settings snapshot — added straight in: a settings-only diff (zero
+// channel changes at all) must still be sendable, so the "nothing to
+// send"/"blocked-only" branches below are only reached when settings is
+// also 0. runWrite passes 0 here whenever --settings was not given (the
+// plan then carries no settings deltas at all — see runWrite), so this
+// never changes countSendable's result for a run that never asked for it.
+func countSendable(diff codeplug.DiffResult, settings int) int {
+	n := settings
 	for _, e := range diff.Entries {
 		if e.Blocked {
 			continue
@@ -120,27 +129,70 @@ func writeNothingSendableReport(w io.Writer, model string, diff codeplug.DiffRes
 	}
 }
 
+// writeSettingsDeltaReport renders plan.Settings() (task f2): one line per
+// address whose fresh live value disagrees with FILE's settings snapshot,
+// printed BEFORE the channel diff (writePlanSummary calls this first) so
+// a reviewer sees what a --settings run is about to change ahead of the
+// channel-side Added/Modified/Erased sections. Empty settings (the
+// default: --settings not given, or nothing disagreed) prints nothing at
+// all — never a "no settings changes" line — so a run that never asked
+// for --settings produces byte-identical output to before this flag
+// existed.
+func writeSettingsDeltaReport(w io.Writer, settings []clone.SettingDelta) {
+	if len(settings) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "Settings:")
+	for _, sd := range settings {
+		fmt.Fprintf(w, "  %s: %s -> %s\n", sd.ID, sd.Observed, sd.Wanted)
+	}
+}
+
 // writePlanSummary renders a PrepareSend plan's review material to w
-// (task-14 brief §1 step 4): the diff — reusing diff.go's writeDiffReport
-// verbatim, never duplicating its rendering logic — followed by the
-// snapshot path and the truncated baseline digest, explicitly labelled as
-// the plan's baseline (as opposed to any later, re-read digest). Takes
-// the diff/paths as plain values rather than a *clone.SendPlan itself:
-// SendPlan is deliberately opaque outside core/clone (accessors only), so
-// this keeps the renderer unit-testable with synthetic data, the same
-// principle diff.go's writeDiffReport already follows for codeplug.DiffResult.
+// (task-14 brief §1 step 4): the settings deltas (task f2, see
+// writeSettingsDeltaReport — printed first) then the diff — reusing
+// diff.go's writeDiffReport verbatim, never duplicating its rendering
+// logic — followed by the snapshot path and the truncated baseline
+// digest, explicitly labelled as the plan's baseline (as opposed to any
+// later, re-read digest). Takes the diff/settings/paths as plain values
+// rather than a *clone.SendPlan itself: SendPlan is deliberately opaque
+// outside core/clone (accessors only), so this keeps the renderer
+// unit-testable with synthetic data, the same principle diff.go's
+// writeDiffReport already follows for codeplug.DiffResult.
 //
 // Returns the first write error encountered, if any (Fix 1, adjudicated
 // HIGH, Codex M4 #1): this is pre-Execute rendering, so a caller that
 // cannot actually deliver the plan to the user must abort rather than
 // let Execute run against an unseen plan.
-func writePlanSummary(w io.Writer, diff codeplug.DiffResult, snapshotPath, baselineDigest string) error {
+func writePlanSummary(w io.Writer, diff codeplug.DiffResult, settings []clone.SettingDelta, snapshotPath, baselineDigest string) error {
 	tw := &errTrackingWriter{w: w}
+	writeSettingsDeltaReport(tw, settings)
 	_ = writeDiffReport(tw, diff) // tw itself already tracks this; see its doc comment.
 	fmt.Fprintln(tw)
 	fmt.Fprintf(tw, "Snapshot: %s\n", snapshotPath)
 	fmt.Fprintf(tw, "Baseline digest: %s (truncated, plan's baseline)\n", truncateDigest(baselineDigest))
 	return tw.err
+}
+
+// writeSettingsResults renders report.Settings — one line per address
+// Execute's write-then-verify pass actually attempted, in attempt order,
+// naming its Outcome (task f2, plan m7): every SettingWriteOutcome value
+// renders here identically (accepted-and-verified / refused /
+// verify-mismatch / outcome-unknown via SettingWriteOutcome.String()),
+// not just the two refusal paths. Called after execution from both the
+// success summary (writeExecuteSummary) and the abort report
+// (writeAbortReport), since an aborted settings batch still retains every
+// address it attempted before stopping (core/clone/execute.go's
+// writeSettingsBatch). Empty results (no --settings, or the session's
+// driver has no SettingsWriter) prints nothing.
+func writeSettingsResults(w io.Writer, results []driver.SettingWriteResult) {
+	if len(results) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "Settings results:")
+	for _, r := range results {
+		fmt.Fprintf(w, "  %s: %s\n", r.ID, r.Outcome)
+	}
 }
 
 // writeExecuteSummary renders a successful Execute's summary to w
@@ -154,6 +206,7 @@ func writeExecuteSummary(w io.Writer, report *clone.Report, snapshotPath string)
 	fmt.Fprintf(w, "Unchanged:      %d\n", report.Unchanged)
 	fmt.Fprintf(w, "Journal:        %s\n", report.JournalPath)
 	fmt.Fprintf(w, "Snapshot:       %s\n", snapshotPath)
+	writeSettingsResults(w, report.Settings)
 }
 
 // writeSlotTable renders report's per-slot results (task-14 brief §1 step
@@ -215,6 +268,7 @@ func writeAbortReport(w io.Writer, abortErr *clone.AbortedError, report *clone.R
 	}
 	if report != nil {
 		writeSlotTable(w, report.Slots)
+		writeSettingsResults(w, report.Settings)
 		fmt.Fprintf(w, "Journal:  %s\n", report.JournalPath)
 	}
 	fmt.Fprintf(w, "Snapshot: %s\n", snapshotPath)
@@ -509,27 +563,47 @@ func executeAndReport(ctx context.Context, svc *clone.Service, plan *clone.SendP
 // through to writeNothingSendableReport's radiotext.For lookup — the
 // caller (cmdWrite) already validated it against wiring.SupportedModels()
 // before opening sess.
-func runWrite(ctx context.Context, model string, sess driver.Session, snapshotDir string, file *codeplug.Codeplug, yesFlag bool, isTTY bool, stdin io.Reader, stdout, stderr io.Writer) int {
+//
+// settingsFlag (task f2) is "rigprog write --settings", opt-in: WITHOUT
+// it, FILE's settings snapshot (if it carries one at all, e.g. from an
+// earlier "rigprog read --settings") is never handed to PrepareSend —
+// core/clone/settings.go's settingsDeltas returns (nil, nil), reading
+// nothing, the instant its wanted argument is nil — so this run produces
+// ZERO settings wire traffic and an output byte-identical to a build that
+// never had this flag. A shallow copy of file with Menus cleared achieves
+// that without mutating the caller's own *codeplug.Codeplug. WITH it,
+// file is passed through unchanged: PrepareSend diffs every
+// CanSetEX-characterised address against it, and Execute writes and
+// verifies each disagreeing one.
+func runWrite(ctx context.Context, model string, sess driver.Session, snapshotDir string, file *codeplug.Codeplug, settingsFlag, yesFlag bool, isTTY bool, stdin io.Reader, stdout, stderr io.Writer) int {
 	svc := clone.NewService(sess, clone.SnapshotStore{Dir: snapshotDir}, clone.WithProgress(progressPrinter(stderr)))
 
-	plan, err := svc.PrepareSend(ctx, file)
+	prepFile := file
+	if !settingsFlag {
+		cp := *file
+		cp.Menus = nil
+		prepFile = &cp
+	}
+
+	plan, err := svc.PrepareSend(ctx, prepFile)
 	if err != nil {
 		return reportPrepareSendFailure(stderr, err)
 	}
 
 	diff := plan.Diff()
+	settings := plan.Settings()
 
 	// Fix 1 (adjudicated HIGH, Codex M4 #1): a failure to actually render
 	// the plan gates Execute outright — with --yes, resolveConfirmation
 	// below never writes anything at all, so THIS is the one place that
 	// bug (a broken stdout letting Execute run against a plan the caller
 	// never saw) can be caught.
-	if err := writePlanSummary(stdout, diff, plan.SnapshotPath(), plan.BaselineDigest()); err != nil {
+	if err := writePlanSummary(stdout, diff, settings, plan.SnapshotPath(), plan.BaselineDigest()); err != nil {
 		fmt.Fprintf(stderr, "rigprog write: rendering plan summary: %v (nothing was sent)\n", err)
 		return exitError
 	}
 
-	sendable := countSendable(diff)
+	sendable := countSendable(diff, len(settings))
 	if sendable == 0 {
 		// task-25 brief (adjudicated remedy for the reported "i don't seem
 		// to be able to send deletes to the radio" defect): countSendable
@@ -573,6 +647,7 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	fs.SetOutput(io.Discard) // this function owns all usage/error output.
 	port := fs.String("port", "", "real serial port device path")
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
+	settings := fs.Bool("settings", false, "also diff and write FILE's settings snapshot against the radio's admitted, hardware-characterised addresses (opt-in)")
 	yes := fs.Bool("yes", false, "skip the interactive confirmation prompt (required for non-interactive runs)")
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 	snapshotDirFlag := fs.String("snapshot-dir", "", "snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)")
@@ -621,5 +696,5 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	}
 	defer func() { _ = closeAll() }()
 
-	return runWrite(ctx, *model, sess, snapshotDir, file, *yes, isStdinTTY(stdin), stdin, stdout, stderr)
+	return runWrite(ctx, *model, sess, snapshotDir, file, *settings, *yes, isStdinTTY(stdin), stdin, stdout, stderr)
 }
