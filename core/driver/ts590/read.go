@@ -4,7 +4,6 @@ package ts590
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -56,7 +55,7 @@ var filterLabels = map[byte]string{
 // ErrUnknownSlot is the sentinel a caller compares against (via errors.Is)
 // when a slot identifier is not one this ROW publishes. The error actually
 // returned is an *UnknownSlotError.
-var ErrUnknownSlot = errors.New("ts590: slot is not one this row publishes")
+var ErrUnknownSlot = driver.ErrUnknownSlot
 
 // UnknownSlotError reports a slot identifier that is not in any bank of this
 // row — whether because it is malformed, because it names a channel outside
@@ -80,13 +79,11 @@ var ErrUnknownSlot = errors.New("ts590: slot is not one this row publishes")
 // in the code. TestReadChannel_TheSGExtensionChannelsAreNotSlotIDs pins that
 // "110", "115" and "119" take this branch on the SG exactly as "999" does on
 // both rows.
+// Fields are driver.UnknownSlotError's shared shape (core/driver/errors.go);
+// this package keeps its own Error() because the "ts590:" prefix is a
+// package literal, not a field.
 type UnknownSlotError struct {
-	// Slot is the identifier that was requested.
-	Slot string
-	// Model is the row it was requested of.
-	Model string
-	// Reason says which of the three ways it failed.
-	Reason string
+	driver.UnknownSlotError
 }
 
 // Error implements the error interface.
@@ -325,22 +322,22 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	number, half, err := parseSlotID(id)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: modelNameFor(s.row), Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: modelNameFor(s.row), Reason: err.Error()}}
 	}
 	bank, ok := s.bankFor(id)
 	if !ok {
-		return codeplug.Channel{}, &UnknownSlotError{
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{
 			Slot:   id,
 			Model:  modelNameFor(s.row),
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 	slot, err := s.layout.NewSlot(number, half)
 	if err != nil {
 		// Unreachable for a slot the banks published, since every published
 		// identifier was rendered by this same layout's NewSlot (caps.go).
 		// Refuse rather than build a frame from a slot the codec disowns.
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: modelNameFor(s.row), Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: modelNameFor(s.row), Reason: err.Error()}}
 	}
 
 	cmd, err := s.layout.BuildMRRead(slot)

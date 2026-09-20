@@ -19,7 +19,6 @@ const writeTrialsComplete = false
 // package (core/driver.Profile); this package keeps its own Simulated
 // selector, which internal/guards.TestSimulatedProfileTokensConfinement
 // requires.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware

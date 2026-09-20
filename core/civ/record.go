@@ -3,6 +3,7 @@
 package civ
 
 import (
+	"bytes"
 	"fmt"
 	"maps"
 	"slices"
@@ -510,6 +511,22 @@ type FieldSpan struct {
 	Enum map[byte]string
 }
 
+// EnumSpan builds one EncodingEnum field's FieldSpan. Nibble selects the
+// half of the byte it occupies; NibbleWhole is the whole byte. Shared by
+// every profile package (ic7100, ic9100, ic9700, icr8600, ...) so the
+// span shape lives in one place rather than being restated per model.
+func EnumSpan(id FieldID, offset int, nibble NibbleSel, enum map[byte]string) FieldSpan {
+	return FieldSpan{Field: id, Offset: offset, Length: 1, Nibble: nibble, Encoding: EncodingEnum, Enum: enum}
+}
+
+// BCDSpan builds one EncodingBCDNumber field's FieldSpan. Scale
+// multiplies the wire value to reach the neutral unit: 1 where the wire
+// already carries Hz or tenths of a Hz, 100 where the field's lowest
+// printed digit place is the 100 Hz one.
+func BCDSpan(id FieldID, offset, length int, order ByteOrder, scale uint64) FieldSpan {
+	return FieldSpan{Field: id, Offset: offset, Length: length, Encoding: EncodingBCDNumber, Order: order, Scale: scale}
+}
+
 // clone returns a deep copy of the span, so a profile's layout can be
 // handed out without handing out its enum map.
 func (s FieldSpan) clone() FieldSpan {
@@ -564,7 +581,7 @@ type RecordLayout struct {
 
 // clone returns a deep copy.
 func (l RecordLayout) clone() RecordLayout {
-	out := RecordLayout{Length: l.Length, ModeClass: l.ModeClass, ModeValues: copyBytes(l.ModeValues)}
+	out := RecordLayout{Length: l.Length, ModeClass: l.ModeClass, ModeValues: bytes.Clone(l.ModeValues)}
 	if l.Fields != nil {
 		out.Fields = make([]FieldSpan, len(l.Fields))
 		for i, f := range l.Fields {
@@ -572,7 +589,7 @@ func (l RecordLayout) clone() RecordLayout {
 		}
 	}
 	if l.Fixed != nil {
-		out.Fixed = copyBytes(l.Fixed)
+		out.Fixed = bytes.Clone(l.Fixed)
 	}
 	return out
 }

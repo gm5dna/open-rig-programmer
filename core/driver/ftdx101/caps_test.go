@@ -782,8 +782,8 @@ func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
 				if !ok {
 					t.Fatal("the constructor did not return a *ftdx101Driver")
 				}
-				if !d.profileRecognised() {
-					t.Errorf("profileRecognised() = false for the declared constant %s — a declared profile must be able to receive consent", tt.name)
+				if !d.Recognised() {
+					t.Errorf("Recognised() = false for the declared constant %s — a declared profile must be able to receive consent", tt.name)
 				}
 			})
 		}
@@ -793,8 +793,8 @@ func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
 				if !ok {
 					t.Fatal("the constructor did not return a *ftdx101Driver")
 				}
-				if d.profileRecognised() {
-					t.Errorf("profileRecognised() = true for Profile(%d), which this package does not declare — Capabilities' switch would hand that profile the fail-safe set and the gate would then let consent make it writable", int(p))
+				if d.Recognised() {
+					t.Errorf("Recognised() = true for Profile(%d), which this package does not declare — Capabilities' switch would hand that profile the fail-safe set and the gate would then let consent make it writable", int(p))
 				}
 			})
 		}

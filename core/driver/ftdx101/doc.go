@@ -345,7 +345,7 @@
 //     proximity. The FT-710's 38400 is an OPERATING-manual fact for that
 //     radio; this project holds no FTdx101 operating manual, so 38400 here
 //     is the same-generation family default and nothing more. It matters
-//     operationally: internal/wiring's OpenRealSessionFor opens a real
+//     operationally: internal/wiring's OpenRealSessionWith opens a real
 //     radio at exactly this driver's DefaultBaud.
 //     STAGE R LIFTS IT, PER MODEL, WITH: the baud a FACTORY-CONFIGURED
 //     radio of that model answers an ID exchange at — try 38400 first, then

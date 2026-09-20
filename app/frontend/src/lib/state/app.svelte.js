@@ -20,18 +20,12 @@
 // the bridge.
 //
 // Task 17/18 contract notes:
-//   - `canSend` composes the brief's four pieces (connected, baseline
-//     fresh, no blocking issues, !dirtyTransferConflicts) PLUS "no
-//     transfer currently active" (implied by "canSend" — you can't start
-//     a second send mid-transfer). Each piece is also exposed on its own
-//     (`connected`, `baselineFresh`, `blockingIssues`,
-//     `dirtyTransferConflicts`) for a future UI that wants to explain
-//     *why* Send is disabled.
-//   - `dirtyTransferConflicts` is a placeholder: always false until
-//     Task 18 defines the real rule (what counts as a conflict between a
-//     local edit and a stale/in-flight transfer). It already participates
-//     in `canSend` so nothing downstream needs to change when Task 18
-//     starts setting it for real.
+//   - `canSend` composes the brief's three pieces (connected, baseline
+//     fresh, no blocking issues) PLUS "no transfer currently active"
+//     (implied by "canSend" — you can't start a second send
+//     mid-transfer). Each piece is also exposed on its own (`connected`,
+//     `baselineFresh`, `blockingIssues`) for a future UI that wants to
+//     explain *why* Send is disabled.
 //   - `transfer.active` is NOT driven solely by transfer:progress/
 //     transfer:done — see bindings.js's module doc comment for why
 //     ConfirmSend is a special case (it starts a background transfer and
@@ -254,9 +248,6 @@ class AppState {
 	 * @type {SettingsView | null} */
 	settings = $state(null)
 
-	/** Task 18 placeholder — see module doc comment above. */
-	dirtyTransferConflicts = $state(false)
-
 	// --- Task 14 (M9d): the unverified-write consent surface -------------
 	//
 	// Four pieces of UI state and one epoch counter, all deliberately NOT
@@ -377,7 +368,6 @@ class AppState {
 			this.connected &&
 			this.baselineFresh &&
 			this.blockingIssues.length === 0 &&
-			!this.dirtyTransferConflicts &&
 			!this.transfer.active
 		)
 	}
@@ -397,7 +387,6 @@ class AppState {
 			const n = this.blockingIssues.length
 			return `${n} validation ${n === 1 ? 'error needs' : 'errors need'} to be fixed first`
 		}
-		if (this.dirtyTransferConflicts) return 'Resolve the conflicting local changes first'
 		return ''
 	}
 
@@ -476,8 +465,7 @@ class AppState {
 		return ''
 	}
 
-	// --- mutators — called from bindings.js (and, for dirtyTransferConflicts,
-	// eventually Task 18's edit-tracking code) ---
+	// --- mutators — called from bindings.js ---
 
 	/** @param {boolean} loading */
 	setPortsLoading(loading) {
@@ -520,7 +508,6 @@ class AppState {
 		this.dirty = false
 		this.issues = []
 		this.issuesAdvisory = true
-		this.dirtyTransferConflicts = false
 		this.transfer = { active: false, kind: null, progress: { ...EMPTY_PROGRESS }, lastOutcome: null }
 	}
 
@@ -552,7 +539,6 @@ class AppState {
 	disconnectConnection() {
 		this.connection = null
 		if (this.codeplug !== null) this.codeplug.BaselineStale = true
-		this.dirtyTransferConflicts = false
 		this.transfer = { active: false, kind: null, progress: { ...EMPTY_PROGRESS }, lastOutcome: null }
 	}
 

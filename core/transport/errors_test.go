@@ -11,7 +11,7 @@ import (
 )
 
 func TestPortClosedError_IsCompatible(t *testing.T) {
-	err := wrapClosedErr(io.EOF)
+	err := wrapErr(ErrPortClosed, io.EOF)
 	if !errors.Is(err, ErrPortClosed) {
 		t.Errorf("errors.Is(%v, ErrPortClosed) = false, want true", err)
 	}
@@ -21,9 +21,9 @@ func TestPortClosedError_IsCompatible(t *testing.T) {
 }
 
 func TestPortClosedError_NoCause(t *testing.T) {
-	err := wrapClosedErr(nil)
+	err := wrapErr(ErrPortClosed, nil)
 	if err != ErrPortClosed {
-		t.Errorf("wrapClosedErr(nil) = %v, want the bare ErrPortClosed sentinel", err)
+		t.Errorf("wrapErr(ErrPortClosed, nil) = %v, want the bare ErrPortClosed sentinel", err)
 	}
 }
 
@@ -53,7 +53,7 @@ func TestContaminatedError_NilCauseFallsBackToSentinel(t *testing.T) {
 }
 
 func TestQuarantineFailedError_IsCompatible(t *testing.T) {
-	err := wrapQuarantineFailedErr(ErrPortClosed)
+	err := wrapErr(ErrQuarantineFailed, ErrPortClosed)
 	if !errors.Is(err, ErrQuarantineFailed) {
 		t.Errorf("errors.Is(%v, ErrQuarantineFailed) = false, want true", err)
 	}
@@ -63,8 +63,8 @@ func TestQuarantineFailedError_IsCompatible(t *testing.T) {
 }
 
 func TestQuarantineFailedError_NilCauseFallsBackToSentinel(t *testing.T) {
-	err := wrapQuarantineFailedErr(nil)
+	err := wrapErr(ErrQuarantineFailed, nil)
 	if err != ErrQuarantineFailed {
-		t.Errorf("wrapQuarantineFailedErr(nil) = %v, want the bare ErrQuarantineFailed sentinel", err)
+		t.Errorf("wrapErr(ErrQuarantineFailed, nil) = %v, want the bare ErrQuarantineFailed sentinel", err)
 	}
 }

@@ -4,7 +4,6 @@ package bincat
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -68,9 +67,5 @@ var _ transport.Command = Command{}
 // family's frames are binary, so %q's escapes would hide the byte a reader
 // is looking for (core/civ's frame.go draws the identical distinction).
 func hexFrame(b []byte) string {
-	parts := make([]string, len(b))
-	for i, by := range b {
-		parts[i] = fmt.Sprintf("%02x", by)
-	}
-	return strings.Join(parts, " ")
+	return fmt.Sprintf("% x", b)
 }

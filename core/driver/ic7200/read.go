@@ -11,6 +11,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7200 "github.com/gm5dna/open-rig-programmer/core/civ/ic7200"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -119,7 +120,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, fmt.Errorf("ic7200: ReadChannel %s: the record carries no frequency", slot)
 	}
 	if freq > MaxRadioFreqHz {
-		return codeplug.Channel{}, &OutOfDomainError{Field: spec.FieldFrequency, Value: freq, Max: MaxRadioFreqHz}
+		return codeplug.Channel{}, &OutOfDomainError{driver.OutOfDomainError{Field: spec.FieldFrequency, Value: freq, Max: MaxRadioFreqHz}}
 	}
 	mode, ok := rec.Mode.Get()
 	if !ok {

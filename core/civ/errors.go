@@ -3,6 +3,7 @@
 package civ
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 )
@@ -115,7 +116,7 @@ func (e *ParseError) Unwrap() error { return ErrParse }
 // truncating it.
 func newParseError(input []byte, format string, args ...any) *ParseError {
 	n := min(len(input), maxParseErrorFrameLen)
-	return &ParseError{Frame: copyBytes(input[:n]), Reason: fmt.Sprintf(format, args...)}
+	return &ParseError{Frame: bytes.Clone(input[:n]), Reason: fmt.Sprintf(format, args...)}
 }
 
 // ErrInvalidProfile is the sentinel every ProfileConfig validation failure

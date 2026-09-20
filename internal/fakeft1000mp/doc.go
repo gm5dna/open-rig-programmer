@@ -93,11 +93,3 @@ const writeTrialsComplete = false
 //     VFO register; "current operating data" mirrors it, and VFO-B's own
 //     16 bytes stay zero.
 //     (state.go: buildFullDump)
-//
-//  4. THE FULL-DUMP CHUNKING OPTION'S SIZES ARE THIS PACKAGE'S OWN, NOT A
-//     MANUAL FACT. The manual states pacing exists (0EH, unwired) and
-//     that a full dump takes "just under 5 seconds" at zero pacing
-//     delay — WithFullDumpChunking exists only to let a test make one
-//     read cross an arbitrary timeout, not to reproduce a real radio's
-//     timing.
-//     (options.go: WithFullDumpChunking)

@@ -108,20 +108,6 @@ func TestParseMCAnswer_HWDerived_M06(t *testing.T) {
 	}
 }
 
-// TestParseAIAnswer_HWDerived pins the live "AI;" -> "AI0;" query,
-// matching G2's manual-derived form exactly — recorded here as the
-// hardware-derived confirmation that the radio's AI-off answer is
-// byte-identical to the documented one, not a new parse path.
-func TestParseAIAnswer_HWDerived(t *testing.T) {
-	on, err := FT710.ParseAIAnswer([]byte("AI0;"))
-	if err != nil {
-		t.Fatalf("ParseAIAnswer: unexpected error: %v", err)
-	}
-	if on {
-		t.Error(`ParseAIAnswer("AI0;") = true, want false`)
-	}
-}
-
 // TestIsRejection_HWDerived_NAKToken pins only the literal "?;" NAK
 // token this package's IsRejection recognises — the live session's four
 // rejection exchanges (docs/hardware-notes.md §Empty/out-of-range

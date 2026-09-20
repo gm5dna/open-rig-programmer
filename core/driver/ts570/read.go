@@ -4,7 +4,6 @@ package ts570
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
@@ -16,14 +15,14 @@ import (
 
 // ErrUnknownSlot is the sentinel a caller compares against (via errors.Is)
 // when a slot identifier is not one this row publishes.
-var ErrUnknownSlot = errors.New("ts570: slot is not one this row publishes")
+var ErrUnknownSlot = driver.ErrUnknownSlot
 
 // UnknownSlotError reports a slot identifier that is not in this row's
-// bank — core/driver/ts480's own shape.
+// bank — core/driver/ts480's own shape. Fields are driver.UnknownSlotError's
+// shared shape (core/driver/errors.go); this package keeps its own Error()
+// because the "ts570:" prefix is a package literal, not a field.
 type UnknownSlotError struct {
-	Slot   string
-	Model  string
-	Reason string
+	driver.UnknownSlotError
 }
 
 func (e *UnknownSlotError) Error() string {
@@ -106,17 +105,17 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	number, err := parseSlotID(id)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: s.model.name, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: s.model.name, Reason: err.Error()}}
 	}
 	if _, ok := s.bankFor(id); !ok {
-		return codeplug.Channel{}, &UnknownSlotError{
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{
 			Slot: id, Model: s.model.name,
 			Reason: fmt.Sprintf("this row publishes %s", s.bankNames()),
-		}
+		}}
 	}
 	slot, err := s.layout.NewSlot(number, kw.ScanHalfNone)
 	if err != nil {
-		return codeplug.Channel{}, &UnknownSlotError{Slot: id, Model: s.model.name, Reason: err.Error()}
+		return codeplug.Channel{}, &UnknownSlotError{driver.UnknownSlotError{Slot: id, Model: s.model.name, Reason: err.Error()}}
 	}
 
 	cmd, err := s.layout.BuildMRRead(slot)

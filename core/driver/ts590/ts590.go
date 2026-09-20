@@ -116,7 +116,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // all-Unverified capability set while writeTrialsComplete is false, and ANY
 // unrecognised Profile value deliberately selects the same fail-safe.
 // Option: WithConsentedUnverifiedWrites.
-func New(row Row, profile Profile, opts ...Option) driver.Driver {
+func New(row Row, profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ts590Driver{row: row, Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

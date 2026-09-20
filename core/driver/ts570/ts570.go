@@ -93,22 +93,26 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // Profile — selects the all-Unverified capability set while
 // writeTrialsComplete is false, and any unrecognised Profile value
 // deliberately selects the same fail-safe.
-func NewD(profile Profile, opts ...Option) driver.Driver { return newDriver(modelD, profile, opts...) }
+func NewD(profile driver.Profile, opts ...Option) driver.Driver {
+	return newDriver(modelD, profile, opts...)
+}
 
 // NewS builds the TS-570S driver, on NewD's terms in every respect.
-func NewS(profile Profile, opts ...Option) driver.Driver { return newDriver(modelS, profile, opts...) }
+func NewS(profile driver.Profile, opts ...Option) driver.Driver {
+	return newDriver(modelS, profile, opts...)
+}
 
 // NewDG builds the TS-570DG driver, on NewD's terms in every respect. See
 // modelDG and doc.go for the CATID it shares with the D and the ambiguity
 // that follows from it.
-func NewDG(profile Profile, opts ...Option) driver.Driver {
+func NewDG(profile driver.Profile, opts ...Option) driver.Driver {
 	return newDriver(modelDG, profile, opts...)
 }
 
 // newDriver is the one implementation the three exported constructors
 // wrap. There is no bare New: three rows and none is a fallback for
 // another.
-func newDriver(m modelParams, profile Profile, opts ...Option) driver.Driver {
+func newDriver(m modelParams, profile driver.Profile, opts ...Option) driver.Driver {
 	d := &ts570Driver{model: m, Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

@@ -142,24 +142,24 @@ func recordLayout(class string, length int, modes map[byte]string) civ.RecordLay
 
 func commonFields(modes map[byte]string) []civ.FieldSpan {
 	return []civ.FieldSpan{
-		enumSpan(civ.FieldSelect, 0, civ.NibbleLow, map[byte]string{
+		civ.EnumSpan(civ.FieldSelect, 0, civ.NibbleLow, map[byte]string{
 			0x00: "OFF", 0x01: "SEL1", 0x02: "SEL2", 0x03: "SEL3",
 			0x04: "SEL4", 0x05: "SEL5", 0x06: "SEL6", 0x07: "SEL7",
 			0x08: "SEL8", 0x09: "SEL9",
 		}),
-		bcdSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
-		enumSpan(civ.FieldMode, 6, civ.NibbleWhole, modes),
-		enumSpan(civ.FieldFilter, 7, civ.NibbleWhole, map[byte]string{
+		civ.BCDSpan(civ.FieldRXFrequency, 1, 5, civ.OrderLittleEndian, 1),
+		civ.EnumSpan(civ.FieldMode, 6, civ.NibbleWhole, modes),
+		civ.EnumSpan(civ.FieldFilter, 7, civ.NibbleWhole, map[byte]string{
 			0x01: "FIL1", 0x02: "FIL2", 0x03: "FIL3",
 		}),
-		enumSpan(civ.FieldDuplex, 8, civ.NibbleLow, map[byte]string{
+		civ.EnumSpan(civ.FieldDuplex, 8, civ.NibbleLow, map[byte]string{
 			0x00: "OFF", 0x01: "DUP-", 0x02: "DUP+",
 		}),
-		bcdSpan(civ.FieldOffset, 9, 4, civ.OrderLittleEndian, 100),
-		enumSpan(civ.FieldTuningStepEnabled, 13, civ.NibbleWhole, map[byte]string{
+		civ.BCDSpan(civ.FieldOffset, 9, 4, civ.OrderLittleEndian, 100),
+		civ.EnumSpan(civ.FieldTuningStepEnabled, 13, civ.NibbleWhole, map[byte]string{
 			0x00: "OFF", 0x01: "ON",
 		}),
-		enumSpan(civ.FieldTuningStep, 14, civ.NibbleWhole, map[byte]string{
+		civ.EnumSpan(civ.FieldTuningStep, 14, civ.NibbleWhole, map[byte]string{
 			0x01: "100 Hz", 0x02: "1 kHz", 0x03: "2.5 kHz",
 			0x04: "3.125 kHz", 0x05: "5 kHz", 0x06: "6.25 kHz",
 			0x07: "8.33 kHz", 0x08: "9 kHz", 0x09: "10 kHz",
@@ -169,41 +169,33 @@ func commonFields(modes map[byte]string) []civ.FieldSpan {
 		// B and PDF p.12 agree that the digit weights are 1 kHz,
 		// 100 Hz, 100 kHz, 10 kHz. Little-endian BCD with a 100 Hz
 		// scale preserves that deliberately non-monotonic byte order.
-		bcdSpan(civ.FieldProgramTuningStep, 15, 2, civ.OrderLittleEndian, 100),
-		bcdSpan(civ.FieldAttenuator, 17, 1, civ.OrderBigEndian, 1),
-		enumSpan(civ.FieldPreamp, 18, civ.NibbleLow, map[byte]string{
+		civ.BCDSpan(civ.FieldProgramTuningStep, 15, 2, civ.OrderLittleEndian, 100),
+		civ.BCDSpan(civ.FieldAttenuator, 17, 1, civ.OrderBigEndian, 1),
+		civ.EnumSpan(civ.FieldPreamp, 18, civ.NibbleLow, map[byte]string{
 			0x00: "OFF", 0x01: "ON",
 		}),
-		enumSpan(civ.FieldAntenna, 19, civ.NibbleLow, map[byte]string{
+		civ.EnumSpan(civ.FieldAntenna, 19, civ.NibbleLow, map[byte]string{
 			0x00: "ANT1", 0x01: "ANT2", 0x02: "ANT3",
 		}),
-		enumSpan(civ.FieldIPPlus, 20, civ.NibbleLow, map[byte]string{
+		civ.EnumSpan(civ.FieldIPPlus, 20, civ.NibbleLow, map[byte]string{
 			0x00: "OFF", 0x01: "ON",
 		}),
 		{Field: civ.FieldName, Offset: 21, Length: NameLength, Encoding: civ.EncodingName},
 	}
 }
 
-func enumSpan(field civ.FieldID, offset int, nibble civ.NibbleSel, values map[byte]string) civ.FieldSpan {
-	return civ.FieldSpan{Field: field, Offset: offset, Length: 1, Nibble: nibble, Encoding: civ.EncodingEnum, Enum: values}
-}
-
-func bcdSpan(field civ.FieldID, offset, length int, order civ.ByteOrder, scale uint64) civ.FieldSpan {
-	return civ.FieldSpan{Field: field, Offset: offset, Length: length, Encoding: civ.EncodingBCDNumber, Order: order, Scale: scale}
-}
-
 func fmTailFields() []civ.FieldSpan {
 	return []civ.FieldSpan{
-		enumSpan(civ.FieldToneMode, 37, civ.NibbleLow, map[byte]string{
+		civ.EnumSpan(civ.FieldToneMode, 37, civ.NibbleLow, map[byte]string{
 			0x00: "OFF", 0x01: "TSQL", 0x02: "DTCS",
 		}),
-		bcdSpan(civ.FieldToneRX, 38, 3, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldToneRX, 38, 3, civ.OrderBigEndian, 1),
 		// The first DTCS byte carries only receive polarity. The code's
 		// three printed digits occupy the following two bytes.
-		enumSpan(civ.FieldDTCSPolarity, 41, civ.NibbleLow, map[byte]string{
+		civ.EnumSpan(civ.FieldDTCSPolarity, 41, civ.NibbleLow, map[byte]string{
 			0x00: "Normal", 0x01: "Reverse",
 		}),
-		bcdSpan(civ.FieldDTCSCode, 42, 2, civ.OrderBigEndian, 1),
+		civ.BCDSpan(civ.FieldDTCSCode, 42, 2, civ.OrderBigEndian, 1),
 	}
 }
 

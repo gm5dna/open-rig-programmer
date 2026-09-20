@@ -337,7 +337,7 @@ func TestWriteChannel_RefusedBeforeWire(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		profile Profile
+		profile driver.Profile
 		ch      codeplug.Channel
 	}{
 		// The codec cannot express a tone or scan-skip write: a Known

@@ -117,29 +117,7 @@ func (r *Radio) handleStatusUpdate(args [4]byte) {
 	if args[0] != ufullDump {
 		return
 	}
-	dump := r.buildFullDump()
-
-	r.mu.Lock()
-	chunk, gap := r.fullDumpChunk, r.fullDumpGap
-	r.mu.Unlock()
-
-	if chunk <= 0 {
-		r.rawWrite(dump)
-		return
-	}
-	for len(dump) > 0 {
-		n := chunk
-		if n > len(dump) {
-			n = len(dump)
-		}
-		if !r.pipe.WriteNow(dump[:n]) {
-			return // peer gone, or shutdown — nothing left to do
-		}
-		dump = dump[n:]
-		if len(dump) > 0 && !r.pipe.Sleep(gap) {
-			return
-		}
-	}
+	r.rawWrite(r.buildFullDump())
 }
 
 // handleStore implements 03H VFO/MEM: Store/Enter (matrix §1.8's override

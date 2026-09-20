@@ -97,7 +97,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, &AnswerMismatchError{Model: s.dialect.CATID(), Requested: sl.Wire(), Answered: m.Slot.Wire()}
 	}
 	if !kindAccepted(m.Kind) {
-		return codeplug.Channel{}, &KindMismatchError{Slot: sl.Wire(), Got: m.Kind, Want: acceptedKinds}
+		return codeplug.Channel{}, &KindMismatchError{Model: "ft2000", Slot: sl.Wire(), Got: m.Kind, Want: acceptedKinds}
 	}
 
 	ctcss, ok := ctcssNames[m.CTCSS]

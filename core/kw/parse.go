@@ -3,6 +3,7 @@
 package kw
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 )
@@ -83,7 +84,7 @@ func (l Layout) checkRecordLen(command string, got int, frame []byte) error {
 		Got:     got,
 		Want:    want,
 		reason:  "both books print one grid for MR's answer and MW's Set (590:1440-1461, 590:1518-1536; 480:923-943, 480:955-976), and the short MW form 590:1579-1581 describes ERASES the channel, so a frame of any other width than this row's RecordLen is refused rather than interpreted",
-		Frame:   copyBytes(frame[:n]),
+		Frame:   bytes.Clone(frame[:n]),
 	}
 }
 

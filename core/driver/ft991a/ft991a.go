@@ -233,11 +233,6 @@ func (d *ft991aDriver) sessionCapabilities() spec.Capabilities {
 	return d.SessionCaps(d.Capabilities())
 }
 
-// profileRecognised reports whether this driver's profile is one of the
-// declared constants — driver.Base's shared predicate, kept under the
-// name this package's tests put the question by.
-func (d *ft991aDriver) profileRecognised() bool { return d.Recognised() }
-
 // Session is the FT-991A's driver.Session: one open, identity-verified
 // connection. Safe for concurrent use.
 //

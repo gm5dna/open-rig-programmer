@@ -35,7 +35,7 @@ func WithConsentedUnverifiedWrites() Option {
 }
 
 // New returns the one-radio IC-R8600 driver.
-func New(profile Profile, opts ...Option) driver.Driver {
+func New(profile driver.Profile, opts ...Option) driver.Driver {
 	d := &icr8600Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)

@@ -2,7 +2,10 @@
 
 package kw
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 // Command is an outbound Kenwood command frame whose bytes were produced
 // and validated by a builder in this package. The zero value is invalid;
@@ -42,7 +45,7 @@ func newCommand(frame []byte) Command {
 // and returns an independent copy: callers may freely mutate what they get
 // back, with no effect on c or on any other copy.
 func (c Command) Bytes() []byte {
-	return copyBytes(c.frame)
+	return bytes.Clone(c.frame)
 }
 
 // String renders c safely for logs: %q-quoted, so control bytes, embedded

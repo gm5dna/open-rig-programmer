@@ -6,10 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -111,7 +111,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, &AnswerMismatchError{Model: modelName, Requested: sl.Wire(), Answered: m.Slot.Wire()}
 	}
 	if !kindAccepted(m.Kind) {
-		return codeplug.Channel{}, &KindMismatchError{Slot: sl.Wire(), Got: m.Kind, Want: acceptedKinds}
+		return codeplug.Channel{}, &KindMismatchError{Model: "ft450d", Slot: sl.Wire(), Got: m.Kind, Want: acceptedKinds}
 	}
 
 	ctcss, ok := ctcssNames[m.CTCSS]
@@ -175,21 +175,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 }
 
 // KindMismatchError reports that an MR answer's P7 kind byte was not one
-// of this radio's accepted read-side values (acceptedKinds, above).
-type KindMismatchError struct {
-	// Slot is the canonical wire-form slot that was read.
-	Slot string
-	// Got is the P7 kind byte the answer carried.
-	Got byte
-	// Want lists every kind byte this radio's read side accepts.
-	Want []byte
-}
-
-// Error implements the error interface.
-func (e *KindMismatchError) Error() string {
-	want := make([]string, len(e.Want))
-	for i, k := range e.Want {
-		want[i] = fmt.Sprintf("%q", rune(k))
-	}
-	return fmt.Sprintf("ft450d: MR answer for slot %q carries kind %q, want one of {%s}", e.Slot, rune(e.Got), strings.Join(want, ","))
-}
+// of this radio's accepted read-side values (acceptedKinds, above). The
+// shared form (yaesu.KindMismatchError) carries the model name so this
+// package needs no typed error of its own.
+type KindMismatchError = yaesu.KindMismatchError

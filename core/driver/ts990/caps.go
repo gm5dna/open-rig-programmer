@@ -78,7 +78,6 @@ const writeTrialsComplete = false
 // towards the simulator's, whose Supported writes are a claim about
 // internal/fakets990 and about nothing else. Any OTHER unrecognised Profile
 // value fails the same way, through Capabilities' explicit default arm.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware

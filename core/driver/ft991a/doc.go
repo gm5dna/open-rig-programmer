@@ -332,7 +332,7 @@
 //     names menu 031 CAT RATE and EXCLUDES menu 029 232C RATE as the
 //     RS-232C jack's rate (plan P11): both print the same four rates, so
 //     nothing changes numerically, but a user sent to 029 sets the wrong
-//     port's rate. internal/wiring's OpenRealSessionFor opens a real radio
+//     port's rate. internal/wiring's OpenRealSessionWith opens a real radio
 //     at exactly this value and NO baud override exists in the CLI or the
 //     GUI, so a wrong value leaves a real FT-991A reachable only through
 //     its own menu.

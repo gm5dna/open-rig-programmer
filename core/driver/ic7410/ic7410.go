@@ -12,6 +12,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7410 "github.com/gm5dna/open-rig-programmer/core/civ/ic7410"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -86,22 +87,17 @@ type OpenReport struct {
 
 // RecordLengthMismatchError reports that a memory answer carried a record
 // at a length this profile does not declare (spec D3.2's continuous
-// length fingerprint).
+// length fingerprint). Fields are icom.RecordLengthMismatchError's shared
+// shape (core/driver/internal/icom/errors.go); Unwrap is promoted from
+// there unchanged, and only Error() is this package's own.
 type RecordLengthMismatchError struct {
-	Err  *civ.RecordLengthError
-	Got  int
-	Want int
-	Slot civ.ChannelAddress
+	icom.RecordLengthMismatchError
 }
 
 func (e *RecordLengthMismatchError) Error() string {
 	return fmt.Sprintf(
 		"ic7410: %s answered a %d-byte memory record, want %d — matrix §3.11 derives this expected length from the record diagram, and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check",
 		e.Slot, e.Got, e.Want)
-}
-
-func (e *RecordLengthMismatchError) Unwrap() []error {
-	return []error{driver.ErrWrongRadio, e.Err}
 }
 
 // AnswerMismatchError reports tier ruling T2: a memory answer whose
@@ -200,7 +196,7 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 	if err != nil {
 		var lengthErr *civ.RecordLengthError
 		if errors.As(err, &lengthErr) {
-			return nil, false, &RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7410.RecordOnlyLength, Slot: a}
+			return nil, false, &RecordLengthMismatchError{icom.RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7410.RecordOnlyLength, Slot: a}}
 		}
 		return nil, false, fmt.Errorf("ic7410: Open: probing %s: %w", a, err)
 	}

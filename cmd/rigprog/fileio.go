@@ -198,31 +198,3 @@ func normaliseTierFieldsForOwnModel(cp *codeplug.Codeplug) {
 	}
 	codeplug.NormaliseTierFields(cp, caps)
 }
-
-// resolveSnapshotDir returns the snapshot/journal directory a radio-
-// touching subcommand should use: override verbatim if non-empty,
-// otherwise "<os.UserConfigDir()>/rigprog/snapshots" (task-12 brief §1's
-// default). It does not touch the filesystem — callers create the
-// directory (mode 0700) on demand. Originally read.go-only (task 12);
-// moved here (task 14) since write.go needs it too and this file is
-// where cross-subcommand file/path helpers live (checkOverwrite,
-// loadCodeplugStrict) — behaviour unchanged.
-//
-// model then decides whether that base directory is used directly or
-// namespaced (task-7, D9): wiring.DefaultModel stays at the base
-// directory unchanged — byte-identical to the pre-task-7 behaviour — so
-// every snapshot written before per-model subdirectories existed is
-// still found. Any other model gets its own <base>/<model-slug>/
-// subdirectory, applied to an explicit override too, since two models
-// sharing one explicitly-named directory is exactly the collision this
-// rule exists to prevent. A model whose ModelSlug is "" (no
-// alphanumeric characters at all) is refused with an error rather than
-// silently falling back to the base directory. A thin alias of
-// internal/wiring's own ResolveSnapshotDir, which app/ already shares —
-// the "deliberately duplicated" reasoning this doc comment used to give
-// is stale (Stuart, ponytail audit 2026-09-06): wiring already exports
-// it and this package already imports wiring, so there is nothing left
-// to duplicate for. No test pins wiring's own "wiring: " error prefix.
-func resolveSnapshotDir(override, model string) (string, error) {
-	return wiring.ResolveSnapshotDir(override, model)
-}

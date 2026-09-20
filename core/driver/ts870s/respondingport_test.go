@@ -82,7 +82,7 @@ func (p *respondingPort) Transcript() []string {
 
 // openSession opens this row against a scripted radio serving img, failing
 // the test if Open does.
-func openSession(t *testing.T, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
+func openSession(t *testing.T, profile driver.Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
 	p := newRespondingPort(t, img)
 	d := New(profile, opts...)

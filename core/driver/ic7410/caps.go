@@ -19,7 +19,6 @@ const writeTrialsComplete = false
 // value is RealHardware on purpose: a forgotten or zero-valued Profile
 // must fail TOWARDS the real-hardware capability set, which while
 // writeTrialsComplete is false is the all-Unverified one.
-type Profile = driver.Profile
 
 const (
 	RealHardware = driver.RealHardware

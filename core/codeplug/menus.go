@@ -223,7 +223,7 @@ func MergeMenuSnapshots(old, fresh *MenuSnapshot) *MenuSnapshot {
 		Complete:   fresh.Complete,
 	}
 	if old.Legacy != nil {
-		out.Legacy = append(json.RawMessage(nil), old.Legacy...)
+		out.Legacy = slices.Clone(old.Legacy)
 	}
 
 	freshIDs := make(map[string]bool, len(fresh.Entries))

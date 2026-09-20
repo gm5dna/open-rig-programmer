@@ -324,7 +324,7 @@ func TestConsentOption_UnrecognisedProfileStaysFailSafe(t *testing.T) {
 	// all-Unverified set AND is not consented, so a forged or corrupted
 	// profile goes on writing nothing however the option is set.
 	port := newRecordingPort(t, factoryAnswers())
-	sess, err := ic9700.New(ic9700.Profile(99), ic9700.WithConsentedUnverifiedWrites()).
+	sess, err := ic9700.New(driver.Profile(99), ic9700.WithConsentedUnverifiedWrites()).
 		Open(context.Background(), port.Port(), driver.Identity{})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
