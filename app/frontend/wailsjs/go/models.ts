@@ -671,6 +671,7 @@ export namespace main {
 	    ID: string;
 	    Label: string;
 	    Display: string;
+	    Editable: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SettingItemView(source);
@@ -681,6 +682,27 @@ export namespace main {
 	        this.ID = source["ID"];
 	        this.Label = source["Label"];
 	        this.Display = source["Display"];
+	        this.Editable = source["Editable"];
+	    }
+	}
+	export class SettingWriteResultView {
+	    ID: string;
+	    Wanted: string;
+	    Observed: string;
+	    Outcome: string;
+	    Err: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SettingWriteResultView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.Wanted = source["Wanted"];
+	        this.Observed = source["Observed"];
+	        this.Outcome = source["Outcome"];
+	        this.Err = source["Err"];
 	    }
 	}
 	export class SettingGroupView {

@@ -1,11 +1,20 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <script>
-	// Read-only settings browser (task 36, M8b-6). Structure/labels come
+	// Settings browser (task 36, M8b-6). Structure/labels come
 	// wholesale from appState.settingsSpec (GetSettingsSpec — works
 	// offline, never a value); content comes from appState.settings
 	// (GetSettings/ReadSettingsRadio). ZERO protocol facts hardcoded here
 	// — every menu/group/item label and ID is spec-supplied; the synthetic
 	// vitest fixture (SettingsViewer.test.js) proves it.
+	//
+	// Editable cells (task g2): a SettingItemView with Editable true
+	// renders its Value cell as a plain <input> instead of text; Enter or
+	// blur commits the edit via App.WriteSetting (app/settings.go), and
+	// the row then shows the write's Outcome text — spec §7 requires all
+	// four driver.SettingWriteOutcome values rendered, never collapsed to
+	// a boolean, with Err shown only when non-empty. No consent toggle, no
+	// new state model: Editable is the hardware-characterisation gate
+	// already decided server-side (SettingItemView's own doc comment).
 	//
 	// Own menu-level tablist (the spec's Menus): fresh markup, but the
 	// SAME complete tab pattern as App.svelte's view switch and
@@ -24,7 +33,7 @@
 	// exists but cannot be rendered; unrecognised file IDs (not in the
 	// spec) -> their own section.
 	import { appState } from './state/app.svelte.js'
-	import { readSettingsRadio } from './bridge/bindings.js'
+	import { readSettingsRadio, writeSetting } from './bridge/bindings.js'
 	import { tabKeydown } from './tabKeydown.js'
 	import ToolButton from './ToolButton.svelte'
 	import { getStoredTheme, setTheme } from './theme.js'
@@ -32,6 +41,7 @@
 	/** @typedef {import('../../wailsjs/go/models').main.SettingMenuView} SettingMenuView */
 	/** @typedef {import('../../wailsjs/go/models').main.SettingItemView} SettingItemView */
 	/** @typedef {import('../../wailsjs/go/models').main.SettingEntryView} SettingEntryView */
+	/** @typedef {import('../../wailsjs/go/models').main.SettingWriteResultView} SettingWriteResultView */
 
 	const spec = $derived(appState.settingsSpec)
 	const menus = $derived(spec?.Menus ?? [])
@@ -97,6 +107,36 @@
 		if (!entry) return 'not read'
 		if (entry.State === 'known') return null
 		return entry.State
+	}
+
+	// --- editable cells (task g2) ---------------------------------------
+
+	/** Last write outcome per item ID — local component state only (brief:
+	 * no new state model in appState; this never outlives the panel).
+	 * @type {Record<string, SettingWriteResultView>} */
+	let writeResults = $state({})
+
+	/** @param {SettingItemView} item @param {string} value */
+	async function commitSetting(item, value) {
+		try {
+			const result = await writeSetting(item.ID, value)
+			writeResults = { ...writeResults, [item.ID]: result }
+		} catch {
+			// Pre-flight refusal or a busy reservation — the alert strip
+			// already carries the message (see writeSetting's doc comment).
+		}
+	}
+
+	/** @param {KeyboardEvent} e @param {SettingItemView} item */
+	function onValueKeydown(e, item) {
+		if (e.key !== 'Enter') return
+		e.preventDefault()
+		commitSetting(item, /** @type {HTMLInputElement} */ (e.target).value)
+	}
+
+	/** @param {FocusEvent} e @param {SettingItemView} item */
+	function onValueBlur(e, item) {
+		commitSetting(item, /** @type {HTMLInputElement} */ (e.target).value)
 	}
 
 	// --- read settings -------------------------------------------------------
@@ -207,13 +247,35 @@
 									{#each group.Items ?? [] as item (item.ID)}
 										{@const entry = entriesById.get(item.ID)}
 										{@const badge = badgeText(entry)}
+										{@const result = writeResults[item.ID]}
 										<tr>
 											<td class="col-display">{item.Display}</td>
 											<td>{item.Label}</td>
-											<td>{entry ? entry.Value : '—'}</td>
+											<td>
+												{#if item.Editable}
+													<input
+														class="settings-value-input"
+														type="text"
+														value={entry ? entry.Value : ''}
+														aria-label={`${item.Label} value`}
+														onkeydown={(e) => onValueKeydown(e, item)}
+														onblur={(e) => onValueBlur(e, item)}
+													/>
+												{:else}
+													{entry ? entry.Value : '—'}
+												{/if}
+											</td>
 											<td>
 												{#if badge}
 													<span class="settings-badge">{badge}</span>
+												{/if}
+												{#if result}
+													<div class="settings-write-outcome">
+														{result.Outcome}
+														{#if result.Err}
+															<span class="settings-write-err">{result.Err}</span>
+														{/if}
+													</div>
 												{/if}
 											</td>
 										</tr>
@@ -416,5 +478,30 @@
 		background: var(--colour-warn-bg);
 		color: var(--colour-warn);
 		white-space: nowrap;
+	}
+
+	/* --- editable cells (task g2) --- */
+
+	.settings-value-input {
+		width: 100%;
+		background: var(--colour-panel-sunken);
+		border: 1px solid var(--colour-hairline);
+		border-radius: var(--radius-sm);
+		padding: var(--space-1) var(--space-2);
+		font-size: 12.5px;
+		font-family: var(--font-mono);
+		color: var(--colour-text);
+	}
+
+	.settings-write-outcome {
+		margin-top: var(--space-1);
+		font-size: 10.5px;
+		font-family: var(--font-mono);
+		color: var(--colour-text-dim);
+	}
+
+	.settings-write-err {
+		display: block;
+		color: var(--colour-warn);
 	}
 </style>
