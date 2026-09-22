@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 
@@ -77,6 +78,18 @@ func (a *App) ImportCSV() (ImportResultView, error) {
 	if !ok {
 		return result, err
 	}
+	// Read BEFORE Import: TierColumnsAbsent only reads the header row, so
+	// the file is rewound afterwards for Import's own full read (see its
+	// doc comment).
+	absentTierFields, err := csvio.TierColumnsAbsent(f)
+	if err != nil {
+		_ = f.Close()
+		return ImportResultView{Path: path, ParseError: err.Error()}, nil
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		_ = f.Close()
+		return ImportResultView{Path: path, ParseError: err.Error()}, nil
+	}
 	imported, err := csvio.Import(f)
 	_ = f.Close()
 	if err != nil {
@@ -107,6 +120,14 @@ func (a *App) ImportCSV() (ImportResultView, error) {
 	// normaliseTierFieldsForOwnModel for why the connected session's
 	// capabilities are the wrong question here).
 	normaliseTierFieldsForOwnModel(a.working)
+	// csvio marks a tier field Unavailable whenever its CSV column is
+	// entirely absent (a v1 file, or a v2 file with no receiver group) —
+	// absentTierFields names exactly those fields, never one whose
+	// column is present with an explicit "n/a" cell. Reopen the ones THE
+	// WORKING COPY'S OWN MODEL can genuinely reach back to Absent so
+	// Validate catches them as missing rather than "no such field"
+	// (fleet-audit item 4).
+	reopenUnavailableTierFieldsForOwnModel(a.working, absentTierFields)
 	// caps is the CONNECTED session's when connected, which is the right
 	// question for the advisory/authoritative Validate below and nothing
 	// else in this function.

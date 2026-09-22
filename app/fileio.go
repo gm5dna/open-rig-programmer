@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -223,6 +224,36 @@ func normaliseTierFieldsForOwnModel(cp *codeplug.Codeplug) {
 		return
 	}
 	codeplug.NormaliseTierFields(cp, caps)
+}
+
+// reopenUnavailableTierFieldsForOwnModel runs
+// codeplug.ReopenUnavailableTierFields over cp against the capabilities
+// of the model CP ITSELF names, restricted to absentTierFields — the GUI
+// half of the composition-root pass that function's doc comment
+// describes, and the twin of cmd/rigprog/fileio.go's function of the
+// same name.
+//
+// absentTierFields is csvio.TierColumnsAbsent's report on the SAME CSV
+// file ImportCSV just parsed: only a field whose column the file's
+// header does not carry at all is eligible to reopen. A field whose
+// column IS present, however its cell reads — including an explicit
+// "n/a" — is never in that list, so it is never touched here: that cell
+// is a statement the file makes, and ReopenUnavailableTierFields leaves
+// it exactly as spelled.
+//
+// Called ONLY from ImportCSV (importexport.go), immediately after
+// normaliseTierFieldsForOwnModel. Never called from the plain-load path
+// (codeplug.go) — a genuine radio read's or legacy schema's Unavailable
+// claim is not this function's to question.
+func reopenUnavailableTierFieldsForOwnModel(cp *codeplug.Codeplug, absentTierFields []spec.Field) {
+	if cp == nil || cp.Radio.Model == "" {
+		return
+	}
+	caps, err := capsForModel(cp.Radio.Model)
+	if err != nil {
+		return
+	}
+	codeplug.ReopenUnavailableTierFields(cp, caps, absentTierFields)
 }
 
 // defaultFilenameFor returns the base name of path, or fallback if path

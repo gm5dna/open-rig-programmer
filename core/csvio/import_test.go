@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -934,5 +935,77 @@ func TestImport_EmptyAndBOMOnlyInput(t *testing.T) {
 				t.Errorf("ParseError.Line = %d, want 1", pe.Line)
 			}
 		})
+	}
+}
+
+// allTierColumnFields and receiverTierColumnFields are TierColumnsAbsent's
+// own expected answers, built from codeplug.TierFields directly rather
+// than hand-counted, so a field added there is reflected here too.
+func allTierColumnFields() []spec.Field {
+	out := make([]spec.Field, len(codeplug.TierFields))
+	for i, tf := range codeplug.TierFields {
+		out[i] = tf.Field
+	}
+	return out
+}
+
+func receiverTierColumnFields() []spec.Field {
+	var out []spec.Field
+	for _, tf := range codeplug.TierFields {
+		if tf.Receiver {
+			out = append(out, tf.Field)
+		}
+	}
+	return out
+}
+
+// TestTierColumnsAbsent pins the fact TierColumnsAbsent reports: which
+// tier columns a file's HEADER carries no column for at all, by version
+// — never a fact about any cell's content, which it does not read (it
+// stops after the header row).
+func TestTierColumnsAbsent(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		header []string
+		want   []spec.Field
+	}{
+		{"version 1: no tier columns at all", header, allTierColumnFields()},
+		{"version 2: tier columns present, no receiver group", headerV2, receiverTierColumnFields()},
+		{"version 3: every column present", headerV3, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := TierColumnsAbsent(strings.NewReader(strings.Join(tc.header, ",") + "\n"))
+			if err != nil {
+				t.Fatalf("TierColumnsAbsent: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("TierColumnsAbsent(%s) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTierColumnsAbsent_CellContentIsIrrelevant confirms the header
+// alone decides: a version-2+ row whose tier cells all spell the
+// reserved "n/a" reports the SAME absent set as an empty row, because
+// the column is present either way — the exact distinction the
+// fleet-audit item 4 regression fix depends on (an explicit "n/a" is
+// never in this list).
+func TestTierColumnsAbsent_CellContentIsIrrelevant(t *testing.T) {
+	row := make([]string, len(headerV3))
+	for i, c := range headerV3 {
+		if c == "slot" {
+			row[i] = "001"
+			continue
+		}
+		row[i] = cellUnavailable
+	}
+	body := strings.Join(headerV3, ",") + "\n" + strings.Join(row, ",") + "\n"
+	got, err := TierColumnsAbsent(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("TierColumnsAbsent: %v", err)
+	}
+	if got != nil {
+		t.Errorf("TierColumnsAbsent(all cells \"n/a\") = %v, want nil — every column is present", got)
 	}
 }
