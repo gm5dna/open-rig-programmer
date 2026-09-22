@@ -11,8 +11,6 @@ name: flathub
 
 on:
   workflow_dispatch:
-  push:
-    branches: [flathub-spike]
   pull_request:
     paths:
       - 'flathub/**'
