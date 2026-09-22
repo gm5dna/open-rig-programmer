@@ -160,7 +160,34 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("icr8600: ReadChannel %s: %w", slot, err)
 	}
-	return neutralChannel(rec, slot, s.caps), nil
+	ch := neutralChannel(rec, slot, s.caps)
+	// Mirrors validateWriteFields' own rung (write.go): this radio's own
+	// bound is the wire field width, not caps — no capability-range write
+	// check exists for it either. TxFreqHz gets no such check here,
+	// matching codeplug.Validate, which only ever bounds the RX field.
+	if err := checkFrequencyWidth(slot, ch.Data.FreqHz); err != nil {
+		return codeplug.Channel{}, err
+	}
+	return ch, nil
+}
+
+// checkFrequencyWidth refuses an RX frequency wider than the five-byte
+// packed-BCD frequency field (write.go's own rung, mirrored here). A
+// package-level function rather than inlined, so the rung is directly
+// testable: decodeBCDNumber's own nibble check (core/civ/bcd.go) already
+// makes this UNREACHABLE via any real wire record — five bytes of BCD
+// cannot decode above 9,999,999,999 — so this stays a defence-in-depth
+// rung against a future looser decode, exactly as write.go's twin already
+// is against a future looser codeplug import.
+func checkFrequencyWidth(slot string, hz uint64) error {
+	if hz > 9_999_999_999 {
+		return &driver.WriteRefusedError{
+			Slot:   slot,
+			Fields: []spec.Field{spec.FieldFrequency},
+			Reason: fmt.Sprintf("%d Hz exceeds the five-byte packed-BCD frequency field", hz),
+		}
+	}
+	return nil
 }
 
 // admittedFreq and admittedInt carry a decoded value only when the declared

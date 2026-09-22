@@ -433,7 +433,7 @@ func TestWriteChannel_KnownTagDisplayRefusedByTheGate(t *testing.T) {
 
 			// The builder's side of the same claim: it accepts the channel,
 			// because it makes no TagDisplay decision whatsoever.
-			if _, err := buildWriteCommand(catDialect, ch); err != nil {
+			if _, err := buildWriteCommand(catDialect, CapabilitiesSimulated(), ch); err != nil {
 				t.Errorf("buildWriteCommand = %v, want success — the combined form has no display flag, so a Known value is not the BUILDER's to refuse (the gate above is what refuses it)", err)
 			}
 		})
@@ -1330,16 +1330,21 @@ func TestBuildWriteCommand_RefusesInexpressibleValues(t *testing.T) {
 			reasonHas: "cannot encode the combined MT Set frame",
 		},
 		{
+			// Zero is also below caps.MinFreqHz (30 kHz), so since
+			// CheckFreqRange this is now caught by that earlier rung
+			// rather than reaching the codec's own zero-frequency
+			// refusal (core/cat/mw.go) — the codec's check stays in
+			// place for a receiver with a wider caps range.
 			name:      "a zero frequency",
 			mutate:    func(d *codeplug.ChannelData) { d.FreqHz = 0 },
-			reasonHas: "cannot encode the combined MT Set frame",
+			reasonHas: "outside this radio's storable range",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := writableChannel("010")
 			tt.mutate(ch.Data)
 
-			cmd, err := buildWriteCommand(catDialect, ch)
+			cmd, err := buildWriteCommand(catDialect, CapabilitiesSimulated(), ch)
 			var wre *driver.WriteRefusedError
 			if !errors.As(err, &wre) {
 				t.Fatalf("buildWriteCommand = %v (%T), want a *driver.WriteRefusedError", err, err)
@@ -1362,7 +1367,7 @@ func TestBuildWriteCommand_RefusesInexpressibleValues(t *testing.T) {
 	t.Run("an ungrammatical slot", func(t *testing.T) {
 		ch := writableChannel("010")
 		ch.Slot = "0X1"
-		if _, err := buildWriteCommand(catDialect, ch); !errors.Is(err, driver.ErrWriteRefused) {
+		if _, err := buildWriteCommand(catDialect, CapabilitiesSimulated(), ch); !errors.Is(err, driver.ErrWriteRefused) {
 			t.Errorf("buildWriteCommand = %v, want a refusal", err)
 		}
 	})
@@ -1373,7 +1378,7 @@ func TestBuildWriteCommand_RefusesInexpressibleValues(t *testing.T) {
 		// but the CODEC refuses them too: cat.Dialect's combined-MT write
 		// policy admits memory and PMS slots only. Both layers, deliberately.
 		ch := writableChannel("501")
-		if _, err := buildWriteCommand(catDialect, ch); !errors.Is(err, driver.ErrWriteRefused) {
+		if _, err := buildWriteCommand(catDialect, CapabilitiesSimulated(), ch); !errors.Is(err, driver.ErrWriteRefused) {
 			t.Errorf("buildWriteCommand(\"501\") = %v, want a refusal", err)
 		}
 	})
@@ -1381,7 +1386,7 @@ func TestBuildWriteCommand_RefusesInexpressibleValues(t *testing.T) {
 	t.Run("the unmutated fixture builds", func(t *testing.T) {
 		// Non-vacuity: every row above would pass against a builder that
 		// refused everything.
-		if _, err := buildWriteCommand(catDialect, writableChannel("010")); err != nil {
+		if _, err := buildWriteCommand(catDialect, CapabilitiesSimulated(), writableChannel("010")); err != nil {
 			t.Errorf("buildWriteCommand(writableChannel) = %v, want a frame", err)
 		}
 	})
@@ -1426,7 +1431,7 @@ func TestBuildWriteCommand_NoTagDisplayRefusalTakesPriority(t *testing.T) {
 			ch := multiplyInvalid()
 			ch.Data.TagDisplay = tt.tagDisplay
 
-			_, err := buildWriteCommand(catDialect, ch)
+			_, err := buildWriteCommand(catDialect, CapabilitiesSimulated(), ch)
 			var wre *driver.WriteRefusedError
 			if !errors.As(err, &wre) {
 				t.Fatalf("buildWriteCommand = %v, want a *driver.WriteRefusedError", err)
@@ -1465,7 +1470,7 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 	// mtAnswerFields records the same offsets for the read direction).
 	const p7Index = 22
 
-	cmd, err := buildWriteCommand(catDialect, writableChannel("010"))
+	cmd, err := buildWriteCommand(catDialect, CapabilitiesSimulated(), writableChannel("010"))
 	if err != nil {
 		t.Fatalf("buildWriteCommand = %v, want a frame", err)
 	}
@@ -1507,7 +1512,7 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 		t.Fatal("the peer dialect's MW write kind equals the form constant, so this leg proves nothing")
 	}
 
-	peerCmd, err := buildWriteCommand(peer, writableChannel("010"))
+	peerCmd, err := buildWriteCommand(peer, CapabilitiesSimulated(), writableChannel("010"))
 	if err != nil {
 		t.Fatalf("buildWriteCommand on a dialect whose MW kind is %q = %v, want a frame — the combined Set's P7 is the FORM's constant, so a differing MW kind must be irrelevant here", peer.MWWriteKind(), err)
 	}
@@ -1580,5 +1585,33 @@ func TestWriteChannel_NoConsent_StillRefused(t *testing.T) {
 	}
 	if got := p.Transcript(); len(got) != before {
 		t.Errorf("an unconsented, refused WriteChannel sent %d frames, want 0", len(got)-before)
+	}
+}
+
+// TestWriteChannel_RefusesFrequencyAboveCapsCeiling pins the newly-live
+// CheckFreqRange rung: this radio's real 30 kHz-75 MHz storable range
+// (caps.MinFreqHz/MaxFreqHz), checked ahead of the codec's own much wider
+// nine-digit ceiling. Before this, a frequency between 75 MHz and the
+// codec's ceiling reached the wire unrefused.
+func TestWriteChannel_RefusesFrequencyAboveCapsCeiling(t *testing.T) {
+	p, sess := openSession(t, Simulated, slotImage{})
+
+	ch := writableChannel("010")
+	ch.Data.FreqHz = 75_000_001 // one Hz above CapabilitiesSimulated().MaxFreqHz
+
+	before := len(p.Transcript())
+	_, err := sess.WriteChannel(testCtx(t), ch)
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if want := "frequency 75000001 Hz is outside this radio's storable range 30000-75000000 Hz"; wre.Reason != want {
+		t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldFrequency)
+	}
+	if got := p.Transcript(); len(got) != before {
+		t.Errorf("refused WriteChannel sent %d frames, want 0", len(got)-before)
 	}
 }

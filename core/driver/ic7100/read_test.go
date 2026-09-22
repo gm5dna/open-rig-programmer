@@ -4,12 +4,17 @@ package ic7100
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
+	civic7100 "github.com/gm5dna/open-rig-programmer/core/civ/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 func TestReadAllWalksExactlyDenseBanksAThroughE(t *testing.T) {
@@ -129,5 +134,43 @@ func TestChannelData_AbsentTxFreqAndOffsetAreUnavailable(t *testing.T) {
 				t.Errorf("%s = %+v, want Unavailable — the record does not carry it", tc.name, got)
 			}
 		})
+	}
+}
+
+// recordAtFrequency uses the CI-V builder so the test record exercises the
+// same frequency encoding the driver parses, then removes the set envelope
+// — see ic7610's namesake helper for the same technique.
+func recordAtFrequency(t *testing.T, hz uint64) []byte {
+	t.Helper()
+	rec := fullMemoryRecord()
+	rec.RXFreqHz = civ.Available(hz)
+	cmd, err := civic7100.Profile().BuildMemorySet(rec)
+	if err != nil {
+		t.Fatalf("BuildMemorySet(%d Hz): %v", hz, err)
+	}
+	frame := cmd.Bytes()
+	return frame[9 : len(frame)-1]
+}
+
+// TestReadChannel_RefusesFrequencyAboveCeiling pins the read-side half of
+// the rule that a driver must not construct a channel codeplug.Validate
+// will immediately refuse: a read must not surface an RX frequency above
+// this radio's own caps.MaxFreqHz, matching the refusal write.go's
+// validateWriteValues already makes for the identical condition.
+func TestReadChannel_RefusesFrequencyAboveCeiling(t *testing.T) {
+	hz := uint64(maxFreqHz + 1)
+	p := newRespondingPort(t, withRecord(1, 1, recordAtFrequency(t, hz)))
+	s := openTestSession(t, p)
+
+	_, err := s.ReadChannel(context.Background(), "A-001")
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("ReadChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if want := fmt.Sprintf("frequency %d is outside %d..%d Hz", hz, uint64(minFreqHz), uint64(maxFreqHz)); wre.Reason != want {
+		t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [frequency]", wre.Fields)
 	}
 }
