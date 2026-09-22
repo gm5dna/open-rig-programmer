@@ -27,6 +27,22 @@ tag. The full release notes for each version are on the
   wrong, so only testing on hardware can be trusted. Every other
   radio's menu settings stay read-only.
 
+### Fixed
+- FT-710, FTdx10 and FTdx101: a channel write no longer accepts a
+  frequency outside the radio's own 30 kHz-75 MHz storable range;
+  previously only the wire codec's 9-digit field width was checked.
+- IC-7100, IC-7300, IC-7300MK2, IC-905, IC-9700 and IC-R8600: a channel
+  read now refuses a frequency the radio's own record cannot express,
+  matching the equivalent check these models' writes already made.
+- Importing a version-1 CSV (or a version-2 CSV with no receiver-fields
+  columns) whose model has tier fields (duplex, offset, tone mode, DTCS
+  and the rest) no longer settles the fields that file's header has no
+  column for at all to "this radio has no such field"; they are left
+  unanswered, so validation catches them as missing rather than silently
+  treating the radio as lacking a field it has. A field whose column IS
+  present, including an explicit "n/a" cell, is left exactly as the file
+  states.
+
 ## [1.10.0] - 2026-09-18
 
 ### Added

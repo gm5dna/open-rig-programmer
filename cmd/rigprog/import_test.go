@@ -268,6 +268,102 @@ func TestCmdImport_CSVKeepsAbsentTierFieldTheFileMODELReaches(t *testing.T) {
 	}
 }
 
+// v1IcomBaseCSVFixture writes a genuine version-1 CSV (the thirteen
+// pre-tier columns only, no tier columns at all) covering EXACTLY
+// buildIcomBase's own slot inventory (MEM 001..099, SCAN P1/P2) — slot
+// 001 populated, everything else an empty row — so mergeCSV's inventory
+// check passes against a base built from that same helper.
+func v1IcomBaseCSVFixture(t *testing.T) string {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("slot,display,freq_hz,mode,clar_hz,rx_clar,tx_clar,ctcss,ctcss_tone,shift,tag,tag_display,scan_skip\n")
+	b.WriteString("001,,7000000,USB,,,,,,,,,\n")
+	for n := 2; n <= 99; n++ {
+		fmt.Fprintf(&b, "%03d,,,,,,,,,,,,\n", n)
+	}
+	b.WriteString("P1,,,,,,,,,,,,\n")
+	b.WriteString("P2,,,,,,,,,,,,\n")
+	path := filepath.Join(t.TempDir(), "v1.csv")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("writing v1 CSV fixture: %v", err)
+	}
+	return path
+}
+
+// TestCmdImport_CSVVersion1ReopensReachableTierFieldsAsAbsent pins the
+// fleet-audit item 4 fix's own scenario: a genuine version-1 CSV — no
+// tier columns in its header at all — imported onto a radio that
+// reaches one of the tier fields must not settle that field to "this
+// radio has no such field"; it must come back Absent, for Validate to
+// catch as missing.
+func TestCmdImport_CSVVersion1ReopensReachableTierFieldsAsAbsent(t *testing.T) {
+	radio, caps := icomRadioInfo(t)
+	base := buildIcomBase(radio)
+	csvPath := v1IcomBaseCSVFixture(t)
+
+	basePath := saveFixture(t, base, "base.json")
+	outPath := filepath.Join(t.TempDir(), "out.json")
+	var stdout, stderr bytes.Buffer
+	if got := cmdImport([]string{"--csv", csvPath, "--into", basePath, "--out", outPath}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("cmdImport(v1 CSV) = %d, want exitSuccess (%d); stdout=%q stderr=%q", got, exitSuccess, stdout.String(), stderr.String())
+	}
+	got, err := codeplug.Load(outPath)
+	if err != nil {
+		t.Fatalf("codeplug.Load(output): %v", err)
+	}
+	if state := got.Channels[0].Data.Filter.State; state != codeplug.Absent {
+		t.Errorf("saved filter state = %q, want Absent — the IC-7610 reaches filter, and the v1 file's header has no column for it at all", state)
+	}
+
+	var said int
+	for _, issue := range codeplug.Validate(got, caps) {
+		if issue.Slot == "001" && issue.Field == spec.FieldFilter && issue.Severity == codeplug.SeverityError {
+			said++
+		}
+	}
+	if said != 1 {
+		t.Errorf("Validate(saved file, IC-7610 caps) reported %d slot-001 filter errors, want exactly 1 (%q)", said, codeplug.Validate(got, caps))
+	}
+}
+
+// TestCmdImport_CSVExplicitUnavailableTierFieldStaysUnavailable is the
+// regression this fix exists for (reported against the app's own
+// export/import round trip on TS-590S/SG and TS-870S, all of which
+// reach tx_frequency): re-importing THIS PROGRAM'S OWN CSV export —
+// always the full version-3 column set — must leave an explicit "n/a"
+// cell exactly as it reads, never promote it to Absent just because the
+// named radio can reach the field. The file's column IS present; only a
+// genuinely ABSENT column may reopen.
+func TestCmdImport_CSVExplicitUnavailableTierFieldStaysUnavailable(t *testing.T) {
+	radio, _ := icomRadioInfo(t)
+	base := buildIcomBase(radio)
+	source := buildIcomBase(radio)
+	// tone_mode Known forces csvio.Export to write the tier column group
+	// at all (a channel whose every tier field is Unavailable needs no
+	// column — Export omits the group entirely, RepresentableByOmission
+	// — which would make this fixture a genuine v1-equivalent file
+	// instead of the "column present, cell explicit" case under test).
+	// ToneMode is one of the four fields the IC-7610 reaches, alongside
+	// Filter (icomRadioInfo/buildIcomBase's own doc comment).
+	source.Channels[0].Data.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "OFF"}
+	source.Channels[0].Data.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	csvPath := exportCSVFixture(t, source.Channels)
+
+	basePath := saveFixture(t, base, "base.json")
+	outPath := filepath.Join(t.TempDir(), "out.json")
+	var stdout, stderr bytes.Buffer
+	if got := cmdImport([]string{"--csv", csvPath, "--into", basePath, "--out", outPath}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("cmdImport(explicit n/a) = %d, want exitSuccess (%d); stdout=%q stderr=%q", got, exitSuccess, stdout.String(), stderr.String())
+	}
+	got, err := codeplug.Load(outPath)
+	if err != nil {
+		t.Fatalf("codeplug.Load(output): %v", err)
+	}
+	if state := got.Channels[0].Data.Filter.State; state != codeplug.Unavailable {
+		t.Errorf("saved filter state = %q, want Unavailable unchanged — the CSV's column was present with an explicit \"n/a\" cell, a statement the file makes, not a missing column", state)
+	}
+}
+
 // TestCmdImport_CSVUnrecognisedFileModelNormalisesNothing pins the other
 // half of the same rule, mirroring loadCodeplugStrict and app/fileio.go's
 // normaliseTierFieldsForOwnModel: a file naming a model this build does
