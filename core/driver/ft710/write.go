@@ -304,7 +304,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// Build BOTH frames before any wire traffic, so a mapping/validation
 	// failure in either can still refuse the whole write cleanly.
-	mwCmd, mtCmd, err := buildWriteCommands(s.dialect, ch)
+	mwCmd, mtCmd, err := buildWriteCommands(s.dialect, s.caps, ch)
 	if err != nil {
 		return res, err
 	}
@@ -352,7 +352,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 // frames, refusing (typed, via *driver.WriteRefusedError) any value the
 // codec cannot express. Called only after WriteChannel's capability gate
 // has passed.
-func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err error) {
+func buildWriteCommands(dialect cat.Dialect, caps spec.Capabilities, ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err error) {
 	sl, err := dialect.ParseSlot(ch.Slot)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
@@ -436,15 +436,29 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 	// read-only, so the capability gate refused them already;
 	// cat.Dialect.BuildMWSet would reject their slots too (its own
 	// writableSlot rule).
+	// Defence-in-depth, independent of codeplug.Validate having already
+	// run: caps.MaxFreqHz (75 MHz) is this radio's own documented
+	// general-coverage ceiling, narrower than the codec's nine-digit wire
+	// width below, so it must be checked here too rather than assumed
+	// unreachable. Mirrors ft991a's buildWriteCommand (same package
+	// shape, same yaesu.Params.CheckFreqRange rung).
+	if data.FreqHz < caps.MinFreqHz || data.FreqHz > caps.MaxFreqHz {
+		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
+			Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency},
+			Reason: fmt.Sprintf("frequency %d Hz is outside this radio's storable range %d-%d Hz", data.FreqHz, caps.MinFreqHz, caps.MaxFreqHz),
+		}
+	}
+
 	// The ONE checked conversion between the neutral model's uint64
 	// frequency and this protocol's uint32 (design D4, item 7):
 	// core/cat stays uint32 because a NEWCAT memory frame carries nine
 	// digits and can express nothing wider, so a bare cast here would
 	// truncate an out-of-range value into a plausible small one and send
-	// it. The arm is unreachable for this radio — Validate has already
-	// refused anything above its 75 MHz ceiling — and it is a refusal,
-	// not a cast, so it stays unreachable by construction rather than by
-	// habit.
+	// it. The caps check above already refused anything above this
+	// radio's own 75 MHz ceiling, well inside the codec's nine-digit
+	// width, so this arm stays unreachable for the FT-710 — but it is a
+	// refusal, not a cast, so a codec shared with a wider-range receiver
+	// stays safe too.
 	freqHz, err := cat.MemoryFreqHz(data.FreqHz)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: err.Error()}

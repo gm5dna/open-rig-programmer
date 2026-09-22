@@ -450,6 +450,36 @@ func TestReadChannel_TenGigahertzSurvivesTheCodeplugRoundTrip(t *testing.T) {
 	}
 }
 
+// TestReadChannel_RefusesFrequencyAboveCeiling pins the read-side half of
+// the rule that a driver must not construct a channel codeplug.Validate
+// will immediately refuse: a read must not surface an RX frequency above
+// this radio's own caps.MaxFreqHz (10.5 GHz), matching the refusal
+// write.go's rung 5b already makes for the identical condition. The wide
+// (6-byte) frequency form can encode a value this far past the ceiling
+// with room to spare, so the record itself is well-formed.
+func TestReadChannel_RefusesFrequencyAboveCeiling(t *testing.T) {
+	t.Parallel()
+	hz := uint64(10_500_000_001)
+	var img radioImage
+	img.idToken = testToken
+	img.records = map[wireAddr][]byte{
+		{0, 0}: goldenRecord(hz, 6).build(),
+	}
+
+	_, s := openFor(t, img)
+	_, err := s.ReadChannel(context.Background(), "G01-001")
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("ReadChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if want := fmt.Sprintf("%d Hz is outside what this radio is declared to store, %d ~ %d Hz (ASSUMED as memory-record limits: ic905.min_storable_hz, lift ic905-R-05; ic905.max_storable_hz, lift ic905-R-06)", hz, uint64(144_000_000), uint64(10_500_000_000)); want != wre.Reason {
+		t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [frequency]", wre.Fields)
+	}
+}
+
 // TestReadChannel_TheGoldensToneMapsToKnown885 and
 // TestReadChannel_AZeroToneMapsToUnknownNotKnown pin both directions of
 // ruling T1(3).

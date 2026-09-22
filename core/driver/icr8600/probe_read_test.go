@@ -5,6 +5,7 @@ package icr8600
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -244,4 +245,29 @@ func bytesOf(value byte, n int) []byte {
 		b[i] = value
 	}
 	return b
+}
+
+// TestReadChannel_RefusesFrequencyAboveCeiling pins checkFrequencyWidth,
+// read.go's mirror of write.go's own five-byte packed-BCD field-width
+// rung. decodeBCDNumber's strict nibble check (core/civ/bcd.go) makes
+// this unreachable via any real wire record — see the function's own doc
+// comment — so the boundary is pinned directly rather than through a
+// scripted radio.
+func TestReadChannel_RefusesFrequencyAboveCeiling(t *testing.T) {
+	if err := checkFrequencyWidth("G00-000", 9_999_999_999); err != nil {
+		t.Errorf("checkFrequencyWidth at the ceiling = %v, want nil (the ceiling itself is a valid five-byte BCD value)", err)
+	}
+
+	hz := uint64(10_000_000_000)
+	err := checkFrequencyWidth("G00-000", hz)
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("checkFrequencyWidth = %v, want a *driver.WriteRefusedError", err)
+	}
+	if want := fmt.Sprintf("%d Hz exceeds the five-byte packed-BCD frequency field", hz); wre.Reason != want {
+		t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [frequency]", wre.Fields)
+	}
 }
