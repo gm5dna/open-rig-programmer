@@ -47,6 +47,15 @@ func cmdDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if candidate == nil {
 		return code
 	}
+	// Same gap as the baseline check below, mirrored: a candidate FILE
+	// saved from a partial ReadAll has the same unreturned-slot hole as a
+	// partial baseline, and Diff's inventory check cannot tell it from an
+	// ordinary unchanged/added slot either. Checked before openSession so
+	// a bad file is refused without touching the radio.
+	if n := len(candidate.Radio.FailedSlots); n > 0 {
+		fmt.Fprintf(stderr, "rigprog diff: %s is a partial read (%d slot(s) failed); re-read the radio and try again\n", file, n)
+		return exitError
+	}
 
 	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
 	if err != nil {

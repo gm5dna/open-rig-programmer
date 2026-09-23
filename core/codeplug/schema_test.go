@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -268,6 +269,73 @@ func TestLoadV5_MigratesToSchema6WithNilFailedSlots(t *testing.T) {
 	}
 	if cp.Schema != CurrentSchema {
 		t.Errorf("Schema = %d, want %d", cp.Schema, CurrentSchema)
+	}
+	if cp.Radio.FailedSlots != nil {
+		t.Errorf("Radio.FailedSlots = %+v, want nil", cp.Radio.FailedSlots)
+	}
+}
+
+// TestLoadV5_FailedSlotsKeyRejected pins the fix for the schema-boundary
+// gap Codex flagged: codeplugV5 used to embed the LIVE RadioInfo, which
+// already has FailedSlots (schema 6) — a JSON key with a matching Go
+// field is exactly what DisallowUnknownFields does NOT reject, so a
+// schema-5 file carrying "failed_slots" decoded straight through.
+// radioInfoV5 has no such field, so the same file must now be refused as
+// an unknown field.
+func TestLoadV5_FailedSlotsKeyRejected(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.json")
+	body := `{"schema":5,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() error = nil, want non-nil: schema 5 must not accept failed_slots")
+	}
+	var ufe *UnknownFieldError
+	if !errors.As(err, &ufe) {
+		t.Fatalf("errors.As(err, *UnknownFieldError) = false, want true (err = %v)", err)
+	}
+	if ufe.Field != "failed_slots" {
+		t.Errorf("UnknownFieldError.Field = %q, want %q", ufe.Field, "failed_slots")
+	}
+}
+
+// TestLoadV5_OrdinaryFilePreservesAllRadioFields is the companion to the
+// rejection test above: an ordinary schema-5 file — one populating every
+// field radioInfoV5 now carries, not just the three the basic golden
+// exercises — must still load with every one of them intact, proving the
+// v5-to-live RadioInfo conversion in loadV5 dropped nothing.
+func TestLoadV5_OrdinaryFilePreservesAllRadioFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.json")
+	body := `{"schema":5,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","port":"/dev/cu.usbserial-X","usb_serial":"ABC123","firmware_confirmed":"1.05","region":"UK","baseline_digest":"deadbeef"},"channels":[]}`
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cp, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil for an ordinary schema-5 file", err)
+	}
+	readAt, err := time.Parse(time.RFC3339, "2026-07-10T12:00:00Z")
+	if err != nil {
+		t.Fatalf("time.Parse() error = %v", err)
+	}
+	want := RadioInfo{
+		Model:             "FT-710",
+		CATID:             "0800",
+		ReadAt:            readAt,
+		Port:              "/dev/cu.usbserial-X",
+		USBSerial:         "ABC123",
+		FirmwareConfirmed: "1.05",
+		Region:            "UK",
+		BaselineDigest:    "deadbeef",
+	}
+	if !reflect.DeepEqual(cp.Radio, want) {
+		t.Errorf("Radio = %+v, want %+v", cp.Radio, want)
 	}
 	if cp.Radio.FailedSlots != nil {
 		t.Errorf("Radio.FailedSlots = %+v, want nil", cp.Radio.FailedSlots)
