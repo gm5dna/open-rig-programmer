@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -139,6 +140,13 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	data, err := s.channelData(rec)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
+	}
+	// Mirrors mandatoryFields' own rung (write.go): a read must not
+	// construct an RX frequency this radio's own frequencyInRange refuses.
+	// TxFreqHz gets no such check here, matching codeplug.Validate, which
+	// only ever bounds the RX field.
+	if err := s.frequencyInRange(data.FreqHz); err != nil {
+		return codeplug.Channel{}, &driver.WriteRefusedError{Slot: slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: err.Error()}
 	}
 	return codeplug.Channel{Slot: slot, Data: data}, nil
 }

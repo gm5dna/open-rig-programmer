@@ -35,4 +35,10 @@ var params = yaesu.Params{
 
 	Probe:     yaesu.ProbeMT,
 	MTRetries: 1,
+
+	// caps.go's 30 kHz-75 MHz MinFreqHz/MaxFreqHz (ASSUMED, register
+	// entry) is narrower than the codec's nine-digit wire width, which
+	// otherwise would have let a well-formed but out-of-range frequency
+	// reach the wire.
+	CheckFreqRange: true,
 }
