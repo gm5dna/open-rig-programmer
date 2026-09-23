@@ -29,9 +29,13 @@ import (
 // TestWriteChannel_IcomTierFieldKnown, the pin this branch must not
 // break.
 //
-// THERE IS NO FieldTag/FieldTagDisplay HERE: no driver migrated onto this
-// body so far has a tag/name route over CAT at all (ftdx5000's
-// RequestConditionalTagFields wires that in when it migrates).
+// RequestConditionalTagFields — ftdx5000 only — additionally asks for Tag
+// when non-empty, TagDisplay when Known, and ScanSkip when Known: this
+// radio has no tag/display/scan-skip route over CAT at all, so an ordinary
+// write (every read of it always leaves these unset) must not be refused
+// for asking after a field it never touches, but a codeplug written for a
+// tag-bearing radio IS refused rather than silently dropped. No other
+// driver migrated onto this body requests any of the three.
 func mrRequestedFields(p *MRParams, data codeplug.ChannelData) []spec.Field {
 	fields := []spec.Field{
 		spec.FieldFrequency,
@@ -45,6 +49,17 @@ func mrRequestedFields(p *MRParams, data codeplug.ChannelData) []spec.Field {
 		fields = append(fields, spec.FieldCTCSSTone)
 	case p.ToneWrite == ToneOptionalIfKnown && data.CTCSSTone.State == codeplug.Known:
 		fields = append(fields, spec.FieldCTCSSTone)
+	}
+	if p.RequestConditionalTagFields {
+		if data.Tag != "" {
+			fields = append(fields, spec.FieldTag)
+		}
+		if data.TagDisplay.State == codeplug.Known {
+			fields = append(fields, spec.FieldTagDisplay)
+		}
+		if data.ScanSkip.State == codeplug.Known {
+			fields = append(fields, spec.FieldScanSkip)
+		}
 	}
 	if p.SkipTierFields {
 		return fields
@@ -139,6 +154,26 @@ func BuildMWCommand(dialect cat.Dialect, caps spec.Capabilities, p *MRParams, ch
 		return cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
 	}
 	data := *ch.Data
+
+	// ExplicitTagRefusal — ftdx5000 only. This radio's record has no field
+	// after P10 Shift at all: a non-empty tag or a Known tag_display cannot
+	// be expressed and must be refused rather than silently dropped. Ahead
+	// of every other value-level check below, matching the pre-migration
+	// buildWriteCommand's own order.
+	if p.ExplicitTagRefusal {
+		if data.Tag != "" {
+			return cat.Command{}, &driver.WriteRefusedError{
+				Slot: ch.Slot, Fields: []spec.Field{spec.FieldTag},
+				Reason: "this radio's CAT command set has no channel-name/tag route at all (matrix §2/§3): a non-empty tag cannot be written",
+			}
+		}
+		if data.TagDisplay.State == codeplug.Known {
+			return cat.Command{}, &driver.WriteRefusedError{
+				Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay},
+				Reason: "this radio's 27-byte record has no display flag (matrix §2): a Known tag_display cannot be written",
+			}
+		}
+	}
 
 	mode, ok := dialect.ModeByName(data.Mode)
 	if !ok {

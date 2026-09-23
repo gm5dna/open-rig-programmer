@@ -21,14 +21,10 @@ import (
 // overlap: a merged struct would drag Probe/MTRetries/DescriptorVersion
 // into every MW-only driver for nothing.
 //
-// AN UNSET FIELD MEANS "NOT THIS RADIO", same convention as Params:
-// ExplicitTagRefusal and RequestConditionalTagFields are declared here
-// for the full 7-driver design (spec v2 §2) but are NOT YET READ by
-// ReadChannel/MRWriteChannel/BuildMWCommand below — ftdx5000, the one
-// driver that needs either, adds its branch to the shared body when it
-// migrates, per the plan's step order. SkipTierFields and
-// ScanSkipUnavailable ARE read (ftdx9000, the migration that needed
-// them first).
+// AN UNSET FIELD MEANS "NOT THIS RADIO", same convention as Params. Every
+// field is now read by ReadChannel/MRWriteChannel/BuildMWCommand below —
+// ExplicitTagRefusal and RequestConditionalTagFields (ftdx5000, the last
+// migration) were the final two.
 type MRParams struct {
 	// Name is the error prefix every message this package mints carries,
 	// and the Model KindMismatchError names, e.g. "ftdx1200".
@@ -57,7 +53,9 @@ type MRParams struct {
 	WriteKind func(cat.Dialect) byte
 	// EraseReason is the refusal text for a write of an empty channel.
 	EraseReason string
-	// ExplicitTagRefusal — ftdx5000 only. Not yet read anywhere below.
+	// ExplicitTagRefusal — ftdx5000 only. When true, BuildMWCommand refuses
+	// a non-empty Tag / Known TagDisplay itself, with model-specific
+	// wording, ahead of its other value-level checks.
 	ExplicitTagRefusal bool
 	// SkipTierFields — ftdx9000 only. When true, mrRequestedFields skips
 	// the TierRequestedFields loop entirely: this radio's 27-byte record
@@ -65,8 +63,9 @@ type MRParams struct {
 	// request list never asked after them (spec-v2 finding 9) — a Known
 	// one is accepted and silently dropped, not refused.
 	SkipTierFields bool
-	// RequestConditionalTagFields — ftdx5000 only. Not yet read anywhere
-	// below.
+	// RequestConditionalTagFields — ftdx5000 only. When true,
+	// mrRequestedFields appends Tag if non-empty, TagDisplay if Known,
+	// ScanSkip if Known (no other driver ever requests any of the three).
 	RequestConditionalTagFields bool
 	// ScanSkipUnavailable — ftdx5000, ftdx9000 only. When true,
 	// ReadChannel reports ScanSkip as Unavailable rather than Unknown:

@@ -132,21 +132,28 @@ func TestWriteChannel_ScanSkipKnownRefused(t *testing.T) {
 	}
 }
 
-// TestBuildWriteCommand_TagRefused pins ExplicitTagRefusal's own wording:
-// buildWriteCommand refuses a non-empty Tag itself, ahead of the value-level
+// TestBuildMWCommand_TagRefused pins ExplicitTagRefusal's own wording:
+// buildMWCommand refuses a non-empty Tag itself, ahead of the value-level
 // checks that follow it, before the caps-driven "not write-Supported"
 // refusal (which fires first via WriteChannel today, since FieldTag is the
-// zero FieldSupport) ever gets a chance to. Called directly, bypassing
-// WriteChannel's capability walk, the same way TestBuildWriteCommand_
-// ToneRoundTrips already does.
-func TestBuildWriteCommand_TagRefused(t *testing.T) {
+// zero FieldSupport) ever gets a chance to. Called directly via the Session
+// method, bypassing WriteChannel's capability walk, the same way
+// TestBuildMWCommand_ToneRoundTrips already does. Renamed from
+// TestBuildWriteCommand_TagRefused: the pre-migration package-level
+// buildWriteCommand(dialect, ch) became the Session method
+// s.buildMWCommand(ch) the shared core migration uses, the same shape
+// every other migrated sibling's equivalent test already keeps
+// (TestBuildMWCommand_UnknownModeRefuses, ftdx1200/ftdx3000). The
+// assertions are unchanged from the pin commit.
+func TestBuildMWCommand_TagRefused(t *testing.T) {
+	_, s := openSession(t, Simulated, slotImage{})
 	data := populatedChannel(14_250_000)
 	data.Tag = "GB3TEST"
-	_, err := buildWriteCommand(dialect, codeplug.Channel{Slot: "010", Data: data})
+	_, err := s.buildMWCommand(codeplug.Channel{Slot: "010", Data: data})
 
 	var refused *driver.WriteRefusedError
 	if !errors.As(err, &refused) {
-		t.Fatalf("buildWriteCommand with a non-empty Tag = %v, want *driver.WriteRefusedError", err)
+		t.Fatalf("buildMWCommand with a non-empty Tag = %v, want *driver.WriteRefusedError", err)
 	}
 	if len(refused.Fields) != 1 || refused.Fields[0] != spec.FieldTag {
 		t.Errorf("refused.Fields = %v, want [FieldTag]", refused.Fields)
@@ -157,17 +164,19 @@ func TestBuildWriteCommand_TagRefused(t *testing.T) {
 	}
 }
 
-// TestBuildWriteCommand_TagDisplayKnownRefused pins ExplicitTagRefusal's
-// TagDisplay wording, the same way TestBuildWriteCommand_TagRefused pins
-// its Tag wording.
-func TestBuildWriteCommand_TagDisplayKnownRefused(t *testing.T) {
+// TestBuildMWCommand_TagDisplayKnownRefused pins ExplicitTagRefusal's
+// TagDisplay wording, the same way TestBuildMWCommand_TagRefused pins its
+// Tag wording. Renamed from TestBuildWriteCommand_TagDisplayKnownRefused
+// (see that renaming's own comment above); assertions unchanged.
+func TestBuildMWCommand_TagDisplayKnownRefused(t *testing.T) {
+	_, s := openSession(t, Simulated, slotImage{})
 	data := populatedChannel(14_250_000)
 	data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: true}
-	_, err := buildWriteCommand(dialect, codeplug.Channel{Slot: "010", Data: data})
+	_, err := s.buildMWCommand(codeplug.Channel{Slot: "010", Data: data})
 
 	var refused *driver.WriteRefusedError
 	if !errors.As(err, &refused) {
-		t.Fatalf("buildWriteCommand with TagDisplay Known = %v, want *driver.WriteRefusedError", err)
+		t.Fatalf("buildMWCommand with TagDisplay Known = %v, want *driver.WriteRefusedError", err)
 	}
 	if len(refused.Fields) != 1 || refused.Fields[0] != spec.FieldTagDisplay {
 		t.Errorf("refused.Fields = %v, want [FieldTagDisplay]", refused.Fields)
@@ -181,7 +190,7 @@ func TestBuildWriteCommand_TagDisplayKnownRefused(t *testing.T) {
 // TestWriteChannel_KindByteHardcodedVFO pins Q2: the MW Set frame's P7 kind
 // byte is always cat.KindVFO. Offset 21 is this dialect's own memKindOff
 // (P1 3 digits + P2 8 digits + P3 sign/4-digit mag + P4 + P5 + P6, matching
-// the P9 offset TestBuildWriteCommand_ToneRoundTrips already addresses at
+// the P9 offset TestBuildMWCommand_ToneRoundTrips already addresses at
 // frame[23:25], two bytes further on past P8).
 func TestWriteChannel_KindByteHardcodedVFO(t *testing.T) {
 	p, sess := openSession(t, Simulated, slotImage{})
@@ -212,16 +221,19 @@ func TestWriteChannel_CTCSSToneMustBeKnown(t *testing.T) {
 	}
 }
 
-// TestBuildWriteCommand_ToneRoundTrips is a pure-function check: every
+// TestBuildMWCommand_ToneRoundTrips is a pure-function check: every
 // standard chart tone builds an MW frame carrying its own two-digit index.
-func TestBuildWriteCommand_ToneRoundTrips(t *testing.T) {
+// Renamed from TestBuildWriteCommand_ToneRoundTrips (see
+// TestBuildMWCommand_TagRefused's comment); assertions unchanged.
+func TestBuildMWCommand_ToneRoundTrips(t *testing.T) {
+	_, s := openSession(t, Simulated, slotImage{})
 	tones := spec.StandardCTCSSTones()
 	for i, tone := range tones {
 		data := populatedChannel(14_250_000)
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: tone}
-		cmd, err := buildWriteCommand(dialect, codeplug.Channel{Slot: "010", Data: data})
+		cmd, err := s.buildMWCommand(codeplug.Channel{Slot: "010", Data: data})
 		if err != nil {
-			t.Fatalf("buildWriteCommand tone index %d = %v, want nil", i, err)
+			t.Fatalf("buildMWCommand tone index %d = %v, want nil", i, err)
 		}
 		frame := string(cmd.Bytes())
 		want := fmt.Sprintf("%02d", i)
