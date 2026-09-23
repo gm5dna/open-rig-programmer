@@ -16,10 +16,18 @@ import (
 )
 
 // mrRequestedFields lists the spec.Fields an MW write of data asks for:
-// the five the bare frame always carries, plus FieldCTCSSTone under
-// ToneOptionalIfKnown when the channel's tone is Known (never under
-// ToneNeverRequested), plus the Icom tier's seventeen (shared,
-// TierRequestedFields), each only when Known.
+// the five the bare frame always carries, plus FieldCTCSSTone — under
+// ToneOptionalIfKnown only when the channel's tone is Known, under
+// ToneRequiredKnown unconditionally (P9 is a live byte on every frame
+// this radio has no "leave it alone" encoding for — ftdx9000's own doc
+// comment before this migration), never under ToneNeverRequested — plus
+// the Icom tier's seventeen (shared, TierRequestedFields), each only
+// when Known, UNLESS SkipTierFields is set: ftdx9000's fixed 6-field
+// request list never asks after any of them at all (spec-v2 finding 9),
+// so a Known tier field is accepted and silently dropped rather than
+// refused — see core/driver/ftdx9000/write_test.go's
+// TestWriteChannel_IcomTierFieldKnown, the pin this branch must not
+// break.
 //
 // THERE IS NO FieldTag/FieldTagDisplay HERE: no driver migrated onto this
 // body so far has a tag/name route over CAT at all (ftdx5000's
@@ -32,8 +40,14 @@ func mrRequestedFields(p *MRParams, data codeplug.ChannelData) []spec.Field {
 		spec.FieldCTCSSState,
 		spec.FieldShift,
 	}
-	if p.ToneWrite == ToneOptionalIfKnown && data.CTCSSTone.State == codeplug.Known {
+	switch {
+	case p.ToneWrite == ToneRequiredKnown:
 		fields = append(fields, spec.FieldCTCSSTone)
+	case p.ToneWrite == ToneOptionalIfKnown && data.CTCSSTone.State == codeplug.Known:
+		fields = append(fields, spec.FieldCTCSSTone)
+	}
+	if p.SkipTierFields {
+		return fields
 	}
 	for _, t := range TierRequestedFields {
 		if t.Present(data) {
@@ -156,15 +170,25 @@ func BuildMWCommand(dialect cat.Dialect, caps spec.Capabilities, p *MRParams, ch
 		}
 	}
 
-	// The P9 tone index: only asked for under ToneOptionalIfKnown with a
-	// Known tone (mrRequestedFields, above), so a Known tone reaching
-	// here has already passed the write-Supported capability gate. It
-	// must also already be one of this session's own CTCSSTones
-	// (driver.CheckFieldStates, upstream in MRWriteChannel), so the
-	// lookup below cannot fail on a well-formed write — but it is not
-	// re-derived here on faith.
+	// The P9 tone index. Under ToneRequiredKnown (ftdx9000, ftdx5000) P9
+	// is a live byte on every frame with no "leave it alone" encoding, so
+	// a non-Known tone is refused outright, before the lookup, rather
+	// than merely left off the request as ToneOptionalIfKnown's channels
+	// are. Under ToneOptionalIfKnown a Known tone reaching here has
+	// already passed the write-Supported capability gate (mrRequestedFields,
+	// above). Either way it must also already be one of this session's
+	// own CTCSSTones (driver.CheckFieldStates, upstream in
+	// MRWriteChannel), so the lookup below cannot fail on a well-formed
+	// write — but it is not re-derived here on faith.
+	if p.ToneWrite == ToneRequiredKnown && data.CTCSSTone.State != codeplug.Known {
+		return cat.Command{}, &driver.WriteRefusedError{
+			Slot: ch.Slot, Fields: []spec.Field{spec.FieldCTCSSTone},
+			Reason: fmt.Sprintf("ctcss tone FieldState is %q, not %q; P9 is a live tone-table index on every MW frame with no \"leave it alone\" encoding, so only a Known value is ever sent", data.CTCSSTone.State, codeplug.Known),
+		}
+	}
 	var toneIndex uint8
-	if p.ToneWrite == ToneOptionalIfKnown && data.CTCSSTone.State == codeplug.Known {
+	toneRequested := p.ToneWrite == ToneRequiredKnown || (p.ToneWrite == ToneOptionalIfKnown && data.CTCSSTone.State == codeplug.Known)
+	if toneRequested {
 		idx := slices.Index(caps.CTCSSTones, data.CTCSSTone.Value)
 		if idx < 0 {
 			return cat.Command{}, &driver.WriteRefusedError{
