@@ -122,20 +122,20 @@ export function tierColumnFor(column) {
  *
  * The asymmetry is deliberate and is the tier's whole frontend
  * contract. The ten pre-tier columns stay UNCONDITIONAL — their per-CELL
- * rules are state-based (isCellEditable), and re-deriving their
- * VISIBILITY from capabilities is a separate decision nobody has taken —
- * while a tier column has no such history and would be meaningless on a
- * radio with no such field. On the six Yaesu models Fields is empty on
- * every bank, so this returns exactly COLUMNS and their grid does not
- * change by so much as a column; on the IC-7610 it appends that radio's
- * own four.
+ * rules are state-based (isCellEditable) — with one exception below
+ * (CTCSS); VISIBILITY re-derived from capabilities for the other nine is
+ * a separate decision nobody has taken — while a tier column has no such
+ * history and would be meaningless on a radio with no such field. On the
+ * six Yaesu models Fields is empty on every bank, so this returns
+ * exactly COLUMNS and their grid does not change by so much as a
+ * column; on the IC-7610 it appends that radio's own four.
  *
  * A missing or hand-built bank (no Fields) answers the same way an empty
  * one does: no tier columns. Refusing to invent a column for a radio
  * that has not said it has the field is the same posture as the rest of
  * this module.
  *
- * The one exception to "the ten pre-tier columns stay UNCONDITIONAL"
+ * The other exception to "the ten pre-tier columns stay UNCONDITIONAL"
  * above: Tag. A NoTag model (nameless-capability milestone) has no
  * channel-name route over CAT at all, and GetUISpec already serves
  * TagMaxBytes: 0 for one (uispec.go sets it straight from
@@ -145,12 +145,22 @@ export function tierColumnFor(column) {
  * unchanged ten; a caller that passes a UISpec with TagMaxBytes <= 0
  * gets Tag hidden, not merely read-only (Stuart's decision, spec.md §7
  * Q1).
+ *
+ * CTCSS is now decided too (small-followups patch): an Icom/Kenwood
+ * radio expresses the tone-state identity as FieldToneMode rather than
+ * FieldCTCSSState, so app/uispec.go serves CTCSSStateOptions empty for
+ * it (capsExpressesCTCSSState) — an always-visible ctcss column would
+ * render a dead, unusable empty `<select>` (ChannelGrid.svelte's editor
+ * iterates that same list). `uiSpec` carries the answer already; no new
+ * capability field is needed. A caller that omits `uiSpec` keeps ctcss,
+ * same convention as the Tag check above.
  * @param {BankView | null | undefined} bank
  * @param {UISpecView | null | undefined} [uiSpec]
  * @returns {Column[]}
  */
 export function columnsFor(bank, uiSpec) {
-	const base = uiSpec != null && (uiSpec.TagMaxBytes ?? 0) <= 0 ? COLUMNS.filter((c) => c.id !== 'tag') : COLUMNS
+	let base = uiSpec != null && (uiSpec.TagMaxBytes ?? 0) <= 0 ? COLUMNS.filter((c) => c.id !== 'tag') : COLUMNS
+	if (uiSpec != null && (uiSpec.CTCSSStateOptions?.length ?? 0) === 0) base = base.filter((c) => c.id !== 'ctcss')
 	const fields = bank?.Fields
 	if (!fields || fields.length === 0) return base
 	const present = new Set(fields)
@@ -403,7 +413,11 @@ export function newChannelData(uiSpec, bank, freqHz) {
 		clar_hz: 0,
 		rx_clar: false,
 		tx_clar: false,
-		ctcss: uiSpec.CTCSSStateOptions[0],
+		// Omitted, not set to undefined, when the radio has no CTCSS state
+		// list to draw a default from (Icom/Kenwood — see columnsFor's own
+		// doc comment): matches this module's convention elsewhere of
+		// leaving a key absent for a field the radio does not reach.
+		...(uiSpec.CTCSSStateOptions?.length > 0 ? { ctcss: uiSpec.CTCSSStateOptions[0] } : {}),
 		ctcss_tone: { state: 'unknown' },
 		shift: uiSpec.ShiftOptions[0],
 		tag: '',
