@@ -1308,20 +1308,24 @@ function tierData(extra = {}) {
 /** The row every test edits, in the served Display spelling. */
 const ROW = 'G00-000'
 
-// The ten pre-tier columns are 0..9 (COLUMNS is unconditional); the bank's
-// own fourteen follow in TIER_COLUMNS order (columnsFor).
-const DUPLEX = 10
-const OFFSET = 11
-const TONE_MODE = 12
-const TONE_RX = 13
-const DTCS_CODE = 14
-const DTCS_POLARITY = 15
-const FILTER = 16
-const TUNING_STEP = 18
-const ATTENUATOR = 20
-const PREAMP = 21
-const ANTENNA = 22
-const IP_PLUS = 23
+// Nine pre-tier columns, not ten: TIER_UI_SPEC's CTCSSStateOptions is
+// empty (a real Icom/Kenwood radio, per its own doc comment above), and
+// columnsFor now hides the core ctcss column for such a UISpec
+// (small-followups patch) — the bug that column's empty, unusable
+// `<select>` was. The bank's own fourteen follow in TIER_COLUMNS order
+// (columnsFor).
+const DUPLEX = 9
+const OFFSET = 10
+const TONE_MODE = 11
+const TONE_RX = 12
+const DTCS_CODE = 13
+const DTCS_POLARITY = 14
+const FILTER = 15
+const TUNING_STEP = 17
+const ATTENUATOR = 19
+const PREAMP = 20
+const ANTENNA = 21
+const IP_PLUS = 22
 
 /** TIER_UI_SPEC with all seven vocab-served text-kind lists populated — the
  * shape a radio like the IC-R8600 (core/driver/icr8600/caps.go) actually
@@ -1471,7 +1475,7 @@ describe('tier-column editing', () => {
 
 		// The SAME field object a paste of that text produces — one parser,
 		// shared with grid/paste.js, so the two routes cannot diverge.
-		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0], TIER_UI_SPEC)
 		const pasted = parsePasteCell(columns[DUPLEX], 'DUP+', TIER_UI_SPEC)
 		expect(pasted.ok).toBe(true)
 		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual(pasted.ok && pasted.patch.duplex)
@@ -1597,7 +1601,7 @@ describe('tier-column editing', () => {
 		// The SAME field a paste of that text would produce — parsed
 		// through parsePasteCell exactly as the other free-text tier
 		// kinds are, per ruling §4.
-		const columns = columnsFor(TIER_UI_SPEC_NO_TONES.Banks[0])
+		const columns = columnsFor(TIER_UI_SPEC_NO_TONES.Banks[0], TIER_UI_SPEC_NO_TONES)
 		const pasted = parsePasteCell(columns[TONE_RX], '100.0 Hz', TIER_UI_SPEC_NO_TONES)
 		expect(pasted.ok).toBe(true)
 		expect(updateChannelMock.mock.calls[0][0].data.tone_rx).toEqual(pasted.ok && pasted.patch.tone_rx)
@@ -1656,7 +1660,7 @@ describe('tier-column editing', () => {
 		await fireEvent.change(select, { target: { value: 'off' } })
 		await fireEvent.keyDown(select, { key: 'Enter' })
 
-		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0], TIER_UI_SPEC)
 		const pasted = parsePasteCell(columns[IP_PLUS], 'off', TIER_UI_SPEC)
 		expect(pasted.ok).toBe(true)
 		expect(updateChannelMock.mock.calls[0][0].data.ip_plus).toEqual(pasted.ok && pasted.patch.ip_plus)
@@ -1867,10 +1871,10 @@ describe('tier-column editing', () => {
 		// seventeen were in before this lane — cannot hide behind a
 		// same-kind neighbour. The seven receiver columns are only reachable
 		// on this row: no transceiver's record maps them.
-		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
-		expect(columns).toHaveLength(10 + ICR8600_TIER_FIELDS.length)
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0], TIER_UI_SPEC)
+		expect(columns).toHaveLength(9 + ICR8600_TIER_FIELDS.length)
 
-		for (let c = 10; c < columns.length; c++) {
+		for (let c = 9; c < columns.length; c++) {
 			const column = columns[c]
 			const { container, unmount } = render(ChannelGrid)
 			const cellEl = cell(container, 0, c)
