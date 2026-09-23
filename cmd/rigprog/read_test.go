@@ -308,3 +308,43 @@ func TestCmdRead_SettingsFailureLeavesOutUntouched(t *testing.T) {
 		t.Errorf("cmdRead(--settings, settings-phase failure): --out = %s, want it to not exist (err=%v)", out, err)
 	}
 }
+
+// TestCmdRead_RecordDecodeFailurePartialRead exercises the exitPartial (6)
+// path end to end: FaultGarbleReplyPayload(openExchanges+1) corrupts the
+// VERY FIRST channel's MR reply payload (see fakeradio.
+// FaultGarbleReplyPayload's doc comment), so that one slot's ReadChannel
+// returns a driver.ErrRecordDecode-wrapped error while every other slot
+// reads normally. Unlike FaultGarbleReply (which corrupts the command
+// prefix and only ever produces a fatal ErrTimeout after retries — never
+// exitPartial, see cat.PrefixLenMatcher), this fault is accepted on the
+// wire and mis-decodes, which is exactly what core/clone/read.go's
+// readAll treats as survivable: recorded into Radio.FailedSlots, the read
+// completes, and the output file is still written.
+func TestCmdRead_RecordDecodeFailurePartialRead(t *testing.T) {
+	const openExchanges = 4             // AI0, ID, MR501 (rejected), MREMG (rejected)
+	garbleExchange := openExchanges + 1 // the first slot's MR read
+
+	prevOpts := wiring.FakeSessionOpts
+	wiring.FakeSessionOpts = []fakeradio.Option{fakeradio.WithFault(fakeradio.FaultGarbleReplyPayload(garbleExchange))}
+	t.Cleanup(func() { wiring.FakeSessionOpts = prevOpts })
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "record-decode-partial.json")
+
+	var stdout, stderr bytes.Buffer
+	got := cmdRead(testCtx(t), []string{"--fake", "--out", out}, &stdout, &stderr)
+	if got != exitPartial {
+		t.Fatalf("cmdRead(garbled MR payload) = %d, want exitPartial (%d); stdout=%q stderr=%q", got, exitPartial, stdout.String(), stderr.String())
+	}
+
+	cp, err := codeplug.Load(out)
+	if err != nil {
+		t.Fatalf("codeplug.Load(%s): %v", out, err)
+	}
+	if len(cp.Radio.FailedSlots) != 1 {
+		t.Fatalf("Radio.FailedSlots = %+v, want exactly one entry", cp.Radio.FailedSlots)
+	}
+	if !strings.Contains(cp.Radio.FailedSlots[0].Reason, "could not be decoded") {
+		t.Errorf("FailedSlots[0].Reason = %q, want it to name a record-decode failure", cp.Radio.FailedSlots[0].Reason)
+	}
+}

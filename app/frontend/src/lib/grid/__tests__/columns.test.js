@@ -7,7 +7,16 @@
 // controller amendment).
 
 import { describe, it, expect } from 'vitest'
-import { COLUMNS, TIER_COLUMNS, isCellEditable, displayValue, newChannelData, cloneData, parsePasteCell } from '../columns.js'
+import {
+	COLUMNS,
+	TIER_COLUMNS,
+	columnsFor,
+	isCellEditable,
+	displayValue,
+	newChannelData,
+	cloneData,
+	parsePasteCell,
+} from '../columns.js'
 
 /** A bank whose radio DOES carry the memory frame's display flag — the
  * FT-710 shape GetUISpec serves for MEM/PMS (bankTagDisplayDefault,
@@ -99,6 +108,23 @@ describe('COLUMNS', () => {
 		expect(col('tone').field).toBe('ctcss_tone')
 		expect(col('skip').field).toBe('scan_skip')
 		expect(col('tagDisplay').field).toBe('tag_display')
+	})
+})
+
+describe('columnsFor', () => {
+	it('hides ctcss for a UISpec with no CTCSS state list (Icom/Kenwood), leaving the other nine', () => {
+		const noCtcssUiSpec = { ...uiSpec, CTCSSStateOptions: [] }
+		const ids = columnsFor(flagBank, noCtcssUiSpec).map((c) => c.id)
+		expect(ids).not.toContain('ctcss')
+		expect(ids).toEqual(COLUMNS.filter((c) => c.id !== 'ctcss').map((c) => c.id))
+	})
+
+	it('keeps ctcss when the UISpec serves a CTCSS state list (Yaesu)', () => {
+		expect(columnsFor(flagBank, uiSpec).map((c) => c.id)).toContain('ctcss')
+	})
+
+	it('keeps ctcss when no uiSpec is passed at all', () => {
+		expect(columnsFor(flagBank)).toEqual(COLUMNS)
 	})
 })
 
@@ -255,6 +281,12 @@ describe('newChannelData', () => {
 	it('copies the bank default rather than aliasing the UISpec object', () => {
 		const d = newChannelData(uiSpec, flagBank, 7100000)
 		expect(d.tag_display).not.toBe(flagBank.TagDisplayDefault)
+	})
+
+	it('omits the ctcss key entirely for a UISpec with no CTCSS state list (Icom/Kenwood)', () => {
+		const noCtcssUiSpec = { ...uiSpec, CTCSSStateOptions: [] }
+		const d = newChannelData(noCtcssUiSpec, flagBank, 7100000)
+		expect('ctcss' in d).toBe(false)
 	})
 
 	it('refuses to invent a value for a bank carrying no default at all', () => {
