@@ -1213,14 +1213,16 @@ describe('empty states', () => {
 
 const TIER_UI_SPEC = {
 	...UI_SPEC,
-	// CTCSSStateOptions is overridden to empty, unlike Tones above: the
-	// toneMode tier column reuses this very field as its vocab (Stuart's
-	// ruling — see columns.js), but a real Icom/Kenwood radio like the
-	// IC-R8600 never expresses FieldCTCSSState, so GetUISpec's own
-	// capsExpressesCTCSSState gate (app/uispec.go) leaves it empty for
-	// every radio that reaches this bank's tone_mode field. Inheriting
-	// UI_SPEC's Yaesu-shaped non-empty list here would make the toneMode
-	// column open a select no real Icom/Kenwood UISpec would ever serve.
+	// CTCSSStateOptions is overridden to empty, unlike Tones above: a real
+	// Icom/Kenwood radio like the IC-R8600 never expresses FieldCTCSSState,
+	// so GetUISpec's own capsExpressesCTCSSState gate (app/uispec.go)
+	// leaves it empty for every such radio — inheriting UI_SPEC's
+	// Yaesu-shaped non-empty list here would misrepresent what a real
+	// Icom/Kenwood UISpec serves. The toneMode tier column reads
+	// ToneModeOptions instead (app/uispec.go's capsExpressesToneMode
+	// mirror), left unset here — same as every other vocab field — so
+	// this fixture continues to exercise the free-text fallback; see
+	// TIER_UI_SPEC_WITH_VOCAB below for the populated case.
 	CTCSSStateOptions: [],
 	Banks: [
 		{
@@ -1305,16 +1307,21 @@ const PREAMP = 21
 const ANTENNA = 22
 const IP_PLUS = 23
 
-/** TIER_UI_SPEC with all six vocab-served text-kind lists populated — the
+/** TIER_UI_SPEC with all seven vocab-served text-kind lists populated — the
  * shape a radio like the IC-R8600 (core/driver/icr8600/caps.go) actually
  * serves, unlike TIER_UI_SPEC above, which carries none of them (that
  * fixture is deliberately UI_SPEC's own FT-710-shaped scaffolding — see
  * its doc comment). Exercises the new select arm this task adds; the
  * bare TIER_UI_SPEC above continues to exercise the free-text fallback
- * for a radio that declares no such vocabulary, unchanged. */
+ * for a radio that declares no such vocabulary, unchanged. ToneModeOptions
+ * carries the IC-R8600's own wire-form spellings (core/driver/icr8600) —
+ * CTCSSStateOptions stays empty (this radio expresses FieldToneMode, not
+ * FieldCTCSSState), so the two never disagree about which list serves
+ * this column. */
 const TIER_UI_SPEC_WITH_VOCAB = {
 	...TIER_UI_SPEC,
 	DuplexOptions: ['OFF', 'DUP+', 'DUP-'],
+	ToneModeOptions: ['OFF', 'TONE', 'TSQL'],
 	DTCSPolarities: ['NN', 'NR', 'RN', 'RR'],
 	Filters: ['FIL1', 'FIL2', 'FIL3'],
 	TuningSteps: ['100 Hz', '1 kHz', '5 kHz'],
@@ -1938,9 +1945,46 @@ describe('tier-column editing', () => {
 		expect(options[2]).toHaveAttribute('value', 'DUP-')
 	})
 
-	it('DTCS polarity, filter, tuning step, preamp and antenna each open the same vocab-served select', async () => {
+	// A Known value the served vocabulary no longer lists — an older
+	// firmware/vocabulary, a paste, or a file import — must not be
+	// silently replaced by whichever option the browser happens to
+	// preselect. Without this option present, blurring the untouched
+	// select would commit vocab[0] (Codex P2 finding, tier-field-selects
+	// milestone): a <select> with no matching `selected` option defaults
+	// to its first, and commitSelectEditor's vocab branch only no-ops
+	// when the value it receives still equals the current one.
+	it('a Known value absent from the served vocabulary is preserved as its own option, so blur commits nothing', async () => {
+		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ duplex: { state: 'known', value: 'DUP+++' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = /** @type {HTMLSelectElement} */ (screen.getByRole('combobox', { name: `Duplex, ${ROW}` }))
+		// The stale value is present, selected, and listed ahead of the
+		// real vocabulary (same position the current-value arm renders in
+		// for every other vocab-served kind).
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['DUP+++', 'OFF', 'DUP+', 'DUP-'])
+		const options = screen.getAllByRole('option')
+		expect(options.map((o) => o.hasAttribute('selected'))).toEqual([true, false, false, false])
+
+		await fireEvent.blur(select)
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('Tone mode, DTCS polarity, filter, tuning step, preamp and antenna each open the same vocab-served select', async () => {
 		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
 		for (const [col, label, want] of [
+			[TONE_MODE, 'Tone mode', ['— not set', 'OFF', 'TONE', 'TSQL']],
 			[DTCS_POLARITY, 'DTCS polarity', ['— not set', 'NN', 'NR', 'RN', 'RR']],
 			[FILTER, 'Filter', ['— not set', 'FIL1', 'FIL2', 'FIL3']],
 			[TUNING_STEP, 'Tuning step', ['— not set', '100 Hz', '1 kHz', '5 kHz']],

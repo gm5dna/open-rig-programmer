@@ -1325,10 +1325,21 @@
 													     (which never happens, since such a radio takes the
 													     free-text editor instead). -->
 													{@const vocabCurrent = tierField(tier, data)}
+													{@const vocabList = appState.uiSpec?.[tier.vocab] ?? []}
 													{#if vocabCurrent?.state !== 'known'}
 														<option value="" selected>— not set</option>
+													{:else if !vocabList.includes(vocabCurrent.value)}
+														<!-- The current value is Known but absent from this
+														     radio's served list — a value written by an older
+														     firmware/vocabulary, a paste, or a file import.
+														     Without this option the browser would preselect the
+														     list's first entry, and blurring away untouched would
+														     silently commit it (commitSelectEditor's vocab branch
+														     only no-ops when the selected value still equals the
+														     current one). Rendering it keeps that comparison true. -->
+														<option value={vocabCurrent.value} selected>{vocabCurrent.value}</option>
 													{/if}
-													{#each appState.uiSpec?.[tier.vocab] ?? [] as v (v)}
+													{#each vocabList as v (v)}
 														<option value={v} selected={vocabCurrent?.state === 'known' && v === vocabCurrent.value}>{v}</option>
 													{/each}
 												{/if}
