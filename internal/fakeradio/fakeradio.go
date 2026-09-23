@@ -141,6 +141,9 @@ func (r *Radio) handleEvent(ev accEvent) (stop bool) {
 		if r.faults.garbleReplyN == n {
 			out = garbleReply(out)
 		}
+		if r.faults.garbleReplyPayload == n {
+			out = garbleReplyPayload(out)
+		}
 		drop := r.faults.dropRepliesAfterN > 0 && n >= r.faults.dropRepliesAfterN
 		if !drop {
 			r.rawWrite(out)
@@ -162,6 +165,25 @@ func garbleReply(b []byte) []byte {
 	out := append([]byte(nil), b...)
 	if len(out) > 0 {
 		out[0] ^= 0xFF
+	}
+	return out
+}
+
+// garbleReplyPayload deterministically corrupts b (never mutating the
+// caller's slice) inside the FIELD BLOCK rather than the command prefix:
+// it flips every bit of the second-to-last byte — offset 26 (P10, the
+// shift field) in a 28-byte MR/MW frame, per core/cat/memdata.go's
+// memShiftOffset — leaving byte[0]/[1] (the prefix cat.PrefixLenMatcher
+// checks) and the final ';' terminator intact. The frame is still
+// accepted on the wire and still the correct length; it just decodes to
+// an invalid shift character, which core/cat's parseMemoryFields refuses
+// with a parse error the driver wraps as driver.ErrRecordDecode. See
+// FaultGarbleReplyPayload's doc comment for why this differs from
+// garbleReply above.
+func garbleReplyPayload(b []byte) []byte {
+	out := append([]byte(nil), b...)
+	if len(out) >= 2 {
+		out[len(out)-2] ^= 0xFF
 	}
 	return out
 }

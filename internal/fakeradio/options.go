@@ -135,15 +135,16 @@ type Fault interface {
 // meaning tied to "the Nth thing the host sent", regardless of whether
 // that thing produced a normal reply, no reply, or a "?;".
 type faultConfig struct {
-	dropRepliesAfterN int // 0 disabled; else no reply from exchange N onward (inclusive)
-	garbleReplyN      int // 0 disabled; corrupt exactly exchange N's reply
-	spurious          []spuriousFrame
-	delayedRejectionN int // 0 disabled; exchange N gets a late "?;" instead of its normal reply
-	delayedRejectionD time.Duration
-	delayedReplyN     int // 0 disabled; exchange N's ENTIRE reply (whatever it normally is) is delayed
-	delayedReplyD     time.Duration
-	disconnectAfterN  int // 0 disabled; close the pipe once exchange N has been handled
-	chunkedSize       int // 0 disabled (whole reply in one Write); else write in chunks of this many bytes
+	dropRepliesAfterN  int // 0 disabled; else no reply from exchange N onward (inclusive)
+	garbleReplyN       int // 0 disabled; corrupt exactly exchange N's reply
+	garbleReplyPayload int // 0 disabled; corrupt exactly exchange N's reply, payload only
+	spurious           []spuriousFrame
+	delayedRejectionN  int // 0 disabled; exchange N gets a late "?;" instead of its normal reply
+	delayedRejectionD  time.Duration
+	delayedReplyN      int // 0 disabled; exchange N's ENTIRE reply (whatever it normally is) is delayed
+	delayedReplyD      time.Duration
+	disconnectAfterN   int // 0 disabled; close the pipe once exchange N has been handled
+	chunkedSize        int // 0 disabled (whole reply in one Write); else write in chunks of this many bytes
 }
 
 // spuriousFrame is one FaultSpuriousFrame registration.
@@ -173,6 +174,21 @@ func FaultDropReplies(afterN int) Fault {
 // a corrupt-payload failure is distinguishable from a truncated one).
 func FaultGarbleReply(n int) Fault {
 	return faultFunc(func(fc *faultConfig) { fc.garbleReplyN = n })
+}
+
+// FaultGarbleReplyPayload corrupts exactly exchange n's reply, but a
+// PAYLOAD byte rather than the command prefix FaultGarbleReply flips: it
+// leaves byte[0] (the two-byte command prefix cat.PrefixLenMatcher checks)
+// untouched, so the frame still matches on the wire and the transport
+// engine accepts it rather than retrying it to ErrTimeout. What it
+// mis-decodes into is a driver.ErrRecordDecode instead — a corrupt-but-
+// received reply, not a reply that never arrived. See
+// core/clone/read.go's readAll: only ErrRecordDecode/ErrAnswerMismatch are
+// survivable there (recorded into FailedSlots, read continues); a bare
+// ErrTimeout is fatal, which is why FaultGarbleReply alone can never
+// exercise the partial-read path.
+func FaultGarbleReplyPayload(n int) Fault {
+	return faultFunc(func(fc *faultConfig) { fc.garbleReplyPayload = n })
 }
 
 // FaultSpuriousFrame injects frame, unprompted, immediately before the
