@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
@@ -70,6 +71,41 @@ func TestReadRadio_SetsBaselineWorkingAndEvents(t *testing.T) {
 	}
 	if got.Radio.CATID != view.Radio.CATID || len(got.Channels) != len(view.Channels) {
 		t.Errorf("GetCodeplug = %+v, want it to match ReadRadio's view", got)
+	}
+}
+
+// TestReadFailedMessage pins ReadRadio's transfer:done Message for a
+// partial read: empty for an ordinary complete read (Outcome stays "ok"
+// either way — a partial read is not a failed transfer), a singular
+// wording for exactly one failed slot, a plural count otherwise.
+func TestReadFailedMessage(t *testing.T) {
+	if got := readFailedMessage(&codeplug.Codeplug{}); got != "" {
+		t.Errorf("readFailedMessage(no failures) = %q, want empty", got)
+	}
+	one := &codeplug.Codeplug{Radio: codeplug.RadioInfo{FailedSlots: []codeplug.ReadFailure{{Slot: "003", Reason: "boom"}}}}
+	if got := readFailedMessage(one); got == "" || !strings.Contains(got, "1 slot") {
+		t.Errorf("readFailedMessage(1 failure) = %q, want it to mention \"1 slot\"", got)
+	}
+	two := &codeplug.Codeplug{Radio: codeplug.RadioInfo{FailedSlots: []codeplug.ReadFailure{{Slot: "003"}, {Slot: "004"}}}}
+	if got := readFailedMessage(two); got == "" || !strings.Contains(got, "2 slots") {
+		t.Errorf("readFailedMessage(2 failures) = %q, want it to mention \"2 slots\"", got)
+	}
+}
+
+// TestReadReport pins ReadRadio's transfer:done Report: nil for an
+// ordinary complete read, one SlotResultView per failed slot otherwise.
+func TestReadReport(t *testing.T) {
+	if got := readReport(&codeplug.Codeplug{}); got != nil {
+		t.Errorf("readReport(no failures) = %+v, want nil", got)
+	}
+	cp := &codeplug.Codeplug{Radio: codeplug.RadioInfo{FailedSlots: []codeplug.ReadFailure{{Slot: "003", Reason: "boom"}}}}
+	got := readReport(cp)
+	if got == nil || len(got.Slots) != 1 {
+		t.Fatalf("readReport(1 failure) = %+v, want one SlotResultView", got)
+	}
+	sr := got.Slots[0]
+	if sr.Slot != "003" || sr.Action != "read-failed" || sr.Detail != "boom" {
+		t.Errorf("readReport(1 failure).Slots[0] = %+v, want Slot=003 Action=read-failed Detail=boom", sr)
 	}
 }
 

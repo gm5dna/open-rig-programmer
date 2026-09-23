@@ -44,6 +44,12 @@
 			<span class="transfer-label transfer-label-muted">
 				Last {kindLabel(lastOutcome.Kind)}: {lastOutcome.Outcome}
 			</span>
+		{:else if lastOutcome && lastOutcome.Message}
+			<!-- Outcome "ok" but Message is populated (a partial ReadAll:
+			     some slots failed but the read as a whole completed and was
+			     saved, so it is not "aborted"/"error" — Message is the only
+			     cue this happened). -->
+			<span class="transfer-label transfer-label-warn">{lastOutcome.Message}</span>
 		{:else}
 			<span class="transfer-label transfer-label-muted">Idle</span>
 		{/if}
@@ -119,6 +125,10 @@
 
 	.transfer-label-muted {
 		color: var(--colour-text-faint);
+	}
+
+	.transfer-label-warn {
+		color: var(--colour-accent);
 	}
 
 	.transfer-slot {
