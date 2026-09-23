@@ -74,7 +74,7 @@ export const TIER_COLUMNS = [
 	{ id: 'txFreq', label: 'TX frequency (MHz)', field: 'tx_frequency', key: 'tx_frequency', kind: 'freq' },
 	{ id: 'duplex', label: 'Duplex', field: 'duplex', key: 'duplex', kind: 'text', vocab: 'DuplexOptions' },
 	{ id: 'offset', label: 'Offset (MHz)', field: 'offset', key: 'offset', kind: 'freq' },
-	{ id: 'toneMode', label: 'Tone mode', field: 'tone_mode', key: 'tone_mode', kind: 'text', vocab: 'CTCSSStateOptions' },
+	{ id: 'toneMode', label: 'Tone mode', field: 'tone_mode', key: 'tone_mode', kind: 'text', vocab: 'ToneModeOptions' },
 	{ id: 'toneTx', label: 'TX tone', field: 'tone_tx', key: 'tone_tx', kind: 'tone' },
 	{ id: 'toneRx', label: 'RX tone', field: 'tone_rx', key: 'tone_rx', kind: 'tone' },
 	{ id: 'dtcsCode', label: 'DTCS code', field: 'dtcs_code', key: 'dtcs_code', kind: 'int' },

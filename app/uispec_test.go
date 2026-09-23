@@ -3399,6 +3399,9 @@ func TestGetUISpec_Disconnected_StaticBaseline(t *testing.T) {
 	if len(got.CTCSSStateOptions) != 3 || got.CTCSSStateOptions[0] != "OFF" || got.CTCSSStateOptions[1] != "ENC-DEC" || got.CTCSSStateOptions[2] != "ENC" {
 		t.Errorf("CTCSSStateOptions = %v, want [OFF ENC-DEC ENC]", got.CTCSSStateOptions)
 	}
+	if len(got.ToneModeOptions) != 0 {
+		t.Errorf("ToneModeOptions = %v, want empty — the FT-710 expresses FieldCTCSSState, not FieldToneMode", got.ToneModeOptions)
+	}
 	if len(got.Modes) != len(staticCaps.Modes) {
 		t.Errorf("len(Modes) = %d, want %d", len(got.Modes), len(staticCaps.Modes))
 	}
@@ -3951,9 +3954,11 @@ func TestGetUISpec_VocabMatchesValidate(t *testing.T) {
 // core/driver/icr8600/caps.go). DuplexOptions is Value-extracted; the
 // other five are copied straight through.
 //
-// tone_mode carries no seventh field here — Stuart's ruling directs that
-// column to reuse CTCSSStateOptions instead of a new ToneModes field; see
-// UISpecView.DuplexOptions' doc comment.
+// The seventh, tone_mode, is served by ToneModeOptions rather than a
+// plain capabilities.go field, and this Icom radio expresses FieldToneMode
+// (not FieldCTCSSState), so it also pins ToneModeOptions non-empty and
+// CTCSSStateOptions empty — the mirror image of the FT-710 assertion in
+// TestGetUISpec_Disconnected_StaticBaseline.
 func TestGetUISpec_SixTierVocabs_MatchCaps(t *testing.T) {
 	caps, err := wiring.StaticCapabilities(wiring.ICR8600Model)
 	if err != nil {
@@ -3999,6 +4004,19 @@ func TestGetUISpec_SixTierVocabs_MatchCaps(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.AntennaOptions, caps.AntennaOptions) {
 		t.Errorf("AntennaOptions = %v, want %v", got.AntennaOptions, caps.AntennaOptions)
+	}
+	wantToneModes := make([]string, len(caps.ToneModes))
+	for i, m := range caps.ToneModes {
+		wantToneModes[i] = m.Value
+	}
+	if len(wantToneModes) == 0 {
+		t.Fatalf("IC-R8600 caps.ToneModes: expected non-empty")
+	}
+	if !reflect.DeepEqual(got.ToneModeOptions, wantToneModes) {
+		t.Errorf("ToneModeOptions = %v, want %v (IC-R8600 expresses FieldToneMode)", got.ToneModeOptions, wantToneModes)
+	}
+	if len(got.CTCSSStateOptions) != 0 {
+		t.Errorf("CTCSSStateOptions = %v, want empty — the IC-R8600 expresses FieldToneMode, not FieldCTCSSState", got.CTCSSStateOptions)
 	}
 }
 

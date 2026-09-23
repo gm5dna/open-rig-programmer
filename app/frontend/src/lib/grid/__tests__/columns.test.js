@@ -111,7 +111,7 @@ describe('TIER_COLUMNS vocab', () => {
 
 	it('names the UISpecView field each vocab-served text column reads from', () => {
 		expect(tierCol('duplex').vocab).toBe('DuplexOptions')
-		expect(tierCol('toneMode').vocab).toBe('CTCSSStateOptions')
+		expect(tierCol('toneMode').vocab).toBe('ToneModeOptions')
 		expect(tierCol('dtcsPolarity').vocab).toBe('DTCSPolarities')
 		expect(tierCol('filter').vocab).toBe('Filters')
 		expect(tierCol('tuningStep').vocab).toBe('TuningSteps')

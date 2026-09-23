@@ -876,6 +876,7 @@ export namespace main {
 	    Modes: string[];
 	    ShiftOptions: string[];
 	    CTCSSStateOptions: string[];
+	    ToneModeOptions: string[];
 	    Tones: ToneView[];
 	    DuplexOptions: string[];
 	    DTCSPolarities: string[];
@@ -904,6 +905,7 @@ export namespace main {
 	        this.Modes = source["Modes"];
 	        this.ShiftOptions = source["ShiftOptions"];
 	        this.CTCSSStateOptions = source["CTCSSStateOptions"];
+	        this.ToneModeOptions = source["ToneModeOptions"];
 	        this.Tones = this.convertValues(source["Tones"], ToneView);
 	        this.DuplexOptions = source["DuplexOptions"];
 	        this.DTCSPolarities = source["DTCSPolarities"];

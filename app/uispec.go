@@ -564,13 +564,24 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	}
 	ctcssStateOptions := ctcssStateValues(yaesuToneModes)
 
+	// toneModeOptions is ctcssStateOptions' mirror for the OTHER tone
+	// identity: caps.ToneModes again, but gated on FieldToneMode
+	// (capsExpressesToneMode) rather than FieldCTCSSState, so an
+	// Icom/Kenwood radio gets a tone-mode select and a Yaesu radio's
+	// column keeps reading CTCSSStateOptions instead (UISpecView.
+	// ToneModeOptions' doc comment).
+	var icomToneModes []spec.ToneMode
+	if capsExpressesToneMode(caps) {
+		icomToneModes = caps.ToneModes
+	}
+	toneModeOptions := ctcssStateValues(icomToneModes)
+
 	// The six text-kind tier vocabularies (DuplexOptions, DTCSPolarities,
 	// Filters, TuningSteps, PreampOptions, AntennaOptions): straight from
 	// caps, same as Modes below, Value-extracted for DuplexOptions since
 	// its caps source is struct-typed (matching the shiftOptions loop
-	// above). No tone_mode list is built here — that column reuses
-	// ctcssStateOptions (Stuart's ruling; see UISpecView.DuplexOptions'
-	// doc comment).
+	// above). tone_mode is served by toneModeOptions above instead of
+	// here (UISpecView.ToneModeOptions' doc comment).
 	duplexOptions := make([]string, len(caps.DuplexOptions))
 	for i, o := range caps.DuplexOptions {
 		duplexOptions[i] = o.Value
@@ -604,6 +615,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		Modes:                     append([]string(nil), caps.Modes...),
 		ShiftOptions:              shiftOptions,
 		CTCSSStateOptions:         ctcssStateOptions,
+		ToneModeOptions:           toneModeOptions,
 		Tones:                     tones,
 		DuplexOptions:             duplexOptions,
 		DTCSPolarities:            append([]string(nil), caps.DTCSPolarities...),
@@ -654,6 +666,20 @@ func ctcssStateValues(states []spec.ToneMode) []string {
 func capsExpressesCTCSSState(caps spec.Capabilities) bool {
 	for _, b := range caps.Banks {
 		if !caps.FieldSupport(b.ID, spec.FieldCTCSSState).Unreachable() {
+			return true
+		}
+	}
+	return false
+}
+
+// capsExpressesToneMode is capsExpressesCTCSSState's mirror for the other
+// tone identity: whether ANY bank in caps reaches spec.FieldToneMode (the
+// Icom/Kenwood identity) rather than spec.FieldCTCSSState (the Yaesu
+// one). The two are mutually exclusive per radio, same source list
+// (caps.ToneModes) split by which field a bank actually declares.
+func capsExpressesToneMode(caps spec.Capabilities) bool {
+	for _, b := range caps.Banks {
+		if !caps.FieldSupport(b.ID, spec.FieldToneMode).Unreachable() {
 			return true
 		}
 	}

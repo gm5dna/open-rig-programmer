@@ -442,19 +442,30 @@ type UISpecView struct {
 	Modes             []string
 	ShiftOptions      []string
 	CTCSSStateOptions []string
-	Tones             []ToneView
+	// ToneModeOptions is the tone_mode column's own vocabulary, served
+	// from caps.ToneModes ONLY for a radio that expresses FieldToneMode
+	// (the Icom/Kenwood identity) — mirroring how CTCSSStateOptions above
+	// serves the same caps.ToneModes list, but gated on FieldCTCSSState
+	// (the Yaesu identity) instead. The two identities are mutually
+	// exclusive per radio (capsExpressesCTCSSState's doc comment), so
+	// exactly one of CTCSSStateOptions/ToneModeOptions is non-empty for
+	// any registered model. A prior ruling had the toneMode column reuse
+	// CTCSSStateOptions unconditionally; that left Icom/Kenwood radios
+	// with no tone-mode select at all, since their banks never reach
+	// FieldCTCSSState — see columns.js's `toneMode` TIER_COLUMNS entry.
+	ToneModeOptions []string
+	Tones           []ToneView
 	// DuplexOptions/DTCSPolarities/Filters/TuningSteps/PreampOptions/
 	// AntennaOptions serve six of the seven text-kind tier vocabularies
 	// core/spec/capabilities.go declares (DuplexOptions, DTCSPolarities,
 	// Filters, TuningSteps, PreampOptions, AntennaOptions) — straight from
 	// caps, Value-extracted where the source is struct-typed, matching
-	// how ShiftOptions is served above. The seventh, tone_mode, is
-	// deliberately NOT a new field: Stuart's ruling is that its column
-	// reuses CTCSSStateOptions rather than adding a ToneModes field
-	// alongside it — see columns.js's `toneMode` TIER_COLUMNS entry. A
-	// radio that declares an empty list here leaves its column free text,
-	// unchanged (see GetUISpec's doc comment on this file's tier-column
-	// gap).
+	// how ShiftOptions is served above. The seventh, tone_mode, is served
+	// by ToneModeOptions above instead of living here, since its source
+	// (caps.ToneModes) is shared with CTCSSStateOptions rather than being
+	// one of capabilities.go's plain string-slice fields. A radio that
+	// declares an empty list here leaves its column free text, unchanged
+	// (see GetUISpec's doc comment on this file's tier-column gap).
 	DuplexOptions  []string
 	DTCSPolarities []string
 	Filters        []string
