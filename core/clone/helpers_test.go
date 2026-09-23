@@ -594,6 +594,30 @@ func writableChannel(slot string, freqHz uint64, tag string) codeplug.Channel {
 	}
 }
 
+// answerMismatchOnceSession wraps a real session, returning a persistent
+// driver.ErrAnswerMismatch-compatible error for exactly one scripted slot
+// and delegating every other ReadChannel call (and every other method,
+// via the embedded interface) to the real session unchanged.
+//
+// It exists because internal/fakeradio's own FaultGarbleReply cannot
+// prove this on its own: a single garbled reply is simply retried away by
+// the transport engine (see execute_test.go's own comment on that fault),
+// so it can never produce the PERSISTENT, non-retryable classified
+// failure a partial-read test needs. This wrapper replaces the wire layer
+// for exactly the one scripted slot; every other slot still goes through
+// the real fakeradio-backed session.
+type answerMismatchOnceSession struct {
+	driver.Session
+	failSlot string
+}
+
+func (s answerMismatchOnceSession) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
+	if slot == s.failSlot {
+		return codeplug.Channel{}, &driver.AnswerMismatchError[string]{Model: "test", Requested: slot, Answered: "999"}
+	}
+	return s.Session.ReadChannel(ctx, slot)
+}
+
 // withChannel returns a deep copy of cp with slot's Channel replaced by
 // {Slot: slot, Data: data} (data may be nil, for an erase/empty edit) — a
 // test-only Codeplug editor, used to build a candidate file from a
