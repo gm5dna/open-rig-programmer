@@ -220,6 +220,41 @@ func TestCmdDiff_RefusesPartialCandidate(t *testing.T) {
 	}
 }
 
+// TestCmdDiff_RefusesPartialCandidate_FromRealRead is
+// TestCmdDiff_RefusesPartialCandidate's end-to-end sibling: rather than a
+// hand-built fixture, the candidate file comes from a genuine cmdRead run
+// against fakeradio.FaultGarbleReplyPayload (see TestCmdRead_
+// RecordDecodeFailurePartialRead, read_test.go), so this exercises the
+// live diff.go candidate-check path against Radio.FailedSlots as ReadAll
+// itself actually produces it, not just the shape a fixture asserts.
+func TestCmdDiff_RefusesPartialCandidate_FromRealRead(t *testing.T) {
+	const openExchanges = 4             // AI0, ID, MR501 (rejected), MREMG (rejected)
+	garbleExchange := openExchanges + 1 // the first slot's MR read
+
+	prevOpts := wiring.FakeSessionOpts
+	wiring.FakeSessionOpts = []fakeradio.Option{fakeradio.WithFault(fakeradio.FaultGarbleReplyPayload(garbleExchange))}
+
+	path := filepath.Join(t.TempDir(), "real-partial.json")
+	var readStdout, readStderr bytes.Buffer
+	if got := cmdRead(testCtx(t), []string{"--fake", "--out", path}, &readStdout, &readStderr); got != exitPartial {
+		t.Fatalf("cmdRead(garbled MR payload) = %d, want exitPartial (%d); stdout=%q stderr=%q", got, exitPartial, readStdout.String(), readStderr.String())
+	}
+	wiring.FakeSessionOpts = prevOpts
+	t.Cleanup(func() { wiring.FakeSessionOpts = prevOpts })
+
+	var stdout, stderr bytes.Buffer
+	got := cmdDiff(testCtx(t), []string{"--fake", path}, &stdout, &stderr)
+	if got != exitError {
+		t.Errorf("cmdDiff(real partial candidate) = %d, want exitError (%d); stderr=%q", got, exitError, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "partial read") {
+		t.Errorf("cmdDiff(real partial candidate) stderr = %q, want it to mention the partial read", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("cmdDiff(real partial candidate) stdout = %q, want empty (refused before any diff was computed)", stdout.String())
+	}
+}
+
 // TestCmdDiff_CancelledBeforeStart mirrors
 // TestCmdRead_CancelledBeforeStart: a context already cancelled before
 // cmdDiff opens a session yields exit 1 and a "cancelled" message. Uses a
