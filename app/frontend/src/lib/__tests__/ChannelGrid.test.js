@@ -1213,6 +1213,17 @@ describe('empty states', () => {
 
 const TIER_UI_SPEC = {
 	...UI_SPEC,
+	// CTCSSStateOptions is overridden to empty, unlike Tones above: a real
+	// Icom/Kenwood radio like the IC-R8600 never expresses FieldCTCSSState,
+	// so GetUISpec's own capsExpressesCTCSSState gate (app/uispec.go)
+	// leaves it empty for every such radio — inheriting UI_SPEC's
+	// Yaesu-shaped non-empty list here would misrepresent what a real
+	// Icom/Kenwood UISpec serves. The toneMode tier column reads
+	// ToneModeOptions instead (app/uispec.go's capsExpressesToneMode
+	// mirror), left unset here — same as every other vocab field — so
+	// this fixture continues to exercise the free-text fallback; see
+	// TIER_UI_SPEC_WITH_VOCAB below for the populated case.
+	CTCSSStateOptions: [],
 	Banks: [
 		{
 			ID: 'MEM',
@@ -1288,8 +1299,35 @@ const OFFSET = 11
 const TONE_MODE = 12
 const TONE_RX = 13
 const DTCS_CODE = 14
+const DTCS_POLARITY = 15
+const FILTER = 16
+const TUNING_STEP = 18
 const ATTENUATOR = 20
+const PREAMP = 21
+const ANTENNA = 22
 const IP_PLUS = 23
+
+/** TIER_UI_SPEC with all seven vocab-served text-kind lists populated — the
+ * shape a radio like the IC-R8600 (core/driver/icr8600/caps.go) actually
+ * serves, unlike TIER_UI_SPEC above, which carries none of them (that
+ * fixture is deliberately UI_SPEC's own FT-710-shaped scaffolding — see
+ * its doc comment). Exercises the new select arm this task adds; the
+ * bare TIER_UI_SPEC above continues to exercise the free-text fallback
+ * for a radio that declares no such vocabulary, unchanged. ToneModeOptions
+ * carries the IC-R8600's own wire-form spellings (core/driver/icr8600) —
+ * CTCSSStateOptions stays empty (this radio expresses FieldToneMode, not
+ * FieldCTCSSState), so the two never disagree about which list serves
+ * this column. */
+const TIER_UI_SPEC_WITH_VOCAB = {
+	...TIER_UI_SPEC,
+	DuplexOptions: ['OFF', 'DUP+', 'DUP-'],
+	ToneModeOptions: ['OFF', 'TONE', 'TSQL'],
+	DTCSPolarities: ['NN', 'NR', 'RN', 'RR'],
+	Filters: ['FIL1', 'FIL2', 'FIL3'],
+	TuningSteps: ['100 Hz', '1 kHz', '5 kHz'],
+	PreampOptions: ['OFF', 'ON'],
+	AntennaOptions: ['ANT1', 'ANT2', 'ANT3'],
+}
 
 describe('tier-column editing', () => {
 	beforeEach(() => {
@@ -1829,5 +1867,152 @@ describe('tier-column editing', () => {
 			unmount()
 		}
 		expect(updateChannel).not.toHaveBeenCalled() // opening an editor commits nothing
+	})
+
+	// --- vocab-served text-kind columns (this task) ------------------------
+	//
+	// Six of the seven text kinds now open a select when GetUISpec serves
+	// a non-empty list for them (TIER_UI_SPEC_WITH_VOCAB); free text
+	// remains the fallback when it does not (TIER_UI_SPEC, exercised by
+	// "a text-kind cell is FREE TEXT" above — unchanged by this task).
+
+	it('a vocab-served text-kind cell opens a select, not free text', async () => {
+		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: `Duplex, ${ROW}` })
+		expect(select.tagName).toBe('SELECT')
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['— not set', 'OFF', 'DUP+', 'DUP-'])
+	})
+
+	it('an unanswered vocab-served cell opens on the placeholder and commits nothing on blur', async () => {
+		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = /** @type {HTMLSelectElement} */ (screen.getByRole('combobox', { name: `Duplex, ${ROW}` }))
+		expect(select.value).toBe('')
+		await fireEvent.blur(select)
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('choosing a value from a vocab-served select commits the wire-form string, unjudged', async () => {
+		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: `Duplex, ${ROW}` })
+		await fireEvent.change(select, { target: { value: 'DUP+' } })
+		await fireEvent.keyDown(select, { key: 'Enter' })
+
+		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual({ state: 'known', value: 'DUP+' })
+	})
+
+	it('a Known vocab-served cell opens the select on its current value, no placeholder', async () => {
+		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ duplex: { state: 'known', value: 'DUP-' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = /** @type {HTMLSelectElement} */ (screen.getByRole('combobox', { name: `Duplex, ${ROW}` }))
+		expect(screen.queryByRole('option', { name: '— not set' })).not.toBeInTheDocument()
+		// Reads the "selected" CONTENT ATTRIBUTE Svelte writes on the
+		// matching <option>, not the select's computed .value/.selected
+		// (happy-dom's ask-for-a-reset algorithm mis-tracks selectedness
+		// for a select with 3+ options rendered this way — confirmed a
+		// test-environment quirk, not a real-browser one, by reproducing
+		// it in a two-line standalone Svelte component and by hand-built
+		// DOM constructed the identical way with no such bug).
+		const options = screen.getAllByRole('option')
+		expect(options.map((o) => o.hasAttribute('selected'))).toEqual([false, false, true])
+		expect(options[2]).toHaveAttribute('value', 'DUP-')
+	})
+
+	// A Known value the served vocabulary no longer lists — an older
+	// firmware/vocabulary, a paste, or a file import — must not be
+	// silently replaced by whichever option the browser happens to
+	// preselect. Without this option present, blurring the untouched
+	// select would commit vocab[0] (Codex P2 finding, tier-field-selects
+	// milestone): a <select> with no matching `selected` option defaults
+	// to its first, and commitSelectEditor's vocab branch only no-ops
+	// when the value it receives still equals the current one.
+	it('a Known value absent from the served vocabulary is preserved as its own option, so blur commits nothing', async () => {
+		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ duplex: { state: 'known', value: 'DUP+++' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = /** @type {HTMLSelectElement} */ (screen.getByRole('combobox', { name: `Duplex, ${ROW}` }))
+		// The stale value is present, selected, and listed ahead of the
+		// real vocabulary (same position the current-value arm renders in
+		// for every other vocab-served kind).
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['DUP+++', 'OFF', 'DUP+', 'DUP-'])
+		const options = screen.getAllByRole('option')
+		expect(options.map((o) => o.hasAttribute('selected'))).toEqual([true, false, false, false])
+
+		await fireEvent.blur(select)
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('Tone mode, DTCS polarity, filter, tuning step, preamp and antenna each open the same vocab-served select', async () => {
+		appState.uiSpec = TIER_UI_SPEC_WITH_VOCAB
+		for (const [col, label, want] of [
+			[TONE_MODE, 'Tone mode', ['— not set', 'OFF', 'TONE', 'TSQL']],
+			[DTCS_POLARITY, 'DTCS polarity', ['— not set', 'NN', 'NR', 'RN', 'RR']],
+			[FILTER, 'Filter', ['— not set', 'FIL1', 'FIL2', 'FIL3']],
+			[TUNING_STEP, 'Tuning step', ['— not set', '100 Hz', '1 kHz', '5 kHz']],
+			[PREAMP, 'Preamp', ['— not set', 'OFF', 'ON']],
+			[ANTENNA, 'Antenna', ['— not set', 'ANT1', 'ANT2', 'ANT3']],
+		]) {
+			const { container, unmount } = render(ChannelGrid)
+			const cellEl = cell(container, 0, /** @type {number} */ (col))
+			cellEl.focus()
+			await fireEvent.keyDown(cellEl, { key: 'Enter' })
+			const select = screen.getByRole('combobox', { name: `${label}, ${ROW}` })
+			expect(screen.getAllByRole('option').map((o) => o.textContent), /** @type {string} */ (label)).toEqual(want)
+			unmount()
+		}
+	})
+
+	// Stuart's ruling (plan review): when a radio's list is empty for one
+	// of these vocabularies, the column STAYS free text — behaviour
+	// unchanged. Pinned here for tuning_step specifically, the column the
+	// plan named: no registered model reaches it with a non-nil list, so
+	// TIER_UI_SPEC (no vocab served) is the shape every radio that renders
+	// this column serves today.
+	it('an empty TuningSteps list leaves the tuning-step column free text (unchanged fallback)', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TUNING_STEP)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(screen.getByRole('textbox', { name: `Tuning step, ${ROW}` })).toBeInTheDocument()
+		expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
 	})
 })
