@@ -103,7 +103,7 @@ func TestSaveLoad_V2RoundTrip(t *testing.T) {
 		t.Errorf("Radio.ReadAt = %v, want %v", gotRadio.ReadAt, wantRadio.ReadAt)
 	}
 	gotRadio.ReadAt = wantRadio.ReadAt
-	if gotRadio != wantRadio {
+	if !reflect.DeepEqual(gotRadio, wantRadio) {
 		t.Errorf("Radio = %+v, want %+v", gotRadio, wantRadio)
 	}
 	if len(got.Channels) != len(want.Channels) {

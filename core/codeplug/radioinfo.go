@@ -57,4 +57,20 @@ type RadioInfo struct {
 	// treated as a mismatch to report. See Digest's doc comment for the
 	// full reasoning, including why digest versioning was rejected.
 	BaselineDigest string `json:"baseline_digest,omitempty"`
+	// FailedSlots lists every slot ReadAll could not read
+	// (driver.ErrAnswerMismatch, or driver.ErrRecordDecode for a decode
+	// failure — see core/clone/read.go) rather than reconstruct as empty
+	// or omit silently. Empty for an ordinary complete read. Forces
+	// schema 6 (see schemaFor) — a schema-5 loader always reconstructs
+	// this as nil, since no earlier schema could record it.
+	FailedSlots []ReadFailure `json:"failed_slots,omitempty"`
+}
+
+// ReadFailure records one slot ReadAll classified as a recoverable read
+// failure rather than aborting the whole read — see RadioInfo.FailedSlots.
+type ReadFailure struct {
+	// Slot is the canonical wire-form slot identifier that failed.
+	Slot string `json:"slot"`
+	// Reason is the classified error's own message (err.Error()).
+	Reason string `json:"reason"`
 }
