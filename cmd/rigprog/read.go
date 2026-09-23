@@ -63,6 +63,9 @@ func writeReadSummary(w io.Writer, cp *codeplug.Codeplug, outPath string) {
 	fmt.Fprintf(w, "Populated:       %d\n", countPopulated(cp.Channels))
 	fmt.Fprintf(w, "Region:          %s\n", displayOrDash(cp.Radio.Region))
 	fmt.Fprintf(w, "Baseline digest: %s (truncated)\n", truncateDigest(cp.Radio.BaselineDigest))
+	if n := len(cp.Radio.FailedSlots); n > 0 {
+		fmt.Fprintf(w, "Failed:          %d\n", n)
+	}
 	fmt.Fprintf(w, "Output:          %s\n", outPath)
 }
 
@@ -216,6 +219,9 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	writeReadSummary(stdout, cp, *out)
 	if *settings {
 		writeSettingsReadSummary(stdout, settingsSnapshot)
+	}
+	if len(cp.Radio.FailedSlots) > 0 {
+		return exitPartial
 	}
 	return exitSuccess
 }

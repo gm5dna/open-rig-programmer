@@ -54,6 +54,14 @@ func cmdExport(args []string, stdout, stderr io.Writer) int {
 	if cp == nil {
 		return code
 	}
+	// A partial codeplug is refused before the destination file is even
+	// created: CSV export has no RadioInfo of its own to carry the
+	// warning, so silently exporting a gap-filled read would look
+	// identical to a genuinely empty channel on the far side.
+	if n := len(cp.Radio.FailedSlots); n > 0 {
+		fmt.Fprintf(stderr, "rigprog export: %s is a partial read (%d slot(s) failed); re-read the radio before exporting\n", file, n)
+		return exitError
+	}
 
 	// Fix 3 (adjudicated MEDIUM, Codex M4 #3): no-clobber enforced AT THE
 	// COMMIT (openCSVCommit's O_EXCL when !force), not just via the
