@@ -50,7 +50,8 @@ Everything is on the [Releases page](../../releases), with a
 
 - **macOS**: unzip the app. Releases published here are signed with a
   Developer ID and notarised by Apple, so it opens like any other
-  download.
+  download. With Homebrew:
+  `brew install --cask gm5dna/amateur-radio/open-rig-programmer`.
 - **Windows**: run the installer for your machine (amd64 or ARM64).
   SmartScreen will say *Windows protected your PC*: click *More info*,
   then *Run anyway*. [docs/windows-setup.md](docs/windows-setup.md)
