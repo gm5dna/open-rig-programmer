@@ -1240,3 +1240,89 @@ func TestNormaliseTierFields_LegacyLoadIsUntouched(t *testing.T) {
 func TestNormaliseTierFields_NilCodeplug(t *testing.T) {
 	NormaliseTierFields(nil, icomTestCapabilities())
 }
+
+// TestReopenUnavailableTierFields_PromotesReachableFieldsOnly is
+// ReopenUnavailableTierFields' own pin, the mirror of
+// TestNormaliseTierFields_ReachableAbsentIsLeftAlone: icomChannelData
+// already carries the mix this fixes — DTCSCode and DTCSPolarity are
+// BOTH Unavailable on a bank that reaches both, and CTCSSTone,
+// TagDisplay and ScanSkip are Unavailable on fields this bank genuinely
+// cannot reach.
+//
+// fields NAMES ONLY dtcs_code, standing in for csvio.TierColumnsAbsent's
+// report that dtcs_code's CSV column was absent from the file (a v1
+// file, or a v2 file missing that one column) — the case this function
+// must reopen. dtcs_polarity, left OUT of fields, stands in for the
+// regression this test guards against: a field whose column WAS
+// present and whose cell explicitly spelled the reserved "n/a" — csvio
+// leaves that exactly as spelled, and a fields list that (correctly)
+// does not name it must leave it alone too, however reachable the bank
+// says it is. Only dtcs_code, named AND reachable, may move.
+//
+// The second channel sits in NO bank at all (TestNormaliseTierFields_
+// SlotInNoBankAtAll's own fixture): every field there is Unreachable by
+// construction, so it proves the function leaves a channel alone when
+// nothing on it is promotable, rather than merely leaving fields alone
+// on the SAME channel the first assertions already cover.
+func TestReopenUnavailableTierFields_PromotesReachableFieldsOnly(t *testing.T) {
+	caps := icomTestCapabilities()
+	cp := &Codeplug{
+		Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+		Channels: []Channel{
+			{Slot: "G01-001", Data: icomChannelData(145_500_000)},
+			{Slot: "NO-SUCH-SLOT", Data: icomChannelData(145_600_000)},
+		},
+	}
+	before := *cp.Channels[1].Data
+
+	ReopenUnavailableTierFields(cp, caps, []spec.Field{spec.FieldDTCSCode})
+
+	if got := cp.Channels[0].Data.DTCSCode.State; got != Absent {
+		t.Errorf("dtcs_code state = %q, want Absent — named in fields (its column was absent) and this bank reaches it", got)
+	}
+	if got := cp.Channels[0].Data.DTCSPolarity.State; got != Unavailable {
+		t.Errorf("dtcs_polarity state = %q, want Unavailable unchanged — NOT named in fields (stands in for a present column's explicit \"n/a\" cell), so a reachable bank must not move it", got)
+	}
+	if got := cp.Channels[0].Data.CTCSSTone.State; got != Unavailable {
+		t.Errorf("ctcss_tone state = %q, want Unavailable unchanged — this bank genuinely cannot reach the field", got)
+	}
+	if got := cp.Channels[0].Data.TagDisplay.State; got != Unavailable {
+		t.Errorf("tag_display state = %q, want Unavailable unchanged", got)
+	}
+	if got := cp.Channels[0].Data.ScanSkip.State; got != Unavailable {
+		t.Errorf("scan_skip state = %q, want Unavailable unchanged", got)
+	}
+	// Every Known/Unknown field on the touched channel must survive
+	// byte-for-byte — this pass only ever touches Unavailable.
+	if got := cp.Channels[0].Data.Duplex; got != (StringField{State: Known, Value: "DUP-"}) {
+		t.Errorf("duplex = %+v, changed by a pass that only ever touches Unavailable", got)
+	}
+	if *cp.Channels[1].Data != before {
+		t.Errorf("the no-bank channel changed:\n got %+v\nwant %+v", *cp.Channels[1].Data, before)
+	}
+}
+
+// TestReopenUnavailableTierFields_EmptyFieldsIsANoOp pins the other half
+// of the fix: an empty or nil fields list — what a version-3 file with
+// every column present gives csvio.TierColumnsAbsent — reopens nothing
+// at all, even a reachable Unavailable field.
+func TestReopenUnavailableTierFields_EmptyFieldsIsANoOp(t *testing.T) {
+	caps := icomTestCapabilities()
+	cp := &Codeplug{
+		Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+		Channels: []Channel{{Slot: "G01-001", Data: icomChannelData(145_500_000)}},
+	}
+	before := *cp.Channels[0].Data
+
+	ReopenUnavailableTierFields(cp, caps, nil)
+
+	if *cp.Channels[0].Data != before {
+		t.Errorf("channel changed with an empty fields list:\n got %+v\nwant %+v", *cp.Channels[0].Data, before)
+	}
+}
+
+// TestReopenUnavailableTierFields_NilCodeplug: a nil *Codeplug is a
+// no-op, not a panic — the same contract NormaliseTierFields carries.
+func TestReopenUnavailableTierFields_NilCodeplug(t *testing.T) {
+	ReopenUnavailableTierFields(nil, icomTestCapabilities(), []spec.Field{spec.FieldDTCSCode})
+}

@@ -324,26 +324,7 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 	for i, c := range gotHeader {
 		colIndex[c] = i
 	}
-	// Which header version this file is: version 2 iff it carries any of
-	// the tier columns. Partial adoption (some tier columns, not all) is
-	// accepted for the same reason column ORDER is: columns are looked up
-	// by name, an absent one reads as "", and a hand-edited file that
-	// carries only the column its author cared about is more useful
-	// accepted than refused.
-	hasTier := false
-	for _, c := range tierColumns {
-		if _, ok := colIndex[c]; ok {
-			hasTier = true
-			break
-		}
-	}
-	hasReceiver := false
-	for _, c := range receiverColumns {
-		if _, ok := colIndex[c]; ok {
-			hasReceiver = true
-			break
-		}
-	}
+	hasTier, hasReceiver := detectTierColumns(gotHeader)
 
 	var channels []codeplug.Channel
 	seenSlots := make(map[string]int) // slot -> first line seen
@@ -565,4 +546,73 @@ func markReceiverFieldsUnavailable(data *codeplug.ChannelData) {
 			tf.SetState(data, codeplug.Unavailable)
 		}
 	}
+}
+
+// detectTierColumns reports which of the two appended CSV column groups
+// (tierColumns, receiverColumns) header carries at least one column of —
+// the SAME question Import asks of its own header, extracted so
+// TierColumnsAbsent can ask it too without a second reading of the
+// hasTier/hasReceiver loop. Partial adoption (some but not all of a
+// group's columns) still counts, for the reason parseTierGroup's own doc
+// comment gives: an absent column within an otherwise-present group
+// reads as an unstated cell (Unknown), not a group absence.
+func detectTierColumns(header []string) (hasTier, hasReceiver bool) {
+	got := make(map[string]bool, len(header))
+	for _, c := range header {
+		got[c] = true
+	}
+	for _, c := range tierColumns {
+		if got[c] {
+			hasTier = true
+			break
+		}
+	}
+	for _, c := range receiverColumns {
+		if got[c] {
+			hasReceiver = true
+			break
+		}
+	}
+	return hasTier, hasReceiver
+}
+
+// TierColumnsAbsent reports which of codeplug.TierFields' CSV columns
+// this file's header carries NO column for at all — the two group-level
+// cases (markTierFieldsUnavailable, markReceiverFieldsUnavailable) where
+// Import sets a field Unavailable purely because the file has no column
+// for it, as distinct from a field whose column IS present and whose
+// cell explicitly spells the reserved "n/a": that is a statement the
+// file makes, and Import (parseTierGroup) leaves it exactly as spelled.
+// A version-1 file (no tier columns at all) returns all twenty fields; a
+// version-2 file with no receiver group returns the seven D8/satellite
+// ones; a version-3+ file (every column present) returns nil.
+//
+// csvio stays capability-blind: this reports a fact about the FILE
+// only — which columns it does and does not carry — never whether a
+// given radio can reach the field. A composition root combines this
+// with its own spec.Capabilities lookup to decide which Unavailable
+// fields a re-import may reopen (core/codeplug.ReopenUnavailableTierFields's
+// fields parameter).
+//
+// It reads only the header row, so a caller that also wants Import's
+// channels from the SAME reader must Seek it back to the start first.
+func TierColumnsAbsent(r io.Reader) ([]spec.Field, error) {
+	cr := csv.NewReader(skipUTF8BOM(r))
+	cr.FieldsPerRecord = -1
+	header, err := cr.Read()
+	if err != nil {
+		return nil, fmt.Errorf("reading header: %w", err)
+	}
+	hasTier, hasReceiver := detectTierColumns(header)
+	var absent []spec.Field
+	for _, tf := range codeplug.TierFields {
+		if tf.Receiver {
+			if !hasReceiver {
+				absent = append(absent, tf.Field)
+			}
+		} else if !hasTier {
+			absent = append(absent, tf.Field)
+		}
+	}
+	return absent, nil
 }

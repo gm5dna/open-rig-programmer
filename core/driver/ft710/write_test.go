@@ -872,7 +872,7 @@ func TestBuildWriteCommands_NonKnownTagDisplayRefusedFirst(t *testing.T) {
 		ch := multiplyInvalid()
 		ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
 
-		_, _, err := buildWriteCommands(cat.FT710, ch)
+		_, _, err := buildWriteCommands(cat.FT710, CapabilitiesSimulated(), ch)
 		var wre *driver.WriteRefusedError
 		if !errors.As(err, &wre) {
 			t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
@@ -891,7 +891,7 @@ func TestBuildWriteCommands_NonKnownTagDisplayRefusedFirst(t *testing.T) {
 		// other diagnosis. With TagDisplay Known the same broken channel must
 		// report the FIRST of the three later failures — mode — by its own
 		// name, exactly as it did before E1 added the check above it.
-		_, _, err := buildWriteCommands(cat.FT710, multiplyInvalid())
+		_, _, err := buildWriteCommands(cat.FT710, CapabilitiesSimulated(), multiplyInvalid())
 		var wre *driver.WriteRefusedError
 		if !errors.As(err, &wre) {
 			t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
@@ -959,7 +959,7 @@ func TestBuildWriteCommands_TagDisplayWireIdentity(t *testing.T) {
 			ch := writableChannel("010")
 			ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: tt.display}
 
-			mwCmd, mtCmd, err := buildWriteCommands(cat.FT710, ch)
+			mwCmd, mtCmd, err := buildWriteCommands(cat.FT710, CapabilitiesSimulated(), ch)
 			if err != nil {
 				t.Fatalf("buildWriteCommands = %v, want success for a Known TagDisplay", err)
 			}
@@ -1279,7 +1279,7 @@ func TestBuildWriteCommands_MWKindComesFromTheReceiver(t *testing.T) {
 		{"peer declaring KindPMS", peer},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			mwCmd, _, err := buildWriteCommands(tt.dialect, writableChannel("010"))
+			mwCmd, _, err := buildWriteCommands(tt.dialect, CapabilitiesSimulated(), writableChannel("010"))
 			if err != nil {
 				t.Fatalf("buildWriteCommands: unexpected error: %v (the write path emitted a kind byte its receiver does not accept)", err)
 			}
@@ -1331,13 +1331,41 @@ func TestWriteChannel_ClarifierBoundComesFromTheReceiver(t *testing.T) {
 	}
 }
 
+// TestWriteChannel_RefusesFrequencyAboveCapsCeiling pins the newly-live
+// caps bound: this radio's real 30 kHz-75 MHz storable range
+// (caps.MinFreqHz/MaxFreqHz), checked in buildWriteCommands ahead of the
+// codec's own much wider nine-digit ceiling. Before this, a frequency
+// between 75 MHz and the codec's ceiling reached the wire unrefused.
+func TestWriteChannel_RefusesFrequencyAboveCapsCeiling(t *testing.T) {
+	cp, sess := openCountingSession(t, Simulated)
+
+	ch := writableChannel("010")
+	ch.Data.FreqHz = 75_000_001 // one Hz above CapabilitiesSimulated().MaxFreqHz
+
+	baseline := cp.writes.Load()
+	_, err := sess.WriteChannel(testCtx(t), ch)
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if want := "frequency 75000001 Hz is outside this radio's storable range 30000-75000000 Hz"; wre.Reason != want {
+		t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldFrequency)
+	}
+	if got := cp.writes.Load(); got != baseline {
+		t.Errorf("refused WriteChannel produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", got-baseline)
+	}
+}
+
 // TestBuildWriteCommands_FT710ByteIdentity is M9c-3's byte-identity bar for
 // the write path: for one reference channel, the FT-710's MW and MT Set
 // frames are exactly these bytes. Task 9 replaced two literals in
 // buildWriteCommands with receiver accessors, and cat.FT710 declares
 // precisely the values those literals carried — so not a byte may move.
 func TestBuildWriteCommands_FT710ByteIdentity(t *testing.T) {
-	mwCmd, mtCmd, err := buildWriteCommands(cat.FT710, writableChannel("010"))
+	mwCmd, mtCmd, err := buildWriteCommands(cat.FT710, CapabilitiesSimulated(), writableChannel("010"))
 	if err != nil {
 		t.Fatalf("buildWriteCommands(cat.FT710): unexpected error: %v", err)
 	}
@@ -1365,7 +1393,7 @@ func TestBuildWriteCommands_FT710ClarifierRefusalText(t *testing.T) {
 			ch := writableChannel("010")
 			ch.Data.ClarHz = tt.clarHz
 
-			_, _, err := buildWriteCommands(cat.FT710, ch)
+			_, _, err := buildWriteCommands(cat.FT710, CapabilitiesSimulated(), ch)
 			var wre *driver.WriteRefusedError
 			if !errors.As(err, &wre) {
 				t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
@@ -1381,19 +1409,23 @@ func TestBuildWriteCommands_FT710ClarifierRefusalText(t *testing.T) {
 // checked conversion between the neutral model's uint64 frequency and
 // core/cat's uint32 (design D4, item 7).
 //
-// The path is UNREACHABLE in normal operation and that is the point of
-// testing it here rather than trusting it: codeplug.Validate refuses any
-// frequency above this radio's 75 MHz ceiling long before a write is
-// planned, so nothing but a direct call gets a value this wide as far as
-// the frame builder. What the test proves is that when one does arrive,
-// the driver REFUSES it — naming the frequency field — instead of
-// casting it to the plausible 14.25 MHz a bare uint32() would have
-// produced and sending that to a radio.
+// The path is UNREACHABLE for the FT-710's own caps.MaxFreqHz (75 MHz,
+// checked above this in buildWriteCommands, and by codeplug.Validate
+// before a write is even planned) — every real FT-710 caps profile
+// refuses a value this wide before the codec sees it. So this test
+// fabricates a caps whose MaxFreqHz is wider than the codec's own
+// nine-digit ceiling, to prove that when one DOES arrive, the driver
+// REFUSES it — naming the frequency field — instead of casting it to the
+// plausible 14.25 MHz a bare uint32() would have produced and sending
+// that to a radio.
 func TestBuildWriteCommands_FrequencyTooWideForTheFrame(t *testing.T) {
 	ch := writableChannel("010")
 	ch.Data.FreqHz = uint64(1)<<32 | 14_250_000
 
-	_, _, err := buildWriteCommands(cat.FT710, ch)
+	wideCaps := CapabilitiesSimulated()
+	wideCaps.MaxFreqHz = ch.Data.FreqHz + 1
+
+	_, _, err := buildWriteCommands(cat.FT710, wideCaps, ch)
 	var wre *driver.WriteRefusedError
 	if !errors.As(err, &wre) {
 		t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)

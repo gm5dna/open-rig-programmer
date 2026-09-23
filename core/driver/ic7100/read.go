@@ -93,6 +93,13 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
 	}
 	data := s.channelData(rec)
+	// Mirrors validateWriteValues' own rung (write.go): a read must not
+	// construct an RX frequency this radio's own caps declares it cannot
+	// hold. TxFreqHz gets no such check here, matching codeplug.Validate,
+	// which only ever bounds the RX field.
+	if data.FreqHz < s.caps.MinFreqHz || data.FreqHz > s.caps.MaxFreqHz {
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, refuse(slot, []spec.Field{spec.FieldFrequency}, "frequency %d is outside %d..%d Hz", data.FreqHz, s.caps.MinFreqHz, s.caps.MaxFreqHz)
+	}
 	return codeplug.Channel{Slot: slot, Data: &data}, record, rec, nil
 }
 

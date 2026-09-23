@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
@@ -197,4 +198,33 @@ func normaliseTierFieldsForOwnModel(cp *codeplug.Codeplug) {
 		return
 	}
 	codeplug.NormaliseTierFields(cp, caps)
+}
+
+// reopenUnavailableTierFieldsForOwnModel runs
+// codeplug.ReopenUnavailableTierFields over cp against the capabilities
+// of the model CP ITSELF names, restricted to absentTierFields — the CLI
+// half of the composition-root pass that function's doc comment
+// describes, and the twin of app/fileio.go's function of the same name.
+//
+// absentTierFields is csvio.TierColumnsAbsent's report on the SAME CSV
+// file cmdImport just parsed: only a field whose column the file's
+// header does not carry at all is eligible to reopen. A field whose
+// column IS present, however its cell reads — including an explicit
+// "n/a" — is never in that list, so it is never touched here: that cell
+// is a statement the file makes, and ReopenUnavailableTierFields leaves
+// it exactly as spelled.
+//
+// Called ONLY from cmdImport's --csv branch, immediately after
+// normaliseTierFieldsForOwnModel. Never called from loadCodeplugStrict's
+// plain-load path — a genuine radio read's or legacy schema's
+// Unavailable claim is not this function's to question.
+func reopenUnavailableTierFieldsForOwnModel(cp *codeplug.Codeplug, absentTierFields []spec.Field) {
+	if cp == nil {
+		return
+	}
+	caps, err := wiring.StaticCapabilities(cp.Radio.Model)
+	if err != nil {
+		return
+	}
+	codeplug.ReopenUnavailableTierFields(cp, caps, absentTierFields)
 }

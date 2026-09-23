@@ -138,6 +138,13 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 	s.rememberRaw(slot, record)
 
 	data := s.channelData(rec)
+	// Mirrors validateKnownValues' own rung (write.go): a read must not
+	// construct an RX frequency this radio's own frequencyInBand refuses.
+	// TxFreqHz gets no such check here, matching codeplug.Validate, which
+	// only ever bounds the RX field.
+	if err := s.frequencyInBand(slot, spec.FieldFrequency, data.FreqHz); err != nil {
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
+	}
 	return codeplug.Channel{Slot: slot, Data: &data}, record, rec, nil
 }
 

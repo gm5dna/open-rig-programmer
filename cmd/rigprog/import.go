@@ -202,6 +202,21 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "rigprog import: opening --csv %s: %v\n", *csvIn, err)
 			return exitError
 		}
+		// Read BEFORE Import: TierColumnsAbsent only reads the header
+		// row, so the file is rewound afterwards for Import's own full
+		// read. This is the one caller that legitimately needs the
+		// header twice (see TierColumnsAbsent's doc comment).
+		absentTierFields, err := csvio.TierColumnsAbsent(f)
+		if err != nil {
+			f.Close()
+			fmt.Fprintf(stderr, "rigprog import: parsing --csv %s: %v\n", *csvIn, err)
+			return exitError
+		}
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			f.Close()
+			fmt.Fprintf(stderr, "rigprog import: rewinding --csv %s: %v\n", *csvIn, err)
+			return exitError
+		}
 		imported, err := csvio.Import(f)
 		f.Close()
 		if err != nil {
@@ -218,6 +233,14 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 		// normaliseTierFieldsForOwnModel in fileio.go for why not
 		// --model's caps, which need not be this file's radio at all).
 		normaliseTierFieldsForOwnModel(base)
+		// csvio marks a tier field Unavailable whenever its CSV column is
+		// entirely absent (a v1 file, or a v2 file with no receiver
+		// group) — absentTierFields names exactly those fields, never one
+		// whose column is present with an explicit "n/a" cell. Reopen the
+		// ones THE MODEL --into NAMES can genuinely reach back to Absent
+		// so Validate catches them as missing rather than "no such field"
+		// (fleet-audit item 4).
+		reopenUnavailableTierFieldsForOwnModel(base, absentTierFields)
 	} else {
 		f, err := os.Open(*chirpIn)
 		if err != nil {

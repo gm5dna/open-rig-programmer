@@ -828,6 +828,68 @@ func NormaliseTierFields(cp *Codeplug, caps spec.Capabilities) {
 	}
 }
 
+// ReopenUnavailableTierFields is NormaliseTierFields' mirror image: for
+// every field named in fields, it resolves an Unavailable state back to
+// Absent wherever caps says the bank holding its channel's slot CAN
+// reach that field. It changes nothing else — a Known, Unknown or
+// genuinely-Unreachable Unavailable field is left exactly as it was, and
+// so is any field NOT named in fields, however it is currently stated.
+//
+// IT EXISTS FOR ONE COMPOSITION-ROOT CASE, not the plain-load path
+// NormaliseTierFields runs on every file: core/csvio.Import marks every
+// tier field a column did not carry AT ALL Unavailable unconditionally
+// (a genuine version-1 file, or a version-2 file with no receiver
+// group), because csvio is capability-blind and cannot itself tell
+// "this radio has no such field" from "this file's header has no column
+// for it" — the identical ambiguity NormaliseTierFields' own doc comment
+// describes for a legacy migration, except csvio's blanket Unavailable
+// is often simply WRONG for the model the caller is importing onto (a
+// v1 CSV merged via --into onto a radio that really has the field).
+// Reopening it to Absent lets codeplug.Validate's ordinary "this radio
+// has a <field> field but this channel says nothing about it" refusal
+// catch it, rather than the import silently asserting the radio lacks a
+// field it has.
+//
+// fields IS THE FIX for the regression this function's first cut caused
+// (fleet-audit item 4 follow-up): reopening EVERY Unavailable tier
+// field, not just the column-absent ones, also reopened an EXPLICIT
+// "n/a" cell in a version-2+ file — a statement the file itself makes,
+// which csvio.Import (parseTierGroup) already leaves exactly as spelled
+// and which must stay Unavailable. csvio.TierColumnsAbsent reports
+// exactly the column-absent set this function should be told about; a
+// caller passes anything else (an empty or nil fields) and nothing
+// reopens.
+//
+// It must NEVER run on the plain-load path (loadCodeplugStrict,
+// app/codeplug.go): a genuine radio read's or legacy schema's Unavailable
+// claim is not this function's to question, only a fabricated one from a
+// column-blind importer is — see the two CSV-import composition roots
+// that call it, immediately after NormaliseTierFields.
+func ReopenUnavailableTierFields(cp *Codeplug, caps spec.Capabilities, fields []spec.Field) {
+	if cp == nil || len(fields) == 0 {
+		return
+	}
+	eligible := make(map[spec.Field]bool, len(fields))
+	for _, f := range fields {
+		eligible[f] = true
+	}
+	for i := range cp.Channels {
+		d := cp.Channels[i].Data
+		if d == nil {
+			continue
+		}
+		bank, _ := bankForSlot(caps, cp.Channels[i].Slot)
+		for _, tf := range TierFields {
+			if !eligible[tf.Field] {
+				continue
+			}
+			if *tf.State(d) == Unavailable && !caps.FieldSupport(bank, tf.Field).Unreachable() {
+				tf.SetState(d, Absent)
+			}
+		}
+	}
+}
+
 // legacyChannel is the FROZEN schema-1/schema-2 on-disk shape of one
 // memory-channel slot.
 //

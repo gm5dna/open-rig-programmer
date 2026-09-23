@@ -551,7 +551,7 @@ func TestWriteChannel_KnownTagDisplayRefusedByTheGate(t *testing.T) {
 			// accepts the channel, because it makes no TagDisplay decision
 			// whatsoever.
 			for _, m := range testModels {
-				if _, err := buildWriteCommand(m.params.dialect, ch); err != nil {
+				if _, err := buildWriteCommand(m.params.dialect, capabilitiesSimulated(m.params), ch); err != nil {
 					t.Errorf("%s: buildWriteCommand = %v, want success — the combined form has no display flag, so a Known value is not the BUILDER's to refuse (the gate above is what refuses it)", m.name, err)
 				}
 			}
@@ -1570,7 +1570,7 @@ func TestBuildWriteCommand_RefusesInexpressibleValues(t *testing.T) {
 				ch := writableChannel(slot)
 				tt.mutate(ch.Data)
 
-				cmd, err := buildWriteCommand(m.params.dialect, ch)
+				cmd, err := buildWriteCommand(m.params.dialect, capabilitiesSimulated(m.params), ch)
 				var wre *driver.WriteRefusedError
 				if !errors.As(err, &wre) {
 					t.Fatalf("buildWriteCommand = %v (%T), want a *driver.WriteRefusedError", err, err)
@@ -1628,7 +1628,7 @@ func TestBuildWriteCommand_NoTagDisplayRefusalTakesPriority(t *testing.T) {
 				ch := multiplyInvalid()
 				ch.Data.TagDisplay = tt.tagDisplay
 
-				_, err := buildWriteCommand(m.params.dialect, ch)
+				_, err := buildWriteCommand(m.params.dialect, capabilitiesSimulated(m.params), ch)
 				var wre *driver.WriteRefusedError
 				if !errors.As(err, &wre) {
 					t.Fatalf("buildWriteCommand = %v, want a *driver.WriteRefusedError", err)
@@ -1673,7 +1673,7 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 	const p7Index = 22
 
 	for _, m := range testModels {
-		cmd, err := buildWriteCommand(m.params.dialect, writableChannel("042"))
+		cmd, err := buildWriteCommand(m.params.dialect, capabilitiesSimulated(m.params), writableChannel("042"))
 		if err != nil {
 			t.Fatalf("%s: buildWriteCommand = %v, want a frame", m.name, err)
 		}
@@ -1716,7 +1716,7 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 		t.Fatal("the peer dialect's MWWriteKind equals the form constant — it cannot discriminate")
 	}
 
-	cmd, err := buildWriteCommand(peer, writableChannel("042"))
+	cmd, err := buildWriteCommand(peer, capabilitiesSimulated(modelD), writableChannel("042"))
 	if err != nil {
 		t.Fatalf("buildWriteCommand on the peer dialect = %v, want a frame — a write path reading MWWriteKind() would be refused here by BuildMTSetCombined, which validates P7 against the form constant", err)
 	}
@@ -1793,6 +1793,38 @@ func TestWriteChannel_NoConsent_StillRefused(t *testing.T) {
 			}
 			if got := p.Transcript(); len(got) != before {
 				t.Errorf("an unconsented, refused WriteChannel sent %d frames, want 0", len(got)-before)
+			}
+		})
+	}
+}
+
+// TestWriteChannel_RefusesFrequencyAboveCapsCeiling pins the newly-live
+// CheckFreqRange rung: this radio's real 30 kHz-75 MHz storable range
+// (caps.MinFreqHz/MaxFreqHz), checked ahead of the codec's own much wider
+// nine-digit ceiling. Before this, a frequency between 75 MHz and the
+// codec's ceiling reached the wire unrefused, for both models.
+func TestWriteChannel_RefusesFrequencyAboveCapsCeiling(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			p, sess := openSession(t, m, Simulated, slotImage{})
+
+			ch := writableChannel("042")
+			ch.Data.FreqHz = 75_000_001 // one Hz above capabilitiesSimulated(m.params).MaxFreqHz
+
+			before := len(p.Transcript())
+			_, err := sess.WriteChannel(testCtx(t), ch)
+			var wre *driver.WriteRefusedError
+			if !errors.As(err, &wre) {
+				t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+			}
+			if want := "frequency 75000001 Hz is outside this radio's storable range 30000-75000000 Hz"; wre.Reason != want {
+				t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+			}
+			if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+				t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldFrequency)
+			}
+			if got := p.Transcript(); len(got) != before {
+				t.Errorf("refused WriteChannel sent %d frames, want 0", len(got)-before)
 			}
 		})
 	}

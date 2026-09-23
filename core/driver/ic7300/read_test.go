@@ -5,10 +5,13 @@ package ic7300
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
+	ic7300civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -325,6 +328,61 @@ func TestReadChannel_RefusesASlotThisRadioDoesNotHave(t *testing.T) {
 		if after := len(peer.Received()); after != before {
 			t.Errorf("ReadChannel(%q) reached the wire before deciding the slot was unknown", slot)
 		}
+	}
+}
+
+// recordAtFrequency uses the CI-V builder so the test record exercises the
+// same frequency encoding the driver parses, then removes the set
+// envelope — see ic7610's namesake helper for the same technique.
+//
+// caps.MaxFreqHz (69,999,999 Hz) is an APP-LEVEL ceiling narrower than
+// what the five-byte packed-BCD field can physically hold: this radio's
+// record has no digit-domain constraint of its own in core/civ/ic7300
+// (unlike write.go's app-level rule), so BuildMemorySet accepts a
+// frequency past it and this helper can build a genuinely reachable
+// over-ceiling record.
+func recordAtFrequency(t *testing.T, hz uint64) []byte {
+	t.Helper()
+	cmd, err := ic7300civ.Profile().BuildMemorySet(civ.MemoryRecord{
+		Address:      civ.ChannelAddress{Channel: 1},
+		Select:       civ.Available("OFF"),
+		RXFreqHz:     civ.Available(hz),
+		TXFreqHz:     civ.Available(hz),
+		Mode:         civ.Available("USB"),
+		Filter:       civ.Available("FIL1"),
+		DataMode:     civ.Available("OFF"),
+		ToneMode:     civ.Available("OFF"),
+		ToneTXDeciHz: civ.Available[uint64](885),
+		ToneRXDeciHz: civ.Available[uint64](1230),
+		Name:         civ.Available("FREQ LIMIT"),
+	})
+	if err != nil {
+		t.Fatalf("BuildMemorySet(%d Hz): %v", hz, err)
+	}
+	frame := cmd.Bytes()
+	return frame[8 : len(frame)-1]
+}
+
+// TestReadChannel_RefusesFrequencyAboveCeiling pins the read-side half of
+// the rule that a driver must not construct a channel codeplug.Validate
+// will immediately refuse: a read must not surface an RX frequency above
+// this radio's own caps.MaxFreqHz, matching the refusal write.go's
+// frequencyInRange already makes for the identical condition.
+func TestReadChannel_RefusesFrequencyAboveCeiling(t *testing.T) {
+	hz := uint64(69_999_999 + 1)
+	peer := newRespondingPort(t, withRecord(1, recordAtFrequency(t, hz)))
+	sess := openSession(t, peer)
+
+	_, err := sess.ReadChannel(context.Background(), "001")
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("ReadChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if want := fmt.Sprintf("%d Hz is above what a memory channel can store on this model (%d Hz): the record's 10 MHz digit is capped at 6, and the 74.8 MHz figure is tuning COVERAGE rather than storable frequency", hz, uint64(69_999_999)); wre.Reason != want {
+		t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [frequency]", wre.Fields)
 	}
 }
 

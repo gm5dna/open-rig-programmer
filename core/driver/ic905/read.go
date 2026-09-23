@@ -11,6 +11,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -129,7 +130,20 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ic905: ReadChannel %s: %w", slot, err)
 	}
-	return neutralChannel(rec, slot, s.caps), nil
+	ch := neutralChannel(rec, slot, s.caps)
+	// Mirrors write.go's rung 5b: a read must not construct an RX
+	// frequency this radio's own caps declares it cannot hold. Same
+	// zero-means-no-ceiling guard as that rung; TxFreqHz gets no such
+	// check here, matching codeplug.Validate, which only ever bounds the
+	// RX field.
+	if ch.Data.FreqHz < s.caps.MinFreqHz || (s.caps.MaxFreqHz != 0 && ch.Data.FreqHz > s.caps.MaxFreqHz) {
+		return codeplug.Channel{}, &driver.WriteRefusedError{
+			Slot:   slot,
+			Fields: []spec.Field{spec.FieldFrequency},
+			Reason: fmt.Sprintf("%d Hz is outside what this radio is declared to store, %d ~ %d Hz (ASSUMED as memory-record limits: ic905.min_storable_hz, lift ic905-R-05; ic905.max_storable_hz, lift ic905-R-06)", ch.Data.FreqHz, s.caps.MinFreqHz, s.caps.MaxFreqHz),
+		}
+	}
+	return ch, nil
 }
 
 // parseRecord decodes raw record bytes into a neutral civ.MemoryRecord.
