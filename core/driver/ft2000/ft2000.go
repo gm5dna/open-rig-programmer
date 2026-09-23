@@ -230,7 +230,7 @@ var ErrAnswerMismatch = driver.ErrAnswerMismatch
 type AnswerMismatchError = driver.AnswerMismatchError[string]
 
 // KindMismatchError reports that an MR answer's P7 kind byte was not one
-// of this radio's accepted read-side values (read.go's acceptedKinds).
-// The shared form (yaesu.KindMismatchError) carries the model name so
-// this package needs no typed error of its own.
+// of this radio's accepted read-side values (read.go's mrParams). The
+// shared form (yaesu.KindMismatchError) carries the model name so this
+// package needs no typed error of its own.
 type KindMismatchError = yaesu.KindMismatchError
