@@ -265,7 +265,7 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	rec, err := s.layout.ParseMA0Answer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ts990: ReadChannel %s: %w", id, err)
+		return codeplug.Channel{}, fmt.Errorf("ts990: ReadChannel %s: %w: %w", id, driver.ErrRecordDecode, err)
 	}
 	if rec.Empty {
 		// The blank-channel note covers P2 TO P18 on this row — the name
