@@ -12,6 +12,12 @@ tag. The full release notes for each version are on the
 ## [Unreleased]
 
 ### Added
+- **Six more tier columns become dropdowns**: Duplex, DTCS polarity,
+  Filter, Tuning step, Preamp and Antenna now edit from each radio's
+  own declared vocabulary (`GetUISpec`), matching Mode/Shift/CTCSS.
+  Tone mode reuses the existing CTCSS-state list rather than a new
+  one. Free text remains the fallback for any radio that declares no
+  such vocabulary.
 - **FT-710 menu settings gain a write path**, hardware-characterised
   address by address: `rigprog write --settings FILE` and the app's
   editable settings cells write only a menu address whose Set

@@ -261,37 +261,35 @@
 	//     is Known — see isToggleColumn for why the FIRST answer is CHOSEN
 	//     rather than manufactured (fix round 1, MED-2).
 	//
-	// NO SELECT FOR THE TEXT KINDS (duplex, tone_mode, dtcs_polarity,
-	// filter, tuning_step, preamp, antenna), deliberately, and the reason
-	// is a GAP rather than an absence: each of the seven has a declared
-	// per-radio vocabulary in core/spec/capabilities.go (DuplexOptions,
-	// ToneModes, DTCSPolarities, Filters, TuningSteps, PreampOptions,
-	// AntennaOptions), but GetUISpec serves NONE of them to the frontend —
-	// app/types.go's UISpecView carries only Modes, ShiftOptions,
-	// CTCSSStateOptions and Tones. So a pick-list here could only offer a
-	// vocabulary this file invented, which is exactly what columns.js's own
-	// header forbids. Free text passes the entry to Go unjudged, precisely
-	// as a paste of the same string does, and Go's Validate answers it.
-	// Serving those seven lists is the change that would earn a select
-	// here; until one is served, this stays free text.
+	// SELECT FOR THE TEXT KINDS, WHEN THE RADIO SERVES A VOCABULARY: six of
+	// the seven (duplex, dtcs_polarity, filter, tuning_step, preamp,
+	// antenna) read their option list from a UISpecView field named by the
+	// column's `vocab` (columns.js's TIER_COLUMNS), one generic select arm
+	// below rather than six near-identical ones. The seventh, tone_mode,
+	// reuses the pre-existing `CTCSSStateOptions` list (Stuart's ruling —
+	// no separate ToneModes field) via the same `vocab` mechanism. A radio
+	// that declares an empty list for a given vocab still falls through to
+	// free text (tierTextColumn below) — the same "no invented vocabulary"
+	// rule as before, just now sometimes satisfied by a served list.
 
 	/** The TierColumn whose editor is the free-text one — the freq, int and
 	 * text kinds, PLUS the tone kind when the UISpec serves no tone list
 	 * to pick from (fix round 2, MED-A): every Icom driver today declares
 	 * `CTCSSTones: nil` and a numeric range instead, so `Tones` reaches
 	 * here as `[]`, and a select built from it would offer nothing to
-	 * keep or choose for a Known cell. That is the same gap the file
-	 * header above describes for the seven unserved vocabularies, and the
-	 * same answer: free text, parsed by the same paste parser, when the
-	 * backend serves no list. null for a non-tier column, for a tone
-	 * column when a list IS served (the select stays, and shows the
-	 * current value selected), and for the bool kind, which has its own
-	 * path above.
+	 * keep or choose for a Known cell — PLUS a `vocab`-bearing text column
+	 * whose named UISpecView list is empty (the radio declares no such
+	 * vocabulary): same gap, same answer. Free text, parsed by the same
+	 * paste parser, when the backend serves no list. null for a non-tier
+	 * column, for a tone or vocab column when a list IS served (the select
+	 * stays, and shows the current value selected), and for the bool kind,
+	 * which has its own path above.
 	 * @param {ReturnType<typeof columnsFor>[number]} column */
 	function tierTextColumn(column) {
 		const tier = tierColumnFor(column)
 		if (!tier || tier.kind === 'bool') return null
 		if (tier.kind === 'tone' && (appState.uiSpec?.Tones?.length ?? 0) > 0) return null
+		if (tier.vocab && (appState.uiSpec?.[tier.vocab]?.length ?? 0) > 0) return null
 		return tier
 	}
 
@@ -564,6 +562,23 @@
 			submitEdit(sv.Slot, (fresh) => ({
 				...cloneData(fresh ?? data),
 				[tier.key]: { state: 'known', value: next },
+			}))
+			return
+		}
+		if (tier?.vocab) {
+			// A vocab-served text-kind column (duplex, tone_mode,
+			// dtcs_polarity, filter, tuning_step, preamp, antenna): the
+			// same "— not set" placeholder cancels as the tone/bool arms
+			// above, and a real choice commits the wire-form string
+			// straight, unjudged — the same value free text would send,
+			// just chosen from the radio's own declared list rather than
+			// typed.
+			if (value === '') return cancelEditor()
+			const current = tierField(tier, data)
+			if (current?.state === 'known' && current.value === value) return cancelEditor()
+			submitEdit(sv.Slot, (fresh) => ({
+				...cloneData(fresh ?? data),
+				[tier.key]: { state: 'known', value },
 			}))
 			return
 		}
@@ -1298,6 +1313,24 @@
 													<option value="" selected>— not set</option>
 													<option value="on">On</option>
 													<option value="off">Off</option>
+												{:else if tier && tier.vocab}
+													<!-- One generic arm for every vocab-served text-kind
+													     column (duplex, tone_mode, dtcs_polarity, filter,
+													     tuning_step, preamp, antenna): the option list comes
+													     from the UISpecView field tier.vocab names
+													     (columns.js), mirroring the tone arm's placeholder
+													     structure above. tierTextColumn only lets a column
+													     reach here when that list is non-empty, so the
+													     placeholder is the sole entry for an empty-list radio
+													     (which never happens, since such a radio takes the
+													     free-text editor instead). -->
+													{@const vocabCurrent = tierField(tier, data)}
+													{#if vocabCurrent?.state !== 'known'}
+														<option value="" selected>— not set</option>
+													{/if}
+													{#each appState.uiSpec?.[tier.vocab] ?? [] as v (v)}
+														<option value={v} selected={vocabCurrent?.state === 'known' && v === vocabCurrent.value}>{v}</option>
+													{/each}
 												{/if}
 											</select>
 										{/if}

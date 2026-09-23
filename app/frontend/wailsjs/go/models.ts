@@ -877,6 +877,12 @@ export namespace main {
 	    ShiftOptions: string[];
 	    CTCSSStateOptions: string[];
 	    Tones: ToneView[];
+	    DuplexOptions: string[];
+	    DTCSPolarities: string[];
+	    Filters: string[];
+	    TuningSteps: string[];
+	    PreampOptions: string[];
+	    AntennaOptions: string[];
 	    TagMaxBytes: number;
 	    ClarMaxHz: number;
 	    ClarStepHz: number;
@@ -899,6 +905,12 @@ export namespace main {
 	        this.ShiftOptions = source["ShiftOptions"];
 	        this.CTCSSStateOptions = source["CTCSSStateOptions"];
 	        this.Tones = this.convertValues(source["Tones"], ToneView);
+	        this.DuplexOptions = source["DuplexOptions"];
+	        this.DTCSPolarities = source["DTCSPolarities"];
+	        this.Filters = source["Filters"];
+	        this.TuningSteps = source["TuningSteps"];
+	        this.PreampOptions = source["PreampOptions"];
+	        this.AntennaOptions = source["AntennaOptions"];
 	        this.TagMaxBytes = source["TagMaxBytes"];
 	        this.ClarMaxHz = source["ClarMaxHz"];
 	        this.ClarStepHz = source["ClarStepHz"];

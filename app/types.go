@@ -443,9 +443,27 @@ type UISpecView struct {
 	ShiftOptions      []string
 	CTCSSStateOptions []string
 	Tones             []ToneView
-	TagMaxBytes       int
-	ClarMaxHz         int
-	ClarStepHz        int
+	// DuplexOptions/DTCSPolarities/Filters/TuningSteps/PreampOptions/
+	// AntennaOptions serve six of the seven text-kind tier vocabularies
+	// core/spec/capabilities.go declares (DuplexOptions, DTCSPolarities,
+	// Filters, TuningSteps, PreampOptions, AntennaOptions) — straight from
+	// caps, Value-extracted where the source is struct-typed, matching
+	// how ShiftOptions is served above. The seventh, tone_mode, is
+	// deliberately NOT a new field: Stuart's ruling is that its column
+	// reuses CTCSSStateOptions rather than adding a ToneModes field
+	// alongside it — see columns.js's `toneMode` TIER_COLUMNS entry. A
+	// radio that declares an empty list here leaves its column free text,
+	// unchanged (see GetUISpec's doc comment on this file's tier-column
+	// gap).
+	DuplexOptions  []string
+	DTCSPolarities []string
+	Filters        []string
+	TuningSteps    []string
+	PreampOptions  []string
+	AntennaOptions []string
+	TagMaxBytes    int
+	ClarMaxHz      int
+	ClarStepHz     int
 	// GridLegendNote (formerly ToneScanSkipNote) is the channel grid's
 	// standing legend explaining why the Tone/Scan Skip columns exist but
 	// cannot be read back over CAT — served from

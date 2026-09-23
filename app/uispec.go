@@ -564,6 +564,18 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	}
 	ctcssStateOptions := ctcssStateValues(yaesuToneModes)
 
+	// The six text-kind tier vocabularies (DuplexOptions, DTCSPolarities,
+	// Filters, TuningSteps, PreampOptions, AntennaOptions): straight from
+	// caps, same as Modes below, Value-extracted for DuplexOptions since
+	// its caps source is struct-typed (matching the shiftOptions loop
+	// above). No tone_mode list is built here — that column reuses
+	// ctcssStateOptions (Stuart's ruling; see UISpecView.DuplexOptions'
+	// doc comment).
+	duplexOptions := make([]string, len(caps.DuplexOptions))
+	for i, o := range caps.DuplexOptions {
+		duplexOptions[i] = o.Value
+	}
+
 	// Prose fields (task 41, M9a-5): served from internal/radiotext rather
 	// than hardcoded in this package or the frontend — see UISpecView's
 	// doc comment (types.go) for what each field is and its exact source.
@@ -593,6 +605,12 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		ShiftOptions:              shiftOptions,
 		CTCSSStateOptions:         ctcssStateOptions,
 		Tones:                     tones,
+		DuplexOptions:             duplexOptions,
+		DTCSPolarities:            append([]string(nil), caps.DTCSPolarities...),
+		Filters:                   append([]string(nil), caps.Filters...),
+		TuningSteps:               append([]string(nil), caps.TuningSteps...),
+		PreampOptions:             append([]string(nil), caps.PreampOptions...),
+		AntennaOptions:            append([]string(nil), caps.AntennaOptions...),
 		TagMaxBytes:               caps.TagLen,
 		ClarMaxHz:                 caps.ClarMaxHz,
 		ClarStepHz:                caps.ClarStepHz,
