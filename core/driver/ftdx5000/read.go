@@ -60,10 +60,9 @@ var mrParams = yaesu.MRParams{
 // driver this is NOT an MT read — this radio has no MT command at all
 // (doc.go) — so, same as ftdx9000, there is no second (tag) exchange to
 // sequence beside the read.
-//
-// UNLIKE EVERY OTHER MIGRATED DRIVER'S ReadChannel, this one takes no
-// s.opMu lock (yet) — carried over unchanged from the pre-migration body,
-// which never took one either. See the next commit, which fixes this.
 func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+
 	return yaesu.ReadChannel(ctx, s.eng, s.dialect, s.caps, &mrParams, slot)
 }
