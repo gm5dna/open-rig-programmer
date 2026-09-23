@@ -3,11 +3,14 @@
 package ftdx5000
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -96,6 +99,102 @@ func TestWriteChannel_TagRefused(t *testing.T) {
 	_, err := sess.WriteChannel(testCtx(t), codeplug.Channel{Slot: "010", Data: data})
 	if err == nil {
 		t.Fatal("WriteChannel with a non-empty Tag = nil, want a refusal")
+	}
+}
+
+// TestWriteChannel_TagDisplayKnownRefused: a Known TagDisplay is requested
+// (RequestConditionalTagFields) — unlike an Unavailable/Unknown one, which
+// TestWriteChannel_Accepted proves is never requested at all — and this
+// radio has no display flag to write, so the capability walk refuses it.
+func TestWriteChannel_TagDisplayKnownRefused(t *testing.T) {
+	_, sess := openSession(t, Simulated, slotImage{})
+
+	data := populatedChannel(14_250_000)
+	data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: true}
+	_, err := sess.WriteChannel(testCtx(t), codeplug.Channel{Slot: "010", Data: data})
+	if err == nil {
+		t.Fatal("WriteChannel with TagDisplay Known = nil, want a refusal — this radio's record has no display flag")
+	}
+}
+
+// TestWriteChannel_ScanSkipKnownRefused: a Known ScanSkip is requested
+// (RequestConditionalTagFields) — unlike an Unavailable one, which
+// TestWriteChannel_Accepted proves is never requested at all — and this
+// radio has no scan-skip byte to write, so the capability walk refuses it.
+func TestWriteChannel_ScanSkipKnownRefused(t *testing.T) {
+	_, sess := openSession(t, Simulated, slotImage{})
+
+	data := populatedChannel(14_250_000)
+	data.ScanSkip = codeplug.BoolField{State: codeplug.Known, Value: true}
+	_, err := sess.WriteChannel(testCtx(t), codeplug.Channel{Slot: "010", Data: data})
+	if err == nil {
+		t.Fatal("WriteChannel with ScanSkip Known = nil, want a refusal — this radio's record has no scan-skip byte")
+	}
+}
+
+// TestBuildWriteCommand_TagRefused pins ExplicitTagRefusal's own wording:
+// buildWriteCommand refuses a non-empty Tag itself, ahead of the value-level
+// checks that follow it, before the caps-driven "not write-Supported"
+// refusal (which fires first via WriteChannel today, since FieldTag is the
+// zero FieldSupport) ever gets a chance to. Called directly, bypassing
+// WriteChannel's capability walk, the same way TestBuildWriteCommand_
+// ToneRoundTrips already does.
+func TestBuildWriteCommand_TagRefused(t *testing.T) {
+	data := populatedChannel(14_250_000)
+	data.Tag = "GB3TEST"
+	_, err := buildWriteCommand(dialect, codeplug.Channel{Slot: "010", Data: data})
+
+	var refused *driver.WriteRefusedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("buildWriteCommand with a non-empty Tag = %v, want *driver.WriteRefusedError", err)
+	}
+	if len(refused.Fields) != 1 || refused.Fields[0] != spec.FieldTag {
+		t.Errorf("refused.Fields = %v, want [FieldTag]", refused.Fields)
+	}
+	const want = "this radio's CAT command set has no channel-name/tag route at all (matrix §2/§3): a non-empty tag cannot be written"
+	if refused.Reason != want {
+		t.Errorf("refused.Reason = %q, want %q", refused.Reason, want)
+	}
+}
+
+// TestBuildWriteCommand_TagDisplayKnownRefused pins ExplicitTagRefusal's
+// TagDisplay wording, the same way TestBuildWriteCommand_TagRefused pins
+// its Tag wording.
+func TestBuildWriteCommand_TagDisplayKnownRefused(t *testing.T) {
+	data := populatedChannel(14_250_000)
+	data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: true}
+	_, err := buildWriteCommand(dialect, codeplug.Channel{Slot: "010", Data: data})
+
+	var refused *driver.WriteRefusedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("buildWriteCommand with TagDisplay Known = %v, want *driver.WriteRefusedError", err)
+	}
+	if len(refused.Fields) != 1 || refused.Fields[0] != spec.FieldTagDisplay {
+		t.Errorf("refused.Fields = %v, want [FieldTagDisplay]", refused.Fields)
+	}
+	const want = "this radio's 27-byte record has no display flag (matrix §2): a Known tag_display cannot be written"
+	if refused.Reason != want {
+		t.Errorf("refused.Reason = %q, want %q", refused.Reason, want)
+	}
+}
+
+// TestWriteChannel_KindByteHardcodedVFO pins Q2: the MW Set frame's P7 kind
+// byte is always cat.KindVFO. Offset 21 is this dialect's own memKindOff
+// (P1 3 digits + P2 8 digits + P3 sign/4-digit mag + P4 + P5 + P6, matching
+// the P9 offset TestBuildWriteCommand_ToneRoundTrips already addresses at
+// frame[23:25], two bytes further on past P8).
+func TestWriteChannel_KindByteHardcodedVFO(t *testing.T) {
+	p, sess := openSession(t, Simulated, slotImage{})
+
+	_, err := sess.WriteChannel(testCtx(t), codeplug.Channel{Slot: "010", Data: populatedChannel(14_250_000)})
+	if err != nil {
+		t.Fatalf("WriteChannel = %v, want nil", err)
+	}
+
+	transcript := p.Transcript()
+	mw := transcript[len(transcript)-1]
+	if got, want := mw[21], byte(cat.KindVFO); got != want {
+		t.Errorf("MW frame P7 (Kind) byte = %q, want %q (cat.KindVFO)", got, want)
 	}
 }
 
