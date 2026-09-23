@@ -63,6 +63,16 @@ var canonicalV5Goldens = []string{
 	"canonical-v5-basic.json",
 }
 
+// canonicalV6Goldens are the schema-6 files in testdata: the schema-5
+// golden above, plus one Radio.FailedSlots entry — the field schema 6
+// added. Produced by loading canonical-v5-basic.json, setting
+// FailedSlots, and re-saving through this package's own Save, then
+// frozen — same provenance rule as canonicalV5Goldens (drift protection,
+// no older writer to prove agreement with).
+var canonicalV6Goldens = []string{
+	"canonical-v6-basic.json",
+}
+
 // TestSaveLoad_CanonicalV3ByteIdentical is the FIRST of design D4's two
 // pinned tests (adjudication 4; round 2 F6+C7): save(load(f)) is
 // byte-identical for every canonical writer-produced schema-3 file.
@@ -189,6 +199,91 @@ func TestSaveLoad_CanonicalV5ByteIdentical(t *testing.T) {
 				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
 			}
 		})
+	}
+}
+
+// TestSaveLoad_CanonicalV6ByteIdentical mirrors
+// TestSaveLoad_CanonicalV5ByteIdentical for schema 6: save(load(f)) is
+// byte-identical for every canonical writer-produced schema-6 file — the
+// new loadV6/codeplugV5 split (file.go) must not change what a file
+// carrying FailedSlots round-trips to.
+func TestSaveLoad_CanonicalV6ByteIdentical(t *testing.T) {
+	for _, name := range canonicalV6Goldens {
+		t.Run(name, func(t *testing.T) {
+			src := filepath.Join("testdata", name)
+			want, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatalf("reading golden: %v", err)
+			}
+			cp, err := Load(src)
+			if err != nil {
+				t.Fatalf("Load(%s) error = %v", src, err)
+			}
+			if cp.Schema != CurrentSchema {
+				t.Fatalf("Load(%s).Schema = %d, want %d (migrate-on-load)", src, cp.Schema, CurrentSchema)
+			}
+			if len(cp.Radio.FailedSlots) == 0 {
+				t.Fatalf("Load(%s).Radio.FailedSlots is empty, want the golden's entry to have round-tripped", src)
+			}
+			dst := filepath.Join(t.TempDir(), name)
+			if err := Save(dst, cp); err != nil {
+				t.Fatalf("Save() error = %v", err)
+			}
+			got, err := os.ReadFile(dst)
+			if err != nil {
+				t.Fatalf("reading re-saved file: %v", err)
+			}
+			if string(got) != string(want) {
+				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
+			}
+		})
+	}
+}
+
+// TestSchemaFor_FailedSlotsForcesSchema6 pins schemaFor's FailedSlots
+// clause: it wins even when every channel is otherwise schema-3-
+// representable (every tier field Unavailable, an in-range frequency) —
+// no earlier schema has a key for FailedSlots at all, so there is no
+// omission for an older loader to reconstruct correctly.
+func TestSchemaFor_FailedSlotsForcesSchema6(t *testing.T) {
+	cp := &Codeplug{
+		Radio: RadioInfo{FailedSlots: []ReadFailure{{Slot: "003", Reason: "boom"}}},
+		Channels: []Channel{
+			{Slot: "001", Data: withUnavailableTierFields(&ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"})},
+		},
+	}
+	if got := schemaFor(cp); got != 6 {
+		t.Errorf("schemaFor() = %d, want 6 (FailedSlots forces schema 6 regardless of channel content)", got)
+	}
+}
+
+// TestLoadV5_MigratesToSchema6WithNilFailedSlots: a schema-5 file (no
+// "failed_slots" key at all) migrates to the current schema with
+// FailedSlots nil — the one honest reading, since no schema before 6
+// could ever have recorded a read failure.
+func TestLoadV5_MigratesToSchema6WithNilFailedSlots(t *testing.T) {
+	cp, err := Load(filepath.Join("testdata", "canonical-v5-basic.json"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cp.Schema != CurrentSchema {
+		t.Errorf("Schema = %d, want %d", cp.Schema, CurrentSchema)
+	}
+	if cp.Radio.FailedSlots != nil {
+		t.Errorf("Radio.FailedSlots = %+v, want nil", cp.Radio.FailedSlots)
+	}
+}
+
+// TestLoadV6_RoundTrip: a schema-6 file's FailedSlots entries decode
+// through the live shape unchanged.
+func TestLoadV6_RoundTrip(t *testing.T) {
+	cp, err := Load(filepath.Join("testdata", "canonical-v6-basic.json"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := []ReadFailure{{Slot: "G00-003", Reason: "ic-r8600: ReadChannel G00-003: requested G00-003 but the answer names G00-004 — refusing to map a reply onto the wrong slot"}}
+	if !reflect.DeepEqual(cp.Radio.FailedSlots, want) {
+		t.Errorf("Radio.FailedSlots = %+v, want %+v", cp.Radio.FailedSlots, want)
 	}
 }
 
