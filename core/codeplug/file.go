@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -480,22 +481,37 @@ func decodeStrict(b []byte, path string, v any, exempt exemptFunc) error {
 	return nil
 }
 
+// radioInfoV5 is the FROZEN schema-5 RadioInfo shape: schema 5's own eight
+// fields, WITHOUT FailedSlots (schema 6). Reusing the live RadioInfo here,
+// as codeplugV5 used to, was wrong: "failed_slots" is a JSON key with a
+// matching live Go field, so DisallowUnknownFields does not reject it —
+// only a JSON key with NO matching field is rejected — and a schema-5 file
+// carrying failed_slots decoded straight through. Freezing RadioInfo's
+// own shape, not just codeplugV5's top level, is what actually keeps a
+// schema-6-only field out of a schema-5 file.
+type radioInfoV5 struct {
+	Model             string    `json:"model"`
+	CATID             string    `json:"cat_id"`
+	ReadAt            time.Time `json:"read_at"`
+	Port              string    `json:"port,omitempty"`
+	USBSerial         string    `json:"usb_serial,omitempty"`
+	FirmwareConfirmed string    `json:"firmware_confirmed,omitempty"`
+	Region            string    `json:"region,omitempty"`
+	BaselineDigest    string    `json:"baseline_digest,omitempty"`
+}
+
 // codeplugV5 is the FROZEN schema-5 top-level shape: schema 5's own five
 // fields, pinned against the live Codeplug gaining a sixth (FailedSlots,
 // schema 6) that a decoder following the live struct would otherwise
 // silently absorb into a schema-5 file. It reuses the live
-// RadioInfo/Channel/ChannelData leaf types deliberately: schema 6 changed
-// none of their shapes, only added a top-level field, so reusing them
-// states the truth about what schema 5 held. Decoding a schema-5 file
-// (no "failed_slots" key) through the live RadioInfo is exactly as safe
-// as through a frozen one today — DisallowUnknownFields only rejects an
-// unrecognised JSON key, never a Go struct field the JSON simply omits —
-// freezing this struct is what keeps that true after the NEXT schema
-// bump too, matching why codeplugV3/codeplugV4 exist at all.
+// Channel/ChannelData leaf types deliberately: schema 6 changed none of
+// their shapes, only added a top-level RadioInfo field, so reusing them
+// states the truth about what schema 5 held. Radio uses the frozen
+// radioInfoV5 instead, for the reason given on that type's own comment.
 type codeplugV5 struct {
 	Schema    int           `json:"schema"`
 	Generator string        `json:"generator"`
-	Radio     RadioInfo     `json:"radio"`
+	Radio     radioInfoV5   `json:"radio"`
 	Channels  []Channel     `json:"channels"`
 	Menus     *MenuSnapshot `json:"menus,omitempty"`
 }
@@ -505,7 +521,8 @@ type codeplugV5 struct {
 // the result, which is the correct migrated value: unlike a tier field's
 // Unknown-vs-Unavailable ambiguity, "this pre-schema-6 file records no
 // read failures" has only one honest reading — no earlier schema could
-// ever have recorded one.
+// ever have recorded one (and radioInfoV5 has no field to carry it even
+// if a file tried).
 func loadV5(b []byte, path string) (*Codeplug, error) {
 	var v5 codeplugV5
 	if err := decodeStrict(b, path, &v5, menusLegacyExempt); err != nil {
@@ -517,9 +534,18 @@ func loadV5(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema,
 		Generator: v5.Generator,
-		Radio:     v5.Radio,
-		Channels:  v5.Channels,
-		Menus:     v5.Menus,
+		Radio: RadioInfo{
+			Model:             v5.Radio.Model,
+			CATID:             v5.Radio.CATID,
+			ReadAt:            v5.Radio.ReadAt,
+			Port:              v5.Radio.Port,
+			USBSerial:         v5.Radio.USBSerial,
+			FirmwareConfirmed: v5.Radio.FirmwareConfirmed,
+			Region:            v5.Radio.Region,
+			BaselineDigest:    v5.Radio.BaselineDigest,
+		},
+		Channels: v5.Channels,
+		Menus:    v5.Menus,
 	}, nil
 }
 

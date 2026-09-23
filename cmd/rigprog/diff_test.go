@@ -187,6 +187,39 @@ func TestCmdDiff_SchemaTooNew(t *testing.T) {
 	}
 }
 
+// TestCmdDiff_RefusesPartialCandidate mirrors
+// TestCmdExport_RefusesPartialCodeplug (export_test.go): a candidate
+// FILE carrying Radio.FailedSlots is refused with the same "partial
+// read" message style as the baseline-partial refusal below it in
+// diff.go, and — since the check runs right after load, before
+// openSession — no radio is ever touched, so a bogus/unreachable --port
+// is irrelevant here and --fake is used purely for a valid session flag.
+func TestCmdDiff_RefusesPartialCandidate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "partial.json")
+	fixture := &codeplug.Codeplug{
+		Schema: codeplug.CurrentSchema,
+		Radio:  codeplug.RadioInfo{FailedSlots: []codeplug.ReadFailure{{Slot: "003", Reason: "boom"}}},
+		Channels: []codeplug.Channel{
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"}},
+		},
+	}
+	if err := codeplug.Save(path, fixture); err != nil {
+		t.Fatalf("Save fixture: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	got := cmdDiff(testCtx(t), []string{"--fake", path}, &stdout, &stderr)
+	if got != exitError {
+		t.Errorf("cmdDiff(partial candidate) = %d, want exitError (%d); stderr=%q", got, exitError, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "partial read") {
+		t.Errorf("cmdDiff(partial candidate) stderr = %q, want it to mention the partial read", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("cmdDiff(partial candidate) stdout = %q, want empty (refused before any diff was computed)", stdout.String())
+	}
+}
+
 // TestCmdDiff_CancelledBeforeStart mirrors
 // TestCmdRead_CancelledBeforeStart: a context already cancelled before
 // cmdDiff opens a session yields exit 1 and a "cancelled" message. Uses a
