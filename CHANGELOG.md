@@ -12,6 +12,21 @@ tag. The full release notes for each version are on the
 ## [Unreleased]
 
 ### Added
+- **A radio read survives one or more corrupted/mis-addressed slot
+  replies** instead of aborting the whole read: `rigprog read`, the
+  app's Read Radio, and `PrepareSend`'s own fresh baseline read now
+  classify a slot answer that named the wrong channel, or that could
+  not be decoded at all, as a recorded per-slot failure rather than a
+  fatal error — every other slot is still read and saved. `rigprog
+  read` exits with a new code, 6, and prints a `Failed: N` line when
+  any slot failed; the app shows a status-bar message and highlights
+  the affected rows in the grid. A codeplug carrying one or more
+  failed slots is refused at every send/diff/CSV-export boundary
+  (`PrepareSend`, `rigprog diff`, CSV export in both the CLI and the
+  app) until the radio is re-read — a partial baseline must never be
+  sent to a radio or compared as if it were complete. Adds file schema
+  6 (schema 5 stays readable and byte-identical when nothing forces
+  the new field).
 - **Seven more tier columns become dropdowns**: Duplex, Tone mode, DTCS
   polarity, Filter, Tuning step, Preamp and Antenna now edit from each
   radio's own declared vocabulary (`GetUISpec`), matching Mode/Shift/
