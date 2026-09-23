@@ -22,13 +22,13 @@ import (
 // into every MW-only driver for nothing.
 //
 // AN UNSET FIELD MEANS "NOT THIS RADIO", same convention as Params:
-// ExplicitTagRefusal, SkipTierFields, RequestConditionalTagFields and
-// ScanSkipUnavailable are declared here for the full 7-driver design
-// (spec v2 §2) but are NOT YET READ by ReadChannel/MRWriteChannel/
-// BuildMWCommand below — no driver migrated so far sets any of them to
-// true. The driver that needs one (ftdx9000, ftdx5000) adds the
-// corresponding branch to the shared body when it migrates, per the
-// plan's step order.
+// ExplicitTagRefusal and RequestConditionalTagFields are declared here
+// for the full 7-driver design (spec v2 §2) but are NOT YET READ by
+// ReadChannel/MRWriteChannel/BuildMWCommand below — ftdx5000, the one
+// driver that needs either, adds its branch to the shared body when it
+// migrates, per the plan's step order. SkipTierFields and
+// ScanSkipUnavailable ARE read (ftdx9000, the migration that needed
+// them first).
 type MRParams struct {
 	// Name is the error prefix every message this package mints carries,
 	// and the Model KindMismatchError names, e.g. "ftdx1200".
@@ -59,13 +59,19 @@ type MRParams struct {
 	EraseReason string
 	// ExplicitTagRefusal — ftdx5000 only. Not yet read anywhere below.
 	ExplicitTagRefusal bool
-	// SkipTierFields — ftdx9000 only. Not yet read anywhere below.
+	// SkipTierFields — ftdx9000 only. When true, mrRequestedFields skips
+	// the TierRequestedFields loop entirely: this radio's 27-byte record
+	// has no room for any of the 17 Icom-tier fields, and its fixed
+	// request list never asked after them (spec-v2 finding 9) — a Known
+	// one is accepted and silently dropped, not refused.
 	SkipTierFields bool
 	// RequestConditionalTagFields — ftdx5000 only. Not yet read anywhere
 	// below.
 	RequestConditionalTagFields bool
-	// ScanSkipUnavailable — ftdx5000, ftdx9000 only. Not yet read
-	// anywhere below.
+	// ScanSkipUnavailable — ftdx5000, ftdx9000 only. When true,
+	// ReadChannel reports ScanSkip as Unavailable rather than Unknown:
+	// the record has no scan-skip byte at all, a positive statement, not
+	// an open question.
 	ScanSkipUnavailable bool
 }
 
@@ -94,9 +100,7 @@ const (
 	// ft450d, ft950, ftdx3000).
 	ToneOptionalIfKnown
 	// ToneRequiredKnown: a write requires the tone Known and refuses
-	// otherwise (ftdx5000, ftdx9000). Declared for MRParams's full design
-	// (spec v2 §2); not yet read by mrRequestedFields/BuildMWCommand —
-	// added when those two drivers migrate.
+	// otherwise (ftdx5000, ftdx9000).
 	ToneRequiredKnown
 )
 
@@ -134,8 +138,9 @@ var shiftNames = map[cat.Shift]string{
 // ReadChannel implements the single-MR-read body shared by the in-scope
 // MW/MR-family drivers (ftx1 stays separate — two-frame MR+MT). There is
 // no MT to sequence beside the read, so Tag stays "" and TagDisplay stays
-// Unavailable; ScanSkip stays Unknown (ScanSkipUnavailable is not yet
-// read here, see MRParams's doc comment). The caller holds its own
+// Unavailable; ScanSkip stays Unknown, UNLESS ScanSkipUnavailable is set
+// (ftdx5000, ftdx9000: the 27-byte record has no scan-skip byte at all —
+// a positive statement, not an open question). The caller holds its own
 // operation mutex around this call; nothing here takes a lock, matching
 // MRWriteChannel and the MT family's WriteChannel.
 func ReadChannel(ctx context.Context, eng *transport.Engine, dialect cat.Dialect, caps spec.Capabilities, p *MRParams, slot string) (codeplug.Channel, error) {
@@ -181,6 +186,11 @@ func ReadChannel(ctx context.Context, eng *transport.Engine, dialect cat.Dialect
 		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: unmapped shift %q", p.Name, sl.Wire(), m.Shift)
 	}
 
+	scanSkip := codeplug.Unknown
+	if p.ScanSkipUnavailable {
+		scanSkip = codeplug.Unavailable
+	}
+
 	var tone codeplug.ToneField
 	switch p.ToneRead {
 	case ToneLiveKnown:
@@ -208,7 +218,7 @@ func ReadChannel(ctx context.Context, eng *transport.Engine, dialect cat.Dialect
 			Shift:      shift,
 			Tag:        "",
 			TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
-			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			ScanSkip:   codeplug.BoolField{State: scanSkip},
 
 			// The Icom-tier fields: UNAVAILABLE on every one of these
 			// radios.
