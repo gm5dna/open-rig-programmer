@@ -370,6 +370,14 @@ func TestValidate(t *testing.T) {
 			wantSlot:     "002",
 			wantMsgSub:   "invalid byte",
 		},
+		{
+			name: "radio carries FailedSlots (a partial read)",
+			mutate: func(cp *Codeplug) {
+				cp.Radio.FailedSlots = []ReadFailure{{Slot: "003", Reason: "boom"}}
+			},
+			wantSeverity: SeverityError,
+			wantMsgSub:   "partial read",
+		},
 	}
 
 	for _, tc := range cases {

@@ -352,7 +352,7 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 	// thirteen in three (§5).
 	rec, err := s.layout.ParseMRAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ts480: ReadChannel %s: %w", id, err)
+		return codeplug.Channel{}, fmt.Errorf("ts480: ReadChannel %s: %w: %w", id, driver.ErrRecordDecode, err)
 	}
 	// THE COMPARISON IS OF THE NUMBER AND NOT OF kw.Slot.String(), which is
 	// the one place this driver may not reuse the codec's own rendering:

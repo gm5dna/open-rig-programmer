@@ -4,6 +4,7 @@ package codeplug
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -34,7 +35,7 @@ func TestRadioInfoJSON_OptionalFieldsOmitted(t *testing.T) {
 			t.Errorf("marshalled JSON missing required key %q: %s", key, b)
 		}
 	}
-	for _, key := range []string{"port", "usb_serial", "firmware_confirmed", "region", "baseline_digest"} {
+	for _, key := range []string{"port", "usb_serial", "firmware_confirmed", "region", "baseline_digest", "failed_slots"} {
 		if _, ok := raw[key]; ok {
 			t.Errorf("marshalled JSON has optional key %q present with zero value, want omitted: %s", key, b)
 		}
@@ -54,6 +55,7 @@ func TestRadioInfoJSON_RoundTrip(t *testing.T) {
 		FirmwareConfirmed: "1.06",
 		Region:            "UK",
 		BaselineDigest:    "deadbeef",
+		FailedSlots:       []ReadFailure{{Slot: "005", Reason: "boom"}},
 	}
 
 	b, err := json.Marshal(want)
@@ -71,7 +73,7 @@ func TestRadioInfoJSON_RoundTrip(t *testing.T) {
 		t.Errorf("ReadAt = %v, want %v", got.ReadAt, want.ReadAt)
 	}
 	got.ReadAt = want.ReadAt // neutralise for the rest of the comparison
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("RadioInfo round trip = %+v, want %+v", got, want)
 	}
 }

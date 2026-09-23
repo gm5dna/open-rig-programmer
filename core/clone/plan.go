@@ -146,6 +146,18 @@ func copyChannelData(d *codeplug.ChannelData) *codeplug.ChannelData {
 	return &cp
 }
 
+// copyRadioInfo returns a defensive copy of info: RadioInfo's other fields
+// hold no pointers, so this is only about FailedSlots, its one slice
+// field. Belt-and-braces here in practice — by the time PrepareSend
+// builds a SendPlan, Validate(file, caps) has already refused any file
+// whose Radio.FailedSlots is non-empty — but it keeps SendPlan's own
+// opacity guarantee (obligation 2) true of every field, not just the ones
+// that happen to matter today.
+func copyRadioInfo(info codeplug.RadioInfo) codeplug.RadioInfo {
+	info.FailedSlots = append([]codeplug.ReadFailure(nil), info.FailedSlots...)
+	return info
+}
+
 // copyChannels returns an independently-allocated deep copy of channels:
 // a fresh slice, and a fresh *ChannelData (via copyChannelData) per
 // element.
@@ -206,16 +218,23 @@ func capsConsented(caps spec.Capabilities) bool {
 // PrepareSend builds an immutable SendPlan for sending file to the radio.
 //
 // Order (fixed, and load-bearing — see doc.go's obligations 1 and 9): a
-// fresh ReadAll (obligation 1 — never a cached/prior read); saving that
-// read as a snapshot via the Service's SnapshotStore (obligation 9 —
-// before Validate/Diff run at all, so even a validation failure still
-// leaves a durable record of what the radio held at this moment);
+// fresh ReadAll (obligation 1 — never a cached/prior read, and now via
+// the unlocked readAll, which may return a PARTIAL result — see
+// Radio.FailedSlots); saving that read as a snapshot via the Service's
+// SnapshotStore (obligation 9 — before Validate/Diff run at all, so even
+// a validation failure still leaves a durable record of what the radio
+// held at this moment); a refusal, as a *ValidationFailedError, if that
+// baseline is partial (a slot ReadAll never returned at all cannot be
+// told apart from an ordinary unchanged/added slot by codeplug.Diff's
+// inventory check, so a partial baseline must never reach it);
 // codeplug.Validate(file, caps) against the session's CURRENT effective
 // capabilities (a SeverityError issue is a typed refusal,
-// *ValidationFailedError, carrying every Issue found); codeplug.Diff
-// against the fresh baseline (a slot-inventory mismatch is likewise
-// reported as a *ValidationFailedError, since it means file does not
-// descend from a read of this radio's current layout).
+// *ValidationFailedError, carrying every Issue found — including the
+// candidate's OWN partial-read check, if file itself carries
+// FailedSlots); codeplug.Diff against the fresh baseline (a slot-
+// inventory mismatch is likewise reported as a *ValidationFailedError,
+// since it means file does not descend from a read of this radio's
+// current layout).
 //
 // The returned plan's baseline and candidate channels are PRIVATE deep
 // copies, made before this method returns (obligation 2): mutating file
@@ -246,6 +265,20 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 		return nil, fmt.Errorf("clone: PrepareSend: %w", err)
 	}
 
+	// A partial baseline is refused HERE, after the snapshot is durably
+	// saved (obligation 9's ordering is preserved) but before Validate/
+	// Diff run: codeplug.Diff's inventory check cannot see a slot ReadAll
+	// never returned at all (checkInventory only compares slots present in
+	// BOTH maps), so a missing baseline slot silently looks like an
+	// ordinary unchanged/added case rather than the corrupted read it
+	// actually is.
+	if n := len(baseline.Radio.FailedSlots); n > 0 {
+		return nil, &ValidationFailedError{Issues: []codeplug.Issue{{
+			Severity: codeplug.SeverityError,
+			Msg:      fmt.Sprintf("clone: PrepareSend: the fresh baseline read is partial (%d slot(s) failed); re-read the radio before sending", n),
+		}}}
+	}
+
 	caps := s.sess.Capabilities()
 
 	issues := codeplug.Validate(file, caps)
@@ -271,7 +304,7 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 		generation:      s.generation,
 		baseline:        copyChannels(baseline.Channels),
 		candidate:       copyChannels(file.Channels),
-		candidateRadio:  file.Radio,
+		candidateRadio:  copyRadioInfo(file.Radio),
 		baselineDigest:  diff.BaselineDigest,
 		candidateDigest: diff.CandidateDigest,
 		diff:            diff,

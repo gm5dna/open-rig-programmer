@@ -4,6 +4,7 @@ package clone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
@@ -30,11 +31,23 @@ import (
 // read, so a later PrepareSend/Execute pair can detect any change to this
 // exact read.
 //
-// Progress is reported once per slot, phase "read", 1-based done against
-// the total slot count across every bank. ctx is checked between slots
-// (not just once at the start): a caller can cancel a long read (a
-// multi-hundred-slot MEM+PMS+60M/EMG image) between any two ReadChannel
-// calls.
+// Progress is reported once per slot, phase "read" for an ordinary slot or
+// "fail" for one classified below, 1-based done against the total slot
+// count across every bank. ctx is checked between slots (not just once at
+// the start): a caller can cancel a long read (a multi-hundred-slot
+// MEM+PMS+60M/EMG image) between any two ReadChannel calls.
+//
+// A single slot's read failure does NOT abort the whole read when it is
+// one driver.ErrAnswerMismatch (a reply named the wrong channel) or
+// driver.ErrRecordDecode (a reply that arrived intact but could not be
+// decoded — see that sentinel's doc comment for exactly which driver
+// errors wrap it): that slot is recorded in the returned Codeplug's
+// Radio.FailedSlots instead, and the read continues over every remaining
+// slot. Any other error (transport, timeout, context, framing) still
+// aborts the whole read, exactly as before. A caller that must never act
+// on a partial baseline (PrepareSend, rigprog diff, a CSV export) refuses
+// FailedSlots explicitly at its own boundary — this function itself never
+// refuses on their account.
 //
 // Fix 2 (adjudicated MEDIUM): ReadAll acquires this Service's operation
 // lock (see Service.acquireOp/ErrBusy) for its whole duration, refusing a
@@ -65,6 +78,7 @@ func (s *Service) readAll(ctx context.Context) (*codeplug.Codeplug, error) {
 	}
 
 	channels := make([]codeplug.Channel, 0, total)
+	var failures []codeplug.ReadFailure
 	done := 0
 	for _, bank := range caps.Banks {
 		if bank.CurrentChannelOnly {
@@ -84,6 +98,17 @@ func (s *Service) readAll(ctx context.Context) (*codeplug.Codeplug, error) {
 			}
 			ch, err := s.sess.ReadChannel(ctx, slot)
 			if err != nil {
+				// Classify, don't abort: a slot whose answer was corrupt or
+				// undecodable is recorded as a failure rather than
+				// discarding every other slot's already-read data.
+				// Transport, timeout, context and framing errors are not
+				// caught by either sentinel and stay fatal, as before.
+				if errors.Is(err, driver.ErrAnswerMismatch) || errors.Is(err, driver.ErrRecordDecode) {
+					failures = append(failures, codeplug.ReadFailure{Slot: slot, Reason: err.Error()})
+					done++
+					s.progress("fail", done, total, slot)
+					continue
+				}
 				return nil, fmt.Errorf("clone: ReadAll: slot %q: %w", slot, err)
 			}
 			channels = append(channels, ch)
@@ -106,6 +131,7 @@ func (s *Service) readAll(ctx context.Context) (*codeplug.Codeplug, error) {
 		USBSerial:      id.USBSerial,
 		Region:         region,
 		BaselineDigest: codeplug.Digest(channels),
+		FailedSlots:    failures,
 	}
 
 	return &codeplug.Codeplug{

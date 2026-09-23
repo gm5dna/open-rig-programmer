@@ -58,6 +58,24 @@ func (e *AnswerMismatchError[T]) Error() string {
 // return and a caller's question is about the class, not a chain.
 func (e *AnswerMismatchError[T]) Is(target error) bool { return target == ErrAnswerMismatch }
 
+// ErrRecordDecode is the sentinel a driver's ReadChannel wraps a genuine
+// record-decode failure with: a reply that arrived intact at the
+// transport level (no timeout, no framing/context error) but could not be
+// decoded into a channel record — a parse failure, a length/fingerprint
+// mismatch, or the like. It is deliberately narrow: a driver wraps ONLY
+// the call that turns received wire bytes into a structured record
+// (e.g. a dialect/profile's ParseXXAnswer, or a bincat record decode) —
+// never a transport-layer error (core/clone/read.go's readAll classifies
+// those as fatal, same as today), and never a semantic/mapping failure
+// after a successful decode (an unrecognised mode byte, an out-of-range
+// value) — those stay fatal too, since the record itself decoded fine.
+//
+// core/clone/read.go's readAll checks this alongside ErrAnswerMismatch:
+// a slot whose read fails this way is recorded in
+// codeplug.RadioInfo.FailedSlots rather than aborting the whole read, so
+// one corrupted reply does not discard every other slot.
+var ErrRecordDecode = errors.New("driver: a reply could not be decoded into a channel record")
+
 // UnknownSettingError reports that ReadSetting's id argument does not name
 // a setting this radio has — refused BEFORE any wire traffic, exactly like
 // ReadChannel's malformed-slot refusal.

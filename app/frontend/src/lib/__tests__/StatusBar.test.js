@@ -85,6 +85,18 @@ describe('StatusBar', () => {
 		expect(screen.getByText('Idle')).toBeInTheDocument()
 	})
 
+	it('shows the Message once a partial read ends "ok" with a populated Message', () => {
+		appState.beginTransfer('read')
+		appState.applyTransferDone({
+			Kind: 'read',
+			Outcome: 'ok',
+			Report: null,
+			Message: '1 slot could not be read — see the highlighted row',
+		})
+		render(StatusBar)
+		expect(screen.getByText('1 slot could not be read — see the highlighted row')).toBeInTheDocument()
+	})
+
 	describe('build version', () => {
 		it('shows nothing until the version fetch has resolved', () => {
 			render(StatusBar)

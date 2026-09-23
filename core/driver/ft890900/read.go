@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/bincat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -40,7 +41,7 @@ func (s *Session) readRecord(ctx context.Context, ch int) (bincat.Record, error)
 	}
 	rec, err := bincat.ParseRecord(frame, s.info.EngineProfile)
 	if err != nil {
-		return bincat.Record{}, fmt.Errorf("ft890900: %s: reading CH=%02Xh: %w", s.info.Name, ch, err)
+		return bincat.Record{}, fmt.Errorf("ft890900: %s: reading CH=%02Xh: %w: %w", s.info.Name, ch, driver.ErrRecordDecode, err)
 	}
 	return rec, nil
 }

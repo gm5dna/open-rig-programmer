@@ -33,4 +33,9 @@ const (
 	// exitAborted means a transfer was aborted after at least one write
 	// attempt reached the radio — see the run's journal.
 	exitAborted = 5
+	// exitPartial means a read completed but one or more slots could not
+	// be read (codeplug.RadioInfo.FailedSlots is non-empty): the output
+	// file was still written — see cmdRead — but a caller must not treat
+	// this as an ordinary success.
+	exitPartial = 6
 )

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -31,7 +32,7 @@ import (
 // as it was before the tier existed. That is what makes every existing
 // Yaesu codeplug and manifest artefact byte-identical BY CONSTRUCTION
 // rather than by a promise nobody can check.
-const CurrentSchema = 5
+const CurrentSchema = 6
 
 // lowestSchema is the oldest version Save will emit — the floor of
 // schemaFor's search. Older schemas are readable (loadV2, loadV1) but
@@ -431,6 +432,8 @@ func Load(path string) (*Codeplug, error) {
 	// Pass 2: version-appropriate strict decode.
 	var cp *Codeplug
 	switch probe.Schema {
+	case 6:
+		cp, err = loadV6(b, path)
 	case 5:
 		cp, err = loadV5(b, path)
 	case 4:
@@ -478,10 +481,107 @@ func decodeStrict(b []byte, path string, v any, exempt exemptFunc) error {
 	return nil
 }
 
-// loadV5 strictly decodes the current schema through the live shape.
-// Schema 5 introduced the seven receiver fields, so the live shape is
-// exactly the versioned shape until the next schema change freezes it.
+// radioInfoV5 is the FROZEN pre-schema-6 RadioInfo shape — schemas 1
+// through 5's own eight fields, WITHOUT FailedSlots (schema 6) — shared by
+// codeplugV1..codeplugV4 and codeplugV5 alike, since none of those five
+// schemas' Radio object ever differed. Reusing the live RadioInfo here, as
+// every one of them used to, was wrong: "failed_slots" is a JSON key with
+// a matching live Go field, so DisallowUnknownFields does not reject it —
+// only a JSON key with NO matching field is rejected — and a schema-1..5
+// file carrying failed_slots decoded straight through. Freezing RadioInfo's
+// own shape, not just each codeplugVN's top level, is what actually keeps
+// a schema-6-only field out of an older file.
+type radioInfoV5 struct {
+	Model             string    `json:"model"`
+	CATID             string    `json:"cat_id"`
+	ReadAt            time.Time `json:"read_at"`
+	Port              string    `json:"port,omitempty"`
+	USBSerial         string    `json:"usb_serial,omitempty"`
+	FirmwareConfirmed string    `json:"firmware_confirmed,omitempty"`
+	Region            string    `json:"region,omitempty"`
+	BaselineDigest    string    `json:"baseline_digest,omitempty"`
+}
+
+// toRadioInfo converts the frozen pre-schema-6 shape to the live
+// RadioInfo, leaving FailedSlots nil — the only honest reading for any
+// schema 1-5 file, since none of them could ever have recorded a read
+// failure (see loadV5's own comment). Shared by loadV1..loadV5 so their
+// conversions cannot drift out of step with each other.
+func (r radioInfoV5) toRadioInfo() RadioInfo {
+	return RadioInfo{
+		Model:             r.Model,
+		CATID:             r.CATID,
+		ReadAt:            r.ReadAt,
+		Port:              r.Port,
+		USBSerial:         r.USBSerial,
+		FirmwareConfirmed: r.FirmwareConfirmed,
+		Region:            r.Region,
+		BaselineDigest:    r.BaselineDigest,
+	}
+}
+
+// toRadioInfoV5 is toRadioInfo's mirror image, for the encode side:
+// saveValue's schema-3 and schema-4 branches need cp.Radio projected onto
+// the frozen shape. It is only ever reached after schemaFor has already
+// forced schema 6 for any FailedSlots content, so dropping that field here
+// never loses anything.
+func (r RadioInfo) toRadioInfoV5() radioInfoV5 {
+	return radioInfoV5{
+		Model:             r.Model,
+		CATID:             r.CATID,
+		ReadAt:            r.ReadAt,
+		Port:              r.Port,
+		USBSerial:         r.USBSerial,
+		FirmwareConfirmed: r.FirmwareConfirmed,
+		Region:            r.Region,
+		BaselineDigest:    r.BaselineDigest,
+	}
+}
+
+// codeplugV5 is the FROZEN schema-5 top-level shape: schema 5's own five
+// fields, pinned against the live Codeplug gaining a sixth (FailedSlots,
+// schema 6) that a decoder following the live struct would otherwise
+// silently absorb into a schema-5 file. It reuses the live
+// Channel/ChannelData leaf types deliberately: schema 6 changed none of
+// their shapes, only added a top-level RadioInfo field, so reusing them
+// states the truth about what schema 5 held. Radio uses the frozen
+// radioInfoV5 instead, for the reason given on that type's own comment.
+type codeplugV5 struct {
+	Schema    int           `json:"schema"`
+	Generator string        `json:"generator"`
+	Radio     radioInfoV5   `json:"radio"`
+	Channels  []Channel     `json:"channels"`
+	Menus     *MenuSnapshot `json:"menus,omitempty"`
+}
+
+// loadV5 strictly decodes a schema-5 file through the frozen v5 shape and
+// migrates it to the current schema. FailedSlots is simply never set on
+// the result, which is the correct migrated value: unlike a tier field's
+// Unknown-vs-Unavailable ambiguity, "this pre-schema-6 file records no
+// read failures" has only one honest reading — no earlier schema could
+// ever have recorded one (and radioInfoV5 has no field to carry it even
+// if a file tried).
 func loadV5(b []byte, path string) (*Codeplug, error) {
+	var v5 codeplugV5
+	if err := decodeStrict(b, path, &v5, menusLegacyExempt); err != nil {
+		return nil, err
+	}
+	if err := v5.Menus.Validate(); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	return &Codeplug{
+		Schema:    CurrentSchema,
+		Generator: v5.Generator,
+		Radio:     v5.Radio.toRadioInfo(),
+		Channels:  v5.Channels,
+		Menus:     v5.Menus,
+	}, nil
+}
+
+// loadV6 strictly decodes the current schema through the live shape.
+// Schema 6 added RadioInfo.FailedSlots, so the live shape is exactly the
+// versioned shape until the next schema change freezes it.
+func loadV6(b []byte, path string) (*Codeplug, error) {
 	var cp Codeplug
 	if err := decodeStrict(b, path, &cp, menusLegacyExempt); err != nil {
 		return nil, err
@@ -507,7 +607,7 @@ func loadV4(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema,
 		Generator: v4.Generator,
-		Radio:     v4.Radio,
+		Radio:     v4.Radio.toRadioInfo(),
 		Channels:  migrateV4Channels(v4.Channels),
 		Menus:     v4.Menus,
 	}, nil
@@ -578,11 +678,12 @@ type channelV3 struct {
 	Data *channelDataV3 `json:"data,omitempty"`
 }
 
-// codeplugV3 is the frozen schema-3 top-level shape.
+// codeplugV3 is the frozen schema-3 top-level shape. Radio uses the frozen
+// radioInfoV5, not the live RadioInfo — see that type's own comment.
 type codeplugV3 struct {
 	Schema    int           `json:"schema"`
 	Generator string        `json:"generator"`
-	Radio     RadioInfo     `json:"radio"`
+	Radio     radioInfoV5   `json:"radio"`
 	Channels  []channelV3   `json:"channels"`
 	Menus     *MenuSnapshot `json:"menus,omitempty"`
 }
@@ -618,7 +719,7 @@ func loadV3(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema, // migrate-on-load, as for every older schema.
 		Generator: v3.Generator,
-		Radio:     v3.Radio,
+		Radio:     v3.Radio.toRadioInfo(),
 		Channels:  migrateV3Channels(v3.Channels),
 		Menus:     v3.Menus,
 	}, nil
@@ -946,22 +1047,24 @@ type legacyChannelData struct {
 }
 
 // codeplugV2 is the frozen schema-2 top-level shape: the schema-2 channel
-// list, with the TYPED menu snapshot schema 2 introduced.
+// list, with the TYPED menu snapshot schema 2 introduced. Radio uses the
+// frozen radioInfoV5, not the live RadioInfo — see that type's own comment.
 type codeplugV2 struct {
 	Schema    int             `json:"schema"`
 	Generator string          `json:"generator"`
-	Radio     RadioInfo       `json:"radio"`
+	Radio     radioInfoV5     `json:"radio"`
 	Channels  []legacyChannel `json:"channels"`
 	Menus     *MenuSnapshot   `json:"menus,omitempty"`
 }
 
 // codeplugV1 is the frozen schema-1 top-level shape: the same channel list
 // as v2, but with Menus the opaque json.RawMessage the v1.1 reservation
-// carried.
+// carried. Radio uses the frozen radioInfoV5, not the live RadioInfo — see
+// that type's own comment.
 type codeplugV1 struct {
 	Schema    int             `json:"schema"`
 	Generator string          `json:"generator"`
-	Radio     RadioInfo       `json:"radio"`
+	Radio     radioInfoV5     `json:"radio"`
 	Channels  []legacyChannel `json:"channels"`
 	Menus     json.RawMessage `json:"menus,omitempty"`
 }
@@ -982,7 +1085,7 @@ func loadV2(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema, // migrate-on-load; Save then emits the LOWEST schema the content needs (schemaFor).
 		Generator: v2.Generator,
-		Radio:     v2.Radio,
+		Radio:     v2.Radio.toRadioInfo(),
 		Channels:  migrateLegacyChannels(v2.Channels),
 		Menus:     v2.Menus,
 	}, nil
@@ -1004,7 +1107,7 @@ func loadV1(b []byte, path string) (*Codeplug, error) {
 	cp := &Codeplug{
 		Schema:    CurrentSchema, // migrate-on-load; Save then emits the LOWEST schema the content needs (schemaFor).
 		Generator: v1.Generator,
-		Radio:     v1.Radio,
+		Radio:     v1.Radio.toRadioInfo(),
 		Channels:  migrateLegacyChannels(v1.Channels),
 	}
 	if migratedMenusPresent(v1.Menus) {
@@ -1154,11 +1257,12 @@ type channelV4 struct {
 	Data *channelDataV4 `json:"data,omitempty"`
 }
 
-// codeplugV4 is the schema-4 top-level shape.
+// codeplugV4 is the schema-4 top-level shape. Radio uses the frozen
+// radioInfoV5, not the live RadioInfo — see that type's own comment.
 type codeplugV4 struct {
 	Schema    int           `json:"schema"`
 	Generator string        `json:"generator"`
-	Radio     RadioInfo     `json:"radio"`
+	Radio     radioInfoV5   `json:"radio"`
 	Channels  []channelV4   `json:"channels"`
 	Menus     *MenuSnapshot `json:"menus,omitempty"`
 }
@@ -1210,7 +1314,11 @@ func migrateV4ChannelData(d *channelDataV4) *ChannelData {
 // reason every pre-tier file stays byte-identical.
 //
 // Schema 3 unless a D4 state or a wide frequency needs schema 4; schema
-// 5 when one of D8's seven receiver states cannot be omitted.
+// 5 when one of D8's seven receiver states cannot be omitted; schema 6
+// when Radio.FailedSlots is non-empty — checked FIRST, before any
+// per-channel reasoning, so it wins even when every channel is otherwise
+// schema-3-representable: no earlier schema has a key for it at all, so
+// there is no omission for an older loader to reconstruct correctly.
 //
 //   - a tier-added field is not Unavailable (see
 //     FieldState.RepresentableByOmission and
@@ -1230,10 +1338,13 @@ func migrateV4ChannelData(d *channelDataV4) *ChannelData {
 // Nothing else participates. In particular the in-memory cp.Schema is
 // NOT consulted: it is always CurrentSchema after a Load (migrate-on-
 // load), so honouring it would make every re-save a CurrentSchema file —
-// schema 5 today — and destroy the byte identity this function exists for.
+// schema 6 today — and destroy the byte identity this function exists for.
 // TestSaveLoad_ReachableAbsentFieldRemainsInvalid pins both schema
 // boundaries and the send-gate consequence.
 func schemaFor(cp *Codeplug) int {
+	if len(cp.Radio.FailedSlots) > 0 {
+		return 6
+	}
 	needsSchema4 := false
 	for _, ch := range cp.Channels {
 		if ch.Data == nil {
@@ -1253,8 +1364,8 @@ func schemaFor(cp *Codeplug) int {
 }
 
 // saveValue returns the versioned marshal value Save should encode for
-// cp: a codeplugV3, codeplugV4, or shallow schema-5 copy, per schemaFor.
-// cp is never modified.
+// cp: a codeplugV3, codeplugV4, or a shallow schema-5/schema-6 copy of the
+// live struct, per schemaFor. cp is never modified.
 //
 // A nil Channels marshals to a nil slice (JSON null), not an empty
 // array, in both versions — preserving exactly what the live struct
@@ -1266,7 +1377,7 @@ func saveValue(cp *Codeplug) any {
 		return codeplugV3{
 			Schema:    schema,
 			Generator: cp.Generator,
-			Radio:     cp.Radio,
+			Radio:     cp.Radio.toRadioInfoV5(),
 			Channels:  saveChannelsV3(cp.Channels),
 			Menus:     cp.Menus,
 		}
@@ -1274,7 +1385,7 @@ func saveValue(cp *Codeplug) any {
 		return codeplugV4{
 			Schema:    schema,
 			Generator: cp.Generator,
-			Radio:     cp.Radio,
+			Radio:     cp.Radio.toRadioInfoV5(),
 			Channels:  saveChannelsV4(cp.Channels),
 			Menus:     cp.Menus,
 		}

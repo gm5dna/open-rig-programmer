@@ -69,8 +69,38 @@ func (a *App) ReadRadio() (CodeplugView, error) {
 	view := a.codeplugViewLocked()
 	a.mu.Unlock()
 
-	a.emitDone("read", "ok", nil, "")
+	a.emitDone("read", "ok", readReport(cp), readFailedMessage(cp))
 	return view, nil
+}
+
+// readFailedMessage returns ReadRadio's transfer:done Message: empty for
+// an ordinary complete read, or a short warning naming how many slots
+// failed. Outcome stays "ok" either way (ruling: a partial read is not a
+// failed transfer — every slot it DID read is a genuine, saved result),
+// so Message is StatusBar's only cue to show something happened.
+func readFailedMessage(cp *codeplug.Codeplug) string {
+	n := len(cp.Radio.FailedSlots)
+	if n == 0 {
+		return ""
+	}
+	if n == 1 {
+		return "1 slot could not be read — see the highlighted row"
+	}
+	return fmt.Sprintf("%d slots could not be read — see the highlighted rows", n)
+}
+
+// readReport builds ReadRadio's transfer:done Report: nil for an ordinary
+// complete read, or one SlotResultView per failed slot (reusing that
+// type as-is, per Stuart's ruling) for a partial one.
+func readReport(cp *codeplug.Codeplug) *ReportView {
+	if len(cp.Radio.FailedSlots) == 0 {
+		return nil
+	}
+	slots := make([]SlotResultView, len(cp.Radio.FailedSlots))
+	for i, f := range cp.Radio.FailedSlots {
+		slots[i] = SlotResultView{Slot: f.Slot, SlotDisplay: codeplug.DisplaySlot(f.Slot), Action: "read-failed", Detail: f.Reason}
+	}
+	return &ReportView{Slots: slots}
 }
 
 // GetCodeplug returns the current working copy, or ErrNothingLoaded if

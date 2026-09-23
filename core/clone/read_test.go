@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
 
 // TestReadAll_DefaultImage: a full ReadAll against fakeradio's default
@@ -146,6 +147,51 @@ func TestReadAll_FreshEveryCall(t *testing.T) {
 	}
 	if got == nil || got.FreqHz != 14_300_000 || got.Tag != "CHANGED" {
 		t.Errorf("second ReadAll slot \"010\" = %+v, want the freshly written value", got)
+	}
+}
+
+// TestReadAll_PartialFailureSurvives: a slot whose ReadChannel returns a
+// driver.ErrAnswerMismatch-compatible error does not abort the whole
+// read — every other slot is still read, and the failed slot is
+// recorded in the returned Codeplug's Radio.FailedSlots rather than
+// omitted or reconstructed as empty.
+func TestReadAll_PartialFailureSurvives(t *testing.T) {
+	_, sess := openSimSession(t, fakeradio.WithFactoryImage(minimalFactoryImage))
+	svc := NewService(answerMismatchOnceSession{Session: sess, failSlot: "010"}, newStore(t), WithNow(func() time.Time { return fixedNow }))
+
+	cp, err := svc.ReadAll(testCtx(t))
+	if err != nil {
+		t.Fatalf("ReadAll: unexpected error: %v", err)
+	}
+
+	if len(cp.Radio.FailedSlots) != 1 {
+		t.Fatalf("Radio.FailedSlots = %+v, want exactly one entry", cp.Radio.FailedSlots)
+	}
+	if got := cp.Radio.FailedSlots[0].Slot; got != "010" {
+		t.Errorf("FailedSlots[0].Slot = %q, want \"010\"", got)
+	}
+	if cp.Radio.FailedSlots[0].Reason == "" {
+		t.Error("FailedSlots[0].Reason is empty")
+	}
+
+	// The failed slot must not appear in Channels at all — never
+	// reconstructed as an empty channel, which would be indistinguishable
+	// from a genuinely blank slot.
+	for _, ch := range cp.Channels {
+		if ch.Slot == "010" {
+			t.Errorf("failed slot \"010\" appears in Channels: %+v, want it absent", ch)
+		}
+	}
+	// M-01 (from minimalFactoryImage) still reads normally: one slot's
+	// failure must not affect any other.
+	found := false
+	for _, ch := range cp.Channels {
+		if ch.Slot == "001" && ch.Data != nil {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("slot \"001\" missing or empty — a different slot's failure must not affect it")
 	}
 }
 

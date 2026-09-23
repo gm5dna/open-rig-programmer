@@ -85,6 +85,49 @@ func TestPrepareSend_SnapshotSavedEvenOnValidationFailure(t *testing.T) {
 	}
 }
 
+// TestPrepareSend_RefusesPartialBaseline: when the fresh baseline read
+// itself comes back partial (one slot classified as a recoverable
+// failure — see TestReadAll_PartialFailureSurvives), PrepareSend refuses
+// with a *ValidationFailedError rather than diffing a candidate against
+// an incomplete baseline — codeplug.Diff's inventory check cannot
+// distinguish a slot ReadAll never returned from an ordinary
+// unchanged/added slot. The snapshot must still exist (obligation 9): the
+// refusal happens AFTER SaveSnapshot, never before.
+func TestPrepareSend_RefusesPartialBaseline(t *testing.T) {
+	_, sess := openSimSession(t, fakeradio.WithFactoryImage(minimalFactoryImage))
+	store := newStore(t)
+	svc := NewService(answerMismatchOnceSession{Session: sess, failSlot: "010"}, store, WithNow(func() time.Time { return fixedNow }))
+
+	// A trivial candidate file — PrepareSend must refuse before ever
+	// reaching Validate/Diff against it, so its exact content does not
+	// matter here.
+	file := &codeplug.Codeplug{
+		Schema:    codeplug.CurrentSchema,
+		Generator: generatorID,
+		Radio:     codeplug.RadioInfo{Model: "FT-710", CATID: "0800"},
+	}
+
+	_, err := svc.PrepareSend(testCtx(t), file)
+	var vfe *ValidationFailedError
+	if !errors.As(err, &vfe) {
+		t.Fatalf("PrepareSend = %v, want a *ValidationFailedError", err)
+	}
+
+	entries, direrr := readDir(t, store.Dir)
+	if direrr != nil {
+		t.Fatalf("reading store dir: %v", direrr)
+	}
+	found := false
+	for _, name := range entries {
+		if hasSuffixOrp(name) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no *.orp.json snapshot found in %s after a partial-baseline refusal, want one saved before the refusal", store.Dir)
+	}
+}
+
 // TestPrepareSend_ValidationFailureCarriesIssues: doctoring the candidate
 // with an out-of-range value must refuse with a *ValidationFailedError
 // naming that issue.

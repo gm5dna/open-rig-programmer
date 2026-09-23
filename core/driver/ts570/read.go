@@ -129,7 +129,7 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	rec, err := s.layout.ParseMRAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ts570: ReadChannel %s: %w", id, err)
+		return codeplug.Channel{}, fmt.Errorf("ts570: ReadChannel %s: %w: %w", id, driver.ErrRecordDecode, err)
 	}
 	if got := rec.Slot.Number(); got != number {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: "ts570", Requested: id, Answered: slotID(got)}

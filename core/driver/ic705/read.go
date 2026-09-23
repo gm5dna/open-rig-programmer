@@ -10,6 +10,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -84,7 +85,11 @@ func (s *Session) readRaw(ctx context.Context, want civ.ChannelAddress) (rawReco
 		// NOT a wrong-radio refusal at this point: the probe already
 		// decided which radio this is, and a mid-session length surprise
 		// is a read that failed, not a radio that changed model.
-		return rawRecord{}, fmt.Errorf("ic705: read %v: %w", want, err)
+		//
+		// Wrapped with driver.ErrRecordDecode: a genuine record-decode
+		// failure, recoverable per-slot by core/clone.Service.readAll
+		// rather than fatal to the whole radio read.
+		return rawRecord{}, fmt.Errorf("ic705: read %v: %w: %w", want, driver.ErrRecordDecode, err)
 	}
 	if got != want {
 		s.mismatches.Add(1)
@@ -128,12 +133,13 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	rec, err := civic705.Profile().ParseMemoryAnswer(raw.frame)
 	if err != nil {
 		// The duplicated TX block's copies disagreeing lands here (spec
-		// D5 entry 4). It is a genuine cost, stated in doc.go: a channel
-		// the radio itself wrote with Split ON and a differing TX-side
-		// field fails to parse, so a whole-radio read aborts on it. The
-		// alternative — silently preferring one copy — would be a guess
-		// about which one the radio honours.
-		return codeplug.Channel{}, fmt.Errorf("ic705: read %s: %w", slot, err)
+		// D5 entry 4): a genuine record-decode failure, now recoverable
+		// per-slot by core/clone.Service.readAll rather than aborting the
+		// whole-radio read — the alternative, silently preferring one
+		// copy, would still be a guess about which one the radio honours,
+		// so the parse itself keeps refusing; only the blast radius
+		// changes.
+		return codeplug.Channel{}, fmt.Errorf("ic705: read %s: %w: %w", slot, driver.ErrRecordDecode, err)
 	}
 	data, err := channelDataFrom(rec, s.caps)
 	if err != nil {
