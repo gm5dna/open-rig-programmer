@@ -150,14 +150,20 @@ func (d *ftdx5000Driver) sessionCapabilities() spec.Capabilities {
 // Session is the FTdx5000's driver.Session: one open, identity-verified
 // connection. Safe for concurrent use.
 //
-// opMu serialises whole driver operations, taken by WriteChannel only:
-// this radio's every operation (ReadChannel's single MR read,
-// WriteChannel's single MW set) is one wire exchange, which
-// transport.Engine already serialises on its own — the lock exists so a
-// WRITE cannot interleave its refusal ladder and its frame with a
-// concurrent write on the same session, mirroring core/driver/ftdx10's own
-// choice for the same single-exchange shape. There is no settings surface
-// to interleave with (doc.go: no EX inventory is built).
+// opMu serialises whole driver operations, taken by BOTH ReadChannel and
+// WriteChannel: this radio's every operation (ReadChannel's single MR
+// read, WriteChannel's single MW set) is one wire exchange, which
+// transport.Engine already serialises on its own — the lock exists so an
+// operation cannot interleave its refusal ladder and its frame with a
+// concurrent operation on the same session, mirroring core/driver/ftdx10's
+// own choice for the same single-exchange shape. There is no settings
+// surface to interleave with (doc.go: no EX inventory is built).
+//
+// ReadChannel gained this lock later than WriteChannel (fix landed
+// 23/09/2026, Q7): every other registered Yaesu driver's read wrapper
+// already took it; this one alone did not, a genuine pre-existing
+// concurrency gap in main, not introduced by the MR core migration. Wire
+// bytes are unchanged by the fix — see read.go's ReadChannel.
 type Session struct {
 	eng     *transport.Engine
 	dialect cat.Dialect
