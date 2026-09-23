@@ -491,7 +491,11 @@ func (s *Session) recordAt(ctx context.Context, addr civ.ChannelAddress) (record
 	}
 	got, rec, err := s.profile.MemoryAnswerRecord(frame)
 	if err != nil {
-		return nil, false, err
+		// Wrapped with driver.ErrRecordDecode: a genuine record-decode
+		// failure (the envelope split / length fingerprint), recoverable
+		// per-slot by core/clone.Service.readAll rather than fatal to the
+		// whole radio read.
+		return nil, false, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)
 	}
 	if got != addr {
 		s.answerMismatches.Add(1)

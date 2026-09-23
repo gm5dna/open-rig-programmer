@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -431,7 +432,7 @@ func (s *Session) readMemoryOrPMS(ctx context.Context, sl cat.Slot) (codeplug.Ch
 
 	m, tag, display, err := s.dialect.ParseMTAnswerCombinedDisplay(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
@@ -474,7 +475,7 @@ func (s *Session) crossCheck(ctx context.Context, sl cat.Slot) (codeplug.Channel
 
 	m, err := s.dialect.ParseMRAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: cross-check: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: cross-check: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
@@ -529,7 +530,7 @@ func (s *Session) readDiscovered(ctx context.Context, sl cat.Slot) (codeplug.Cha
 
 	m, err := s.dialect.ParseMRAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}

@@ -241,7 +241,7 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 
 	rec, err := s.layout.ParseMA0Answer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ts890: ReadChannel %s: %w", id, err)
+		return codeplug.Channel{}, fmt.Errorf("ts890: ReadChannel %s: %w: %w", id, driver.ErrRecordDecode, err)
 	}
 	if rec.Empty {
 		// THE EMPTY PREDICATE IS A PREDICATE AND NOT A VALIDITY RULE (plan

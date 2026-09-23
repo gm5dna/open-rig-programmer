@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
 
 // readChannelGapHook, when non-nil, is called by ReadChannel between its
@@ -199,7 +200,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 
 	m, err := s.dialect.ParseMRAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
@@ -225,7 +226,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	}
 	tslot, display, tag, err := s.dialect.ParseMTAnswer(tframe)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if tslot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: tslot.Wire()}

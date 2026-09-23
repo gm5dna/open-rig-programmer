@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -120,7 +121,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 
 	m, err := s.dialect.ParseMRAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
@@ -145,7 +146,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	}
 	tslot, tag, err := s.dialect.ParseMTAnswerNoDisplay(tframe)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if tslot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: tslot.Wire()}

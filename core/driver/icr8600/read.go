@@ -117,7 +117,11 @@ func (s *Session) recordAt(ctx context.Context, addr civ.ChannelAddress) ([]byte
 	}
 	got, record, err := s.profile.MemoryAnswerRecord(frame)
 	if err != nil {
-		return nil, false, err
+		// Wrapped with driver.ErrRecordDecode: a genuine record-decode
+		// failure (the envelope split / length fingerprint), recoverable
+		// per-slot by core/clone.Service.readAll rather than fatal to the
+		// whole radio read.
+		return nil, false, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)
 	}
 	if got != addr {
 		s.answerMismatches.Add(1)
@@ -141,7 +145,11 @@ func (s *Session) parseRecord(addr civ.ChannelAddress, record []byte) (civ.Memor
 	frame = append(frame, request[6:len(request)-1]...)
 	frame = append(frame, record...)
 	frame = append(frame, 0xFD)
-	return s.profile.ParseMemoryAnswer(frame)
+	rec, err := s.profile.ParseMemoryAnswer(frame)
+	if err != nil {
+		return civ.MemoryRecord{}, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)
+	}
+	return rec, nil
 }
 
 func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {

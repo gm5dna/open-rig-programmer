@@ -123,7 +123,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 
 	got, raw, err := s.p.MemoryAnswerRecord(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w: %w", s.m.errPrefix, slot, driver.ErrRecordDecode, err)
 	}
 	if got != want {
 		s.noteAnswerMismatch()
@@ -135,7 +135,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 
 	rec, err := s.p.ParseMemoryAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w: %w", s.m.errPrefix, slot, driver.ErrRecordDecode, err)
 	}
 	data, err := s.channelData(rec)
 	if err != nil {

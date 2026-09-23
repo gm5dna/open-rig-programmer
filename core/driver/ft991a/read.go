@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -226,7 +227,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	// flag for a radio to report (matrix §2.3).
 	m, tag, err := s.dialect.ParseMTAnswerCombined(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ft991a: ReadChannel %s: %w", sl.Wire(), err)
+		return codeplug.Channel{}, fmt.Errorf("ft991a: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
