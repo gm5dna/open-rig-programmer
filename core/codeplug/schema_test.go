@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -339,6 +340,44 @@ func TestLoadV5_OrdinaryFilePreservesAllRadioFields(t *testing.T) {
 	}
 	if cp.Radio.FailedSlots != nil {
 		t.Errorf("Radio.FailedSlots = %+v, want nil", cp.Radio.FailedSlots)
+	}
+}
+
+// TestLoadV1toV4_FailedSlotsKeyRejected closes the same gap for schemas 1
+// through 4 that TestLoadV5_FailedSlotsKeyRejected pins for schema 5:
+// codeplugV1..codeplugV4 used to embed the live RadioInfo too, so a
+// schema-1..4 file carrying "failed_slots" decoded straight through them
+// exactly as it did through the old codeplugV5. Each body is a minimal,
+// well-formed file for its own schema (an empty channel list, modelled on
+// minimalCodeplugBody/canonical-v3-empty.json/canonical-v4-basic.json)
+// with "failed_slots" added to "radio".
+func TestLoadV1toV4_FailedSlotsKeyRejected(t *testing.T) {
+	bodies := map[int]string{
+		1: `{"schema":1,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+		2: `{"schema":2,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+		3: `{"schema":3,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+		4: `{"schema":4,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+	}
+	for schema, body := range bodies {
+		t.Run(strconv.Itoa(schema), func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "test.json")
+			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+
+			_, err := Load(path)
+			if err == nil {
+				t.Fatalf("Load() error = nil, want non-nil: schema %d must not accept failed_slots", schema)
+			}
+			var ufe *UnknownFieldError
+			if !errors.As(err, &ufe) {
+				t.Fatalf("errors.As(err, *UnknownFieldError) = false, want true (err = %v)", err)
+			}
+			if ufe.Field != "failed_slots" {
+				t.Errorf("UnknownFieldError.Field = %q, want %q", ufe.Field, "failed_slots")
+			}
+		})
 	}
 }
 
