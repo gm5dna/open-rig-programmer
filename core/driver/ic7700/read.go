@@ -11,6 +11,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7700 "github.com/gm5dna/open-rig-programmer/core/civ/ic7700"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -160,7 +161,12 @@ func (s *Session) readRaw(ctx context.Context, a civ.ChannelAddress) (civ.Memory
 		// read re-checks it, so a wrong-model session cannot be opened
 		// once and then trusted. A wrong LENGTH is a wrong radio; an
 		// ABSENT record is an empty slot; the two are different answers.
-		return civ.MemoryRecord{}, nil, false, err
+		//
+		// Wrapped with driver.ErrRecordDecode: a genuine record-decode
+		// failure (the envelope split / length fingerprint), recoverable
+		// per-slot by core/clone.Service.readAll rather than fatal to the
+		// whole radio read.
+		return civ.MemoryRecord{}, nil, false, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)
 	}
 	if got != a { // T2, BEFORE any use of raw
 		s.answerMismatches.Add(1)
@@ -171,7 +177,7 @@ func (s *Session) readRaw(ctx context.Context, a civ.ChannelAddress) (civ.Memory
 	}
 	rec, err := p.ParseMemoryAnswer(frame)
 	if err != nil {
-		return civ.MemoryRecord{}, nil, false, err
+		return civ.MemoryRecord{}, nil, false, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)
 	}
 	return rec, raw, false, nil
 }

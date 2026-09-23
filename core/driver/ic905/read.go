@@ -171,7 +171,14 @@ func (s *Session) parseRecord(addr civ.ChannelAddress, record []byte) (civ.Memor
 	frame = append(frame, addrBytes[6:len(addrBytes)-1]...)
 	frame = append(frame, record...)
 	frame = append(frame, 0xFD)
-	return s.profile.ParseMemoryAnswer(frame)
+	rec, err := s.profile.ParseMemoryAnswer(frame)
+	if err != nil {
+		// Wrapped with driver.ErrRecordDecode: a genuine record-decode
+		// failure, recoverable per-slot by core/clone.Service.readAll
+		// rather than fatal to the whole radio read.
+		return civ.MemoryRecord{}, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)
+	}
+	return rec, nil
 }
 
 // toneField maps a civ-layer tone number to a neutral field. A value

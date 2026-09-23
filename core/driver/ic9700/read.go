@@ -106,7 +106,11 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 	// one should abort the walk.
 	got, record, err := s.profile.MemoryAnswerRecord(answer)
 	if err != nil {
-		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
+		// Wrapped with driver.ErrRecordDecode: a genuine record-decode
+		// failure (the envelope split / length fingerprint), recoverable
+		// per-slot by core/clone.Service.readAll rather than fatal to the
+		// whole radio read.
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, fmt.Errorf("ic9700: ReadChannel %s: %w: %w", slot, driver.ErrRecordDecode, err)
 	}
 
 	// T2, AFTER THE LENGTH GATE ABOVE. MemoryAnswerRecord already checked
@@ -133,7 +137,7 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 
 	rec, err := s.profile.ParseMemoryAnswer(answer)
 	if err != nil {
-		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, fmt.Errorf("ic9700: ReadChannel %s: %w: %w", slot, driver.ErrRecordDecode, err)
 	}
 	s.rememberRaw(slot, record)
 

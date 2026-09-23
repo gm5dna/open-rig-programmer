@@ -9,8 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -61,6 +63,16 @@ var canonicalV4Goldens = []string{
 // state, not a convenient one.
 var canonicalV5Goldens = []string{
 	"canonical-v5-basic.json",
+}
+
+// canonicalV6Goldens are the schema-6 files in testdata: the schema-5
+// golden above, plus one Radio.FailedSlots entry — the field schema 6
+// added. Produced by loading canonical-v5-basic.json, setting
+// FailedSlots, and re-saving through this package's own Save, then
+// frozen — same provenance rule as canonicalV5Goldens (drift protection,
+// no older writer to prove agreement with).
+var canonicalV6Goldens = []string{
+	"canonical-v6-basic.json",
 }
 
 // TestSaveLoad_CanonicalV3ByteIdentical is the FIRST of design D4's two
@@ -189,6 +201,196 @@ func TestSaveLoad_CanonicalV5ByteIdentical(t *testing.T) {
 				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
 			}
 		})
+	}
+}
+
+// TestSaveLoad_CanonicalV6ByteIdentical mirrors
+// TestSaveLoad_CanonicalV5ByteIdentical for schema 6: save(load(f)) is
+// byte-identical for every canonical writer-produced schema-6 file — the
+// new loadV6/codeplugV5 split (file.go) must not change what a file
+// carrying FailedSlots round-trips to.
+func TestSaveLoad_CanonicalV6ByteIdentical(t *testing.T) {
+	for _, name := range canonicalV6Goldens {
+		t.Run(name, func(t *testing.T) {
+			src := filepath.Join("testdata", name)
+			want, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatalf("reading golden: %v", err)
+			}
+			cp, err := Load(src)
+			if err != nil {
+				t.Fatalf("Load(%s) error = %v", src, err)
+			}
+			if cp.Schema != CurrentSchema {
+				t.Fatalf("Load(%s).Schema = %d, want %d (migrate-on-load)", src, cp.Schema, CurrentSchema)
+			}
+			if len(cp.Radio.FailedSlots) == 0 {
+				t.Fatalf("Load(%s).Radio.FailedSlots is empty, want the golden's entry to have round-tripped", src)
+			}
+			dst := filepath.Join(t.TempDir(), name)
+			if err := Save(dst, cp); err != nil {
+				t.Fatalf("Save() error = %v", err)
+			}
+			got, err := os.ReadFile(dst)
+			if err != nil {
+				t.Fatalf("reading re-saved file: %v", err)
+			}
+			if string(got) != string(want) {
+				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
+			}
+		})
+	}
+}
+
+// TestSchemaFor_FailedSlotsForcesSchema6 pins schemaFor's FailedSlots
+// clause: it wins even when every channel is otherwise schema-3-
+// representable (every tier field Unavailable, an in-range frequency) —
+// no earlier schema has a key for FailedSlots at all, so there is no
+// omission for an older loader to reconstruct correctly.
+func TestSchemaFor_FailedSlotsForcesSchema6(t *testing.T) {
+	cp := &Codeplug{
+		Radio: RadioInfo{FailedSlots: []ReadFailure{{Slot: "003", Reason: "boom"}}},
+		Channels: []Channel{
+			{Slot: "001", Data: withUnavailableTierFields(&ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"})},
+		},
+	}
+	if got := schemaFor(cp); got != 6 {
+		t.Errorf("schemaFor() = %d, want 6 (FailedSlots forces schema 6 regardless of channel content)", got)
+	}
+}
+
+// TestLoadV5_MigratesToSchema6WithNilFailedSlots: a schema-5 file (no
+// "failed_slots" key at all) migrates to the current schema with
+// FailedSlots nil — the one honest reading, since no schema before 6
+// could ever have recorded a read failure.
+func TestLoadV5_MigratesToSchema6WithNilFailedSlots(t *testing.T) {
+	cp, err := Load(filepath.Join("testdata", "canonical-v5-basic.json"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cp.Schema != CurrentSchema {
+		t.Errorf("Schema = %d, want %d", cp.Schema, CurrentSchema)
+	}
+	if cp.Radio.FailedSlots != nil {
+		t.Errorf("Radio.FailedSlots = %+v, want nil", cp.Radio.FailedSlots)
+	}
+}
+
+// TestLoadV5_FailedSlotsKeyRejected pins the fix for the schema-boundary
+// gap Codex flagged: codeplugV5 used to embed the LIVE RadioInfo, which
+// already has FailedSlots (schema 6) — a JSON key with a matching Go
+// field is exactly what DisallowUnknownFields does NOT reject, so a
+// schema-5 file carrying "failed_slots" decoded straight through.
+// radioInfoV5 has no such field, so the same file must now be refused as
+// an unknown field.
+func TestLoadV5_FailedSlotsKeyRejected(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.json")
+	body := `{"schema":5,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load() error = nil, want non-nil: schema 5 must not accept failed_slots")
+	}
+	var ufe *UnknownFieldError
+	if !errors.As(err, &ufe) {
+		t.Fatalf("errors.As(err, *UnknownFieldError) = false, want true (err = %v)", err)
+	}
+	if ufe.Field != "failed_slots" {
+		t.Errorf("UnknownFieldError.Field = %q, want %q", ufe.Field, "failed_slots")
+	}
+}
+
+// TestLoadV5_OrdinaryFilePreservesAllRadioFields is the companion to the
+// rejection test above: an ordinary schema-5 file — one populating every
+// field radioInfoV5 now carries, not just the three the basic golden
+// exercises — must still load with every one of them intact, proving the
+// v5-to-live RadioInfo conversion in loadV5 dropped nothing.
+func TestLoadV5_OrdinaryFilePreservesAllRadioFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.json")
+	body := `{"schema":5,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","port":"/dev/cu.usbserial-X","usb_serial":"ABC123","firmware_confirmed":"1.05","region":"UK","baseline_digest":"deadbeef"},"channels":[]}`
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	cp, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil for an ordinary schema-5 file", err)
+	}
+	readAt, err := time.Parse(time.RFC3339, "2026-07-10T12:00:00Z")
+	if err != nil {
+		t.Fatalf("time.Parse() error = %v", err)
+	}
+	want := RadioInfo{
+		Model:             "FT-710",
+		CATID:             "0800",
+		ReadAt:            readAt,
+		Port:              "/dev/cu.usbserial-X",
+		USBSerial:         "ABC123",
+		FirmwareConfirmed: "1.05",
+		Region:            "UK",
+		BaselineDigest:    "deadbeef",
+	}
+	if !reflect.DeepEqual(cp.Radio, want) {
+		t.Errorf("Radio = %+v, want %+v", cp.Radio, want)
+	}
+	if cp.Radio.FailedSlots != nil {
+		t.Errorf("Radio.FailedSlots = %+v, want nil", cp.Radio.FailedSlots)
+	}
+}
+
+// TestLoadV1toV4_FailedSlotsKeyRejected closes the same gap for schemas 1
+// through 4 that TestLoadV5_FailedSlotsKeyRejected pins for schema 5:
+// codeplugV1..codeplugV4 used to embed the live RadioInfo too, so a
+// schema-1..4 file carrying "failed_slots" decoded straight through them
+// exactly as it did through the old codeplugV5. Each body is a minimal,
+// well-formed file for its own schema (an empty channel list, modelled on
+// minimalCodeplugBody/canonical-v3-empty.json/canonical-v4-basic.json)
+// with "failed_slots" added to "radio".
+func TestLoadV1toV4_FailedSlotsKeyRejected(t *testing.T) {
+	bodies := map[int]string{
+		1: `{"schema":1,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+		2: `{"schema":2,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+		3: `{"schema":3,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+		4: `{"schema":4,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[]}`,
+	}
+	for schema, body := range bodies {
+		t.Run(strconv.Itoa(schema), func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "test.json")
+			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+
+			_, err := Load(path)
+			if err == nil {
+				t.Fatalf("Load() error = nil, want non-nil: schema %d must not accept failed_slots", schema)
+			}
+			var ufe *UnknownFieldError
+			if !errors.As(err, &ufe) {
+				t.Fatalf("errors.As(err, *UnknownFieldError) = false, want true (err = %v)", err)
+			}
+			if ufe.Field != "failed_slots" {
+				t.Errorf("UnknownFieldError.Field = %q, want %q", ufe.Field, "failed_slots")
+			}
+		})
+	}
+}
+
+// TestLoadV6_RoundTrip: a schema-6 file's FailedSlots entries decode
+// through the live shape unchanged.
+func TestLoadV6_RoundTrip(t *testing.T) {
+	cp, err := Load(filepath.Join("testdata", "canonical-v6-basic.json"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := []ReadFailure{{Slot: "G00-003", Reason: "ic-r8600: ReadChannel G00-003: requested G00-003 but the answer names G00-004 — refusing to map a reply onto the wrong slot"}}
+	if !reflect.DeepEqual(cp.Radio.FailedSlots, want) {
+		t.Errorf("Radio.FailedSlots = %+v, want %+v", cp.Radio.FailedSlots, want)
 	}
 }
 

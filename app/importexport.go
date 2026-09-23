@@ -232,6 +232,14 @@ func (a *App) ExportCSV() (string, error) {
 	if working == nil {
 		return "", ErrNothingLoaded
 	}
+	// Refused before the save dialog even opens (cheaper than waiting
+	// until after os.Create, and still satisfies "before the file is
+	// created"): csvio.Export has no RadioInfo of its own to carry this
+	// warning, so a gap-filled read would export indistinguishably from a
+	// genuinely empty channel.
+	if n := len(working.Radio.FailedSlots); n > 0 {
+		return "", fmt.Errorf("app: exporting: this codeplug is a partial read (%d slot(s) failed); re-read the radio before exporting", n)
+	}
 
 	path, err := a.dialogs.SaveFile(wailsruntime.SaveDialogOptions{
 		Title:           "Export CSV",

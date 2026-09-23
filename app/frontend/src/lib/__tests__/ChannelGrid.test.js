@@ -230,6 +230,22 @@ describe('rows and cells', () => {
 		expect(cell(container, 1, FREQ).textContent).toBe('empty')
 	})
 
+	it('marks a slot ReadAll could not read as row-failed, distinct from row-empty, with a tooltip naming the reason', () => {
+		appState.setCodeplug({
+			...codeplugFixture(),
+			Radio: { ...codeplugFixture().Radio, failed_slots: [{ slot: '002', reason: 'the answer named the wrong slot' }] },
+		})
+		const { container } = render(ChannelGrid)
+		// Slot 002 (row 1) is the EMPTY row in the fixture — a failed read is
+		// distinguishable from a genuinely empty channel, not folded into it.
+		const failedRow = cell(container, 1, 0).closest('tr')
+		expect(failedRow?.classList.contains('row-failed')).toBe(true)
+		expect(failedRow?.getAttribute('title')).toContain('the answer named the wrong slot')
+		// An ordinary populated row (M-01) is untouched.
+		const okRow = cell(container, 0, 0).closest('tr')
+		expect(okRow?.classList.contains('row-failed')).toBe(false)
+	})
+
 	it('keeps the slot cell text exactly the display slot — the row-action icons live in their own trailing column (layout fix)', () => {
 		const { container } = render(ChannelGrid)
 		// A populated row whose actions ARE available: the slot cell must

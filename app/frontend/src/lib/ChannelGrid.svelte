@@ -95,6 +95,18 @@
 		new Map((appState.codeplug?.Channels ?? []).map((ch) => [ch.slot, ch]))
 	)
 
+	/** Slots ReadAll could not read (codeplug.RadioInfo.FailedSlots, served
+	 * as "failed_slots" — RadioInfo marshals through its own json tags,
+	 * unlike CodeplugView's own top-level PascalCase fields) — a
+	 * row-persistence half StatusBar's toast cannot give (it clears on
+	 * the next transfer; the grid keeps showing this for as long as the
+	 * partial baseline is loaded). Keyed by wire slot, value is the
+	 * classified error's own reason, for the row's tooltip.
+	 * @type {Map<string, string>} */
+	const failedSlots = $derived(
+		new Map((appState.codeplug?.Radio?.failed_slots ?? []).map((f) => [f.slot, f.reason]))
+	)
+
 	/** @param {number} rowIdx @returns {ChannelData | null} */
 	function dataAt(rowIdx) {
 		const sv = slots[rowIdx]
@@ -1168,12 +1180,15 @@
 						{@const rowIssues = issuesBySlot.get(sv.Slot) ?? []}
 						{@const rowSeverity = severityClass(rowIssues)}
 						{@const draggableRow = rowDraggable(r)}
+						{@const failedReason = failedSlots.get(sv.Slot)}
 						<tr
 							class:row-empty={data === null}
 							class:row-locked={bankLocked}
 							class:row-issue-error={rowSeverity === 'error'}
 							class:row-issue-warn={rowSeverity === 'warn'}
+							class:row-failed={failedReason !== undefined}
 							class:row-drag-over={dragState.overSlot === sv.Slot}
+							title={failedReason !== undefined ? `could not be read: ${failedReason}` : undefined}
 							draggable={draggableRow}
 							ondragstart={(e) => onRowDragStart(e, sv.Slot, r)}
 							ondragenter={(e) => onRowDragEnter(e, sv.Slot)}
@@ -1636,6 +1651,16 @@
 
 	.row-empty td {
 		color: var(--colour-text-faint);
+	}
+
+	/* A slot ReadAll could not read — distinct from row-empty (a genuinely
+	 * empty channel): this row's data is UNKNOWN, not absent. */
+	.row-failed td {
+		background: var(--colour-danger-bg);
+	}
+
+	.row-failed td.col-slot {
+		box-shadow: inset 3px 0 0 var(--colour-danger);
 	}
 
 	.empty-affordance {

@@ -195,6 +195,20 @@ export namespace codeplug {
 	
 	
 	
+	export class ReadFailure {
+	    slot: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReadFailure(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.slot = source["slot"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class RadioInfo {
 	    model: string;
 	    cat_id: string;
@@ -205,6 +219,7 @@ export namespace codeplug {
 	    firmware_confirmed?: string;
 	    region?: string;
 	    baseline_digest?: string;
+	    failed_slots?: ReadFailure[];
 	
 	    static createFrom(source: any = {}) {
 	        return new RadioInfo(source);
@@ -220,6 +235,7 @@ export namespace codeplug {
 	        this.firmware_confirmed = source["firmware_confirmed"];
 	        this.region = source["region"];
 	        this.baseline_digest = source["baseline_digest"];
+	        this.failed_slots = this.convertValues(source["failed_slots"], ReadFailure);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -240,6 +256,7 @@ export namespace codeplug {
 		    return a;
 		}
 	}
+	
 	
 
 }

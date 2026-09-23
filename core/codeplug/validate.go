@@ -181,6 +181,13 @@ func findChannel(channels []Channel, slot string) (Channel, bool) {
 func Validate(cp *Codeplug, caps spec.Capabilities) []Issue {
 	var issues []Issue
 
+	if n := len(cp.Radio.FailedSlots); n > 0 {
+		issues = append(issues, Issue{
+			Severity: SeverityError,
+			Msg:      fmt.Sprintf("this codeplug is a partial read (%d slot(s) failed); re-read the radio before sending", n),
+		})
+	}
+
 	modelMismatch := caps.Model != "" && cp.Radio.Model != caps.Model
 	catIDMismatch := caps.CATID != "" && cp.Radio.CATID != caps.CATID
 	if modelMismatch || catIDMismatch {

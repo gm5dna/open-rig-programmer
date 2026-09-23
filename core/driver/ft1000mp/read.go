@@ -8,6 +8,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/bincat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
 
 // dump fetches and caches the full U=00H Status Update dump — see
@@ -40,7 +41,11 @@ func (s *Session) recordAt(ctx context.Context, idx int) (record, error) {
 	if start+recordLen > len(raw) {
 		return record{}, fmt.Errorf("ft1000mp: dump is %d bytes, too short for record %d", len(raw), idx)
 	}
-	return parseRecord(raw[start : start+recordLen])
+	rec, err := parseRecord(raw[start : start+recordLen])
+	if err != nil {
+		return record{}, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)
+	}
+	return rec, nil
 }
 
 // ReadChannel implements driver.Session: it fetches (or reuses) the
