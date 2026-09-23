@@ -121,6 +121,39 @@ func TestCmdExport_SchemaTooNew(t *testing.T) {
 	}
 }
 
+// TestCmdExport_RefusesPartialCodeplug pins the new (task 2026-09-23)
+// refusal: a codeplug carrying Radio.FailedSlots is refused before the
+// destination CSV file is even created — csvio.Export has no RadioInfo
+// of its own to carry the warning, so a silent export would look
+// identical to a genuinely empty channel.
+func TestCmdExport_RefusesPartialCodeplug(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "partial.json")
+	fixture := &codeplug.Codeplug{
+		Schema: codeplug.CurrentSchema,
+		Radio:  codeplug.RadioInfo{FailedSlots: []codeplug.ReadFailure{{Slot: "003", Reason: "boom"}}},
+		Channels: []codeplug.Channel{
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"}},
+		},
+	}
+	if err := codeplug.Save(path, fixture); err != nil {
+		t.Fatalf("Save fixture: %v", err)
+	}
+	csvOut := filepath.Join(dir, "out.csv")
+
+	var stdout, stderr bytes.Buffer
+	got := cmdExport([]string{"--csv", csvOut, path}, &stdout, &stderr)
+	if got != exitError {
+		t.Errorf("cmdExport(partial codeplug) = %d, want exitError (%d); stderr=%q", got, exitError, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "partial read") {
+		t.Errorf("cmdExport(partial codeplug) stderr = %q, want it to mention the partial read", stderr.String())
+	}
+	if _, err := os.Stat(csvOut); !os.IsNotExist(err) {
+		t.Errorf("cmdExport(partial codeplug): --csv = %s, want it to not exist", csvOut)
+	}
+}
+
 // TestCmdExport_Success pins the happy path: rows written (one per
 // slot, including empty slots — Export's own contract), exit 0, a CSV
 // that reads back via csvio.Import to the same channels.

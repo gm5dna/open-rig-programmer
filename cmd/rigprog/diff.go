@@ -74,6 +74,16 @@ func cmdDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
+	// A partial baseline hits the exact same checkInventory gap PrepareSend
+	// refuses against (core/clone/plan.go): a slot ReadAll never returned
+	// at all is indistinguishable from an ordinary unchanged/added slot to
+	// Diff's inventory check. diff has no exitBlocked/exitRefused concept
+	// of its own, so this is exitError like every other failure branch here.
+	if n := len(baseline.Radio.FailedSlots); n > 0 {
+		fmt.Fprintf(stderr, "rigprog diff: baseline read is partial (%d slot(s) failed); re-read the radio and try again\n", n)
+		return exitError
+	}
+
 	result, err := codeplug.Diff(baseline, candidate, sess.Capabilities())
 	if err != nil {
 		fmt.Fprintf(stderr, "rigprog diff: file and radio have different slot inventories: %v\n", err)

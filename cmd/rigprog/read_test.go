@@ -44,6 +44,23 @@ func TestWriteReadSummary(t *testing.T) {
 	if strings.Contains(out, "0123456789abcdef0123456789abcdef") {
 		t.Errorf("writeReadSummary output = %q, want the FULL digest not to appear (only the truncated form)", out)
 	}
+	if strings.Contains(out, "Failed:") {
+		t.Errorf("writeReadSummary output = %q, want no \"Failed:\" line for an ordinary complete read", out)
+	}
+}
+
+// TestWriteReadSummary_FailedSlots pins the new (task 2026-09-23)
+// "Failed: N" line, shown only when Radio.FailedSlots is non-empty.
+func TestWriteReadSummary_FailedSlots(t *testing.T) {
+	cp := &codeplug.Codeplug{
+		Channels: []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000}}},
+		Radio:    codeplug.RadioInfo{FailedSlots: []codeplug.ReadFailure{{Slot: "002", Reason: "boom"}, {Slot: "003", Reason: "bang"}}},
+	}
+	var buf bytes.Buffer
+	writeReadSummary(&buf, cp, "/tmp/out.json")
+	if !strings.Contains(buf.String(), "Failed:          2\n") {
+		t.Errorf("writeReadSummary output = %q, want a \"Failed:          2\" line", buf.String())
+	}
 }
 
 // TestCmdRead_MissingOut / NeitherPortNorFake / BothPortAndFake pin
