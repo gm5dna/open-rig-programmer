@@ -149,6 +149,23 @@ func TestDeepCopyCodeplug_MenuSnapshotIndependence(t *testing.T) {
 	}
 }
 
+// TestDeepCopyCodeplug_FailedSlotsIndependence pins the defensive copy
+// added alongside RadioInfo's first slice field (FailedSlots, task
+// 2026-09-23): mutating the copy's Radio.FailedSlots must never reach
+// back into src's — a shallow `out := *cp` alone would share the slice's
+// backing array.
+func TestDeepCopyCodeplug_FailedSlotsIndependence(t *testing.T) {
+	src := &codeplug.Codeplug{
+		Schema: codeplug.CurrentSchema,
+		Radio:  codeplug.RadioInfo{Model: "FT-710", FailedSlots: []codeplug.ReadFailure{{Slot: "003", Reason: "boom"}}},
+	}
+	dup := deepCopyCodeplug(src)
+	dup.Radio.FailedSlots[0].Reason = "CHANGED"
+	if src.Radio.FailedSlots[0].Reason != "boom" {
+		t.Errorf("deepCopyCodeplug: mutating dup.Radio.FailedSlots changed src: %q", src.Radio.FailedSlots[0].Reason)
+	}
+}
+
 // TestDeepCopyCodeplug_NilMenus confirms the nil-Menus path stays nil.
 func TestDeepCopyCodeplug_NilMenus(t *testing.T) {
 	src := &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Radio: codeplug.RadioInfo{Model: "FT-710"}}

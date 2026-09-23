@@ -477,6 +477,27 @@ func TestExportCSV_WritesEverySlot(t *testing.T) {
 	}
 }
 
+// TestExportCSV_RefusesPartialCodeplug pins the new (task 2026-09-23)
+// refusal: a working copy carrying Radio.FailedSlots is refused before
+// the save dialog even opens — csvio.Export has no RadioInfo of its own
+// to carry the warning, so a silent export would look identical to a
+// genuinely empty channel.
+func TestExportCSV_RefusesPartialCodeplug(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = buildImportBase()
+	a.working.Radio.FailedSlots = []codeplug.ReadFailure{{Slot: "001", Reason: "boom"}}
+	a.mu.Unlock()
+
+	// No saveFilePath set on the fake dialogs: a call would panic/zero out
+	// oddly, proving the refusal never reaches the dialog.
+	if _, err := a.ExportCSV(); err == nil {
+		t.Fatal("ExportCSV(partial codeplug): err = nil, want a refusal")
+	} else if !strings.Contains(err.Error(), "partial read") {
+		t.Errorf("ExportCSV(partial codeplug) err = %v, want it to mention the partial read", err)
+	}
+}
+
 func TestExportCSV_NothingLoaded(t *testing.T) {
 	a, _ := newTestApp(t)
 	if _, err := a.ExportCSV(); err == nil {
