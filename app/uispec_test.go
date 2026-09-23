@@ -3943,6 +3943,83 @@ func TestGetUISpec_VocabMatchesValidate(t *testing.T) {
 	}
 }
 
+// TestGetUISpec_SixTierVocabs_MatchCaps pins the six vocabularies this
+// task adds to UISpecView (DuplexOptions, DTCSPolarities, Filters,
+// TuningSteps, PreampOptions, AntennaOptions) against their
+// core/spec/capabilities.go source, for a model that declares all six
+// non-empty — the IC-R8600, the only registered driver that does (see
+// core/driver/icr8600/caps.go). DuplexOptions is Value-extracted; the
+// other five are copied straight through.
+//
+// tone_mode carries no seventh field here — Stuart's ruling directs that
+// column to reuse CTCSSStateOptions instead of a new ToneModes field; see
+// UISpecView.DuplexOptions' doc comment.
+func TestGetUISpec_SixTierVocabs_MatchCaps(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.ICR8600Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.ICR8600Model, err)
+	}
+	wantDuplex := make([]string, len(caps.DuplexOptions))
+	for i, o := range caps.DuplexOptions {
+		wantDuplex[i] = o.Value
+	}
+	if len(wantDuplex) == 0 || len(caps.DTCSPolarities) == 0 || len(caps.Filters) == 0 ||
+		len(caps.TuningSteps) == 0 || len(caps.PreampOptions) == 0 || len(caps.AntennaOptions) == 0 {
+		t.Fatalf("IC-R8600 caps: expected all six tier vocabularies non-empty, got Duplex=%d DTCSPolarities=%d Filters=%d TuningSteps=%d PreampOptions=%d AntennaOptions=%d",
+			len(wantDuplex), len(caps.DTCSPolarities), len(caps.Filters), len(caps.TuningSteps), len(caps.PreampOptions), len(caps.AntennaOptions))
+	}
+
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.ICR8600Model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-R8600 working copy): unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(got.DuplexOptions, wantDuplex) {
+		t.Errorf("DuplexOptions = %v, want %v", got.DuplexOptions, wantDuplex)
+	}
+	if !reflect.DeepEqual(got.DTCSPolarities, caps.DTCSPolarities) {
+		t.Errorf("DTCSPolarities = %v, want %v", got.DTCSPolarities, caps.DTCSPolarities)
+	}
+	if !reflect.DeepEqual(got.Filters, caps.Filters) {
+		t.Errorf("Filters = %v, want %v", got.Filters, caps.Filters)
+	}
+	if !reflect.DeepEqual(got.TuningSteps, caps.TuningSteps) {
+		t.Errorf("TuningSteps = %v, want %v", got.TuningSteps, caps.TuningSteps)
+	}
+	if !reflect.DeepEqual(got.PreampOptions, caps.PreampOptions) {
+		t.Errorf("PreampOptions = %v, want %v", got.PreampOptions, caps.PreampOptions)
+	}
+	if !reflect.DeepEqual(got.AntennaOptions, caps.AntennaOptions) {
+		t.Errorf("AntennaOptions = %v, want %v", got.AntennaOptions, caps.AntennaOptions)
+	}
+}
+
+// TestGetUISpec_TuningStepsEmpty_StaysUnservedFallback pins Stuart's
+// ruling on the empty case: when a radio's TuningSteps list is empty,
+// UISpecView.TuningSteps is an empty slice, and the frontend's own
+// tierTextColumn falls back to free text (ChannelGrid.svelte) —
+// behaviour unchanged from before this task. The FT-710
+// (wiring.DefaultModel) declares no tier vocabularies at all, so it pins
+// every one of the six as empty, TuningSteps included.
+func TestGetUISpec_TuningStepsEmpty_StaysUnservedFallback(t *testing.T) {
+	a, _ := newTestApp(t)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: unexpected error: %v", err)
+	}
+	if len(got.TuningSteps) != 0 {
+		t.Errorf("FT-710 TuningSteps = %v, want empty (no tuning-step vocabulary declared)", got.TuningSteps)
+	}
+}
+
 // TestGetUISpec_ServesProse pins the served sentences server-side (task
 // 41, M9a-5): every radiotext-sourced UISpecView field is byte-equal to
 // internal/radiotext.For(wiring.DefaultModel)'s own value — not merely

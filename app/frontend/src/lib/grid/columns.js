@@ -63,26 +63,30 @@ export const COLUMNS = [
  * @property {string} field   the spec.Field this column is, and decorates from
  * @property {string} key     the ChannelData key it edits
  * @property {'freq'|'tone'|'int'|'bool'|'text'} kind   how its value is rendered and parsed
+ * @property {string} [vocab]   the UISpecView field a select-kind editor reads its
+ *   option list from, for a `text`-kind column whose vocabulary GetUISpec serves.
+ *   Free text remains the fallback when the radio's own list is empty
+ *   (ChannelGrid.svelte's tierTextColumn) — see that file's comment for why.
  */
 
 /** @type {TierColumn[]} */
 export const TIER_COLUMNS = [
 	{ id: 'txFreq', label: 'TX frequency (MHz)', field: 'tx_frequency', key: 'tx_frequency', kind: 'freq' },
-	{ id: 'duplex', label: 'Duplex', field: 'duplex', key: 'duplex', kind: 'text' },
+	{ id: 'duplex', label: 'Duplex', field: 'duplex', key: 'duplex', kind: 'text', vocab: 'DuplexOptions' },
 	{ id: 'offset', label: 'Offset (MHz)', field: 'offset', key: 'offset', kind: 'freq' },
-	{ id: 'toneMode', label: 'Tone mode', field: 'tone_mode', key: 'tone_mode', kind: 'text' },
+	{ id: 'toneMode', label: 'Tone mode', field: 'tone_mode', key: 'tone_mode', kind: 'text', vocab: 'CTCSSStateOptions' },
 	{ id: 'toneTx', label: 'TX tone', field: 'tone_tx', key: 'tone_tx', kind: 'tone' },
 	{ id: 'toneRx', label: 'RX tone', field: 'tone_rx', key: 'tone_rx', kind: 'tone' },
 	{ id: 'dtcsCode', label: 'DTCS code', field: 'dtcs_code', key: 'dtcs_code', kind: 'int' },
-	{ id: 'dtcsPolarity', label: 'DTCS polarity', field: 'dtcs_polarity', key: 'dtcs_polarity', kind: 'text' },
-	{ id: 'filter', label: 'Filter', field: 'filter', key: 'filter', kind: 'text' },
+	{ id: 'dtcsPolarity', label: 'DTCS polarity', field: 'dtcs_polarity', key: 'dtcs_polarity', kind: 'text', vocab: 'DTCSPolarities' },
+	{ id: 'filter', label: 'Filter', field: 'filter', key: 'filter', kind: 'text', vocab: 'Filters' },
 	{ id: 'dataMode', label: 'Data mode', field: 'data_mode', key: 'data_mode', kind: 'bool' },
 	{ id: 'tuningStepEnabled', label: 'Tuning step enabled', field: 'tuning_step_enabled', key: 'tuning_step_enabled', kind: 'bool' },
-	{ id: 'tuningStep', label: 'Tuning step', field: 'tuning_step', key: 'tuning_step', kind: 'text' },
+	{ id: 'tuningStep', label: 'Tuning step', field: 'tuning_step', key: 'tuning_step', kind: 'text', vocab: 'TuningSteps' },
 	{ id: 'programTuningStep', label: 'Program tuning step (Hz)', field: 'program_tuning_step', key: 'program_tuning_step', kind: 'int' },
 	{ id: 'attenuator', label: 'Attenuator (dB)', field: 'attenuator', key: 'attenuator', kind: 'int' },
-	{ id: 'preamp', label: 'Preamp', field: 'preamp', key: 'preamp', kind: 'text' },
-	{ id: 'antenna', label: 'Antenna', field: 'antenna', key: 'antenna', kind: 'text' },
+	{ id: 'preamp', label: 'Preamp', field: 'preamp', key: 'preamp', kind: 'text', vocab: 'PreampOptions' },
+	{ id: 'antenna', label: 'Antenna', field: 'antenna', key: 'antenna', kind: 'text', vocab: 'AntennaOptions' },
 	{ id: 'ipPlus', label: 'IP+', field: 'ip_plus', key: 'ip_plus', kind: 'bool' },
 	// The three TS-2000 Satellite Memory bank fields (v1.10.0). Only that
 	// bank's BankView ever reaches them.

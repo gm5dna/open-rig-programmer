@@ -7,7 +7,7 @@
 // controller amendment).
 
 import { describe, it, expect } from 'vitest'
-import { COLUMNS, isCellEditable, displayValue, newChannelData, cloneData, parsePasteCell } from '../columns.js'
+import { COLUMNS, TIER_COLUMNS, isCellEditable, displayValue, newChannelData, cloneData, parsePasteCell } from '../columns.js'
 
 /** A bank whose radio DOES carry the memory frame's display flag — the
  * FT-710 shape GetUISpec serves for MEM/PMS (bankTagDisplayDefault,
@@ -99,6 +99,30 @@ describe('COLUMNS', () => {
 		expect(col('tone').field).toBe('ctcss_tone')
 		expect(col('skip').field).toBe('scan_skip')
 		expect(col('tagDisplay').field).toBe('tag_display')
+	})
+})
+
+describe('TIER_COLUMNS vocab', () => {
+	const tierCol = (id) => {
+		const found = TIER_COLUMNS.find((c) => c.id === id)
+		if (!found) throw new Error(`no tier column ${id}`)
+		return found
+	}
+
+	it('names the UISpecView field each vocab-served text column reads from', () => {
+		expect(tierCol('duplex').vocab).toBe('DuplexOptions')
+		expect(tierCol('toneMode').vocab).toBe('CTCSSStateOptions')
+		expect(tierCol('dtcsPolarity').vocab).toBe('DTCSPolarities')
+		expect(tierCol('filter').vocab).toBe('Filters')
+		expect(tierCol('tuningStep').vocab).toBe('TuningSteps')
+		expect(tierCol('preamp').vocab).toBe('PreampOptions')
+		expect(tierCol('antenna').vocab).toBe('AntennaOptions')
+	})
+
+	it('carries no vocab on a column of another kind', () => {
+		expect(tierCol('txFreq').vocab).toBeUndefined()
+		expect(tierCol('toneTx').vocab).toBeUndefined()
+		expect(tierCol('dataMode').vocab).toBeUndefined()
 	})
 })
 
