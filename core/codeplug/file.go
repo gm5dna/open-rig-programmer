@@ -481,14 +481,16 @@ func decodeStrict(b []byte, path string, v any, exempt exemptFunc) error {
 	return nil
 }
 
-// radioInfoV5 is the FROZEN schema-5 RadioInfo shape: schema 5's own eight
-// fields, WITHOUT FailedSlots (schema 6). Reusing the live RadioInfo here,
-// as codeplugV5 used to, was wrong: "failed_slots" is a JSON key with a
-// matching live Go field, so DisallowUnknownFields does not reject it —
-// only a JSON key with NO matching field is rejected — and a schema-5 file
-// carrying failed_slots decoded straight through. Freezing RadioInfo's
-// own shape, not just codeplugV5's top level, is what actually keeps a
-// schema-6-only field out of a schema-5 file.
+// radioInfoV5 is the FROZEN pre-schema-6 RadioInfo shape — schemas 1
+// through 5's own eight fields, WITHOUT FailedSlots (schema 6) — shared by
+// codeplugV1..codeplugV4 and codeplugV5 alike, since none of those five
+// schemas' Radio object ever differed. Reusing the live RadioInfo here, as
+// every one of them used to, was wrong: "failed_slots" is a JSON key with
+// a matching live Go field, so DisallowUnknownFields does not reject it —
+// only a JSON key with NO matching field is rejected — and a schema-1..5
+// file carrying failed_slots decoded straight through. Freezing RadioInfo's
+// own shape, not just each codeplugVN's top level, is what actually keeps
+// a schema-6-only field out of an older file.
 type radioInfoV5 struct {
 	Model             string    `json:"model"`
 	CATID             string    `json:"cat_id"`
@@ -498,6 +500,42 @@ type radioInfoV5 struct {
 	FirmwareConfirmed string    `json:"firmware_confirmed,omitempty"`
 	Region            string    `json:"region,omitempty"`
 	BaselineDigest    string    `json:"baseline_digest,omitempty"`
+}
+
+// toRadioInfo converts the frozen pre-schema-6 shape to the live
+// RadioInfo, leaving FailedSlots nil — the only honest reading for any
+// schema 1-5 file, since none of them could ever have recorded a read
+// failure (see loadV5's own comment). Shared by loadV1..loadV5 so their
+// conversions cannot drift out of step with each other.
+func (r radioInfoV5) toRadioInfo() RadioInfo {
+	return RadioInfo{
+		Model:             r.Model,
+		CATID:             r.CATID,
+		ReadAt:            r.ReadAt,
+		Port:              r.Port,
+		USBSerial:         r.USBSerial,
+		FirmwareConfirmed: r.FirmwareConfirmed,
+		Region:            r.Region,
+		BaselineDigest:    r.BaselineDigest,
+	}
+}
+
+// toRadioInfoV5 is toRadioInfo's mirror image, for the encode side:
+// saveValue's schema-3 and schema-4 branches need cp.Radio projected onto
+// the frozen shape. It is only ever reached after schemaFor has already
+// forced schema 6 for any FailedSlots content, so dropping that field here
+// never loses anything.
+func (r RadioInfo) toRadioInfoV5() radioInfoV5 {
+	return radioInfoV5{
+		Model:             r.Model,
+		CATID:             r.CATID,
+		ReadAt:            r.ReadAt,
+		Port:              r.Port,
+		USBSerial:         r.USBSerial,
+		FirmwareConfirmed: r.FirmwareConfirmed,
+		Region:            r.Region,
+		BaselineDigest:    r.BaselineDigest,
+	}
 }
 
 // codeplugV5 is the FROZEN schema-5 top-level shape: schema 5's own five
@@ -534,18 +572,9 @@ func loadV5(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema,
 		Generator: v5.Generator,
-		Radio: RadioInfo{
-			Model:             v5.Radio.Model,
-			CATID:             v5.Radio.CATID,
-			ReadAt:            v5.Radio.ReadAt,
-			Port:              v5.Radio.Port,
-			USBSerial:         v5.Radio.USBSerial,
-			FirmwareConfirmed: v5.Radio.FirmwareConfirmed,
-			Region:            v5.Radio.Region,
-			BaselineDigest:    v5.Radio.BaselineDigest,
-		},
-		Channels: v5.Channels,
-		Menus:    v5.Menus,
+		Radio:     v5.Radio.toRadioInfo(),
+		Channels:  v5.Channels,
+		Menus:     v5.Menus,
 	}, nil
 }
 
@@ -578,7 +607,7 @@ func loadV4(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema,
 		Generator: v4.Generator,
-		Radio:     v4.Radio,
+		Radio:     v4.Radio.toRadioInfo(),
 		Channels:  migrateV4Channels(v4.Channels),
 		Menus:     v4.Menus,
 	}, nil
@@ -649,11 +678,12 @@ type channelV3 struct {
 	Data *channelDataV3 `json:"data,omitempty"`
 }
 
-// codeplugV3 is the frozen schema-3 top-level shape.
+// codeplugV3 is the frozen schema-3 top-level shape. Radio uses the frozen
+// radioInfoV5, not the live RadioInfo — see that type's own comment.
 type codeplugV3 struct {
 	Schema    int           `json:"schema"`
 	Generator string        `json:"generator"`
-	Radio     RadioInfo     `json:"radio"`
+	Radio     radioInfoV5   `json:"radio"`
 	Channels  []channelV3   `json:"channels"`
 	Menus     *MenuSnapshot `json:"menus,omitempty"`
 }
@@ -689,7 +719,7 @@ func loadV3(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema, // migrate-on-load, as for every older schema.
 		Generator: v3.Generator,
-		Radio:     v3.Radio,
+		Radio:     v3.Radio.toRadioInfo(),
 		Channels:  migrateV3Channels(v3.Channels),
 		Menus:     v3.Menus,
 	}, nil
@@ -1017,22 +1047,24 @@ type legacyChannelData struct {
 }
 
 // codeplugV2 is the frozen schema-2 top-level shape: the schema-2 channel
-// list, with the TYPED menu snapshot schema 2 introduced.
+// list, with the TYPED menu snapshot schema 2 introduced. Radio uses the
+// frozen radioInfoV5, not the live RadioInfo — see that type's own comment.
 type codeplugV2 struct {
 	Schema    int             `json:"schema"`
 	Generator string          `json:"generator"`
-	Radio     RadioInfo       `json:"radio"`
+	Radio     radioInfoV5     `json:"radio"`
 	Channels  []legacyChannel `json:"channels"`
 	Menus     *MenuSnapshot   `json:"menus,omitempty"`
 }
 
 // codeplugV1 is the frozen schema-1 top-level shape: the same channel list
 // as v2, but with Menus the opaque json.RawMessage the v1.1 reservation
-// carried.
+// carried. Radio uses the frozen radioInfoV5, not the live RadioInfo — see
+// that type's own comment.
 type codeplugV1 struct {
 	Schema    int             `json:"schema"`
 	Generator string          `json:"generator"`
-	Radio     RadioInfo       `json:"radio"`
+	Radio     radioInfoV5     `json:"radio"`
 	Channels  []legacyChannel `json:"channels"`
 	Menus     json.RawMessage `json:"menus,omitempty"`
 }
@@ -1053,7 +1085,7 @@ func loadV2(b []byte, path string) (*Codeplug, error) {
 	return &Codeplug{
 		Schema:    CurrentSchema, // migrate-on-load; Save then emits the LOWEST schema the content needs (schemaFor).
 		Generator: v2.Generator,
-		Radio:     v2.Radio,
+		Radio:     v2.Radio.toRadioInfo(),
 		Channels:  migrateLegacyChannels(v2.Channels),
 		Menus:     v2.Menus,
 	}, nil
@@ -1075,7 +1107,7 @@ func loadV1(b []byte, path string) (*Codeplug, error) {
 	cp := &Codeplug{
 		Schema:    CurrentSchema, // migrate-on-load; Save then emits the LOWEST schema the content needs (schemaFor).
 		Generator: v1.Generator,
-		Radio:     v1.Radio,
+		Radio:     v1.Radio.toRadioInfo(),
 		Channels:  migrateLegacyChannels(v1.Channels),
 	}
 	if migratedMenusPresent(v1.Menus) {
@@ -1225,11 +1257,12 @@ type channelV4 struct {
 	Data *channelDataV4 `json:"data,omitempty"`
 }
 
-// codeplugV4 is the schema-4 top-level shape.
+// codeplugV4 is the schema-4 top-level shape. Radio uses the frozen
+// radioInfoV5, not the live RadioInfo — see that type's own comment.
 type codeplugV4 struct {
 	Schema    int           `json:"schema"`
 	Generator string        `json:"generator"`
-	Radio     RadioInfo     `json:"radio"`
+	Radio     radioInfoV5   `json:"radio"`
 	Channels  []channelV4   `json:"channels"`
 	Menus     *MenuSnapshot `json:"menus,omitempty"`
 }
@@ -1344,7 +1377,7 @@ func saveValue(cp *Codeplug) any {
 		return codeplugV3{
 			Schema:    schema,
 			Generator: cp.Generator,
-			Radio:     cp.Radio,
+			Radio:     cp.Radio.toRadioInfoV5(),
 			Channels:  saveChannelsV3(cp.Channels),
 			Menus:     cp.Menus,
 		}
@@ -1352,7 +1385,7 @@ func saveValue(cp *Codeplug) any {
 		return codeplugV4{
 			Schema:    schema,
 			Generator: cp.Generator,
-			Radio:     cp.Radio,
+			Radio:     cp.Radio.toRadioInfoV5(),
 			Channels:  saveChannelsV4(cp.Channels),
 			Menus:     cp.Menus,
 		}
