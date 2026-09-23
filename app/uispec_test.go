@@ -3399,6 +3399,9 @@ func TestGetUISpec_Disconnected_StaticBaseline(t *testing.T) {
 	if len(got.CTCSSStateOptions) != 3 || got.CTCSSStateOptions[0] != "OFF" || got.CTCSSStateOptions[1] != "ENC-DEC" || got.CTCSSStateOptions[2] != "ENC" {
 		t.Errorf("CTCSSStateOptions = %v, want [OFF ENC-DEC ENC]", got.CTCSSStateOptions)
 	}
+	if len(got.ToneModeOptions) != 0 {
+		t.Errorf("ToneModeOptions = %v, want empty — the FT-710 expresses FieldCTCSSState, not FieldToneMode", got.ToneModeOptions)
+	}
 	if len(got.Modes) != len(staticCaps.Modes) {
 		t.Errorf("len(Modes) = %d, want %d", len(got.Modes), len(staticCaps.Modes))
 	}
@@ -3940,6 +3943,98 @@ func TestGetUISpec_VocabMatchesValidate(t *testing.T) {
 		d.CTCSS = ctcss
 		cp := &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Channels: []codeplug.Channel{{Slot: "001", Data: &d}}}
 		assertNoFieldIssue(t, cp, "ctcss_state", ctcss)
+	}
+}
+
+// TestGetUISpec_SixTierVocabs_MatchCaps pins the six vocabularies this
+// task adds to UISpecView (DuplexOptions, DTCSPolarities, Filters,
+// TuningSteps, PreampOptions, AntennaOptions) against their
+// core/spec/capabilities.go source, for a model that declares all six
+// non-empty — the IC-R8600, the only registered driver that does (see
+// core/driver/icr8600/caps.go). DuplexOptions is Value-extracted; the
+// other five are copied straight through.
+//
+// The seventh, tone_mode, is served by ToneModeOptions rather than a
+// plain capabilities.go field, and this Icom radio expresses FieldToneMode
+// (not FieldCTCSSState), so it also pins ToneModeOptions non-empty and
+// CTCSSStateOptions empty — the mirror image of the FT-710 assertion in
+// TestGetUISpec_Disconnected_StaticBaseline.
+func TestGetUISpec_SixTierVocabs_MatchCaps(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.ICR8600Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.ICR8600Model, err)
+	}
+	wantDuplex := make([]string, len(caps.DuplexOptions))
+	for i, o := range caps.DuplexOptions {
+		wantDuplex[i] = o.Value
+	}
+	if len(wantDuplex) == 0 || len(caps.DTCSPolarities) == 0 || len(caps.Filters) == 0 ||
+		len(caps.TuningSteps) == 0 || len(caps.PreampOptions) == 0 || len(caps.AntennaOptions) == 0 {
+		t.Fatalf("IC-R8600 caps: expected all six tier vocabularies non-empty, got Duplex=%d DTCSPolarities=%d Filters=%d TuningSteps=%d PreampOptions=%d AntennaOptions=%d",
+			len(wantDuplex), len(caps.DTCSPolarities), len(caps.Filters), len(caps.TuningSteps), len(caps.PreampOptions), len(caps.AntennaOptions))
+	}
+
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.ICR8600Model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-R8600 working copy): unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(got.DuplexOptions, wantDuplex) {
+		t.Errorf("DuplexOptions = %v, want %v", got.DuplexOptions, wantDuplex)
+	}
+	if !reflect.DeepEqual(got.DTCSPolarities, caps.DTCSPolarities) {
+		t.Errorf("DTCSPolarities = %v, want %v", got.DTCSPolarities, caps.DTCSPolarities)
+	}
+	if !reflect.DeepEqual(got.Filters, caps.Filters) {
+		t.Errorf("Filters = %v, want %v", got.Filters, caps.Filters)
+	}
+	if !reflect.DeepEqual(got.TuningSteps, caps.TuningSteps) {
+		t.Errorf("TuningSteps = %v, want %v", got.TuningSteps, caps.TuningSteps)
+	}
+	if !reflect.DeepEqual(got.PreampOptions, caps.PreampOptions) {
+		t.Errorf("PreampOptions = %v, want %v", got.PreampOptions, caps.PreampOptions)
+	}
+	if !reflect.DeepEqual(got.AntennaOptions, caps.AntennaOptions) {
+		t.Errorf("AntennaOptions = %v, want %v", got.AntennaOptions, caps.AntennaOptions)
+	}
+	wantToneModes := make([]string, len(caps.ToneModes))
+	for i, m := range caps.ToneModes {
+		wantToneModes[i] = m.Value
+	}
+	if len(wantToneModes) == 0 {
+		t.Fatalf("IC-R8600 caps.ToneModes: expected non-empty")
+	}
+	if !reflect.DeepEqual(got.ToneModeOptions, wantToneModes) {
+		t.Errorf("ToneModeOptions = %v, want %v (IC-R8600 expresses FieldToneMode)", got.ToneModeOptions, wantToneModes)
+	}
+	if len(got.CTCSSStateOptions) != 0 {
+		t.Errorf("CTCSSStateOptions = %v, want empty — the IC-R8600 expresses FieldToneMode, not FieldCTCSSState", got.CTCSSStateOptions)
+	}
+}
+
+// TestGetUISpec_TuningStepsEmpty_StaysUnservedFallback pins Stuart's
+// ruling on the empty case: when a radio's TuningSteps list is empty,
+// UISpecView.TuningSteps is an empty slice, and the frontend's own
+// tierTextColumn falls back to free text (ChannelGrid.svelte) —
+// behaviour unchanged from before this task. The FT-710
+// (wiring.DefaultModel) declares no tier vocabularies at all, so it pins
+// every one of the six as empty, TuningSteps included.
+func TestGetUISpec_TuningStepsEmpty_StaysUnservedFallback(t *testing.T) {
+	a, _ := newTestApp(t)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: unexpected error: %v", err)
+	}
+	if len(got.TuningSteps) != 0 {
+		t.Errorf("FT-710 TuningSteps = %v, want empty (no tuning-step vocabulary declared)", got.TuningSteps)
 	}
 }
 
