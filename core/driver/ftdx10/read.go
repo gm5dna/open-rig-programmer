@@ -19,11 +19,7 @@ import (
 // the ones this driver's own Capabilities.ToneModes advertises).
 // Deliberately NOT cat.CTCSSState.String(), whose spellings ("off",
 // "ENC/DEC") are log labels rather than model values.
-var ctcssNames = map[cat.CTCSSState]string{
-	cat.CTCSSOff:    "OFF",
-	cat.CTCSSEncDec: "ENC-DEC",
-	cat.CTCSSEnc:    "ENC",
-}
+var ctcssNames = yaesu.CTCSSNames(yaesu.CTCSSVocab3)
 
 // shiftNames maps the wire shift state to codeplug's display spelling
 // ("SIMPLEX", "PLUS", "MINUS").

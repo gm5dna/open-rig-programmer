@@ -76,23 +76,9 @@ func TestCapabilities_CTCSSToneMapped(t *testing.T) {
 	}
 }
 
-// TestToneIndexRoundTrip pins toneForIndex/indexForTone as exact inverses
-// over the whole 50-entry chart.
-func TestToneIndexRoundTrip(t *testing.T) {
-	for i := 0; i < 50; i++ {
-		tone, ok := toneForIndex(uint8(i))
-		if !ok {
-			t.Fatalf("toneForIndex(%d) refused, want ok", i)
-		}
-		idx, ok := indexForTone(tone)
-		if !ok || idx != uint8(i) {
-			t.Errorf("indexForTone(toneForIndex(%d)) = %d, %v, want %d, true", i, idx, ok, i)
-		}
-	}
-	if _, ok := toneForIndex(50); ok {
-		t.Error("toneForIndex(50) succeeded, want refused (chart is 0-49)")
-	}
-}
+// TestToneIndexRoundTrip: moved to core/driver/internal/yaesu (write_test.go)
+// alongside the ToneForIndex/IndexForTone helpers it pins, now shared with
+// ft450d and ftdx9000 rather than duplicated per driver.
 
 // TestBanks_StartAtZero pins this radio's own delta: the MEM bank's first
 // slot is "000", not "001" (matrix §1.5, doc.go entry 4), and holds 100

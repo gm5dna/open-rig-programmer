@@ -10,13 +10,9 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 )
 
-// ctcssVocab is matrix §1.16's three-value family, the same three every
-// sibling driver uses, in legend order.
-var ctcssVocab = []yaesu.CTCSSName{
-	{Name: "OFF", State: cat.CTCSSOff},
-	{Name: "ENC-DEC", State: cat.CTCSSEncDec},
-	{Name: "ENC", State: cat.CTCSSEnc},
-}
+// ctcssVocab is the shared 3-value CTCSS legend-order vocabulary
+// (matrix §1.16 — the same three every sibling driver uses).
+var ctcssVocab = yaesu.CTCSSVocab3
 
 // mrAnswerLen is this radio's whole MR-answer/MW-set frame length: 27
 // bytes (matrix §2, Lift Y's MemoryFrameLen). Written down here rather
