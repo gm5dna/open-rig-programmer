@@ -191,10 +191,12 @@ func menuSnapshotToView(snap *codeplug.MenuSnapshot) SettingsView {
 // deepCopyCodeplug returns an independently-allocated deep copy of cp
 // (nil in, nil out): a fresh Channels slice/ChannelData per element, a
 // fresh Menus snapshot via MenuSnapshot.Clone (nil-safe: a fresh Entries
-// slice and Legacy bytes), and a fresh Radio.FailedSlots slice —
-// RadioInfo's other fields hold no pointers, so copying the struct by
-// value already isolates them. Used so ReadRadio's baseline and working
-// copies (task-15 brief §2) can never alias each other, and so every View
+// slice and Legacy bytes), a fresh Radio.FailedSlots slice, and — when
+// present — a fresh RawImage with its own Bytes slice, so a clone-mode
+// read's whole-image blob never aliases the source either. RadioInfo's
+// other fields hold no pointers, so copying the struct by value already
+// isolates them. Used so ReadRadio's baseline and working copies
+// (task-15 brief §2) can never alias each other, and so every View
 // returned to the frontend is independent of the App's own in-memory
 // state.
 func deepCopyCodeplug(cp *codeplug.Codeplug) *codeplug.Codeplug {
@@ -205,5 +207,10 @@ func deepCopyCodeplug(cp *codeplug.Codeplug) *codeplug.Codeplug {
 	out.Channels = copyChannels(cp.Channels)
 	out.Menus = cp.Menus.Clone()
 	out.Radio.FailedSlots = append([]codeplug.ReadFailure(nil), cp.Radio.FailedSlots...)
+	if cp.RawImage != nil {
+		rb := *cp.RawImage
+		rb.Bytes = append([]byte(nil), cp.RawImage.Bytes...)
+		out.RawImage = &rb
+	}
 	return &out
 }
