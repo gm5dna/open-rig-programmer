@@ -78,4 +78,38 @@
 // Profile is exercised by this package's own tests against a synthetic
 // fixture profile — no radio's real baud, block schedule or record layout
 // is set here. Those are Phase 2's job, informed-by CHIRP per family.
+//
+// # Phase 2: real profiles, CHIRP provenance pin
+//
+// FT817Family (FT-817/FT-817ND/FT-818, five image lengths) and the
+// FT-857/FT-857D and FT-897/FT-897D profiles are informed-by CHIRP's
+// chirp/drivers/{ft817,ft818,ft857}.py and chirp/drivers/yaesu_clone.py,
+// pinned at commit e7347e6a66ef8f9edb50e3e534510c2d3ae6b329
+// (github.com/kk7ds/chirp). CHIRP has no separate ft897.py: its own
+// FT857Radio class covers "FT-857/897" as one MODEL, identical _memsize
+// and block schedule for both radios — this project still models FT-857/
+// FT-857D and FT-897/FT-897D as separate Profile values (spec.md
+// §Identity probe wants one Profile per named model), but since CHIRP
+// itself supplies no byte that tells those apart, offering them together
+// to one Arm/Receive call correctly returns ErrImageAmbiguous — this is
+// the spec-required outcome for "nothing distinguishes them", not a bug.
+// FT-857/FT-857D/FT-897/FT-897D's Baud is ASSUMED, not clone-confirmed,
+// informed-by manual CAT RATE menu 019, no HW capture (Stuart, 25/09/2026)
+// — see each Profile's own comment.
+//
+// # Block.HeaderBytes/TrailerBytes (extended internally, no API change)
+//
+// Every real family above frames its wire blocks as CHIRP's
+// yaesu_clone.py does: [1-byte block number][payload][1-byte checksum].
+// Checksum must validate that whole framed chunk, but Image.Raw must hold
+// only the concatenated payload bytes (what a Profile's ImageLen/
+// RecordOffset/RecordWidth are stated against, and what CHIRP's own mmap
+// contains). Block gained two fields, HeaderBytes/TrailerBytes, to strip
+// that framing before the content reaches Raw; Receive's internal
+// accumulation step honours them. This is exactly the "genuinely
+// divergent wire schedule" case flagged above ("new work inside Receive,
+// not a signature change") — Arm, Receive and ParseImage's signatures are
+// unchanged; only the Block struct (already documented as Phase 2's to
+// fill in) gained two zero-defaulting fields, and Phase 1's own tests
+// (which never set them) are unaffected.
 package clonewire
