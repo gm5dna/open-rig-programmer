@@ -692,6 +692,27 @@ func TestCmdWrite_UnknownModel(t *testing.T) {
 	}
 }
 
+// TestCmdWrite_RefusesCloneModel is test 2 of the Phase 4 write-refusal
+// proof (plan.md, clone-mode READ milestone): a clone-only model name
+// (registered in wiring.CloneModels(), never wiring.SupportedModels()) is
+// UNKNOWN on the ordinary write path, refused by the SAME
+// validateModel/exitUsage route as any other unrecognised model — proving
+// no write route can reach a clone-mode model, because the two registries
+// are disjoint by construction
+// (wiring.TestCloneModelsDisjointFromSessionModels), not because "FT-817"
+// happens to be spelled wrong.
+func TestCmdWrite_RefusesCloneModel(t *testing.T) {
+	const cloneModel = "FT-817"
+	var stdout, stderr bytes.Buffer
+	got := cmdWrite(testCtx(t), []string{"--fake", "--model", cloneModel, "/nonexistent/rigprog-test.json"}, strings.NewReader(""), &stdout, &stderr)
+	if got != exitUsage {
+		t.Fatalf("cmdWrite(--model %s) = %d, want exitUsage (%d); stderr=%q", cloneModel, got, exitUsage, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), cloneModel) || !strings.Contains(stderr.String(), "FT-710") {
+		t.Errorf("cmdWrite(--model %s) stderr = %q, want it to name both the rejected clone model and a supported model", cloneModel, stderr.String())
+	}
+}
+
 func TestCmdWrite_LoadNonexistentFile(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	got := cmdWrite(testCtx(t), []string{"--fake", "/nonexistent/path/rigprog-test.json"}, strings.NewReader(""), &stdout, &stderr)

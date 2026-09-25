@@ -106,6 +106,8 @@ const readUsageText = `rigprog read — read every memory slot from a radio and 
 Usage:
   rigprog read --port <path> --out <file> [--settings] [--model NAME] [--force] [--snapshot-dir <dir>]
   rigprog read --fake --out <file> [--settings] [--model NAME] [--force] [--snapshot-dir <dir>]
+  rigprog read --clone --port <path> --out <file> --model NAME [--force]
+  rigprog read --clone --fake --out <file> --model NAME [--force]
 
 Flags:
   --port PATH          real serial port device path (e.g. /dev/cu.usbserial-XXXX)
@@ -115,11 +117,27 @@ Flags:
   --model NAME          radio model to target (default: FT-710)
   --force               overwrite --out if it already exists
   --snapshot-dir DIR    snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)
+  --clone                read a whole-image clone-mode transfer instead of an ordinary CAT read
+                         (--model must name one of wiring.CloneModels(), a SEPARATE list from the
+                         ordinary --model list; --settings and --snapshot-dir do not apply)
 
 Exactly one of --port or --fake is required. Reads every memory slot,
 prints progress to stderr, and saves the result to --out. Refuses to
 overwrite an existing --out file unless --force is given; never
 overwrites as a side effect of a failed read.
+
+--clone reads a whole memory image over the radio's own clone-mode cable
+procedure (core/clonewire) rather than CAT: the radio has no per-channel
+read command for this family. The port is opened and armed BEFORE any
+prompt; only once armed does rigprog print "put the radio into clone-send
+mode now". Model identity is OPERATOR-ASSERTED: --model selects the exact
+image shape to expect, and rigprog cannot confirm it against the radio
+(e.g. it cannot tell an FT-857 image from an FT-857D image — CHIRP's own
+source does not distinguish them either). An incomplete, over-length, or
+checksum-failing image is refused in full, never saved partially. The
+saved file carries the complete raw image (RawImage) plus whatever
+channels this family's parser decodes; every field it does not decode
+reads back Unavailable.
 
 Without --settings (the default), the channel read is entirely
 unchanged: zero settings/EX wire traffic, and the saved file's "menus"
