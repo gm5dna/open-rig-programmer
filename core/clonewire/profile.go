@@ -443,3 +443,115 @@ var (
 // (FT857/FT857D at 7341, FT857US/FT857DUS at 7481) — see the package
 // comment above.
 var FT857Family = []Profile{FT857, FT857D, FT857US, FT857DUS}
+
+// FT-897/FT-897D (Phase 2c). CHIRP has no separate ft897.py: its
+// chirp/drivers/ft857.py class FT857Radio/FT857USRadio is documented as
+// "Yaesu FT-857/897" — MODEL "FT-857/897", one _memsize, one block
+// schedule for both radios (pinned at commit
+// e7347e6a66ef8f9edb50e3e534510c2d3ae6b329, see doc.go). FT-897/FT-897D's
+// geometry below is therefore byte-for-byte identical to FT-857/FT-857D's
+// — informed-by the SAME CHIRP source file, honestly cited as such rather
+// than invented for a driver CHIRP does not ship. ASSUMED, no HW capture;
+// no manual prints this family's byte layout (spec.md §Frame grammar).
+//
+// Baud, RESOLVED (Stuart, 25/09/2026): option (a), 9600, admitted-and-
+// labelled ASSUMED — informed-by manual CAT RATE menu 019, ASSUMED not
+// clone-confirmed, no HW capture. Same rationale as the FT-857 family.
+//
+// spec.md §Identity probe: exactly as with FT-857/FT-857D, CHIRP supplies
+// no byte that tells FT-897 apart from FT-897D — FT897/FT897D (and their
+// US variants) intentionally share their ImageLen; offering two of them to
+// one Arm/Receive call correctly returns ErrImageAmbiguous
+// (TestFT897Family_Ambiguous). The SAME lengths also collide with the
+// FT-857 family above — CHIRP's own single-class treatment of "FT-857/897"
+// means an image alone can never tell an FT-857 from an FT-897 either;
+// which candidate set a caller offers Arm (Phase 4's wiring, out of scope
+// here) is what disambiguates by model family, not this package.
+var (
+	// FT897 models the FT-897 (7341 bytes, non-US) — same geometry as
+	// FT857 (see package comment above).
+	FT897 = Profile{
+		Model:              "FT-897",
+		ProfileID:          "ft897",
+		Baud:               9600,
+		DataBits:           8,
+		Parity:             "N",
+		StopBits:           1,
+		ImageLen:           7341,
+		RecordWidth:        28,
+		ChannelCount:       200,
+		RecordOffset:       yaesuSum(ft857Leading),
+		FreqOffset:         12,
+		BlockSchedule:      yaesuSchedule(ft857Leading, 140, 40, []int{140, 140, 38, 176}),
+		AckExpected:        true,
+		StartDeadline:      yaesuStartDeadline,
+		InterBlockDeadline: yaesuInterBlockDeadline,
+		TotalDeadline:      yaesuTotalDeadline,
+	}
+
+	// FT897D models the FT-897D — not distinguished from FT-897 by CHIRP.
+	FT897D = Profile{
+		Model:              "FT-897D",
+		ProfileID:          "ft897d",
+		Baud:               9600,
+		DataBits:           8,
+		Parity:             "N",
+		StopBits:           1,
+		ImageLen:           7341,
+		RecordWidth:        28,
+		ChannelCount:       200,
+		RecordOffset:       yaesuSum(ft857Leading),
+		FreqOffset:         12,
+		BlockSchedule:      yaesuSchedule(ft857Leading, 140, 40, []int{140, 140, 38, 176}),
+		AckExpected:        true,
+		StartDeadline:      yaesuStartDeadline,
+		InterBlockDeadline: yaesuInterBlockDeadline,
+		TotalDeadline:      yaesuTotalDeadline,
+	}
+
+	// FT897US models the FT-897 (US).
+	FT897US = Profile{
+		Model:              "FT-897 (US)",
+		ProfileID:          "ft897-us",
+		Baud:               9600,
+		DataBits:           8,
+		Parity:             "N",
+		StopBits:           1,
+		ImageLen:           7481,
+		RecordWidth:        28,
+		ChannelCount:       200,
+		RecordOffset:       yaesuSum(ft857Leading),
+		FreqOffset:         12,
+		BlockSchedule:      yaesuSchedule(ft857Leading, 140, 40, []int{140, 140, 38, 176, 140}),
+		AckExpected:        true,
+		StartDeadline:      yaesuStartDeadline,
+		InterBlockDeadline: yaesuInterBlockDeadline,
+		TotalDeadline:      yaesuTotalDeadline,
+	}
+
+	// FT897DUS models the FT-897D (US) — not distinguished from FT897US
+	// by CHIRP.
+	FT897DUS = Profile{
+		Model:              "FT-897D (US)",
+		ProfileID:          "ft897d-us",
+		Baud:               9600,
+		DataBits:           8,
+		Parity:             "N",
+		StopBits:           1,
+		ImageLen:           7481,
+		RecordWidth:        28,
+		ChannelCount:       200,
+		RecordOffset:       yaesuSum(ft857Leading),
+		FreqOffset:         12,
+		BlockSchedule:      yaesuSchedule(ft857Leading, 140, 40, []int{140, 140, 38, 176, 140}),
+		AckExpected:        true,
+		StartDeadline:      yaesuStartDeadline,
+		InterBlockDeadline: yaesuInterBlockDeadline,
+		TotalDeadline:      yaesuTotalDeadline,
+	}
+)
+
+// FT897Family lists every FT-897/FT-897D image shape this package models.
+// Contains INTENTIONAL length collisions, both within itself and against
+// FT857Family — see the package comment above.
+var FT897Family = []Profile{FT897, FT897D, FT897US, FT897DUS}
