@@ -17,6 +17,9 @@ var allCapabilityFields = []spec.Field{
 	spec.FieldCTCSSState, spec.FieldShift, spec.FieldTag,
 }
 
+// The "design D4" entries below are the fields of
+// yaesu.TierRequestedFields (core/driver/internal/yaesu/write.go) that
+// this radio's memory frame cannot carry.
 var deliberatelyUnexpressedFields = map[spec.Field]string{
 	spec.FieldSatBandSwap: "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldSatTrace:    "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",

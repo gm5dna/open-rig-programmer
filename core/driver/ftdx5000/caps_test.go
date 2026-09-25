@@ -28,7 +28,10 @@ var allFields = []spec.Field{
 }
 
 // deliberatelyUnexpressedFields is the seventeen Icom-tier (D4/D8) fields
-// this radio's 27-byte record has no room for at all.
+// this radio's 27-byte record has no room for at all. The "design D4"
+// entries are the fields of yaesu.TierRequestedFields
+// (core/driver/internal/yaesu/write.go) that this radio's memory frame
+// cannot carry.
 var deliberatelyUnexpressedFields = map[spec.Field]string{
 	spec.FieldSatBandSwap:       "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
 	spec.FieldSatTrace:          "ts2000-only: TS-2000/2000X/B2000 Satellite Memory bank flag (SA record); no home on this radio",
