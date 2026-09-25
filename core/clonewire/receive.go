@@ -187,7 +187,15 @@ func (r *Reception) Receive(ctx context.Context) (Image, error) {
 				if block.Checksum != nil && !block.Checksum(chunk) {
 					return Image{}, fmt.Errorf("%w: block %d checksum failed", ErrImageIncomplete, blockIdx)
 				}
-				raw = append(raw, chunk...)
+				// HeaderBytes/TrailerBytes are wire framing (e.g. a
+				// leading block number, a trailing checksum byte) that
+				// Checksum needed to see but Image.Raw must not carry —
+				// see Block's doc comment (profile.go).
+				content := chunk
+				if block.HeaderBytes > 0 || block.TrailerBytes > 0 {
+					content = chunk[block.HeaderBytes : len(chunk)-block.TrailerBytes]
+				}
+				raw = append(raw, content...)
 				pending = pending[block.Len:]
 
 				if ref.AckExpected && block.Ack {
