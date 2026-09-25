@@ -242,6 +242,149 @@ func TestSaveLoad_CanonicalV6ByteIdentical(t *testing.T) {
 	}
 }
 
+// canonicalV7Goldens are the schema-7 files in testdata: the schema-6
+// golden above, plus a RawImage blob — the field schema 7 added.
+// Produced by loading canonical-v6-basic.json, setting RawImage, and
+// re-saving through this package's own Save, then frozen — same
+// provenance rule as canonicalV5Goldens/canonicalV6Goldens (drift
+// protection, no older writer to prove agreement with).
+var canonicalV7Goldens = []string{
+	"canonical-v7-basic.json",
+}
+
+// TestSaveLoad_CanonicalV7ByteIdentical mirrors
+// TestSaveLoad_CanonicalV6ByteIdentical for schema 7: save(load(f)) is
+// byte-identical for every canonical writer-produced schema-7 file —
+// the new codeplugV6/loadV7 split (file.go) must not change what a file
+// carrying RawImage round-trips to.
+func TestSaveLoad_CanonicalV7ByteIdentical(t *testing.T) {
+	for _, name := range canonicalV7Goldens {
+		t.Run(name, func(t *testing.T) {
+			src := filepath.Join("testdata", name)
+			want, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatalf("reading golden: %v", err)
+			}
+			cp, err := Load(src)
+			if err != nil {
+				t.Fatalf("Load(%s) error = %v", src, err)
+			}
+			if cp.Schema != CurrentSchema {
+				t.Fatalf("Load(%s).Schema = %d, want %d (migrate-on-load)", src, cp.Schema, CurrentSchema)
+			}
+			if cp.RawImage == nil || len(cp.RawImage.Bytes) == 0 {
+				t.Fatalf("Load(%s).RawImage = %+v, want the golden's blob to have round-tripped", src, cp.RawImage)
+			}
+			dst := filepath.Join(t.TempDir(), name)
+			if err := Save(dst, cp); err != nil {
+				t.Fatalf("Save() error = %v", err)
+			}
+			got, err := os.ReadFile(dst)
+			if err != nil {
+				t.Fatalf("reading re-saved file: %v", err)
+			}
+			if string(got) != string(want) {
+				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
+			}
+		})
+	}
+}
+
+// TestLoad_RawImageKeyRejectedBelowSchema7 pins that schemas 1 through 6
+// all reject a "raw_image" key — the freeze codeplugV6 (and every older
+// frozen shape) exists for: a JSON key with a matching live Go field is
+// NOT rejected by DisallowUnknownFields on its own, only a decode through
+// a shape that genuinely lacks the field is. Bodies mirror
+// TestLoadV1toV4_FailedSlotsKeyRejected's minimal fixture, plus the
+// failed_slots key schemas 5 and 6 need to stay otherwise valid.
+func TestLoad_RawImageKeyRejectedBelowSchema7(t *testing.T) {
+	bodies := map[int]string{
+		1: `{"schema":1,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"raw_image":{"model":"x","profile_id":"y","bytes":""}}`,
+		2: `{"schema":2,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"raw_image":{"model":"x","profile_id":"y","bytes":""}}`,
+		3: `{"schema":3,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"raw_image":{"model":"x","profile_id":"y","bytes":""}}`,
+		4: `{"schema":4,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"raw_image":{"model":"x","profile_id":"y","bytes":""}}`,
+		5: `{"schema":5,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"raw_image":{"model":"x","profile_id":"y","bytes":""}}`,
+		6: `{"schema":6,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z","failed_slots":[{"slot":"001","reason":"boom"}]},"channels":[],"raw_image":{"model":"x","profile_id":"y","bytes":""}}`,
+	}
+	for schema, body := range bodies {
+		t.Run(strconv.Itoa(schema), func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "test.json")
+			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				t.Fatalf("WriteFile() error = %v", err)
+			}
+
+			_, err := Load(path)
+			if err == nil {
+				t.Fatalf("Load() error = nil, want non-nil: schema %d must not accept raw_image", schema)
+			}
+			var ufe *UnknownFieldError
+			if !errors.As(err, &ufe) {
+				t.Fatalf("errors.As(err, *UnknownFieldError) = false, want true (err = %v)", err)
+			}
+			if ufe.Field != "raw_image" {
+				t.Errorf("UnknownFieldError.Field = %q, want %q", ufe.Field, "raw_image")
+			}
+		})
+	}
+}
+
+// TestSchemaFor_RawImageForcesSchema7 pins schemaFor's RawImage clause: it
+// wins even over FailedSlots (checked second) and even when every channel
+// is otherwise schema-3-representable — no earlier schema has a key for
+// RawImage at all, so there is no omission for an older loader to
+// reconstruct correctly.
+func TestSchemaFor_RawImageForcesSchema7(t *testing.T) {
+	cp := &Codeplug{
+		Radio:    RadioInfo{FailedSlots: []ReadFailure{{Slot: "003", Reason: "boom"}}},
+		RawImage: &RawImageBlob{Model: "FT-817ND", ProfileID: "ft817nd-6521", Bytes: []byte{0x01}},
+		Channels: []Channel{
+			{Slot: "001", Data: withUnavailableTierFields(&ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"})},
+		},
+	}
+	if got := schemaFor(cp); got != 7 {
+		t.Errorf("schemaFor() = %d, want 7 (RawImage forces schema 7 regardless of FailedSlots or channel content)", got)
+	}
+}
+
+// TestSchemaFor_NilRawImageDoesNotForceSchema7 pins the other side of the
+// same clause: a codeplug with no RawImage set is unaffected by this
+// tier's change and still falls through to the FailedSlots/channel
+// reasoning schemaFor already had.
+func TestSchemaFor_NilRawImageDoesNotForceSchema7(t *testing.T) {
+	cp := &Codeplug{
+		Channels: []Channel{
+			{Slot: "001", Data: withUnavailableTierFields(&ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"})},
+		},
+	}
+	if got := schemaFor(cp); got != lowestSchema {
+		t.Errorf("schemaFor() = %d, want %d (nil RawImage must not force schema 7)", got, lowestSchema)
+	}
+}
+
+// TestDigest_UnaffectedByRawImage pins the durable decision (Stuart,
+// 25/09/2026): Digest is defined over Channels alone and must produce the
+// identical value whether RawImage is nil or populated, for the same
+// Channels — see RawImageBlob's doc comment. A regression here would mean
+// Digest started reading the blob, silently invalidating every stored
+// baseline digest the moment a clone-mode read set one.
+func TestDigest_UnaffectedByRawImage(t *testing.T) {
+	channels := []Channel{
+		{Slot: "001", Data: withUnavailableTierFields(&ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"})},
+	}
+	withoutBlob := Digest(channels)
+
+	cp := &Codeplug{
+		Channels: channels,
+		RawImage: &RawImageBlob{Model: "FT-817ND", ProfileID: "ft817nd-6521", Bytes: []byte{0xDE, 0xAD, 0xBE, 0xEF}},
+	}
+	withBlob := Digest(cp.Channels)
+
+	if withoutBlob != withBlob {
+		t.Errorf("Digest = %q with RawImage populated, want %q (unchanged from the no-blob case): Digest must never read RawImage", withBlob, withoutBlob)
+	}
+}
+
 // TestSchemaFor_FailedSlotsForcesSchema6 pins schemaFor's FailedSlots
 // clause: it wins even when every channel is otherwise schema-3-
 // representable (every tier field Unavailable, an in-range frequency) —
