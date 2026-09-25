@@ -36,7 +36,6 @@
 	import { readSettingsRadio, writeSetting } from './bridge/bindings.js'
 	import { tabKeydown } from './tabKeydown.js'
 	import ToolButton from './ToolButton.svelte'
-	import { getStoredTheme, setTheme } from './theme.js'
 
 	/** @typedef {import('../../wailsjs/go/models').main.SettingMenuView} SettingMenuView */
 	/** @typedef {import('../../wailsjs/go/models').main.SettingItemView} SettingItemView */
@@ -148,31 +147,9 @@
 			// Alert strip already carries the message.
 		}
 	}
-
-	// --- appearance (v1.8.0 Phase 5) -----------------------------------
-	// Pure frontend preference (Go has no opinion on it — same category
-	// as appState.activeView), so it lives as local component state
-	// rather than in appState. Kept in THIS panel rather than a new one
-	// (brief: reuse, don't build a new settings surface), above the
-	// radio-settings toolbar since it applies with or without a codeplug
-	// loaded.
-	let theme = $state(getStoredTheme())
-
-	function onThemeChange() {
-		setTheme(theme)
-	}
 </script>
 
 <div class="settings-region">
-	<div class="appearance-row">
-		<label class="appearance-label" for="theme-select">Appearance</label>
-		<select id="theme-select" bind:value={theme} onchange={onThemeChange}>
-			<option value="system">System</option>
-			<option value="light">Light</option>
-			<option value="dark">Dark</option>
-		</select>
-	</div>
-
 	{#if spec === null}
 		<div class="settings-empty">
 			<p class="settings-empty-title">Settings layout unavailable</p>
@@ -326,31 +303,6 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow-y: auto;
-	}
-
-	/* --- appearance row — same field-label/select look as ConnectionBar's
-	 * radio/port pickers --- */
-
-	.appearance-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-3) var(--space-4) 0;
-	}
-
-	.appearance-label {
-		font-size: 11px;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--colour-text-faint);
-	}
-
-	.appearance-row select {
-		background: var(--colour-panel-sunken);
-		border: 1px solid var(--colour-hairline);
-		border-radius: var(--radius-sm);
-		padding: var(--space-1) var(--space-2);
-		font-size: 12.5px;
 	}
 
 	/* --- empty states — mirrors ChannelGrid's .grid-empty look --- */

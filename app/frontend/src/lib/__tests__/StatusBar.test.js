@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/svelte'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/svelte'
 import { appState } from '../state/app.svelte.js'
 import StatusBar from '../StatusBar.svelte'
+import * as theme from '../theme.js'
 
 function resetState() {
 	appState.clearConnection()
@@ -136,6 +137,22 @@ describe('StatusBar', () => {
 			}
 			render(StatusBar)
 			expect(screen.getByTestId('app-version')).toHaveTextContent('v2.3.4 — release candidate')
+		})
+	})
+
+	describe('appearance select', () => {
+		it('renders the theme select, moved here from the Settings tab', () => {
+			render(StatusBar)
+			expect(screen.getByLabelText('Appearance')).toBeInTheDocument()
+		})
+
+		it('calls setTheme with the chosen value on change', async () => {
+			const spy = vi.spyOn(theme, 'setTheme')
+			render(StatusBar)
+			const select = screen.getByLabelText('Appearance')
+			await fireEvent.change(select, { target: { value: 'dark' } })
+			expect(spy).toHaveBeenCalledWith('dark')
+			spy.mockRestore()
 		})
 	})
 })

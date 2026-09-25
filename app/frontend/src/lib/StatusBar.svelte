@@ -6,6 +6,7 @@
 	// transfer:done via bindings.js.
 	import { appState } from './state/app.svelte.js'
 	import { phaseLabel, kindLabel } from './transferLabels.js'
+	import { getStoredTheme, setTheme } from './theme.js'
 
 	const blockingCount = $derived(appState.blockingIssues.length)
 	const progress = $derived(appState.transfer.progress)
@@ -13,6 +14,18 @@
 		progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
 	)
 	const lastOutcome = $derived(appState.transfer.lastOutcome)
+
+	// --- appearance (moved from SettingsViewer, task appearance-statusbar)
+	// Pure frontend preference (Go has no opinion on it — same category as
+	// appState.activeView), so it stays local component state rather than
+	// in appState. Lives here, last in the bar, rather than in the
+	// Settings tab — it is an app preference, not a radio setting.
+	let theme = $state(getStoredTheme())
+
+	/** @param {Event} e */
+	function onThemeChange(e) {
+		setTheme(/** @type {HTMLSelectElement} */ (e.target).value)
+	}
 </script>
 
 <div class="status-bar">
@@ -69,6 +82,15 @@
 			>{appState.appVersion.Display}</span>
 		</div>
 	{/if}
+
+	<div class="status-item status-appearance">
+		<label class="visually-hidden" for="theme-select">Appearance</label>
+		<select id="theme-select" bind:value={theme} onchange={onThemeChange}>
+			<option value="system">System</option>
+			<option value="light">Light</option>
+			<option value="dark">Dark</option>
+		</select>
+	</div>
 </div>
 
 <style>
@@ -170,5 +192,31 @@
 		.progress-fill {
 			transition: none;
 		}
+	}
+
+	/* --- appearance select — moved here from SettingsViewer; compact to
+	 * match the bar's own font size/height, same field look as
+	 * ConnectionBar's radio/port pickers --- */
+
+	.status-appearance {
+		flex-shrink: 0;
+	}
+
+	.status-appearance select {
+		background: var(--colour-panel-sunken);
+		border: 1px solid var(--colour-hairline);
+		border-radius: var(--radius-sm);
+		padding: 1px var(--space-1);
+		font-size: 11.5px;
+		color: var(--colour-text-dim);
+	}
+
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 </style>
