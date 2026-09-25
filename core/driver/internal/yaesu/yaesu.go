@@ -101,6 +101,14 @@ type CTCSSName struct {
 	State cat.CTCSSState
 }
 
+// CTCSSVocab3 is the three-value CTCSS state vocabulary shared by every
+// registered driver that has no wider one of its own, in legend order.
+var CTCSSVocab3 = []CTCSSName{
+	{Name: "OFF", State: cat.CTCSSOff},
+	{Name: "ENC-DEC", State: cat.CTCSSEncDec},
+	{Name: "ENC", State: cat.CTCSSEnc},
+}
+
 // ProbeKind names the read Open's 5xx/EMG discovery sweep uses to ask
 // whether one slot is populated.
 type ProbeKind int

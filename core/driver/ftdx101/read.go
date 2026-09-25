@@ -24,11 +24,7 @@ import (
 // \"OFF\" 1: CTCSS ENC/DEC 2: CTCSS ENC" in five frame blocks (MR at layout
 // 1291, MT 1325, MW 1365, OI 1449; IF at 1095 with its off state
 // abbreviated), none of them model-qualified — matrix §1.15.
-var ctcssNames = map[cat.CTCSSState]string{
-	cat.CTCSSOff:    "OFF",
-	cat.CTCSSEncDec: "ENC-DEC",
-	cat.CTCSSEnc:    "ENC",
-}
+var ctcssNames = yaesu.CTCSSNames(yaesu.CTCSSVocab3)
 
 // shiftNames maps the wire shift state to codeplug's display spelling
 // ("SIMPLEX", "PLUS", "MINUS"), from this radio's own P10 legend "0:

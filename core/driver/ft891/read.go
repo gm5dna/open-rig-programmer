@@ -39,11 +39,7 @@ var readChannelGapHook func()
 // 977, MT 1012, MW 1048, IF 790, OI 1136), and CT's fourth value — `3: DCS
 // "ON"` (414) — is LIVE STATE on a different command, not a memory field
 // (matrix §1.17).
-var ctcssNames = map[cat.CTCSSState]string{
-	cat.CTCSSOff:    "OFF",
-	cat.CTCSSEncDec: "ENC-DEC",
-	cat.CTCSSEnc:    "ENC",
-}
+var ctcssNames = yaesu.CTCSSNames(yaesu.CTCSSVocab3)
 
 // shiftNames maps the wire shift state to codeplug's display spelling
 // ("SIMPLEX", "PLUS", "MINUS"), from this radio's own P10 legend "0: Simplex

@@ -35,6 +35,16 @@ func CTCSSMap(vocab []CTCSSName) map[string]cat.CTCSSState {
 	return m
 }
 
+// CTCSSNames is CTCSSMap's read-direction mirror: wire state -> display
+// name, for a driver's ReadChannel to render into ChannelData.
+func CTCSSNames(vocab []CTCSSName) map[cat.CTCSSState]string {
+	m := make(map[cat.CTCSSState]string, len(vocab))
+	for _, c := range vocab {
+		m[c.State] = c.Name
+	}
+	return m
+}
+
 // CTCSSLegend renders a vocabulary as the slash-separated legend the
 // refusal text names, e.g. "OFF/ENC-DEC/ENC". Derived from the same slice
 // the lookup is built from, so a radio cannot acquire a state its own
@@ -55,6 +65,30 @@ func CTCSSState(vocab []CTCSSName, name string) (cat.CTCSSState, bool) {
 	for _, c := range vocab {
 		if c.Name == name {
 			return c.State, true
+		}
+	}
+	return 0, false
+}
+
+// standardTones is the 50-tone chart every registered Yaesu dialect shares.
+var standardTones = spec.StandardCTCSSTones()
+
+// ToneForIndex reports the chart tone for a wire tone-index 0-49, and false
+// for anything outside that domain. The array index IS the CAT tone
+// number: no separate lookup table exists on the wire.
+func ToneForIndex(idx uint8) (spec.Tone, bool) {
+	if int(idx) >= len(standardTones) {
+		return 0, false
+	}
+	return standardTones[idx], true
+}
+
+// IndexForTone is ToneForIndex's write-direction inverse: a linear scan
+// over fifty entries, cheap enough to run once per write.
+func IndexForTone(t spec.Tone) (uint8, bool) {
+	for i, v := range standardTones {
+		if v == t {
+			return uint8(i), true
 		}
 	}
 	return 0, false
