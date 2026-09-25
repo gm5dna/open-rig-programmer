@@ -240,10 +240,28 @@ func TestE2E_ShortSetIsRefusedByTheRadio(t *testing.T) {
 	s := openFakeRadio(t, r, WithConsentedUnverifiedWrites())
 
 	before, _ := r.Record(42)
+	unexpectedBefore := s.eng.UnexpectedFrames()
 	short := append([]byte{0xFE, 0xFE, fakeic7760.AddrRadio, fakeic7760.AddrController, 0x1A, 0x00, 0x00, 0x42},
 		append(e2eRecord(42)[:24], 0xFD)...)
 	if _, err := r.Port().Write(short); err != nil {
 		t.Fatalf("writing the short set to the radio: %v", err)
+	}
+	// The fake answers this off-session write with NG asynchronously (its
+	// own writer goroutine, after its own latency), and this session's
+	// engine reader is running continuously regardless of whether a Do
+	// call is outstanding. Left alone, that NG can arrive AFTER the
+	// entry purge below starts and land inside ReadChannel's own answer
+	// wait instead — where a rejection is checked before a match, so the
+	// read would report ErrRejected and this test would misdiagnose an
+	// engine timing accident as an empty slot. DrainToQuiet blocks until
+	// the port has been genuinely idle, so it is the NG's late arrival
+	// that gets absorbed here (as an unexpected frame), synchronously,
+	// leaving nothing for the read below to trip over.
+	if err := s.eng.DrainToQuiet(t.Context()); err != nil {
+		t.Fatalf("draining the short set's NG: %v", err)
+	}
+	if got := s.eng.UnexpectedFrames(); got != unexpectedBefore+1 {
+		t.Fatalf("UnexpectedFrames = %d, want %d (the short set's own NG, drained above)", got, unexpectedBefore+1)
 	}
 	// The session's next exchange is what proves the radio kept its record:
 	// a refused set changes nothing.

@@ -335,7 +335,9 @@
 //     port's rate. internal/wiring's OpenRealSessionWith opens a real radio
 //     at exactly this value and NO baud override exists in the CLI or the
 //     GUI, so a wrong value leaves a real FT-991A reachable only through
-//     its own menu.
+//     its own menu. Owners report 38400 as the factory setting (Stuart,
+//     06/09/2026, third-party corroboration); the label stays ASSUMED
+//     until a document or a probe.
 //   - THE ACKNOWLEDGEMENT CONVENTIONS — read.go's reading of "?;" as a
 //     rejection at all, and write.go's mtSetSpec, whose fire-and-forget
 //     class reads silence as acceptance and a "?;" as the rejection. This
