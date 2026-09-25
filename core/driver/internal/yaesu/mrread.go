@@ -84,6 +84,12 @@ const (
 	// ToneLiveKnown: P9's read side is a live two-digit index into the
 	// radio's own CTCSS tone chart (every other in-scope driver).
 	ToneLiveKnown
+	// ToneUnknown: this radio's CAT protocol has no command that reads a
+	// memory channel's live tone-table index at all — Unknown, not
+	// Unavailable, because a write path downstream still means "preserve
+	// whatever the radio has" by it (ftx1: MTFormShortNoDisplay's record
+	// has no such field, spec.md §3.1).
+	ToneUnknown
 )
 
 // ToneWriteMode selects a radio's CTCSSTone write behaviour.
@@ -200,6 +206,8 @@ func ReadChannel(ctx context.Context, eng *transport.Engine, dialect cat.Dialect
 			return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: tone index %d out of range", p.Name, sl.Wire(), m.ToneIndex)
 		}
 		tone = codeplug.ToneField{State: codeplug.Known, Value: caps.CTCSSTones[m.ToneIndex]}
+	case ToneUnknown:
+		tone = codeplug.ToneField{State: codeplug.Unknown}
 	default: // ToneUnavailable
 		tone = codeplug.ToneField{State: codeplug.Unavailable}
 	}
