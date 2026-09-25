@@ -4,7 +4,6 @@ package ftx1
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
@@ -13,13 +12,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
-
-// mrSpec is the transport spec for an MR read: fixed 30-byte answer
-// (dialect.go's MemoryFrameLen — spec.md §3.1). One retry: an MR read is
-// idempotent.
-func mrSpec() transport.CommandSpec {
-	return transport.CATReadSpec("MR", 30, 1)
-}
 
 // mtSpec builds the transport spec for an MT read against d: the prefix,
 // the EXACT answer length, and one retry. THE LENGTH IS DERIVED FROM THE
@@ -55,13 +47,43 @@ var ctcssNames = map[cat.CTCSSState]string{
 	cat.CTCSSState('5'): "REV-TONE",
 }
 
-// shiftNames maps the wire shift state to codeplug's display spelling
-// ("SIMPLEX", "PLUS", "MINUS") — the same three-value vocabulary as
-// yaesu.ShiftByName's write-direction inverse.
-var shiftNames = map[cat.Shift]string{
-	cat.ShiftSimplex: "SIMPLEX",
-	cat.ShiftPlus:    "PLUS",
-	cat.ShiftMinus:   "MINUS",
+// ctcssVocab is ctcssNames' shared-body form, built once FROM ctcssNames
+// itself, IN THE SAME ORDER the current legend text implies — a plain map
+// range cannot give that order, so each entry is looked up by its known
+// key instead. yaesu.CTCSSLegend(ctcssVocab) then renders exactly
+// "OFF/ENC-DEC/ENC/DCS/PR-FREQ/REV-TONE", byte-identical to write.go's
+// former literal. ctcssNames/ctcssByName stay (not deleted): the read
+// side still renders m.CTCSS's exact wire byte back to a display name
+// beyond CTCSS-state lookups on unreachable paths, and the write side's
+// MT-tag mapping is untouched.
+var ctcssVocab = []yaesu.CTCSSName{
+	{Name: ctcssNames[cat.CTCSSOff], State: cat.CTCSSOff},
+	{Name: ctcssNames[cat.CTCSSEncDec], State: cat.CTCSSEncDec},
+	{Name: ctcssNames[cat.CTCSSEnc], State: cat.CTCSSEnc},
+	{Name: ctcssNames[cat.CTCSSDCSEncDec], State: cat.CTCSSDCSEncDec},
+	{Name: ctcssNames[cat.CTCSSState('4')], State: cat.CTCSSState('4')},
+	{Name: ctcssNames[cat.CTCSSState('5')], State: cat.CTCSSState('5')},
+}
+
+// mrParams is this radio's yaesu.MRParams value for the shared MR-read/
+// MW-write bodies. Model is set explicitly to "ftx1" (not left at the
+// zero value): dialect.CATID() is "0840", which AnswerMismatchError must
+// not name instead of the driver's own error-prefix spelling — matching
+// this package's pre-migration literal (params.Name, ftx1.go).
+// ExplicitTagRefusal/SkipTierFields/RequestConditionalTagFields/
+// ScanSkipUnavailable all stay false: this driver's own tag/scan-skip
+// gate (requestedFields, write.go) runs BEFORE the shared body is ever
+// called, so none of the shared body's own tag/tier variants apply here.
+var mrParams = yaesu.MRParams{
+	Name:          "ftx1",
+	Model:         "ftx1",
+	MRAnswerLen:   30,
+	CTCSS:         ctcssVocab,
+	AcceptedKinds: nil,
+	ToneRead:      yaesu.ToneUnknown,
+	ToneWrite:     yaesu.ToneNeverRequested,
+	WriteKind:     func(d cat.Dialect) byte { return d.MWWriteKind() },
+	EraseReason:   "erase cannot be expressed by the CAT codec (no erase command is documented for a memory channel), and FieldErase is not write-Supported",
 }
 
 // ReadChannel implements driver.Session: MR (channel data) + MT (tag)
@@ -101,31 +123,20 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	sl, err := s.dialect.ParseSlot(slot)
+	// The single-frame MR half goes through the shared body — this
+	// driver's slot-parse error text, ErrRejected-as-empty-channel
+	// mapping, MR-answer-decode error and AnswerMismatchError all match
+	// yaesu.ReadChannel's own byte-for-byte (spec.md/B1-ftx1-spec.md §2).
+	ch, err := yaesu.ReadChannel(ctx, s.eng, s.dialect, s.caps, &mrParams, slot)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel: %w", err)
+		return codeplug.Channel{}, err
+	}
+	if ch.Data == nil {
+		// MR "?;" -> empty channel, no MT attempted — same as before.
+		return ch, nil
 	}
 
-	mrCmd, err := s.dialect.BuildMRRead(sl)
-	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel: %w", err)
-	}
-
-	frame, err := s.eng.Do(ctx, mrCmd, mrSpec())
-	if errors.Is(err, cat.ErrRejected) {
-		return codeplug.Channel{Slot: sl.Wire()}, nil
-	}
-	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: MR: %w", sl.Wire(), err)
-	}
-
-	m, err := s.dialect.ParseMRAnswer(frame)
-	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: %w: %w", sl.Wire(), driver.ErrRecordDecode, err)
-	}
-	if m.Slot.Wire() != sl.Wire() {
-		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
-	}
+	sl, _ := s.dialect.ParseSlot(slot) // already validated inside yaesu.ReadChannel
 
 	mtCmd, err := s.dialect.BuildMTRead(sl)
 	if err != nil {
@@ -152,57 +163,6 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: tslot.Wire()}
 	}
 
-	ctcss, ok := ctcssNames[m.CTCSS]
-	if !ok {
-		// Unreachable after ParseMRAnswer's own validation; refuse rather
-		// than silently mislabel if it ever isn't.
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: unmapped CTCSS state %q", sl.Wire(), m.CTCSS)
-	}
-	shift, ok := shiftNames[m.Shift]
-	if !ok {
-		return codeplug.Channel{}, fmt.Errorf("ftx1: ReadChannel %s: unmapped shift %q", sl.Wire(), m.Shift)
-	}
-
-	return codeplug.Channel{
-		Slot: sl.Wire(),
-		Data: &codeplug.ChannelData{
-			FreqHz: uint64(m.FreqHz),
-			// Rendered through THIS session's dialect, not
-			// cat.Mode.String: user-visible, so it must be the mode
-			// table of the radio that answered.
-			Mode:       s.dialect.ModeName(m.Mode),
-			ClarHz:     int(m.ClarHz),
-			RxClar:     m.RxClar,
-			TxClar:     m.TxClar,
-			CTCSS:      ctcss,
-			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
-			Shift:      shift,
-			Tag:        tag,
-			TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
-			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-
-			// The Icom-tier fields (design D4/D8): UNAVAILABLE on this
-			// radio — this family's memory frame carries none of them.
-			TxFreqHz:            codeplug.FreqField{State: codeplug.Unavailable},
-			Duplex:              codeplug.StringField{State: codeplug.Unavailable},
-			OffsetHz:            codeplug.FreqField{State: codeplug.Unavailable},
-			ToneMode:            codeplug.StringField{State: codeplug.Unavailable},
-			ToneTx:              codeplug.ToneField{State: codeplug.Unavailable},
-			ToneRx:              codeplug.ToneField{State: codeplug.Unavailable},
-			DTCSCode:            codeplug.IntField{State: codeplug.Unavailable},
-			DTCSPolarity:        codeplug.StringField{State: codeplug.Unavailable},
-			Filter:              codeplug.StringField{State: codeplug.Unavailable},
-			DataMode:            codeplug.BoolField{State: codeplug.Unavailable},
-			TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
-			TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
-			ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
-			AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
-			Preamp:              codeplug.StringField{State: codeplug.Unavailable},
-			Antenna:             codeplug.StringField{State: codeplug.Unavailable},
-			IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
-			SatBandSwap:         codeplug.BoolField{State: codeplug.Unavailable},
-			SatTrace:            codeplug.BoolField{State: codeplug.Unavailable},
-			SatTraceRev:         codeplug.BoolField{State: codeplug.Unavailable},
-		},
-	}, nil
+	ch.Data.Tag = tag
+	return ch, nil
 }

@@ -234,7 +234,7 @@ func BuildMWCommand(dialect cat.Dialect, caps spec.Capabilities, p *MRParams, ch
 		toneIndex = uint8(idx)
 	}
 
-	if data.FreqHz < caps.MinFreqHz || data.FreqHz > caps.MaxFreqHz {
+	if data.FreqHz < caps.MinFreqHz || (caps.MaxFreqHz != 0 && data.FreqHz > caps.MaxFreqHz) {
 		return cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency},
 			Reason: fmt.Sprintf("frequency %d Hz is outside this radio's storable range %d-%d Hz", data.FreqHz, caps.MinFreqHz, caps.MaxFreqHz),
