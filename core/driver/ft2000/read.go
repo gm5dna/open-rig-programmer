@@ -10,13 +10,8 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 )
 
-// ctcssVocab is this radio's 3-value CTCSS state vocabulary, in legend
-// order — matches every registered sibling's.
-var ctcssVocab = []yaesu.CTCSSName{
-	{Name: "OFF", State: cat.CTCSSOff},
-	{Name: "ENC-DEC", State: cat.CTCSSEncDec},
-	{Name: "ENC", State: cat.CTCSSEnc},
-}
+// ctcssVocab is the shared 3-value CTCSS legend-order vocabulary.
+var ctcssVocab = yaesu.CTCSSVocab3
 
 // mrParams is this family's yaesu.MRParams value, shared by both rows
 // (FT-2000/FT-2000D — matrix §4: byte-identical on every position but

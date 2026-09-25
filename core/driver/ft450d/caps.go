@@ -39,26 +39,6 @@ const (
 // addresses.
 var standardTones = spec.StandardCTCSSTones()
 
-// toneForIndex reports the chart tone for a wire tone-index 0-49, and
-// false for anything outside that domain.
-func toneForIndex(idx uint8) (spec.Tone, bool) {
-	if int(idx) >= len(standardTones) {
-		return 0, false
-	}
-	return standardTones[idx], true
-}
-
-// indexForTone is toneForIndex's write-direction inverse: a linear scan
-// over fifty entries, cheap enough to run once per write.
-func indexForTone(t spec.Tone) (uint8, bool) {
-	for i, v := range standardTones {
-		if v == t {
-			return uint8(i), true
-		}
-	}
-	return 0, false
-}
-
 // modeNamesList returns this radio's selectable mode display names in
 // wire-code order, DERIVED FROM THE DIALECT rather than transcribed here.
 // cat.ModeUnset is excluded: a parse-accept-only placeholder that appears

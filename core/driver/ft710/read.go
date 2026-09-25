@@ -10,6 +10,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 )
 
 // readChannelGapHook, when non-nil, is called by ReadChannel between its
@@ -36,11 +37,7 @@ var readChannelGapHook func()
 // ("OFF", "ENC-DEC", "ENC" — the strings codeplug.Validate checks for).
 // Deliberately NOT cat.CTCSSState.String(), whose spellings ("off",
 // "ENC/DEC") are log labels, not model values.
-var ctcssNames = map[cat.CTCSSState]string{
-	cat.CTCSSOff:    "OFF",
-	cat.CTCSSEncDec: "ENC-DEC",
-	cat.CTCSSEnc:    "ENC",
-}
+var ctcssNames = yaesu.CTCSSNames(yaesu.CTCSSVocab3)
 
 // ctcssByName is ctcssNames' write-direction inverse.
 var ctcssByName = map[string]cat.CTCSSState{

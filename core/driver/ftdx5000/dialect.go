@@ -148,22 +148,14 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 // compares against is the same value the capability data advertises.
 var catID = dialect.CATID()
 
-// ctcssVocab is this radio's CTCSS state vocabulary, in P8's own legend
-// order (matrix §4, layout:949/982) — the order write.go's refusal text
-// names the states in.
-var ctcssVocab = []yaesu.CTCSSName{
-	{Name: "OFF", State: cat.CTCSSOff},
-	{Name: "ENC-DEC", State: cat.CTCSSEncDec},
-	{Name: "ENC", State: cat.CTCSSEnc},
-}
+// ctcssVocab is the shared 3-value CTCSS legend-order vocabulary (matrix
+// §4, layout:949/982) — the order write.go's refusal text names the
+// states in.
+var ctcssVocab = yaesu.CTCSSVocab3
 
 // ctcssNames is ctcssVocab's read-direction lookup (wire state -> display
 // name), the mirror of yaesu.CTCSSMap's write-direction one.
-var ctcssNames = map[cat.CTCSSState]string{
-	cat.CTCSSOff:    "OFF",
-	cat.CTCSSEncDec: "ENC-DEC",
-	cat.CTCSSEnc:    "ENC",
-}
+var ctcssNames = yaesu.CTCSSNames(ctcssVocab)
 
 // shiftNames is the read-direction repeater-shift lookup (wire shift ->
 // display name), the mirror of yaesu.ShiftByName.

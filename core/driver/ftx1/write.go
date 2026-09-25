@@ -139,27 +139,39 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		}
 	}
 
-	// Build BOTH frames before any wire traffic, so a mapping/validation
-	// failure in either can still refuse the whole write cleanly.
-	mwCmd, mtCmd, err := s.buildMWMTCommands(ch)
+	// Build the MT frame FIRST, pure and with no wire traffic, so a
+	// tag-encoding failure refuses before any byte goes out — the shared
+	// MW body below both builds AND sends the MW frame in one call, so
+	// there is no later point to refuse from before that frame is on the
+	// wire.
+	sl, err := s.dialect.ParseSlot(ch.Slot)
 	if err != nil {
-		return res, err
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
+	}
+	mtCmd, err := s.dialect.BuildMTSetNoDisplay(sl, ch.Data.Tag)
+	if err != nil {
+		return res, &driver.WriteRefusedError{
+			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTag},
+			Reason: fmt.Sprintf("cannot encode MT frame: %v", err),
+		}
 	}
 
+	// Pre-declared TWO-entry, unlike the shared body's own one-entry
+	// MRWriteChannel: dropping the MT placeholder on an MW-side failure
+	// would silently change this radio's WriteResult shape.
 	res.Steps = []driver.WriteStep{{Command: "MW"}, {Command: "MT"}}
 	const (
 		mwStep = 0
 		mtStep = 1
 	)
 
-	if _, err := s.eng.Do(ctx, mwCmd, fnfSpec()); err != nil {
-		if errors.Is(err, cat.ErrRejected) {
-			res.Steps[mwStep].Sent = true
-			return res, fmt.Errorf("ftx1: WriteChannel %s: MW rejected by radio: %w", ch.Slot, err)
-		}
-		return res, fmt.Errorf("ftx1: WriteChannel %s: MW: %w", ch.Slot, err)
+	mwRes, err := yaesu.MRWriteChannel(ctx, s.eng, s.dialect, s.caps, &mrParams, ch)
+	if len(mwRes.Steps) > 0 {
+		res.Steps[mwStep] = mwRes.Steps[0]
 	}
-	res.Steps[mwStep].Sent, res.Steps[mwStep].Confirmed = true, true
+	if err != nil {
+		return res, err
+	}
 
 	if _, err := s.eng.Do(ctx, mtCmd, fnfSpec()); err != nil {
 		if errors.Is(err, cat.ErrRejected) {
@@ -175,68 +187,26 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 // buildMWMTCommands maps a populated channel onto its MW and MT Set
 // frames, refusing (typed, via *driver.WriteRefusedError) any value the
-// codec cannot express. Called only after WriteChannel's capability gate
-// has passed.
+// codec cannot express. Kept as a Session method — not inlined at
+// WriteChannel's own call site, which now builds the two frames in the
+// opposite order for the refusal-before-wire reason given there — because
+// write_test.go exercises it directly. The MW frame goes through the
+// shared yaesu.BuildMWCommand body (mrParams, read.go); the MT frame
+// stays bespoke, unchanged: MTFormShortNoDisplay is this radio's own
+// frame shape, with nothing in core/driver/internal/yaesu that builds it.
 func (s *Session) buildMWMTCommands(ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err error) {
+	mwCmd, err = yaesu.BuildMWCommand(s.dialect, s.caps, &mrParams, ch)
+	if err != nil {
+		return cat.Command{}, cat.Command{}, err
+	}
+
 	sl, err := s.dialect.ParseSlot(ch.Slot)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
 	}
-	data := *ch.Data
-
-	mode, ok := s.dialect.ModeByName(data.Mode)
-	if !ok {
-		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
-			Slot: ch.Slot, Fields: []spec.Field{spec.FieldMode},
-			Reason: fmt.Sprintf("mode %q is not a mode this radio supports", data.Mode),
-		}
-	}
-	ctcss, ok := ctcssByName[data.CTCSS]
-	if !ok {
-		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
-			Slot: ch.Slot, Fields: []spec.Field{spec.FieldCTCSSState},
-			Reason: fmt.Sprintf("ctcss state %q is not one of OFF/ENC-DEC/ENC/DCS/PR-FREQ/REV-TONE", data.CTCSS),
-		}
-	}
-	shift, ok := yaesu.ShiftByName[data.Shift]
-	if !ok {
-		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
-			Slot: ch.Slot, Fields: []spec.Field{spec.FieldShift},
-			Reason: fmt.Sprintf("shift %q is not one of SIMPLEX/PLUS/MINUS", data.Shift),
-		}
-	}
-
-	clar := s.dialect.Clarifier()
-	if data.ClarHz < -clar.MaxAbsHz || data.ClarHz > clar.MaxAbsHz {
-		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
-			Slot: ch.Slot, Fields: []spec.Field{spec.FieldClarifier},
-			Reason: fmt.Sprintf("clarifier %d Hz exceeds +/-%d Hz", data.ClarHz, clar.MaxAbsHz),
-		}
-	}
-
-	freqHz, err := cat.MemoryFreqHz(data.FreqHz)
-	if err != nil {
-		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: err.Error()}
-	}
-
-	mwCmd, err = s.dialect.BuildMWSet(cat.MemoryData{
-		Slot:   sl,
-		FreqHz: freqHz,
-		ClarHz: int16(data.ClarHz),
-		RxClar: data.RxClar,
-		TxClar: data.TxClar,
-		Mode:   mode,
-		Kind:   s.dialect.MWWriteKind(),
-		CTCSS:  ctcss,
-		Shift:  shift,
-	})
-	if err != nil {
-		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("cannot encode MW frame: %v", err)}
-	}
-
 	// No display argument: MTFormShortNoDisplay's own builder takes a
 	// slot and a tag only (mtnodisplay.go).
-	mtCmd, err = s.dialect.BuildMTSetNoDisplay(sl, data.Tag)
+	mtCmd, err = s.dialect.BuildMTSetNoDisplay(sl, ch.Data.Tag)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTag},
