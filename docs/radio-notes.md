@@ -139,8 +139,11 @@ C4FM channel.
 Guesses: its **speed**. The menu row that sets the rate for the socket
 this program uses is 031 CAT RATE, which lists 4800, 9600, 19200 and
 38400 and marks none as the factory setting, so the program opens at
-38400; if your radio is set differently, change menu 031, because the
-program has no speed setting. Menu 029 is not that row — 029 sets the
+38400; owners report 38400 as the factory setting (not something this
+manual states or this program has read off a radio), which is why the
+program's guess and owners' experience agree. If your radio is set
+differently, change menu 031, because the program has no speed setting.
+Menu 029 is not that row — 029 sets the
 rate of the rear-panel RS-232C jack, a different port. Its **socket**:
 the USB connection is a built-in dual-UART bridge, so the radio appears
 as two serial ports and the manual never says which carries CAT; if the

@@ -537,6 +537,11 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// because internal/wiring's OpenRealSessionWith opens a real radio
 		// at exactly this rate and NO baud override exists in the CLI or
 		// the GUI.
+		//
+		// Owners report 38400 as the factory setting (Stuart, 06/09/2026,
+		// third-party corroboration) — the value does not change on that
+		// evidence, and the label stays ASSUMED until a document or a
+		// probe.
 		Bauds:       []int{4800, 9600, 19200, 38400},
 		DefaultBaud: 38400,
 		// The NUMBERS are MANUAL-EVIDENCED: FA's P1 legend

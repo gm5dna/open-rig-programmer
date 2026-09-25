@@ -393,7 +393,9 @@
 //     RS-232C jack menu 028 gates (558), and is not a source for this field:
 //     a user sent to 029 sets the wrong port's rate. No baud override exists
 //     in the CLI or the GUI, so a wrong value here leaves a real FT-991A
-//     reachable only through its own menu.
+//     reachable only through its own menu. Owners report 38400 as the
+//     factory setting (Stuart, 06/09/2026, third-party corroboration); the
+//     label stays ASSUMED until a document or a probe.
 //     STAGE R LIFTS IT WITH: one first real-radio session — the factory CAT
 //     RATE read off menu 031, or simply the rate at which the radio answers
 //     "ID;" out of the box.
