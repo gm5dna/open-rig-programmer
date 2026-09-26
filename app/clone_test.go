@@ -180,6 +180,78 @@ func TestCancelCloneRead_ReleasesReservation(t *testing.T) {
 	}
 }
 
+// TestCancelCloneRead_DuringArmingReleasesReservation pins the race
+// Codex's review found in app/clone.go: a dialog close (CancelCloneRead)
+// landing while ArmCloneRead is still opening the port -- before the old
+// code stored a.cloneState at all -- used to return ErrCloneNotArmed
+// having released nothing, while the still-running ArmCloneRead went on
+// to store its state and keep a.opBusy reserved. Blocks openCloneRealPort
+// to force CancelCloneRead into that exact window deterministically,
+// rather than relying on real scheduling luck.
+func TestCancelCloneRead_DuringArmingReleasesReservation(t *testing.T) {
+	a, _ := newTestApp(t)
+
+	reachedOpen := make(chan struct{})
+	unblockOpen := make(chan struct{})
+	orig := openCloneRealPort
+	openCloneRealPort = func(_ string, profile clonewire.Profile) (transport.Port, error) {
+		close(reachedOpen)
+		<-unblockOpen
+		port, _, err := wiring.OpenCloneFakePort(profile.Model)
+		return port, err
+	}
+	t.Cleanup(func() { openCloneRealPort = orig })
+
+	armErr := make(chan error, 1)
+	go func() {
+		armErr <- a.ArmCloneRead("ignored-for-fake", clonewire.FT817.Model)
+	}()
+
+	select {
+	case <-reachedOpen:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ArmCloneRead never reached openCloneRealPort")
+	}
+
+	// a.cloneState must already be set here, even though the port is not
+	// open yet, or this Cancel is exactly the pre-fix ErrCloneNotArmed
+	// leak this test targets.
+	if err := a.CancelCloneRead(); err != nil {
+		t.Fatalf("CancelCloneRead during arming: %v", err)
+	}
+
+	close(unblockOpen)
+
+	select {
+	case <-armErr:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ArmCloneRead never returned after being unblocked")
+	}
+
+	a.mu.Lock()
+	busy := a.opBusy
+	stillArmed := a.cloneState != nil
+	a.mu.Unlock()
+	if busy != "" {
+		t.Errorf("a.opBusy after cancel-during-arming = %q, want \"\" (released)", busy)
+	}
+	if stillArmed {
+		t.Error("a.cloneState after cancel-during-arming is still set, want nil")
+	}
+
+	// The reservation must be free for a later operation, not just the
+	// field zeroed -- reserveOpLocked is the thing a leak actually blocks.
+	a.mu.Lock()
+	err := a.reserveOpLocked("later-op")
+	if err == nil {
+		a.opBusy = ""
+	}
+	a.mu.Unlock()
+	if err != nil {
+		t.Errorf("reserveOpLocked after cancel-during-arming = %v, want nil (not busy)", err)
+	}
+}
+
 // TestReceiveCloneImage_UnknownModelRefusesBeforeArm pins ArmCloneRead's
 // own unknown-model refusal (wiring.OpenCloneReader), never opening a
 // port or reserving anything for a name outside wiring.CloneModels().

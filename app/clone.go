@@ -32,6 +32,13 @@ type cloneReadState struct {
 	reception *clonewire.Reception
 	port      transport.Port
 	model     string
+
+	// cancelled is set by CancelCloneRead when it runs while ArmCloneRead's
+	// slow work (opening the reader/port, arming the wire) is still in
+	// flight, i.e. before a.cloneState even held this cs — see
+	// ArmCloneRead's publishClonePort/publishCloneReception calls. Guarded
+	// by a.mu, like every other field here.
+	cancelled bool
 }
 
 // openCloneRealPort is the real-port constructor ArmCloneRead calls, held
@@ -65,38 +72,102 @@ func (a *App) GetCloneModels() []string {
 // exactly as those already refuse each other (reservation.go). Released
 // again by ReceiveCloneImage/CancelCloneRead, or here on any failure to
 // arm.
+//
+// a.cloneState is published the moment the reservation is taken, before
+// any of the slow reader/port/wire-arm work below runs, so a
+// CancelCloneRead racing in from a closed dialog always finds something
+// to cancel. Without this, a cancel arriving while this call was still
+// opening the port would see a.cloneState still nil, return
+// ErrCloneNotArmed having released nothing, while this call went on to
+// finish, store its own state, and keep the reservation -- leaking the
+// port and a.opBusy for the rest of the session. publishClonePort/
+// publishCloneReception below check cs.cancelled at each later step so
+// whichever call "wins" releases the reservation exactly once.
 func (a *App) ArmCloneRead(portPath, model string) error {
 	a.mu.Lock()
 	if err := a.reserveOpLocked("ArmCloneRead"); err != nil {
 		a.mu.Unlock()
 		return err
 	}
+	cs := &cloneReadState{model: model}
+	a.cloneState = cs
 	a.mu.Unlock()
 
 	reader, profiles, err := wiring.OpenCloneReader(model)
 	if err != nil {
-		a.releaseOp()
+		a.abandonCloneArm(cs)
 		return fmt.Errorf("app: arming clone read: %w", err)
 	}
 	port, err := openCloneRealPort(portPath, profiles[0])
 	if err != nil {
-		a.releaseOp()
+		a.abandonCloneArm(cs)
 		return fmt.Errorf("app: arming clone read: opening port: %w", err)
+	}
+	if !a.publishClonePort(cs, port) {
+		// CancelCloneRead ran while we were still opening the port: it has
+		// already cleared a.cloneState and released a.opBusy, so we only
+		// need to close what it could not see yet.
+		_ = port.Close()
+		return ErrCloneNotArmed
 	}
 	reception, err := reader.Arm(a.ctx, port, profiles)
 	if err != nil {
 		_ = port.Close()
-		a.releaseOp()
+		a.abandonCloneArm(cs)
 		return fmt.Errorf("app: arming clone read: %w", err)
 	}
 	<-reception.Armed()
 
-	a.mu.Lock()
-	a.cloneState = &cloneReadState{reception: reception, port: port, model: model}
-	a.mu.Unlock()
+	if !a.publishCloneReception(cs, reception) {
+		_ = port.Close()
+		return ErrCloneNotArmed
+	}
 
 	a.emit("clone:armed", CloneArmedEvent{Model: model})
 	return nil
+}
+
+// abandonCloneArm cleans up after an ArmCloneRead failure that happened
+// before cs.port was published, so a concurrent CancelCloneRead (if any)
+// saw no port to close. If cs.cancelled is already true, CancelCloneRead
+// got there first and has already cleared a.cloneState and released
+// a.opBusy -- do nothing further, so the reservation is released exactly
+// once either way.
+func (a *App) abandonCloneArm(cs *cloneReadState) {
+	a.mu.Lock()
+	cancelled := cs.cancelled
+	if !cancelled {
+		a.cloneState = nil
+	}
+	a.mu.Unlock()
+	if !cancelled {
+		a.releaseOp()
+	}
+}
+
+// publishClonePort records the opened port on cs, unless CancelCloneRead
+// has already cancelled it -- in which case Cancel has released a.opBusy
+// and the caller must close the port itself. Returns false in that case.
+func (a *App) publishClonePort(cs *cloneReadState, port transport.Port) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if cs.cancelled {
+		return false
+	}
+	cs.port = port
+	return true
+}
+
+// publishCloneReception is publishClonePort's counterpart for the
+// reception handle reader.Arm returns.
+func (a *App) publishCloneReception(cs *cloneReadState, reception *clonewire.Reception) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if cs.cancelled {
+		return false
+	}
+	cs.reception = reception
+	return true
 }
 
 // CancelCloneRead releases an ArmCloneRead call that the operator never
@@ -107,12 +178,17 @@ func (a *App) ArmCloneRead(portPath, model string) error {
 func (a *App) CancelCloneRead() error {
 	a.mu.Lock()
 	cs := a.cloneState
-	a.cloneState = nil
-	a.mu.Unlock()
 	if cs == nil {
+		a.mu.Unlock()
 		return ErrCloneNotArmed
 	}
-	_ = cs.port.Close()
+	cs.cancelled = true
+	a.cloneState = nil
+	port := cs.port // may still be nil if ArmCloneRead hasn't opened it yet
+	a.mu.Unlock()
+	if port != nil {
+		_ = port.Close()
+	}
 	a.releaseOp()
 	return nil
 }
