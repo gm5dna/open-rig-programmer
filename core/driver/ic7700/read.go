@@ -65,7 +65,7 @@ func slotToAddress(slot string) (civ.ChannelAddress, spec.BankID, error) {
 }
 
 // addressToSlot is slotToAddress's inverse — the shared body lives once
-// in core/driver/internal/icom (six flat-addressed Icom packages minted
+// in core/driver/internal/icom (seven flat-addressed Icom packages minted
 // byte-identical copies of it).
 func addressToSlot(a civ.ChannelAddress) (string, error) {
 	return icom.AddressToSlot("ic7700", a, "%03d")
