@@ -31,7 +31,7 @@ func TestCloneModelsDisjointFromSessionModels(t *testing.T) {
 }
 
 func TestOpenCloneReader_UnknownModel(t *testing.T) {
-	_, _, err := OpenCloneReader("NO-SUCH-CLONE-MODEL")
+	_, err := OpenCloneReader("NO-SUCH-CLONE-MODEL")
 	var unk *UnknownModelError
 	if !errors.As(err, &unk) {
 		t.Fatalf("OpenCloneReader(unknown): got %v, want *UnknownModelError", err)
@@ -43,12 +43,9 @@ func TestOpenCloneReader_UnknownModel(t *testing.T) {
 
 func TestOpenCloneReader_OneCandidatePerModel(t *testing.T) {
 	for _, model := range CloneModels() {
-		reader, profiles, err := OpenCloneReader(model)
+		profiles, err := OpenCloneReader(model)
 		if err != nil {
 			t.Fatalf("OpenCloneReader(%q): unexpected error: %v", model, err)
-		}
-		if reader == nil {
-			t.Errorf("OpenCloneReader(%q): nil reader", model)
 		}
 		if len(profiles) != 1 || profiles[0].Model != model {
 			t.Errorf("OpenCloneReader(%q) candidates = %+v, want exactly one Profile whose Model matches — identity is operator-asserted, never a family offered together", model, profiles)
@@ -106,7 +103,7 @@ func TestOpenRealSessionWith_RefusesCloneModel(t *testing.T) {
 func TestOpenCloneFakePort_RoundTrips(t *testing.T) {
 	for _, model := range []string{clonewire.FT817.Model, clonewire.FT857.Model, clonewire.FT897.Model} {
 		t.Run(model, func(t *testing.T) {
-			reader, profiles, err := OpenCloneReader(model)
+			profiles, err := OpenCloneReader(model)
 			if err != nil {
 				t.Fatalf("OpenCloneReader(%q): %v", model, err)
 			}
@@ -118,7 +115,7 @@ func TestOpenCloneFakePort_RoundTrips(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
-			reception, err := reader.Arm(ctx, port, profiles)
+			reception, err := clonewire.Arm(ctx, port, profiles)
 			if err != nil {
 				t.Fatalf("Arm(%q): %v", model, err)
 			}
