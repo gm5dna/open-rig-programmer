@@ -33,8 +33,9 @@ every write is previewed, snapshotted and read back.
 | **TS-2000**, **TS-2000X**, **TS-B2000** | ✅ | ⚠️ opt-in |
 | **TS-570D**, **TS-570S**, **TS-570DG** (UNVERIFIED-BY-INHERITANCE — see radio-notes.md) | ✅ | ⚠️ opt-in |
 | **TS-870S** | ✅ | ⚠️ opt-in |
+| **FT-817**, **FT-817ND**, **FT-818**, **FT-857**, **FT-857D**, **FT-897**, **FT-897D** (clone-mode read only — see radio-notes.md) | ✅ `--clone` | ❌ read-only |
 
-That is 46 radios. Per-radio detail, including where the program
+That is 53 radios. Per-radio detail, including where the program
 guesses, is in [docs/radio-notes.md](docs/radio-notes.md).
 
 **If you own one of the opt-in radios, please try it and say how it
