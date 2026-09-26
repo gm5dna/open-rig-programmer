@@ -1078,3 +1078,81 @@ func TestSave_OverBound_RefusedDestinationUntouched(t *testing.T) {
 		t.Errorf("directory has %d entries, want 1 (no temp file left behind by a refused Save)", len(entries))
 	}
 }
+
+// TestSaveLoad_RawImageRoundTripsAtSchema7: a Codeplug with RawImage set
+// is written at schema 7 and loads back with the blob intact — the
+// schema-7 arm of the same byte-identity contract the canonical goldens
+// pin (see canonicalV7Goldens in schema_test.go).
+func TestSaveLoad_RawImageRoundTripsAtSchema7(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "clone.json")
+	want := &RawImageBlob{
+		Model:     "FT-817ND",
+		ProfileID: "ft817nd-6521",
+		Bytes:     []byte{0xDE, 0xAD, 0xBE, 0xEF, 0x00},
+	}
+	cp := &Codeplug{
+		Schema:    CurrentSchema,
+		Generator: "x",
+		Radio:     RadioInfo{Model: "FT-817ND", CATID: "0800"},
+		Channels:  []Channel{},
+		RawImage:  want,
+	}
+	if err := Save(path, cp); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("json.Unmarshal(probe) error = %v", err)
+	}
+	if probe.Schema != 7 {
+		t.Fatalf("saved file's schema = %d, want 7 (RawImage forces schema 7)", probe.Schema)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.RawImage == nil || !reflect.DeepEqual(got.RawImage, want) {
+		t.Errorf("Load().RawImage = %+v, want %+v", got.RawImage, want)
+	}
+}
+
+// TestSaveLoad_NilRawImageStillUsesSchema3: a Codeplug with RawImage nil
+// is unaffected by this tier — the no-regression half of schemaFor's new
+// clause, at the Save/Load level rather than schemaFor's own unit test
+// (TestSchemaFor_NilRawImageDoesNotForceSchema7 in schema_test.go).
+func TestSaveLoad_NilRawImageStillUsesSchema3(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plain.json")
+	cp := &Codeplug{
+		Schema:    CurrentSchema,
+		Generator: "x",
+		Radio:     RadioInfo{Model: "FT-710", CATID: "0800"},
+		Channels:  []Channel{},
+	}
+	if err := Save(path, cp); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("json.Unmarshal(probe) error = %v", err)
+	}
+	if probe.Schema != lowestSchema {
+		t.Errorf("saved file's schema = %d, want %d (nil RawImage must not force a newer schema)", probe.Schema, lowestSchema)
+	}
+}

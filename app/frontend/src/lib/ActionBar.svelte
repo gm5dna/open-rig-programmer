@@ -20,6 +20,7 @@
 	import DirtyConfirmDialog from './DirtyConfirmDialog.svelte'
 	import SendFlowDialog from './SendFlowDialog.svelte'
 	import ImportResultDialog from './ImportResultDialog.svelte'
+	import CloneReadDialog from './CloneReadDialog.svelte'
 
 	/** @typedef {import('../../wailsjs/go/models').main.SendPlanView} SendPlanView */
 	/** @typedef {import('../../wailsjs/go/models').main.ImportResultView} ImportResultView */
@@ -46,6 +47,12 @@
 	/** The active import result dialogue, or null.
 	 * @type {{ format: 'CSV' | 'CHIRP', result: ImportResultView } | null} */
 	let importResult = $state(null)
+
+	/** Whether the clone-mode read dialogue (Phase 4b) is open. Its own
+	 * model list (getCloneModels) is a SEPARATE, read-only registry from
+	 * GetSupportedModels — never offered here as an ordinary Read/Send
+	 * target, and this dialogue itself has no send/write affordance. */
+	let cloneReadOpen = $state(false)
 
 	// Task 14 (M9d): `sendPlan` is a LOCAL copy of a plan Go also holds, and
 	// Go drops its own whenever the session closes (app/connection.go's
@@ -243,6 +250,12 @@
 			disabled={!appState.canSend}
 			tooltip={appState.canSend ? '' : appState.sendBlockedReason}
 		/>
+		<ToolButton
+			label="Clone read…"
+			onclick={() => (cloneReadOpen = true)}
+			disabled={transferBusy}
+			tooltip={transferBusy ? 'A transfer is already running' : 'Whole-image read for the FT-817/857/897 families (read-only)'}
+		/>
 	</div>
 
 	<div class="tool-group">
@@ -303,6 +316,10 @@
 
 {#if importResult}
 	<ImportResultDialog format={importResult.format} result={importResult.result} onclose={closeImportDialog} />
+{/if}
+
+{#if cloneReadOpen}
+	<CloneReadDialog onClose={() => (cloneReadOpen = false)} />
 {/if}
 
 <style>

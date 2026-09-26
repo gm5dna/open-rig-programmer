@@ -6,6 +6,14 @@ export function CancelTransfer() {
   return window['go']['main']['App']['CancelTransfer']();
 }
 
+export function ArmCloneRead(arg1, arg2) {
+  return window['go']['main']['App']['ArmCloneRead'](arg1, arg2);
+}
+
+export function CancelCloneRead() {
+  return window['go']['main']['App']['CancelCloneRead']();
+}
+
 export function ConfirmSend(arg1) {
   return window['go']['main']['App']['ConfirmSend'](arg1);
 }
@@ -28,6 +36,10 @@ export function ExportCSV() {
 
 export function GetAppVersion() {
   return window['go']['main']['App']['GetAppVersion']();
+}
+
+export function GetCloneModels() {
+  return window['go']['main']['App']['GetCloneModels']();
 }
 
 export function GetCodeplug() {
@@ -84,6 +96,10 @@ export function PrepareSend() {
 
 export function ReadRadio() {
   return window['go']['main']['App']['ReadRadio']();
+}
+
+export function ReceiveCloneImage() {
+  return window['go']['main']['App']['ReceiveCloneImage']();
 }
 
 export function ReadSettingsRadio() {

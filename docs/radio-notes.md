@@ -8,7 +8,7 @@ guesses taken from a manual rather than facts observed on a radio. The
 evidence behind each statement is in the files named at the end of
 each section; those are written for reviewers and contributors.
 
-Two words are used throughout:
+Three words are used throughout:
 
 - **Verified** means the behaviour has been observed on a real radio in
   a recorded session (`docs/hardware-notes.md`).
@@ -19,6 +19,11 @@ Two words are used throughout:
   switch writes on for it (README, *Switching on writes for an
   unverified radio*). Reading is always allowed: only documented read
   commands are sent.
+- **Clone-mode read only** means the radio has no per-channel read/write
+  command at all: reading it means running its own front-panel clone
+  transfer once into the program instead. There is no opt-in switch to
+  find, because there is no write path to switch on — see the *Yaesu
+  clone-mode family* section below.
 
 Shared by every radio: a channel cannot be deleted from the program
 (the Yaesu radios have no such command; the Icom radios and the
@@ -453,6 +458,56 @@ present".
 
 Evidence: `core/driver/ftx1/doc.go`; the manual is the Yaesu FTX-1 CAT
 Operation Manual, revision 2508-C.
+
+### FT-817, FT-817ND, FT-818, FT-857, FT-857D, FT-897 and FT-897D (clone-mode read only)
+
+These seven radios have no CAT memory-channel command at all — their manuals document a
+front-panel clone transfer instead, a cable-and-button procedure that moves the radio's whole
+memory image to a second unit in one go. This program can receive that transfer as if it were
+the second unit, but it cannot send one: there is no write path, opt-in or otherwise, for any
+radio in this family (`rigprog read --clone --model NAME`, or *Clone read…* in the app's action
+bar; a separate model list from every other radio's, and it never appears in either connect
+list). FT-847 is excluded: its own manual disagrees with itself on which menu number starts the
+transfer, so no driver has been built for it.
+
+Reading one means running its clone-send procedure once, from its own front panel, into this
+program: pick the model and the port, and the program arms its receiver and waits — only once
+it is actually listening does it tell you to start the transfer on the radio, so a fast-starting
+radio's opening bytes are never lost to a slow prompt. The model you pick is asserted, not
+detected: none of these radios sends a byte that names itself, so FT-857 and FT-857D (and FT-897
+and FT-897D) are indistinguishable from the image alone. This program takes your word for which
+one you have, and says so in its own output.
+
+Every byte of the image is kept, including any header or calibration region this program does
+not decode, so nothing is thrown away even where it is not understood. The memory channels
+are shown in the grid with frequency, mode and tag, each read from the image at CHIRP-informed
+byte offsets (see below); CTCSS tone, shift and other per-channel settings are not decoded for
+this family and show as unavailable. An incomplete, over-length or checksum-failing transfer is
+refused outright, never accepted as a partial read.
+
+**Where the byte layout comes from, and what that means.** None of the seven manuals prints the
+image's internal byte layout — each one documents only the cable, the button sequence, and that
+"all data" is transferred. The layout used here — how long a complete image is, and where the
+frequency and mode bytes sit within it — is taken from CHIRP, the open-source programming tool
+(GPL-3, the same licence as this program), not from any Yaesu manual. It has not been checked
+against a real radio of any of these seven models: nobody involved in this program owns one.
+Serial speed is the same story for FT-857/FT-857D and FT-897/FT-897D specifically: their manuals
+do not print a clone-mode baud rate at all, so this program assumes 9,600 bps, the same rate
+CHIRP uses for the FT-817/818 family and the middle setting of the radio's own CAT RATE menu.
+FT-817/FT-817ND/FT-818's own rate, 9,600 bps, is also taken from CHIRP, not a manual.
+
+**If you own one of these radios**, trying a read and reporting whether the channel list came
+out looking right (frequencies and modes that match what you programmed) is the single most
+useful thing you can do — see the README's *if you own one of the opt-in radios* note, which
+applies here too even though there is no write side to opt into.
+
+Evidence: `core/clonewire/profile.go`, `core/clonewire/doc.go`;
+`docs/superpowers/ft8{17,17nd,18,57,57d,97,97d}-capability-matrix.md`; CHIRP
+`chirp/drivers/{ft817,ft818,ft857}.py` and `yaesu_clone.py`, pinned at commit
+`e7347e6a66ef8f9edb50e3e534510c2d3ae6b329`; the manuals are `ft817nd_operatingmanual_1308h.pdf`
+(FT-817/FT-817ND), `ft818nd_operatingmanual_2003u.pdf` (FT-818),
+`ft857d_operatingmanual_1701d.pdf` (FT-857/FT-857D), `ft897_operatingmanual.pdf` (FT-897) and
+`ft897d_operatingmanual_1203f.pdf` (FT-897D).
 
 ## Icom
 
@@ -998,3 +1053,7 @@ by revision in the code that transcribes it.
 | FT-900 | Yaesu FT-900 Operating Manual, doc `E?6357502 (408r-DA)` best-effort read (community mirror) |
 | FT-1000MP, Mark-V FT-1000MP | Yaesu FT-1000MP Operating Manual; Mark-V FT-1000MP Operating Manual (own pagination) |
 | FTX-1 | Yaesu FTX-1 CAT Operation Manual, revision 2508-C |
+| FT-817, FT-817ND | `ft817nd_operatingmanual_1308h.pdf` (clone procedure only; layout informed-by CHIRP `ft817.py`, commit `e7347e6a66ef8f9edb50e3e534510c2d3ae6b329`) |
+| FT-818 | `ft818nd_operatingmanual_2003u.pdf` (clone procedure only; layout informed-by CHIRP `ft818.py`, same commit) |
+| FT-857, FT-857D | `ft857d_operatingmanual_1701d.pdf` (clone procedure only; layout informed-by CHIRP `ft857.py`, same commit; baud ASSUMED 9600) |
+| FT-897, FT-897D | `ft897_operatingmanual.pdf` / `ft897d_operatingmanual_1203f.pdf` (clone procedure only; layout informed-by CHIRP `ft857.py`, same commit; baud ASSUMED 9600) |
