@@ -18,7 +18,7 @@ const (
 	lastMemoryChannel = 99
 )
 
-// AddressToSlot is the addressToSlot body six flat-addressed Icom
+// AddressToSlot is the addressToSlot body seven flat-addressed Icom
 // packages (ic7600, ic7610, ic7700, ic7760, ic7800, ic7851 use "%03d";
 // ic7410 uses "%04d") minted byte-identical copies of, apart from the
 // model name in the two error strings and the memory pad width. ic7200

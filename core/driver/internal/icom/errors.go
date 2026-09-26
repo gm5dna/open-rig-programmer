@@ -9,7 +9,7 @@
 // Error() wording is not: each owning package keeps its own Error() by
 // embedding one of these, so a merged field layout costs nothing in
 // wire-facing text. It holds one shared BEHAVIOUR: AddressToSlot
-// (slots.go), the addressToSlot body six flat-addressed packages minted
+// (slots.go), the addressToSlot body seven flat-addressed packages minted
 // byte-identical copies of.
 package icom
 
