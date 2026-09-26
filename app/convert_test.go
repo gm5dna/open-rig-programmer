@@ -166,6 +166,36 @@ func TestDeepCopyCodeplug_FailedSlotsIndependence(t *testing.T) {
 	}
 }
 
+// TestDeepCopyCodeplug_RawImageIndependence mirrors
+// TestDeepCopyCodeplug_FailedSlotsIndependence for RawImage (schema 7):
+// mutating the copy's RawImage.Bytes must never reach back into src's — a
+// shallow `out := *cp` alone would share both the *RawImageBlob pointer
+// and its Bytes slice's backing array.
+func TestDeepCopyCodeplug_RawImageIndependence(t *testing.T) {
+	src := &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: "FT-817ND"},
+		RawImage: &codeplug.RawImageBlob{Model: "FT-817ND", ProfileID: "ft817nd-6521", Bytes: []byte{0xDE, 0xAD}},
+	}
+	dup := deepCopyCodeplug(src)
+	dup.RawImage.Bytes[0] = 0xFF
+	if src.RawImage.Bytes[0] != 0xDE {
+		t.Errorf("deepCopyCodeplug: mutating dup.RawImage.Bytes changed src: %#02x", src.RawImage.Bytes[0])
+	}
+	if dup.RawImage == src.RawImage {
+		t.Error("deepCopyCodeplug: dup.RawImage aliases src.RawImage (same pointer)")
+	}
+}
+
+// TestDeepCopyCodeplug_NilRawImage confirms the nil-RawImage path stays
+// nil, mirroring TestDeepCopyCodeplug_NilMenus.
+func TestDeepCopyCodeplug_NilRawImage(t *testing.T) {
+	src := &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Radio: codeplug.RadioInfo{Model: "FT-710"}}
+	if dup := deepCopyCodeplug(src); dup.RawImage != nil {
+		t.Errorf("deepCopyCodeplug: nil RawImage copied to %+v, want nil", dup.RawImage)
+	}
+}
+
 // TestDeepCopyCodeplug_NilMenus confirms the nil-Menus path stays nil.
 func TestDeepCopyCodeplug_NilMenus(t *testing.T) {
 	src := &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Radio: codeplug.RadioInfo{Model: "FT-710"}}

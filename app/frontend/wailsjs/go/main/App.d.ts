@@ -3,6 +3,10 @@
 import {main} from '../models';
 import {codeplug} from '../models';
 
+export function ArmCloneRead(arg1:string,arg2:string):Promise<void>;
+
+export function CancelCloneRead():Promise<void>;
+
 export function CancelTransfer():Promise<void>;
 
 export function ConfirmSend(arg1:string):Promise<void>;
@@ -16,6 +20,8 @@ export function Disconnect():Promise<void>;
 export function ExportCSV():Promise<string>;
 
 export function GetAppVersion():Promise<main.VersionView>;
+
+export function GetCloneModels():Promise<Array<string>>;
 
 export function GetCodeplug():Promise<main.CodeplugView>;
 
@@ -44,6 +50,8 @@ export function LoadFile():Promise<main.CodeplugView>;
 export function PrepareSend():Promise<main.SendPlanView>;
 
 export function ReadRadio():Promise<main.CodeplugView>;
+
+export function ReceiveCloneImage():Promise<main.CodeplugView>;
 
 export function ReadSettingsRadio():Promise<main.SettingsView>;
 

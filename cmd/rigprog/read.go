@@ -103,6 +103,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 	force := fs.Bool("force", false, "overwrite --out if it already exists")
 	snapshotDirFlag := fs.String("snapshot-dir", "", "snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)")
+	cloneMode := fs.Bool("clone", false, "read a whole-image clone-mode transfer instead (see rigprog read --help); --model must name a clone-mode model (rigprog read --clone --model NAME, NAME from wiring.CloneModels())")
 
 	if ok, code := parseArgs(fs, args, "read", printReadUsage, stdout, stderr); !ok {
 		return code
@@ -111,6 +112,16 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "rigprog read: unexpected argument %q\n", fs.Arg(0))
 		printReadUsage(stderr)
 		return exitUsage
+	}
+
+	// --clone is an entirely separate wire operation (core/clonewire, not
+	// core/clone/driver.Session) against a SEPARATE, disjoint model
+	// registry (wiring.CloneModels(), not wiring.SupportedModels()) — see
+	// cmdCloneRead's own doc comment and
+	// wiring.TestCloneModelsDisjointFromSessionModels. Branches before
+	// validateSessionArgs, which checks the WRONG registry for this path.
+	if *cloneMode {
+		return cmdCloneRead(ctx, *model, *port, *fake, *out, *force, stdout, stderr)
 	}
 
 	if !validateSessionArgs(stderr, "read", *model, *port, *fake, printReadUsage) {

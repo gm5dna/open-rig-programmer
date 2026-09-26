@@ -144,6 +144,14 @@ type App struct {
 	// call.
 	settingsDisplay map[string]string
 
+	// cloneState is the in-flight clone-mode read ArmCloneRead armed and
+	// ReceiveCloneImage consumes — nil except between a successful
+	// ArmCloneRead and the ReceiveCloneImage/CancelCloneRead call that
+	// follows it (app/clone.go). It holds a.opBusy reserved as
+	// "ArmCloneRead" for that whole window, same rule as every other
+	// reservation holder in reservation.go.
+	cloneState *cloneReadState
+
 	// emit sends one event to the frontend (task-15 brief §2's Events
 	// seam). Always non-nil after NewApp; tests overwrite it with a
 	// recorder (see app_test.go's eventRecorder).

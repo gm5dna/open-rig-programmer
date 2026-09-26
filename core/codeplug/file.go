@@ -32,7 +32,7 @@ import (
 // as it was before the tier existed. That is what makes every existing
 // Yaesu codeplug and manifest artefact byte-identical BY CONSTRUCTION
 // rather than by a promise nobody can check.
-const CurrentSchema = 6
+const CurrentSchema = 7
 
 // lowestSchema is the oldest version Save will emit — the floor of
 // schemaFor's search. Older schemas are readable (loadV2, loadV1) but
@@ -67,6 +67,39 @@ type Codeplug struct {
 	// Menus holds the optional menu/EX settings snapshot (schema 2). It is
 	// nil when a file carries no menu data. See MenuSnapshot.
 	Menus *MenuSnapshot `json:"menus,omitempty"`
+	// RawImage holds a clone-mode whole-image read (schema 7), for
+	// families with no per-channel wire operation to populate Channels
+	// from (core/clonewire). It is nil for every ordinary CAT-read
+	// codeplug. See RawImageBlob.
+	RawImage *RawImageBlob `json:"raw_image,omitempty"`
+}
+
+// RawImageBlob holds a clone-mode transfer's COMPLETE received image
+// verbatim — never a trimmed subset, even though only some of it maps to
+// a documented field (core/clonewire's Profile records which ranges are
+// unmapped/calibration bytes for the capability matrix; this package
+// stores all of it regardless, per spec §Decisions item 7).
+//
+// ProfileID, not Model alone, is the stable per-shape identifier: CHIRP's
+// own source shows several distinct image lengths for one model string
+// (e.g. FT-817/FT-817ND/FT-818), so Model cannot by itself say which
+// core/clonewire.Profile this image was parsed against.
+//
+// RawImageBlob is DELIBERATELY EXCLUDED from Digest (see digest.go):
+// Digest is defined over Channels alone, "content alone" per its own doc
+// comment, and clone-mode radios are Write: Unsupported project-wide —
+// there is no write path to verify a written image against, so a blob
+// digest would have no consumer. This is a considered decision (Stuart,
+// 25/09/2026), not an oversight a later reader should "fix".
+type RawImageBlob struct {
+	// Model is the radio's display name, e.g. "FT-817ND" — informational
+	// only; ProfileID, not this field, is what identifies the image shape.
+	Model string `json:"model"`
+	// ProfileID is the stable per-shape identifier of the
+	// core/clonewire.Profile this image was received against.
+	ProfileID string `json:"profile_id"`
+	// Bytes is the complete received image, verbatim.
+	Bytes []byte `json:"bytes"`
 }
 
 // ErrSchemaTooNew is the sentinel a caller should compare against (via
@@ -432,6 +465,8 @@ func Load(path string) (*Codeplug, error) {
 	// Pass 2: version-appropriate strict decode.
 	var cp *Codeplug
 	switch probe.Schema {
+	case 7:
+		cp, err = loadV7(b, path)
 	case 6:
 		cp, err = loadV6(b, path)
 	case 5:
@@ -578,10 +613,51 @@ func loadV5(b []byte, path string) (*Codeplug, error) {
 	}, nil
 }
 
-// loadV6 strictly decodes the current schema through the live shape.
-// Schema 6 added RadioInfo.FailedSlots, so the live shape is exactly the
-// versioned shape until the next schema change freezes it.
+// codeplugV6 is the FROZEN schema-6 top-level shape: today's live shape
+// MINUS RawImage (schema 7) — pinned for the same reason
+// codeplugV3/codeplugV4 were frozen for the Icom tier (see
+// channelDataV3's doc comment): without it, a schema-6 file carrying a
+// "raw_image" key would decode straight through, since it is a JSON key
+// with a matching live Go field and DisallowUnknownFields does not reject
+// those. Radio uses the live RadioInfo, not radioInfoV5: schema 6 is what
+// added FailedSlots to RadioInfo, so this frozen shape must still carry
+// it, or a canonical schema-6 golden with failed_slots set would be
+// rejected as an unknown field. Channels reuses the live
+// Channel/ChannelData leaf types deliberately: schema 7 changes none of
+// their shapes, only adds this new top-level field.
+type codeplugV6 struct {
+	Schema    int           `json:"schema"`
+	Generator string        `json:"generator"`
+	Radio     RadioInfo     `json:"radio"`
+	Channels  []Channel     `json:"channels"`
+	Menus     *MenuSnapshot `json:"menus,omitempty"`
+}
+
+// loadV6 strictly decodes a schema-6 file through the frozen v6 shape —
+// no longer straight into the live Codeplug, now that schema 7 adds
+// RawImage to it (see codeplugV6's doc comment). RawImage is simply never
+// set on the result: no schema-6 file could ever have recorded one.
 func loadV6(b []byte, path string) (*Codeplug, error) {
+	var v6 codeplugV6
+	if err := decodeStrict(b, path, &v6, menusLegacyExempt); err != nil {
+		return nil, err
+	}
+	if err := v6.Menus.Validate(); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	return &Codeplug{
+		Schema:    CurrentSchema,
+		Generator: v6.Generator,
+		Radio:     v6.Radio,
+		Channels:  v6.Channels,
+		Menus:     v6.Menus,
+	}, nil
+}
+
+// loadV7 strictly decodes the current schema through the live shape.
+// Schema 7 added Codeplug.RawImage, so the live shape is exactly the
+// versioned shape until the next schema change freezes it.
+func loadV7(b []byte, path string) (*Codeplug, error) {
 	var cp Codeplug
 	if err := decodeStrict(b, path, &cp, menusLegacyExempt); err != nil {
 		return nil, err
@@ -1315,9 +1391,10 @@ func migrateV4ChannelData(d *channelDataV4) *ChannelData {
 //
 // Schema 3 unless a D4 state or a wide frequency needs schema 4; schema
 // 5 when one of D8's seven receiver states cannot be omitted; schema 6
-// when Radio.FailedSlots is non-empty — checked FIRST, before any
-// per-channel reasoning, so it wins even when every channel is otherwise
-// schema-3-representable: no earlier schema has a key for it at all, so
+// when Radio.FailedSlots is non-empty; schema 7 when RawImage is set —
+// checked FIRST of all, before FailedSlots or any per-channel reasoning,
+// so it wins even when every channel is otherwise schema-3-representable:
+// no earlier schema has a key for RawImage (or FailedSlots) at all, so
 // there is no omission for an older loader to reconstruct correctly.
 //
 //   - a tier-added field is not Unavailable (see
@@ -1338,10 +1415,13 @@ func migrateV4ChannelData(d *channelDataV4) *ChannelData {
 // Nothing else participates. In particular the in-memory cp.Schema is
 // NOT consulted: it is always CurrentSchema after a Load (migrate-on-
 // load), so honouring it would make every re-save a CurrentSchema file —
-// schema 6 today — and destroy the byte identity this function exists for.
+// schema 7 today — and destroy the byte identity this function exists for.
 // TestSaveLoad_ReachableAbsentFieldRemainsInvalid pins both schema
 // boundaries and the send-gate consequence.
 func schemaFor(cp *Codeplug) int {
+	if cp.RawImage != nil {
+		return 7
+	}
 	if len(cp.Radio.FailedSlots) > 0 {
 		return 6
 	}
@@ -1364,8 +1444,9 @@ func schemaFor(cp *Codeplug) int {
 }
 
 // saveValue returns the versioned marshal value Save should encode for
-// cp: a codeplugV3, codeplugV4, or a shallow schema-5/schema-6 copy of the
-// live struct, per schemaFor. cp is never modified.
+// cp: a codeplugV3, codeplugV4, or a shallow schema-5/6/7 copy of the
+// live struct (schema 7 IS the live shape, exactly as schema 5 and 6 are
+// — see loadV7), per schemaFor. cp is never modified.
 //
 // A nil Channels marshals to a nil slice (JSON null), not an empty
 // array, in both versions — preserving exactly what the live struct
