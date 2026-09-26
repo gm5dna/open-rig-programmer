@@ -93,7 +93,7 @@ func (a *App) ArmCloneRead(portPath, model string) error {
 	a.cloneState = cs
 	a.mu.Unlock()
 
-	reader, profiles, err := wiring.OpenCloneReader(model)
+	profiles, err := wiring.OpenCloneReader(model)
 	if err != nil {
 		a.abandonCloneArm(cs)
 		return fmt.Errorf("app: arming clone read: %w", err)
@@ -110,7 +110,7 @@ func (a *App) ArmCloneRead(portPath, model string) error {
 		_ = port.Close()
 		return ErrCloneNotArmed
 	}
-	reception, err := reader.Arm(a.ctx, port, profiles)
+	reception, err := clonewire.Arm(a.ctx, port, profiles)
 	if err != nil {
 		_ = port.Close()
 		a.abandonCloneArm(cs)
@@ -159,7 +159,7 @@ func (a *App) publishClonePort(cs *cloneReadState, port transport.Port) bool {
 }
 
 // publishCloneReception is publishClonePort's counterpart for the
-// reception handle reader.Arm returns.
+// reception handle clonewire.Arm returns.
 func (a *App) publishCloneReception(cs *cloneReadState, reception *clonewire.Reception) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()

@@ -48,7 +48,7 @@ func cmdCloneRead(ctx context.Context, model, portPath string, useFake bool, out
 		return exitUsage
 	}
 
-	reader, profiles, err := wiring.OpenCloneReader(model)
+	profiles, err := wiring.OpenCloneReader(model)
 	if err != nil {
 		fmt.Fprintf(stderr, "rigprog read --clone: %v\n", err)
 		printReadUsage(stderr)
@@ -90,7 +90,7 @@ func cmdCloneRead(ctx context.Context, model, portPath string, useFake bool, out
 	// already live the instant Arm returns (core/clonewire's own Arm doc
 	// comment), so printing any earlier risks losing a fast-starting
 	// radio's opening bytes.
-	reception, err := reader.Arm(ctx, port, profiles)
+	reception, err := clonewire.Arm(ctx, port, profiles)
 	if err != nil {
 		fmt.Fprintf(stderr, "rigprog read --clone: arming: %v\n", err)
 		return exitError

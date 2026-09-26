@@ -50,17 +50,16 @@ func CloneModels() []string {
 	return slices.Sorted(maps.Keys(cloneModels))
 }
 
-// OpenCloneReader resolves model against cloneModels and returns a
-// clonewire.ImageReader plus the single candidate Profile that model
-// names. Unknown model returns *UnknownModelError with Supported set to
-// CloneModels() (not SupportedModels()), so the message names the right
-// list.
-func OpenCloneReader(model string) (clonewire.ImageReader, []clonewire.Profile, error) {
+// OpenCloneReader resolves model against cloneModels and returns the
+// single candidate Profile that model names. Unknown model returns
+// *UnknownModelError with Supported set to CloneModels() (not
+// SupportedModels()), so the message names the right list.
+func OpenCloneReader(model string) ([]clonewire.Profile, error) {
 	profiles, ok := cloneModels[model]
 	if !ok {
-		return nil, nil, &UnknownModelError{Model: model, Supported: CloneModels()}
+		return nil, &UnknownModelError{Model: model, Supported: CloneModels()}
 	}
-	return clonewire.Reader{}, profiles, nil
+	return profiles, nil
 }
 
 // OpenCloneRealPort opens portPath for a clone-mode read at profile's own
