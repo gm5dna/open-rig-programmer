@@ -12,6 +12,7 @@ import (
 	civic7800 "github.com/gm5dna/open-rig-programmer/core/civ/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -62,21 +63,11 @@ func slotToAddress(slot string) (civ.ChannelAddress, spec.BankID, error) {
 	return civ.ChannelAddress{Channel: n}, spec.BankMemory, nil
 }
 
-// addressToSlot is slotToAddress's inverse.
+// addressToSlot is slotToAddress's inverse — the shared body lives once
+// in core/driver/internal/icom (six flat-addressed Icom packages minted
+// byte-identical copies of it).
 func addressToSlot(a civ.ChannelAddress) (string, error) {
-	if a.Group != 0 {
-		return "", fmt.Errorf("ic7800: %s carries a group index; this radio's channel selector is a flat two-byte number", a)
-	}
-	switch a.Channel {
-	case scanEdgeP1Channel:
-		return "P1", nil
-	case scanEdgeP2Channel:
-		return "P2", nil
-	}
-	if a.Channel < 1 || a.Channel > lastMemoryChannel {
-		return "", fmt.Errorf("ic7800: channel %d is outside this radio's addressable space (1..99, plus 100 and 101 for the scan edges)", a.Channel)
-	}
-	return fmt.Sprintf("%03d", a.Channel), nil
+	return icom.AddressToSlot("ic7800", a, "%03d")
 }
 
 // recordIsAbsent reports whether raw is an all-0xFF record — spec D5 entry
