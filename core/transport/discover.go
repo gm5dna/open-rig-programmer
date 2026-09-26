@@ -5,7 +5,7 @@ package transport
 import (
 	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"go.bug.st/serial/enumerator"
@@ -126,11 +126,8 @@ func rankPorts(ports []*enumerator.PortDetails) []PortInfo {
 
 	infos = dedupDarwinCallout(infos)
 
-	sort.SliceStable(infos, func(i, j int) bool {
-		if infos[i].Score != infos[j].Score {
-			return infos[i].Score > infos[j].Score
-		}
-		return infos[i].Path < infos[j].Path
+	slices.SortStableFunc(infos, func(a, b PortInfo) int {
+		return cmp.Or(cmp.Compare(b.Score, a.Score), cmp.Compare(a.Path, b.Path))
 	})
 	return infos
 }

@@ -4,11 +4,13 @@
 // (ic7200, ic7410, ic7600, ic7610, ic7700, ic7760, ic7800, ic7851) each
 // minted their own byte-identical copy of, mirroring
 // core/driver/internal/yaesu's own reason for existing. Unlike that
-// package this one holds no shared BEHAVIOUR — no Params, no funcs — only
-// the two struct shapes whose FIELDS are identical across their owning
-// packages while their Error() wording is not: each owning package keeps
-// its own Error() by embedding one of these, so a merged field layout
-// costs nothing in wire-facing text.
+// package this one holds no shared Params — only the two struct shapes
+// whose FIELDS are identical across their owning packages while their
+// Error() wording is not: each owning package keeps its own Error() by
+// embedding one of these, so a merged field layout costs nothing in
+// wire-facing text. It holds one shared BEHAVIOUR: AddressToSlot
+// (slots.go), the addressToSlot body seven flat-addressed packages minted
+// byte-identical copies of.
 package icom
 
 import (

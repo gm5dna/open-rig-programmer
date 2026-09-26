@@ -15,25 +15,6 @@ import (
 // write.
 const ackByte = 0x06
 
-// ImageReader is core/clonewire's own whole-image reader seam — NOT added
-// to core/driver.Session, which has no per-slot operation this family
-// could implement Session with at all (spec.md §Read model, point 7).
-type ImageReader interface {
-	Arm(ctx context.Context, port transport.Port, profiles []Profile) (*Reception, error)
-}
-
-// Reader is the default ImageReader: a thin method wrapper around the
-// package-level Arm, so a caller (Phase 4's wiring) can hold an
-// ImageReader value without depending on the free function directly.
-type Reader struct{}
-
-// Arm implements ImageReader.
-func (Reader) Arm(ctx context.Context, port transport.Port, profiles []Profile) (*Reception, error) {
-	return Arm(ctx, port, profiles)
-}
-
-var _ ImageReader = Reader{}
-
 // Reception is one armed clone-mode read: the deadline clocks it carries
 // start ticking the instant Arm returns, not when Receive is later called.
 type Reception struct {
