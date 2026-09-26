@@ -23,6 +23,15 @@ vi.mock('../bridge/bindings.js', () => ({
 	importCSV: vi.fn(),
 	importCHIRP: vi.fn(),
 	exportCSV: vi.fn(),
+	// CloneReadDialog's own bridge surface — ActionBar mounts it lazily
+	// (only once "Clone read…" is clicked), but this module mock replaces
+	// the whole file, so every export it uses must be present here too.
+	getCloneModels: vi.fn().mockResolvedValue([]),
+	armCloneRead: vi.fn(),
+	cancelCloneRead: vi.fn(),
+	receiveCloneImage: vi.fn(),
+	onCloneArmed: vi.fn(() => vi.fn()),
+	listPorts: vi.fn().mockResolvedValue([]),
 }))
 
 import {
@@ -34,6 +43,7 @@ import {
 	importCSV,
 	importCHIRP,
 	exportCSV,
+	getCloneModels,
 } from '../bridge/bindings.js'
 
 const readRadioMock = vi.mocked(readRadio)
@@ -343,5 +353,21 @@ describe('prepared plan and the consent surface', () => {
 
 		expect(screen.queryByText('Review before sending')).not.toBeInTheDocument()
 		expect(appState.sendDialogOpen).toBe(false)
+	})
+})
+
+// --- Phase 4b: the clone-mode read model list is a SEPARATE, read-only
+// registry, never merged with the ordinary Read/Send model set -----------
+
+describe('clone-mode read model list', () => {
+	it("feeds the Clone read dialogue's model picker from getCloneModels, never appState.supportedModels", async () => {
+		appState.supportedModels = ['FT-710']
+		getCloneModels.mockResolvedValue(['FT-817'])
+
+		render(ActionBar)
+		await fireEvent.click(screen.getByRole('button', { name: 'Clone read…' }))
+
+		expect(await screen.findByRole('option', { name: 'FT-817' })).toBeInTheDocument()
+		expect(screen.queryByRole('option', { name: 'FT-710' })).not.toBeInTheDocument()
 	})
 })

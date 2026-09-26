@@ -257,16 +257,28 @@ type ProgressEvent struct {
 	TargetDisplay string
 }
 
+// CloneArmedEvent is "clone:armed"'s payload (Phase 4b, app/clone.go):
+// emitted once ArmCloneRead's Arm call has returned and its deadline
+// clocks are live — the CloneReadDialog's cue to show the "put the radio
+// into clone-send mode now" prompt, never before (spec.md §Read model
+// point 1).
+type CloneArmedEvent struct {
+	// Model is the clone model name ArmCloneRead was called with —
+	// operator-asserted, not wire-confirmed (spec.md §Identity probe).
+	Model string
+}
+
 // TransferDoneEvent is transfer:done's payload, emitted exactly once per
-// ReadRadio/ReadSettingsRadio call and once per
+// ReadRadio/ReadSettingsRadio call, once per
 // ConfirmSend transfer (task-15 brief §2; ReadSettingsRadio added by task
-// 35). Report is nil unless Kind=="send" AND the radio was actually
+// 35), and once per ReceiveCloneImage call (Kind "clone", Phase 4b).
+// Report is nil unless Kind=="send" AND the radio was actually
 // touched (a pure pre-write refusal carries no Report, exactly like
 // clone.Service.Execute's own (nil, err) refusal return) — Report is
-// therefore ALWAYS nil for Kind=="settings": a settings read never
-// produces a clone.Report at all (that type is Execute's own).
+// therefore ALWAYS nil for Kind=="settings" and Kind=="clone" alike:
+// neither produces a clone.Report (that type is Execute's own).
 type TransferDoneEvent struct {
-	// Kind is "read", "send", or "settings" — which bound method's
+	// Kind is "read", "send", "settings", or "clone" — which bound method's
 	// operation this event reports on. PrepareSend does NOT emit this
 	// event: it is synchronous and returns its own SendPlanView/error
 	// directly.

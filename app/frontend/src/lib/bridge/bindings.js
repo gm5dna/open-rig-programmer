@@ -676,3 +676,59 @@ export async function importCHIRP() {
 export async function exportCSV() {
 	return call('exporting CSV', () => App.ExportCSV())
 }
+
+// --- Phase 4b: clone-mode GUI read (CloneReadDialog.svelte) --------------
+//
+// Deliberately its own small surface, not folded into readRadio/
+// appState.transfer: GetCloneModels is a SEPARATE list from
+// GetSupportedModels (never merged — internal/wiring's disjoint-registry
+// proof), and the arm/prompt/receive sequence has no equivalent among the
+// existing bound calls. CloneReadDialog owns its own local state machine
+// rather than routing through appState.transfer, since nothing else in
+// the app needs to observe a clone read in progress.
+
+/** Fetches every clone-mode model name ArmCloneRead accepts. Never
+ * throws, like refreshSupportedModels — a failed fetch just leaves the
+ * dialog's model picker empty. */
+export async function getCloneModels() {
+	return callQuiet('listing clone-mode models', () => App.GetCloneModels())
+}
+
+/** Opens portPath for a clone-mode read of model and arms the receive
+ * primitive. Resolves once armed — "clone:armed" (see onCloneArmed) has
+ * already fired by the time this promise settles, but the caller
+ * subscribes to the event rather than relying on that ordering, in case
+ * a future arm ever becomes genuinely asynchronous.
+ * @param {string} portPath
+ * @param {string} model */
+export async function armCloneRead(portPath, model) {
+	return call('arming clone-mode read', () => App.ArmCloneRead(portPath, model))
+}
+
+/** Abandons an armed clone-mode read that was never followed through to
+ * receiveCloneImage (the dialog was closed at the pick/arming/prompt
+ * stage) — releases the port and the App-level busy reservation. */
+export async function cancelCloneRead() {
+	return call('cancelling clone-mode read', () => App.CancelCloneRead())
+}
+
+/** Blocks until the whole clone-mode image has arrived (or a refusal),
+ * then loads it as the working copy exactly like readRadio. */
+export async function receiveCloneImage() {
+	return call('receiving clone-mode image', async () => {
+		const view = await App.ReceiveCloneImage()
+		appState.setCodeplug(view)
+		await refreshUISpec()
+		await revalidateQuiet()
+		return view
+	})
+}
+
+/** Subscribes to "clone:armed" for the lifetime of one CloneReadDialog
+ * instance. Returns the unsubscribe function (EventsOn's own return
+ * value) — call it from the component's own cleanup/$effect teardown.
+ * @param {(payload: {Model: string}) => void} handler
+ * @returns {() => void} */
+export function onCloneArmed(handler) {
+	return EventsOn('clone:armed', handler)
+}
