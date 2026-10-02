@@ -213,9 +213,10 @@ host in CI (`rigprog.exe version` and `rigprog.exe ports`), but the
 amd64 GUI has never been launched by anyone.
 
 **Console output.** `rigprog.exe` switches the console output code page to
-UTF-8 (65001) at start-up, so its em dashes should render as "—" even in
-redirected PowerShell output; the VM re-check is pending. Builds before
-this fix showed `ÔÇö` under a legacy code page (`chcp 65001` fixed it).
+UTF-8 (65001) at start-up, so its em dashes render as "—" in an attached
+console; the VM re-check is pending. Output redirected to a pipe or file is
+decoded by the reader, not the console, so PowerShell may still show `ÔÇö`
+there: run `chcp 65001` first, or use Windows Terminal.
 
 **What remains untried on Windows**: the amd64 GUI (the amd64 builds
 are produced by the same pipeline on a Windows x64 host and the amd64
