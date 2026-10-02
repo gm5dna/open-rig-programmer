@@ -5,10 +5,14 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
+	"log"
+	"os"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/userconfig"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
@@ -100,11 +104,12 @@ func sessionOptionsFor(model string) (wiring.SessionOptions, error) {
 // same recorded decision without each having to ask. A store that cannot be
 // read fails the whole call rather than defaulting either way; see
 // sessionOptionsFor.
-func openRealSession(ctx context.Context, model, portPath string) (driver.Session, func() error, error) {
+func openRealSession(ctx context.Context, model, portPath string, logger transport.Logger) (driver.Session, func() error, error) {
 	opts, err := sessionOptionsFor(model)
 	if err != nil {
 		return nil, nil, err
 	}
+	opts.Logger = logger
 
 	sess, closer, err := openRealSessionWith(ctx, model, portPath, opts)
 	if err != nil {
@@ -206,9 +211,31 @@ func validateSessionArgs(stderr io.Writer, cmdName, model, port string, fake boo
 // interpretation (probe's own WrongRadioError handling, read/diff/
 // write's own isCancelled handling) differs per caller, so it stays at
 // each call site, unchanged.
-func openSession(ctx context.Context, model, port string, fake bool) (driver.Session, func() error, error) {
+//
+// transportLog is the --transport-log FILE value ("" = off). The file is
+// opened append-only and closed by the returned closer. It reaches real
+// sessions only, and of those only drivers that export WithTransportLogger
+// (the Yaesu rows plus the TS-890S and TS-990S) emit anything.
+func openSession(ctx context.Context, model, port string, fake bool, transportLog string) (driver.Session, func() error, error) {
 	if fake {
 		return openFakeSession(ctx, model)
 	}
-	return openRealSession(ctx, model, port)
+	if transportLog == "" {
+		return openRealSession(ctx, model, port, nil)
+	}
+	f, err := os.OpenFile(transportLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open --transport-log: %w", err)
+	}
+	sess, closeSess, err := openRealSession(ctx, model, port, log.New(f, "", log.LstdFlags|log.Lmicroseconds))
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, err
+	}
+	return sess, func() error { return errors.Join(closeSess(), f.Close()) }, nil
+}
+
+// transportLogFlag registers the shared --transport-log flag on fs.
+func transportLogFlag(fs *flag.FlagSet) *string {
+	return fs.String("transport-log", "", "append transport diagnostics to FILE (default: off)")
 }

@@ -108,7 +108,7 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 
 	// consent false — the default path: this pins what the real wiring path
 	// builds for a user who has consented to nothing.
-	d := realDrivers[DefaultModel](false)
+	d := realDrivers[DefaultModel](false, nil)
 	caps := d.Capabilities()
 	if len(caps.Banks) == 0 {
 		t.Fatal("NewRealDriver().Capabilities() has zero banks — sanity check failed, the guard below would pass vacuously")
@@ -1528,7 +1528,7 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 
 	// The fixture ignores consent: what it exists to disagree about is the
 	// baud, and a driver with no writable field has nothing to consent to.
-	realDrivers[fixtureModel] = func(bool) driver.Driver {
+	realDrivers[fixtureModel] = func(bool, transport.Logger) driver.Driver {
 		return baudFixtureDriver{caps: spec.Capabilities{
 			Model:        fixtureModel,
 			CATID:        "9999",
@@ -1959,7 +1959,7 @@ func TestDriverTableKeysMatchDriverModel(t *testing.T) {
 		// belongs) would build a perfectly valid driver for the WRONG radio,
 		// and every capability assertion in this file would pass.
 		for _, consent := range []bool{false, true} {
-			if got := ctor(consent).Model(); got != model {
+			if got := ctor(consent, nil).Model(); got != model {
 				t.Errorf("realDrivers[%q](consent=%v) builds a driver whose Model() = %q", model, consent, got)
 			}
 		}
@@ -1973,7 +1973,7 @@ func TestDriverTableKeysMatchDriverModel(t *testing.T) {
 
 // TestStaticCapabilities_FT710EqualsDriver pins StaticCapabilities'
 // equivalence to the table's own constructor: for DefaultModel, it must
-// return exactly what realDrivers[DefaultModel](false).Capabilities() (i.e.
+// return exactly what realDrivers[DefaultModel](false, nil).Capabilities() (i.e.
 // NewRealDriver().Capabilities()) reports.
 func TestStaticCapabilities_FT710EqualsDriver(t *testing.T) {
 	got, err := StaticCapabilities(DefaultModel)
@@ -2813,7 +2813,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 	}
 
 	for _, tc := range table {
-		got, err := realDriverFor(tc.model, false)
+		got, err := realDriverFor(tc.model, false, nil)
 		if err != nil {
 			t.Fatalf("realDriverFor(%q, false): unexpected error: %v", tc.model, err)
 		}
@@ -2832,7 +2832,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		if tc.wantConsent == nil {
 			continue
 		}
-		gotConsent, err := realDriverFor(tc.model, true)
+		gotConsent, err := realDriverFor(tc.model, true, nil)
 		if err != nil {
 			t.Fatalf("realDriverFor(%q, true): unexpected error: %v", tc.model, err)
 		}
@@ -2857,7 +2857,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 // hardware.
 func TestRealDriverFor_StaticNeverConsented(t *testing.T) {
 	for _, model := range SupportedModels() {
-		d, err := realDriverFor(model, true)
+		d, err := realDriverFor(model, true, nil)
 		if err != nil {
 			t.Fatalf("realDriverFor(%q, true): unexpected error: %v", model, err)
 		}
@@ -3238,7 +3238,7 @@ var _ driver.SerialFramingReporter = framingFixtureDriver{}
 // throwaway model name, removing it again on cleanup.
 func registerFramingFixture(t *testing.T, model string, stopBits int) {
 	t.Helper()
-	realDrivers[model] = func(bool) driver.Driver {
+	realDrivers[model] = func(bool, transport.Logger) driver.Driver {
 		return framingFixtureDriver{
 			baudFixtureDriver: baudFixtureDriver{caps: spec.Capabilities{
 				Model:        model,
@@ -3399,7 +3399,7 @@ func TestStopBitsFor_EveryKenwoodDriverReportsOne(t *testing.T) {
 	}
 
 	// The contrast: a registered Yaesu model implements nothing here.
-	if got, err := stopBitsFor(realDrivers[FT891Model](false)); err != nil || got != transport.DefaultStopBits {
+	if got, err := stopBitsFor(realDrivers[FT891Model](false, nil)); err != nil || got != transport.DefaultStopBits {
 		t.Errorf("stopBitsFor(FT-891) = %d, %v; want %d, nil — no Yaesu driver reports, so the default must still be what reaches the port", got, err, transport.DefaultStopBits)
 	}
 	// The red proof, on a fixture that omits the interface outright:
@@ -3416,7 +3416,7 @@ func TestStopBitsFor_EveryKenwoodDriverReportsOne(t *testing.T) {
 // mustRealDriver builds model's default-path real driver or fails the test.
 func mustRealDriver(t *testing.T, model string) driver.Driver {
 	t.Helper()
-	d, err := realDriverFor(model, false)
+	d, err := realDriverFor(model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q, false): unexpected error: %v", model, err)
 	}
@@ -3702,7 +3702,7 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 	models := yaesuModels
 	for _, model := range models {
 		t.Run(model, func(t *testing.T) {
-			d, err := realDriverFor(model, false)
+			d, err := realDriverFor(model, false, nil)
 			if err != nil {
 				t.Fatalf("realDriverFor(%q): %v", model, err)
 			}
@@ -3870,7 +3870,7 @@ func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
 // configuration through that seam, rather than merely compiling against
 // driver.SerialFramingReporter.
 func TestOpenRealSessionFor_IC7610OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7610Model, false)
+	d, err := realDriverFor(IC7610Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7610Model, err)
 	}
@@ -3900,7 +3900,7 @@ func TestOpenRealSessionFor_IC7610OpensAtEightNOne(t *testing.T) {
 // stopBitsFor consultation, which needed no code change for this
 // registration either.
 func TestOpenRealSessionFor_IC7300OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7300Model, false)
+	d, err := realDriverFor(IC7300Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7300Model, err)
 	}
@@ -3931,7 +3931,7 @@ func TestOpenRealSessionFor_IC7300OpensAtEightNOne(t *testing.T) {
 // ASSUMED tier convention, and no lift on the sibling proves anything
 // about it.
 func TestOpenRealSessionFor_IC7300MK2OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7300MK2Model, false)
+	d, err := realDriverFor(IC7300MK2Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7300MK2Model, err)
 	}
@@ -3961,7 +3961,7 @@ func TestOpenRealSessionFor_IC7300MK2OpensAtEightNOne(t *testing.T) {
 // stopBitsFor consultation, which needed no code change for this
 // registration either.
 func TestOpenRealSessionFor_IC705OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC705Model, false)
+	d, err := realDriverFor(IC705Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC705Model, err)
 	}
@@ -3992,7 +3992,7 @@ func TestOpenRealSessionFor_IC705OpensAtEightNOne(t *testing.T) {
 // registration either — the THREE-BANK shape of this driver's caps has no
 // bearing on framing, which is a serial-link property, not a bank one.
 func TestOpenRealSessionFor_IC9700OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC9700Model, false)
+	d, err := realDriverFor(IC9700Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC9700Model, err)
 	}
@@ -4027,7 +4027,7 @@ func TestOpenRealSessionFor_IC9700OpensAtEightNOne(t *testing.T) {
 // realDrivers' IC905Model row), which this test does not exercise
 // either way since it never reaches Open on a real port.
 func TestOpenRealSessionFor_IC905OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC905Model, false)
+	d, err := realDriverFor(IC905Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC905Model, err)
 	}
@@ -4066,7 +4066,7 @@ func TestOpenRealSessionFor_IC905OpensAtEightNOne(t *testing.T) {
 func TestOpenRealSessionFor_IC7851AndIC7850OpenAtEightNOne(t *testing.T) {
 	for _, model := range []string{IC7851Model, IC7850Model} {
 		t.Run(model, func(t *testing.T) {
-			d, err := realDriverFor(model, false)
+			d, err := realDriverFor(model, false, nil)
 			if err != nil {
 				t.Fatalf("realDriverFor(%q): %v", model, err)
 			}
@@ -4180,7 +4180,7 @@ func assertIC7851FakeOpens(t *testing.T, model string, want bool) {
 // what matters here, because transport.DefaultStopBits is 2 and a report
 // that never reached the port would open the radio at 8-N-2.
 func TestOpenRealSessionFor_IC7760OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7760Model, false)
+	d, err := realDriverFor(IC7760Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7760Model, err)
 	}
@@ -4223,7 +4223,7 @@ func TestOpenRealSessionFor_IC7760OpensAtEightNOne(t *testing.T) {
 // the wire that no page of this radio's manual supports. Both are caught
 // here.
 func TestOpenRealSessionFor_IC7100OpensAtEightNTwo(t *testing.T) {
-	d, err := realDriverFor(IC7100Model, false)
+	d, err := realDriverFor(IC7100Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7100Model, err)
 	}
@@ -4269,7 +4269,7 @@ func TestOpenRealSessionFor_IC7100OpensAtEightNTwo(t *testing.T) {
 // driver's framing report and its DefaultBaud exactly as the ten
 // transceiver rows' are.
 func TestOpenRealSessionFor_ICR8600OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(ICR8600Model, false)
+	d, err := realDriverFor(ICR8600Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", ICR8600Model, err)
 	}
@@ -4298,7 +4298,7 @@ func TestOpenRealSessionFor_ICR8600OpensAtEightNOne(t *testing.T) {
 // OpenRealSessionFor's port configuration through the wiring-side
 // stopBitsFor consultation.
 func TestOpenRealSessionFor_IC7800OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7800Model, false)
+	d, err := realDriverFor(IC7800Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7800Model, err)
 	}
@@ -4324,7 +4324,7 @@ func TestOpenRealSessionFor_IC7800OpensAtEightNOne(t *testing.T) {
 // TestOpenRealSessionFor_IC7800OpensAtEightNOne's sibling for the v1.7.0
 // Icom wave's second registration.
 func TestOpenRealSessionFor_IC7600OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7600Model, false)
+	d, err := realDriverFor(IC7600Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7600Model, err)
 	}
@@ -4350,7 +4350,7 @@ func TestOpenRealSessionFor_IC7600OpensAtEightNOne(t *testing.T) {
 // TestOpenRealSessionFor_IC7800OpensAtEightNOne's sibling for the v1.7.0
 // Icom wave's third registration.
 func TestOpenRealSessionFor_IC7410OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7410Model, false)
+	d, err := realDriverFor(IC7410Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7410Model, err)
 	}
@@ -4376,7 +4376,7 @@ func TestOpenRealSessionFor_IC7410OpensAtEightNOne(t *testing.T) {
 // TestOpenRealSessionFor_IC7800OpensAtEightNOne's sibling for the v1.7.0
 // Icom wave's fourth registration.
 func TestOpenRealSessionFor_IC7700OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7700Model, false)
+	d, err := realDriverFor(IC7700Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7700Model, err)
 	}
@@ -4405,7 +4405,7 @@ func TestOpenRealSessionFor_IC7700OpensAtEightNOne(t *testing.T) {
 // fact), so it opens at transport.DefaultStopBits rather than a
 // driver-asserted value, exactly as the IC-7100 does.
 func TestOpenRealSessionFor_IC9100OpensAtEightNTwo(t *testing.T) {
-	d, err := realDriverFor(IC9100Model, false)
+	d, err := realDriverFor(IC9100Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC9100Model, err)
 	}
@@ -4429,7 +4429,7 @@ func TestOpenRealSessionFor_IC9100OpensAtEightNTwo(t *testing.T) {
 // radio DOES implement driver.SerialFramingReporter (8-N-1), on the same
 // footing as its other four transceiver siblings in this wave.
 func TestOpenRealSessionFor_IC7200OpensAtEightNOne(t *testing.T) {
-	d, err := realDriverFor(IC7200Model, false)
+	d, err := realDriverFor(IC7200Model, false, nil)
 	if err != nil {
 		t.Fatalf("realDriverFor(%q): %v", IC7200Model, err)
 	}

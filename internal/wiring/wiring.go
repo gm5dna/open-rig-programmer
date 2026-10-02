@@ -1072,62 +1072,62 @@ const IC7200Model = "IC-7200"
 // callers below pass false and mean it, and why the option's proof is a
 // session-level test (TestOpenRealSessionWith_ConsentedSessionCaps) rather
 // than a capability comparison here.
-var realDrivers = map[string]func(consent bool) driver.Driver{
-	DefaultModel: func(consent bool) driver.Driver {
+var realDrivers = map[string]func(consent bool, log transport.Logger) driver.Driver{
+	DefaultModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft710.New(ft710.RealHardware, ft710.WithConsentedUnverifiedWrites())
+			return ft710.New(ft710.RealHardware, ft710.WithConsentedUnverifiedWrites(), ft710.WithTransportLogger(log))
 		}
-		return NewRealDriver()
+		return ft710.New(ft710.RealHardware, ft710.WithTransportLogger(log))
 	},
-	FTdx10Model: func(consent bool) driver.Driver {
+	FTdx10Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftdx10.New(ftdx10.RealHardware, ftdx10.WithConsentedUnverifiedWrites())
+			return ftdx10.New(ftdx10.RealHardware, ftdx10.WithConsentedUnverifiedWrites(), ftdx10.WithTransportLogger(log))
 		}
-		return ftdx10.New(ftdx10.RealHardware)
+		return ftdx10.New(ftdx10.RealHardware, ftdx10.WithTransportLogger(log))
 	},
-	FTdx101DModel: func(consent bool) driver.Driver {
+	FTdx101DModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftdx101.NewD(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
+			return ftdx101.NewD(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites(), ftdx101.WithTransportLogger(log))
 		}
-		return ftdx101.NewD(ftdx101.RealHardware)
+		return ftdx101.NewD(ftdx101.RealHardware, ftdx101.WithTransportLogger(log))
 	},
-	FTdx101MPModel: func(consent bool) driver.Driver {
+	FTdx101MPModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftdx101.NewMP(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
+			return ftdx101.NewMP(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites(), ftdx101.WithTransportLogger(log))
 		}
-		return ftdx101.NewMP(ftdx101.RealHardware)
+		return ftdx101.NewMP(ftdx101.RealHardware, ftdx101.WithTransportLogger(log))
 	},
-	IC7610Model: func(consent bool) driver.Driver {
+	IC7610Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7610.New(ic7610.RealHardware, ic7610.WithConsentedUnverifiedWrites())
 		}
 		return ic7610.New(ic7610.RealHardware)
 	},
-	IC7300Model: func(consent bool) driver.Driver {
+	IC7300Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7300.New(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
 		}
 		return ic7300.New(ic7300.RealHardware)
 	},
-	IC7300MK2Model: func(consent bool) driver.Driver {
+	IC7300MK2Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7300.NewMK2(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
 		}
 		return ic7300.NewMK2(ic7300.RealHardware)
 	},
-	IC705Model: func(consent bool) driver.Driver {
+	IC705Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
 		}
 		return ic705.New(ic705.RealHardware)
 	},
-	IC9700Model: func(consent bool) driver.Driver {
+	IC9700Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic9700.New(ic9700.RealHardware, ic9700.WithConsentedUnverifiedWrites())
 		}
 		return ic9700.New(ic9700.RealHardware)
 	},
-	IC905Model: func(consent bool) driver.Driver {
+	IC905Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
 		}
@@ -1139,13 +1139,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// driver the way a package with a default constructor could.
 	// core/driver/ic7851's profile is the RealHardware zero value inside
 	// New7851/New7850, so consent is the only option either row passes.
-	IC7851Model: func(consent bool) driver.Driver {
+	IC7851Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7851.New7851(ic7851.WithConsentedUnverifiedWrites())
 		}
 		return ic7851.New7851()
 	},
-	IC7850Model: func(consent bool) driver.Driver {
+	IC7850Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7851.New7850(ic7851.WithConsentedUnverifiedWrites())
 		}
@@ -1157,7 +1157,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// consent arm passes ic7760.RealHardware for the same reason every
 	// other profile-argument row does — the option changes the SESSION's
 	// effective capabilities and never the profile it was built from.
-	IC7760Model: func(consent bool) driver.Driver {
+	IC7760Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7760.New(ic7760.RealHardware, ic7760.WithConsentedUnverifiedWrites())
 		}
@@ -1170,7 +1170,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// the SESSION's effective capabilities and never the profile it was
 	// built from — TestRealDriverFor_DefaultPathByteIdentical is what
 	// would catch a consent arm that had quietly passed ic7100.Simulated.
-	IC7100Model: func(consent bool) driver.Driver {
+	IC7100Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7100.New(ic7100.RealHardware, ic7100.WithConsentedUnverifiedWrites())
 		}
@@ -1184,7 +1184,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// and never the profile it was built from —
 	// TestRealDriverFor_DefaultPathByteIdentical is what would catch a
 	// consent arm that had quietly passed icr8600.Simulated.
-	ICR8600Model: func(consent bool) driver.Driver {
+	ICR8600Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
 		}
@@ -1204,11 +1204,11 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// consent transform this row feeds is separately pinned by
 	// TestOpenRealSessionWith_ConsentedSessionCaps's FT-891 subtest, which
 	// is why the profile is named here rather than defaulted.
-	FT891Model: func(consent bool) driver.Driver {
+	FT891Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
+			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites(), ft891.WithTransportLogger(log))
 		}
-		return ft891.New(ft891.RealHardware)
+		return ft891.New(ft891.RealHardware, ft891.WithTransportLogger(log))
 	},
 	// ONE ROW, naming its profile explicitly, on exactly the FT-891 row's
 	// terms above and for the same reason: core/driver/ft991a's New takes
@@ -1222,11 +1222,11 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// arms pinned there, false and consent), and the session-level consent
 	// transform this row feeds is separately pinned by
 	// TestOpenRealSessionWith_ConsentedSessionCaps's FT-991A subtest.
-	FT991AModel: func(consent bool) driver.Driver {
+	FT991AModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft991a.New(ft991a.RealHardware, ft991a.WithConsentedUnverifiedWrites())
+			return ft991a.New(ft991a.RealHardware, ft991a.WithConsentedUnverifiedWrites(), ft991a.WithTransportLogger(log))
 		}
-		return ft991a.New(ft991a.RealHardware)
+		return ft991a.New(ft991a.RealHardware, ft991a.WithTransportLogger(log))
 	},
 	// TWO ROWS OVER ONE CONSTRUCTOR, and each names its OWN row
 	// explicitly: core/driver/ts590's New takes the ROW as its first
@@ -1244,13 +1244,13 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// this driver's zero Profile IS RealHardware, so a consent arm that
 	// had quietly passed ts590.Simulated would be caught by that test
 	// rather than by a fail-safe.
-	TS590SModel: func(consent bool) driver.Driver {
+	TS590SModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts590.New(ts590.RowS, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}
 		return ts590.New(ts590.RowS, ts590.RealHardware)
 	},
-	TS590SGModel: func(consent bool) driver.Driver {
+	TS590SGModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts590.New(ts590.RowSG, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}
@@ -1267,85 +1267,85 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// real radio the simulator's write-Supported set with nothing failing
 	// safe. TestRealDriverFor_DefaultPathByteIdentical compares each arm
 	// against the constructor call it is supposed to make.
-	TS890SModel: func(consent bool) driver.Driver {
+	TS890SModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ts890.New(ts890.RealHardware, ts890.WithConsentedUnverifiedWrites())
+			return ts890.New(ts890.RealHardware, ts890.WithConsentedUnverifiedWrites(), ts890.WithTransportLogger(log))
 		}
-		return ts890.New(ts890.RealHardware)
+		return ts890.New(ts890.RealHardware, ts890.WithTransportLogger(log))
 	},
-	TS990SModel: func(consent bool) driver.Driver {
+	TS990SModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites())
+			return ts990.New(ts990.RealHardware, ts990.WithConsentedUnverifiedWrites(), ts990.WithTransportLogger(log))
 		}
-		return ts990.New(ts990.RealHardware)
+		return ts990.New(ts990.RealHardware, ts990.WithTransportLogger(log))
 	},
 	// v1.7.0 Kenwood/Yaesu wave, tenth row: bare New takes the profile as
 	// its first argument.
-	FTdx5000Model: func(consent bool) driver.Driver {
+	FTdx5000Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites())
+			return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithConsentedUnverifiedWrites(), ftdx5000.WithTransportLogger(log))
 		}
-		return ftdx5000.New(ftdx5000.RealHardware)
+		return ftdx5000.New(ftdx5000.RealHardware, ftdx5000.WithTransportLogger(log))
 	},
 	// v1.7.0 Kenwood/Yaesu wave, eleventh row: bare New takes the profile
 	// as its first argument.
-	FTdx9000Model: func(consent bool) driver.Driver {
+	FTdx9000Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftdx9000.New(ftdx9000.RealHardware, ftdx9000.WithConsentedUnverifiedWrites())
+			return ftdx9000.New(ftdx9000.RealHardware, ftdx9000.WithConsentedUnverifiedWrites(), ftdx9000.WithTransportLogger(log))
 		}
-		return ftdx9000.New(ftdx9000.RealHardware)
+		return ftdx9000.New(ftdx9000.RealHardware, ftdx9000.WithTransportLogger(log))
 	},
 	// v1.7.0 Kenwood/Yaesu wave, twelfth and last row: bare New takes the
 	// profile as its first argument.
-	FT950Model: func(consent bool) driver.Driver {
+	FT950Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft950.New(ft950.RealHardware, ft950.WithConsentedUnverifiedWrites())
+			return ft950.New(ft950.RealHardware, ft950.WithConsentedUnverifiedWrites(), ft950.WithTransportLogger(log))
 		}
-		return ft950.New(ft950.RealHardware)
+		return ft950.New(ft950.RealHardware, ft950.WithTransportLogger(log))
 	},
 	// v1.8.0 Yaesu trio, first row: bare New takes the profile as its
 	// first argument.
-	FTdx3000Model: func(consent bool) driver.Driver {
+	FTdx3000Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftdx3000.New(ftdx3000.RealHardware, ftdx3000.WithConsentedUnverifiedWrites())
+			return ftdx3000.New(ftdx3000.RealHardware, ftdx3000.WithConsentedUnverifiedWrites(), ftdx3000.WithTransportLogger(log))
 		}
-		return ftdx3000.New(ftdx3000.RealHardware)
+		return ftdx3000.New(ftdx3000.RealHardware, ftdx3000.WithTransportLogger(log))
 	},
 	// v1.8.0 Yaesu trio, second row: bare New takes the profile as its
 	// first argument.
-	FTdx1200Model: func(consent bool) driver.Driver {
+	FTdx1200Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftdx1200.New(ftdx1200.RealHardware, ftdx1200.WithConsentedUnverifiedWrites())
+			return ftdx1200.New(ftdx1200.RealHardware, ftdx1200.WithConsentedUnverifiedWrites(), ftdx1200.WithTransportLogger(log))
 		}
-		return ftdx1200.New(ftdx1200.RealHardware)
+		return ftdx1200.New(ftdx1200.RealHardware, ftdx1200.WithTransportLogger(log))
 	},
 	// v1.8.0 Yaesu trio, third and last row: bare New takes the profile as
 	// its first argument.
-	FT450DModel: func(consent bool) driver.Driver {
+	FT450DModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft450d.New(ft450d.RealHardware, ft450d.WithConsentedUnverifiedWrites())
+			return ft450d.New(ft450d.RealHardware, ft450d.WithConsentedUnverifiedWrites(), ft450d.WithTransportLogger(log))
 		}
-		return ft450d.New(ft450d.RealHardware)
+		return ft450d.New(ft450d.RealHardware, ft450d.WithTransportLogger(log))
 	},
 	// v1.9.0 binary-CAT four, first row: NewFT890 takes the profile as its
 	// first argument, same shape as the bare-New rows above.
-	FT890Model: func(consent bool) driver.Driver {
+	FT890Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft890900.NewFT890(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites())
+			return ft890900.NewFT890(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites(), ft890900.WithTransportLogger(log))
 		}
-		return ft890900.NewFT890(ft890900.RealHardware)
+		return ft890900.NewFT890(ft890900.RealHardware, ft890900.WithTransportLogger(log))
 	},
 	// v1.9.0 binary-CAT four, second row: NewFT900, same shared package as
 	// FT890Model above, same shape.
-	FT900Model: func(consent bool) driver.Driver {
+	FT900Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft890900.NewFT900(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites())
+			return ft890900.NewFT900(ft890900.RealHardware, ft890900.WithConsentedUnverifiedWrites(), ft890900.WithTransportLogger(log))
 		}
-		return ft890900.NewFT900(ft890900.RealHardware)
+		return ft890900.NewFT900(ft890900.RealHardware, ft890900.WithTransportLogger(log))
 	},
 	// v1.9.0 binary-CAT four, fourth and last row: bare New takes the
 	// profile as its first argument.
-	FT1000MPModel: func(consent bool) driver.Driver {
+	FT1000MPModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ft1000mp.New(ft1000mp.RealHardware, ft1000mp.WithConsentedUnverifiedWrites())
 		}
@@ -1353,23 +1353,23 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	},
 	// v1.10.0, FTX-1 row: bare New takes the profile as its first
 	// argument, same shape as every other ftdx1200/ftdx3000-style row.
-	FTX1Model: func(consent bool) driver.Driver {
+	FTX1Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ftx1.New(ftx1.RealHardware, ftx1.WithConsentedUnverifiedWrites())
+			return ftx1.New(ftx1.RealHardware, ftx1.WithConsentedUnverifiedWrites(), ftx1.WithTransportLogger(log))
 		}
-		return ftx1.New(ftx1.RealHardware)
+		return ftx1.New(ftx1.RealHardware, ftx1.WithTransportLogger(log))
 	},
 	// v1.7.0 Kenwood/Yaesu wave, first row: NewTS2000 takes no profile
 	// argument (options only — the ic7851 shape), so the consent arm is
 	// WithConsentedUnverifiedWrites rather than a second positional value.
-	TS2000Model: func(consent bool) driver.Driver {
+	TS2000Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts2000.NewTS2000(ts2000.WithConsentedUnverifiedWrites())
 		}
 		return ts2000.NewTS2000()
 	},
 	// v1.7.0 Kenwood/Yaesu wave, second row: NewTS2000X, same shape.
-	TS2000XModel: func(consent bool) driver.Driver {
+	TS2000XModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts2000.NewTS2000X(ts2000.WithConsentedUnverifiedWrites())
 		}
@@ -1377,7 +1377,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	},
 	// v1.7.0 Kenwood/Yaesu wave, third and last of the ts2000 rows:
 	// NewTSB2000, same shape.
-	TSB2000Model: func(consent bool) driver.Driver {
+	TSB2000Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts2000.NewTSB2000(ts2000.WithConsentedUnverifiedWrites())
 		}
@@ -1386,14 +1386,14 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// v1.7.0 Kenwood/Yaesu wave, fourth row: core/driver/ts570's NewD takes
 	// the profile as its first argument (the ftdx101 shape), so the consent
 	// arm names ts570.RealHardware explicitly.
-	TS570DModel: func(consent bool) driver.Driver {
+	TS570DModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts570.NewD(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
 		}
 		return ts570.NewD(ts570.RealHardware)
 	},
 	// v1.7.0 Kenwood/Yaesu wave, fifth row: NewS, same shape.
-	TS570SModel: func(consent bool) driver.Driver {
+	TS570SModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts570.NewS(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
 		}
@@ -1401,7 +1401,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	},
 	// v1.7.0 Kenwood/Yaesu wave, sixth and last ts570 row: NewDG, same
 	// shape.
-	TS570DGModel: func(consent bool) driver.Driver {
+	TS570DGModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts570.NewDG(ts570.RealHardware, ts570.WithConsentedUnverifiedWrites())
 		}
@@ -1409,7 +1409,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	},
 	// v1.7.0 Kenwood/Yaesu wave, seventh row: bare New takes the profile as
 	// its first argument.
-	TS870SModel: func(consent bool) driver.Driver {
+	TS870SModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ts870s.New(ts870s.RealHardware, ts870s.WithConsentedUnverifiedWrites())
 		}
@@ -1417,31 +1417,31 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	},
 	// v1.7.0 Kenwood/Yaesu wave, eighth row: NewFT2000 takes the profile as
 	// its first argument (the ftdx101 shape).
-	FT2000Model: func(consent bool) driver.Driver {
+	FT2000Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft2000.NewFT2000(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+			return ft2000.NewFT2000(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites(), ft2000.WithTransportLogger(log))
 		}
-		return ft2000.NewFT2000(ft2000.RealHardware)
+		return ft2000.NewFT2000(ft2000.RealHardware, ft2000.WithTransportLogger(log))
 	},
 	// v1.7.0 Kenwood/Yaesu wave, ninth row: NewFT2000D, same shape.
-	FT2000DModel: func(consent bool) driver.Driver {
+	FT2000DModel: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
-			return ft2000.NewFT2000D(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites())
+			return ft2000.NewFT2000D(ft2000.RealHardware, ft2000.WithConsentedUnverifiedWrites(), ft2000.WithTransportLogger(log))
 		}
-		return ft2000.NewFT2000D(ft2000.RealHardware)
+		return ft2000.NewFT2000D(ft2000.RealHardware, ft2000.WithTransportLogger(log))
 	},
 	// The v1.7.0 Icom wave's first row: profile is a positional argument
 	// (ic7800.New(profile, opts...)), on the IC-7760/IC-7100/ICR8600 rows'
 	// footing rather than the bare-New ones', so the consent arm names
 	// ic7800.RealHardware explicitly.
-	IC7800Model: func(consent bool) driver.Driver {
+	IC7800Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7800.New(ic7800.RealHardware, ic7800.WithConsentedUnverifiedWrites())
 		}
 		return ic7800.New(ic7800.RealHardware)
 	},
 	// The v1.7.0 Icom wave's second row, on IC7800Model's footing.
-	IC7600Model: func(consent bool) driver.Driver {
+	IC7600Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7600.New(ic7600.RealHardware, ic7600.WithConsentedUnverifiedWrites())
 		}
@@ -1450,28 +1450,28 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// The v1.7.0 Icom wave's third row: bare New, on the IC-7610's own
 	// footing rather than IC7800Model's/IC7600Model's — no profile argument
 	// to pass, since RealHardware is the zero value.
-	IC7410Model: func(consent bool) driver.Driver {
+	IC7410Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7410.New(ic7410.WithConsentedUnverifiedWrites())
 		}
 		return ic7410.New()
 	},
 	// The v1.7.0 Icom wave's fourth row, on IC7800Model's footing.
-	IC7700Model: func(consent bool) driver.Driver {
+	IC7700Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7700.New(ic7700.RealHardware, ic7700.WithConsentedUnverifiedWrites())
 		}
 		return ic7700.New(ic7700.RealHardware)
 	},
 	// The v1.7.0 Icom wave's fifth row, on IC7800Model's footing.
-	IC9100Model: func(consent bool) driver.Driver {
+	IC9100Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic9100.New(ic9100.RealHardware, ic9100.WithConsentedUnverifiedWrites())
 		}
 		return ic9100.New(ic9100.RealHardware)
 	},
 	// The v1.7.0 Icom wave's sixth and last row, on IC7800Model's footing.
-	IC7200Model: func(consent bool) driver.Driver {
+	IC7200Model: func(consent bool, log transport.Logger) driver.Driver {
 		if consent {
 			return ic7200.New(ic7200.RealHardware, ic7200.WithConsentedUnverifiedWrites())
 		}
@@ -1518,12 +1518,12 @@ func (e *UnknownModelError) Error() string {
 // WithConsentedUnverifiedWrites (see realDrivers). It is a plain bool and
 // this package reads no store to obtain it: whoever calls decides, and
 // nothing here can turn a caller's "no" into a "yes".
-func realDriverFor(model string, consent bool) (driver.Driver, error) {
+func realDriverFor(model string, consent bool, log transport.Logger) (driver.Driver, error) {
 	ctor, ok := realDrivers[model]
 	if !ok {
 		return nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
 	}
-	return ctor(consent), nil
+	return ctor(consent, log), nil
 }
 
 // RegisterDriverError is registerDriver's typed failure when
@@ -1610,6 +1610,13 @@ type SessionOptions struct {
 	// find it — which is also why no userconfig import appears in this
 	// package.
 	ConsentUnverifiedWrites bool
+
+	// Logger receives the transport engine's diagnostics (unexpected
+	// frames, quarantine drains, contamination). Nil is the default and
+	// drops them. ONLY drivers that export WithTransportLogger honour it
+	// (the Yaesu rows plus the TS-890S and TS-990S); every other row
+	// ignores it.
+	Logger transport.Logger
 }
 
 // OpenRealSessionWith opens a session against a real radio of model,
@@ -1654,7 +1661,7 @@ type SessionOptions struct {
 // closed by whichever call failed, and this function never closes it
 // itself.
 func OpenRealSessionWith(ctx context.Context, model, portPath string, opts SessionOptions) (driver.Session, func() error, error) {
-	d, err := realDriverFor(model, opts.ConsentUnverifiedWrites)
+	d, err := realDriverFor(model, opts.ConsentUnverifiedWrites, opts.Logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1699,7 +1706,7 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 // an unrecognised model.
 func StaticCapabilities(model string) (spec.Capabilities, error) {
 	// consent false: a static surface describes the radio, never a user's consent.
-	d, err := realDriverFor(model, false)
+	d, err := realDriverFor(model, false, nil)
 	if err != nil {
 		return spec.Capabilities{}, err
 	}
@@ -1777,7 +1784,7 @@ func consentCouldUnlockAWrite(caps spec.Capabilities) bool {
 // unrecognised.
 func StaticSettingsDescriptor(model string) (driver.SettingsDescriptor, bool, error) {
 	// consent false: a static surface describes the radio, never a user's consent.
-	d, err := realDriverFor(model, false)
+	d, err := realDriverFor(model, false, nil)
 	if err != nil {
 		return driver.SettingsDescriptor{}, false, err
 	}
@@ -1816,7 +1823,7 @@ func FT710WriteBoundaryRows() []FT710WriteBoundaryRow {
 // the two apart should check model against SupportedModels() itself.
 func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool) {
 	// consent false: a static surface describes the radio, never a user's consent.
-	d, err := realDriverFor(model, false)
+	d, err := realDriverFor(model, false, nil)
 	if err != nil {
 		return nil, false
 	}

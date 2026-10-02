@@ -164,7 +164,7 @@ func TestCmdRead_BadPort_PreservesOriginalWiringWording(t *testing.T) {
 	// file of whoever runs the tests.
 	tempUserConfig(t)
 	const port = "/dev/nonexistent-rigprog-test-port"
-	_, _, wiringErr := openRealSession(testCtx(t), wiring.DefaultModel, port)
+	_, _, wiringErr := openRealSession(testCtx(t), wiring.DefaultModel, port, nil)
 	if wiringErr == nil {
 		t.Fatal("openRealSession: expected an error opening a nonexistent port, got nil")
 	}

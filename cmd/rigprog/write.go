@@ -647,6 +647,7 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 	fs.SetOutput(io.Discard) // this function owns all usage/error output.
 	port := fs.String("port", "", "real serial port device path")
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
+	transportLog := transportLogFlag(fs)
 	settings := fs.Bool("settings", false, "also diff and write FILE's settings snapshot against the radio's admitted, hardware-characterised addresses (opt-in)")
 	yes := fs.Bool("yes", false, "skip the interactive confirmation prompt (required for non-interactive runs)")
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
@@ -685,7 +686,7 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 
 	// Step 2: open session; the Service (with the snapshot store and
 	// progress wired to stderr) is built inside runWrite.
-	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake, *transportLog)
 	if err != nil {
 		if isCancelled(err) {
 			fmt.Fprintln(stderr, "rigprog write: cancelled")

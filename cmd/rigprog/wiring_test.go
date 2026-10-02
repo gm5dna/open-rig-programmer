@@ -4,12 +4,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
+	"github.com/gm5dna/open-rig-programmer/internal/userconfig"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
@@ -75,7 +80,7 @@ func TestOpenFakeSession(t *testing.T) {
 // a path that cannot possibly exist.
 func TestOpenRealSession_BadPort(t *testing.T) {
 	tempUserConfig(t) // openRealSession reads the consent store first
-	sess, closeAll, err := openRealSession(testCtx(t), wiring.DefaultModel, "/dev/nonexistent-rigprog-test-port")
+	sess, closeAll, err := openRealSession(testCtx(t), wiring.DefaultModel, "/dev/nonexistent-rigprog-test-port", nil)
 	if err == nil {
 		t.Fatal("openRealSession: expected an error opening a nonexistent port, got nil")
 	}
@@ -92,7 +97,7 @@ func TestOpenRealSession_BadPort(t *testing.T) {
 // earlier in every real caller — see probe.go/read.go/write.go/diff.go).
 func TestOpenRealSession_UnknownModel(t *testing.T) {
 	tempUserConfig(t) // openRealSession reads the consent store first
-	_, _, err := openRealSession(testCtx(t), unknownModelSentinel, "/dev/nonexistent-rigprog-test-port")
+	_, _, err := openRealSession(testCtx(t), unknownModelSentinel, "/dev/nonexistent-rigprog-test-port", nil)
 	if err == nil {
 		t.Fatal("openRealSession(unknown model): expected an error, got nil")
 	}
@@ -155,4 +160,33 @@ func TestValidateModel(t *testing.T) {
 			t.Errorf("validateModel(%s) stderr = %q, want it to name both the rejected model and the supported one", unknownModelSentinel, out)
 		}
 	})
+}
+
+// --transport-log must reach the session as SessionOptions.Logger, and the
+// file must receive what the logger is given.
+func TestTransportLogFlagReachesSession(t *testing.T) {
+	prev := openRealSessionWith
+	t.Cleanup(func() { openRealSessionWith = prev })
+	var got transport.Logger
+	openRealSessionWith = func(_ context.Context, _, _ string, opts wiring.SessionOptions) (driver.Session, func() error, error) {
+		got = opts.Logger
+		if got != nil {
+			got.Printf("hello transport") // the file closes once the open fails
+		}
+		return nil, nil, errors.New("stop here")
+	}
+	userConfigPath = func() (string, error) { return filepath.Join(t.TempDir(), "settings.json"), nil }
+	t.Cleanup(func() { userConfigPath = userconfig.DefaultPath })
+
+	logFile := filepath.Join(t.TempDir(), "t.log")
+	_, closeAll, err := openSession(testCtx(t), wiring.DefaultModel, "/dev/none", false, logFile)
+	if err == nil || closeAll != nil {
+		t.Fatalf("seam error not surfaced: closer=%v err=%v", closeAll != nil, err)
+	}
+	if got == nil {
+		t.Fatal("Logger not passed to wiring.SessionOptions")
+	}
+	if b, _ := os.ReadFile(logFile); !strings.Contains(string(b), "hello transport") {
+		t.Errorf("log file = %q, want it to contain the logged line", b)
+	}
 }

@@ -25,6 +25,7 @@ func cmdProbe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	fs.SetOutput(io.Discard) // this function owns all usage/error output.
 	port := fs.String("port", "", "real serial port device path")
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
+	transportLog := transportLogFlag(fs)
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 
 	if ok, code := parseArgs(fs, args, "probe", printProbeUsage, stdout, stderr); !ok {
@@ -40,7 +41,7 @@ func cmdProbe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return exitUsage
 	}
 
-	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake, *transportLog)
 	if err != nil {
 		var wrongRadio *driver.WrongRadioError
 		if errors.As(err, &wrongRadio) {
