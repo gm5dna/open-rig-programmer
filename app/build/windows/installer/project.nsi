@@ -143,6 +143,20 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
+
+    # The generated wails.writeUninstaller never writes InstallLocation, so
+    # Programs and Features shows it empty. Pick the root the same way it
+    # does (WAILS_INSTALL_SCOPE), not SHCTX: a user-scope build that still
+    # runs elevated would otherwise land the value in HKLM.
+    !ifdef WAILS_INSTALL_SCOPE
+      !if "${WAILS_INSTALL_SCOPE}" == "user"
+        WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+      !else
+        WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+      !endif
+    !else
+      WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+    !endif
 SectionEnd
 
 Section "uninstall"

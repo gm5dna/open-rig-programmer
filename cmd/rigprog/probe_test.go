@@ -207,7 +207,7 @@ func TestCmdProbe_BadPort_PreservesOriginalWiringWording(t *testing.T) {
 	// reads the consent store first, and no test may read the real user's.
 	tempUserConfig(t)
 	const port = "/dev/nonexistent-rigprog-test-port"
-	_, _, wiringErr := openRealSession(testCtx(t), wiring.DefaultModel, port)
+	_, _, wiringErr := openRealSession(testCtx(t), wiring.DefaultModel, port, nil)
 	if wiringErr == nil {
 		t.Fatal("openRealSession: expected an error opening a nonexistent port, got nil")
 	}

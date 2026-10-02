@@ -87,9 +87,10 @@ check_machine() {
 # FileVersionInfo lookup: on release run 33950484060 (05/09/2026),
 # `(Get-Item $path).VersionInfo.ProductVersion` came back EMPTY for
 # both raw GUI exes even though `.rsrc/0/version.txt` held the correct
-# StringFileInfo block — the block is language-neutral ("000004b0",
-# codepage 1200), which is a shape .NET's FileVersionInfo does not
-# resolve; release.yml keeps that .NET read only as a diagnostic now.
+# StringFileInfo block — the block was language-neutral ("000004b0"),
+# a shape .NET's FileVersionInfo does not resolve. info.json now writes
+# "040904b0" (en-US, Unicode), which it does; the greps below match
+# either block, and release.yml keeps the .NET read as a diagnostic.
 # `7z`/`7zz x` extracts the resource as UTF-16LE-with-embedded-NUL
 # text; `tr -d '\0\r'` collapses it to plain ASCII for grep.
 check_version_resource() {

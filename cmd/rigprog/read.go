@@ -98,6 +98,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(io.Discard) // this function owns all usage/error output.
 	port := fs.String("port", "", "real serial port device path")
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
+	transportLog := transportLogFlag(fs)
 	out := fs.String("out", "", "output codeplug file path (required)")
 	settings := fs.Bool("settings", false, "also read the radio's menu/EX settings surface (opt-in)")
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
@@ -159,7 +160,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
-	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake, *transportLog)
 	if err != nil {
 		if isCancelled(err) {
 			fmt.Fprintln(stderr, "rigprog read: cancelled")

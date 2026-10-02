@@ -88,6 +88,7 @@ Flags:
   --port PATH   real serial port device path (e.g. /dev/cu.usbserial-XXXX)
   --fake        use the in-process simulated radio instead of a real port
   --model NAME  radio model to target (default: FT-710)
+  --transport-log FILE  append transport diagnostics to FILE (default: off; some drivers only)
 
 Exactly one of --port or --fake is required. Opens a session — which
 probes the radio's identity — and prints model, CAT ID, port, USB
@@ -115,6 +116,7 @@ Flags:
   --out FILE            output codeplug file path (required)
   --settings            also read the radio's menu/EX settings surface (opt-in; adds significant wire time)
   --model NAME          radio model to target (default: FT-710)
+  --transport-log FILE  append transport diagnostics to FILE (default: off; some drivers only)
   --force               overwrite --out if it already exists
   --snapshot-dir DIR    snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)
   --clone                read a whole-image clone-mode transfer instead of an ordinary CAT read
@@ -167,6 +169,7 @@ Flags:
   --port PATH   real serial port device path (e.g. /dev/cu.usbserial-XXXX)
   --fake        use the in-process simulated radio instead of a real port
   --model NAME  radio model to target (default: FT-710)
+  --transport-log FILE  append transport diagnostics to FILE (default: off; some drivers only)
 
 Exactly one of --port or --fake is required, together with exactly one
 FILE argument. Reads a fresh baseline from the radio (progress to
@@ -198,6 +201,7 @@ Flags:
   --fake                 use the in-process simulated radio instead of a real port
   --settings             also diff and write FILE's settings snapshot (opt-in)
   --model NAME           radio model to target (default: FT-710)
+  --transport-log FILE   append transport diagnostics to FILE (default: off; some drivers only)
   --yes                  skip the interactive confirmation prompt (required for non-interactive runs)
   --snapshot-dir DIR     snapshot/journal directory (default: <UserConfigDir>/rigprog/snapshots)
 

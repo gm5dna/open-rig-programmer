@@ -23,6 +23,7 @@ func cmdDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(io.Discard) // this function owns all usage/error output.
 	port := fs.String("port", "", "real serial port device path")
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
+	transportLog := transportLogFlag(fs)
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 
 	if ok, code := parseArgs(fs, args, "diff", printDiffUsage, stdout, stderr); !ok {
@@ -57,7 +58,7 @@ func cmdDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
-	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake, *transportLog)
 	if err != nil {
 		if isCancelled(err) {
 			fmt.Fprintln(stderr, "rigprog diff: cancelled")
