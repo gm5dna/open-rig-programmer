@@ -154,12 +154,12 @@ Explorer's Properties → Details on `Open Rig Programmer.exe` correctly
 shows File description, File version, Product name, Product version
 and the licence line — confirmed on the Windows 11 ARM64 VM,
 05/09/2026 (`docs/hardware-notes.md`'s "Windows (ARM64 VM) session —
-05/09/2026", "The install"). PowerShell's `(Get-Item …).VersionInfo`,
-by contrast, reads every one of those string fields as empty: that is
-a .NET `FileVersionInfo` quirk with the language-neutral ("0000")
-version-resource block Wails writes, not a defect in the installed
-binary. Check Explorer's Properties dialogue, not a PowerShell
-`VersionInfo` read, when confirming what shipped.
+05/09/2026", "The install"). PowerShell's
+`(Get-Item …).VersionInfo` read every one of those string fields as empty on builds before this fix: Wails wrote the
+language-neutral ("0000") version-resource block, which .NET's
+`FileVersionInfo` does not resolve. The block is now `040904b0`
+(en-US, Unicode); the VM re-check of PowerShell is still pending, so
+until it is done, trust Explorer's Properties dialogue.
 
 Settings and read-back snapshots live under
 `%AppData%\rigprog\settings.json` and `%AppData%\rigprog\snapshots\` —
@@ -212,11 +212,10 @@ a person) stays **ASSUMED**: the amd64 CLI has run on a Windows x64
 host in CI (`rigprog.exe version` and `rigprog.exe ports`), but the
 amd64 GUI has never been launched by anyone.
 
-**Console output.** `rigprog.exe`'s prose uses em dashes; captured
-under a legacy console code page (as PowerShell's redirected output
-was on the ARM64 VM) they render as `ÔÇö` rather than "—" — a code-page
-display quirk, not a difference in what the CLI printed. Run `chcp
-65001` first, or use Windows Terminal, to see them correctly.
+**Console output.** `rigprog.exe` switches the console output code page to
+UTF-8 (65001) at start-up, so its em dashes should render as "—" even in
+redirected PowerShell output; the VM re-check is pending. Builds before
+this fix showed `ÔÇö` under a legacy code page (`chcp 65001` fixed it).
 
 **What remains untried on Windows**: the amd64 GUI (the amd64 builds
 are produced by the same pipeline on a Windows x64 host and the amd64

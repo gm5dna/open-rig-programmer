@@ -143,6 +143,11 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
+
+    # The generated wails.writeUninstaller never writes InstallLocation, so
+    # Programs and Features shows it empty. SHCTX follows the shell context
+    # set above (HKCU per-user, HKLM per-machine).
+    WriteRegStr SHCTX "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
 SectionEnd
 
 Section "uninstall"
