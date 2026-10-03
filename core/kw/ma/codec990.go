@@ -2,7 +2,11 @@
 
 package ma
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/gm5dna/open-rig-programmer/core/kw"
+)
 
 // THE TS-990S MA0 CODEC, HAND-WRITTEN AGAINST THAT BOOK'S OWN POSITION RULER.
 //
@@ -80,18 +84,18 @@ const (
 func (l Layout) parseMA0Answer990(frame []byte) (Record, error) {
 	const what = "MA0 answer"
 	if len(frame) != ma990Len {
-		return Record{}, newParseError(frame, "%s: the frame is %d bytes, and the TS-990S grid is exactly 57 — eighteen parameters, a ten-byte name window at 47-56 and ';' nailed to 57 (990:2919-2938)", what, len(frame))
+		return Record{}, kw.NewParseError(frame, "%s: the frame is %d bytes, and the TS-990S grid is exactly 57 — eighteen parameters, a ten-byte name window at 47-56 and ';' nailed to 57 (990:2919-2938)", what, len(frame))
 	}
 	if string(frame[:len(ma0Prefix)]) != ma0Prefix {
-		return Record{}, newParseError(frame, "%s: missing %q prefix, got %q", what, ma0Prefix, frame[:len(ma0Prefix)])
+		return Record{}, kw.NewParseError(frame, "%s: missing %q prefix, got %q", what, ma0Prefix, frame[:len(ma0Prefix)])
 	}
 	if frame[ma990Len-1] != ';' {
-		return Record{}, newParseError(frame, "%s: missing ';' terminator at position %d (990:2938)", what, ma990Len)
+		return Record{}, kw.NewParseError(frame, "%s: missing ';' terminator at position %d (990:2938)", what, ma990Len)
 	}
 
 	slot, err := l.parseSlotField(frame)
 	if err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	rec := Record{Slot: slot}
 
@@ -104,29 +108,29 @@ func (l Layout) parseMA0Answer990(frame []byte) (Record, error) {
 	// of the three channel types the radio reported (990:2897-2903). It is
 	// a parser output: the Set direction emits '0' whatever this says (A14).
 	if b := frame[ma990ClassOff]; b < '0' || b > '2' {
-		return Record{}, newParseError(frame, "%s: P2, the channel type, is %q, and the book prints three values — 0 Single, 1 Dual, 2 Section defined (990:2897-2903)", what, b)
+		return Record{}, kw.NewParseError(frame, "%s: P2, the channel type, is %q, and the book prints three values — 0 Single, 1 Dual, 2 Section defined (990:2897-2903)", what, b)
 	}
 	rec.Class = frame[ma990ClassOff]
 
 	if rec.FreqHz, err = decodeDigits("P3, frequency 1", frame[ma990FreqOff:ma990FreqOff+ma0FreqDigits]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if err = l.checkModeByte("P4, the mode for frequency 1", frame[ma990ModeOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.Mode = frame[ma990ModeOff]
 	if rec.FMNarrow, err = decodeFlag("P5, FM wide/narrow for frequency 1", frame[ma990NarrowOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if err = checkToneType("P6, the FM tone function for frequency 1", frame[ma990ToneTypeOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.ToneType = frame[ma990ToneTypeOff]
 	if rec.ToneIndex, err = parseToneIndex("P7, the tone frequency for frequency 1", frame[ma990ToneOff:ma990ToneOff+ma0ToneDigits], l.checkToneIndex); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if rec.CTCSSIndex, err = parseToneIndex("P8, the CTCSS frequency for frequency 1", frame[ma990CTCSSOff:ma990CTCSSOff+ma0ToneDigits], l.checkCTCSSIndex); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 
 	// THE FREQUENCY-2 SIDE IS DOMAIN-CHECKED ONLY WHEN IT CARRIES CONTENT
@@ -136,32 +140,32 @@ func (l Layout) parseMA0Answer990(frame []byte) (Record, error) {
 	// every single-frequency channel on the radio.
 	if !allBytes(frame[ma990SecondLo:ma990SecondHi+1], '0') {
 		if rec.TXFreqHz, err = decodeDigits("P9, frequency 2", frame[ma990TXFreqOff:ma990TXFreqOff+ma0FreqDigits]); err != nil {
-			return Record{}, newParseError(frame, "%s: %v", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 		}
 		if err = l.checkModeByte("P10, the mode for frequency 2", frame[ma990TXModeOff]); err != nil {
-			return Record{}, newParseError(frame, "%s: %v — a frame whose P9-P14 are not all zero is not the single memory channel of 990:2964-2965 (A16). P10 reads the OM command's P1 by this chart's own wording, which is erratum E9; the legend it means is OM P2's", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v — a frame whose P9-P14 are not all zero is not the single memory channel of 990:2964-2965 (A16). P10 reads the OM command's P1 by this chart's own wording, which is erratum E9; the legend it means is OM P2's", what, err)
 		}
 		rec.TXMode = frame[ma990TXModeOff]
 		if rec.TXFMNarrow, err = decodeFlag("P11, FM wide/narrow for frequency 2", frame[ma990TXNarrowOff]); err != nil {
-			return Record{}, newParseError(frame, "%s: %v", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 		}
 		if err = checkToneType("P12, the FM tone function for frequency 2", frame[ma990TXToneTypeOff]); err != nil {
-			return Record{}, newParseError(frame, "%s: %v", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 		}
 		rec.TXToneType = frame[ma990TXToneTypeOff]
 		if rec.TXToneIndex, err = parseToneIndex("P13, the tone frequency for frequency 2", frame[ma990TXToneOff:ma990TXToneOff+ma0ToneDigits], l.checkToneIndex); err != nil {
-			return Record{}, newParseError(frame, "%s: %v", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 		}
 		if rec.TXCTCSSIndex, err = parseToneIndex("P14, the CTCSS frequency for frequency 2", frame[ma990TXCTCSSOff:ma990TXCTCSSOff+ma0ToneDigits], l.checkCTCSSIndex); err != nil {
-			return Record{}, newParseError(frame, "%s: %v", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 		}
 	}
 
 	if rec.Split, err = decodeFlag("P15, the split information", frame[ma990SplitOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if rec.DualRecv, err = decodeFlag("P16, dual reception", frame[ma990DualOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	switch frame[ma990LockoutOff] {
 	case ma990LockoutOffByte:
@@ -169,10 +173,10 @@ func (l Layout) parseMA0Answer990(frame []byte) (Record, error) {
 	case ma990LockoutOnByte:
 		rec.Lockout = true
 	default:
-		return Record{}, newParseError(frame, "%s: P17, the scan lockout, is %q, and this radio prints \"1: Scan Lockout OFF / 2: Scan Lockout ON\" (990:2952-2954) — erratum E8, and accepting '0' here would import MA3's 0/1 convention into MA0's field", what, frame[ma990LockoutOff])
+		return Record{}, kw.NewParseError(frame, "%s: P17, the scan lockout, is %q, and this radio prints \"1: Scan Lockout OFF / 2: Scan Lockout ON\" (990:2952-2954) — erratum E8, and accepting '0' here would import MA3's 0/1 convention into MA0's field", what, frame[ma990LockoutOff])
 	}
 	if rec.Name, err = parseName("P18, the channel name", frame[ma990NameOff:ma990NameOff+ma0MaxNameLen]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	return rec, nil
 }
@@ -198,25 +202,25 @@ func (l Layout) parseMA0Answer990(frame []byte) (Record, error) {
 func (l Layout) buildMA0Set990(rec Record) (Command, error) {
 	const what = "MA0 set"
 	if err := l.checkRecordCommon(rec); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := checkFreq("P3, frequency 1", rec.FreqHz); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkModeByte("P4, the mode for frequency 1", rec.Mode); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := checkToneType("P6, the FM tone function for frequency 1", rec.ToneType); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkToneIndex("P7, the tone frequency for frequency 1", rec.ToneIndex); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkCTCSSIndex("P8, the CTCSS frequency for frequency 1", rec.CTCSSIndex); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := checkName("P18, the channel name", rec.Name); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 
 	second, err := l.buildSecond990(what, rec)
@@ -249,7 +253,7 @@ func (l Layout) buildMA0Set990(rec Record) (Command, error) {
 
 	frame := []byte(b.String())
 	if len(frame) != ma990Len {
-		return Command{}, newParseError(frame, "%s: built %d bytes, want exactly %d (990:2915)", what, len(frame), ma990Len)
+		return Command{}, kw.NewParseError(frame, "%s: built %d bytes, want exactly %d (990:2915)", what, len(frame), ma990Len)
 	}
 	return newCommand(frame), nil
 }
@@ -263,24 +267,24 @@ func (l Layout) buildMA0Set990(rec Record) (Command, error) {
 func (l Layout) buildSecond990(what string, rec Record) (string, error) {
 	if rec.TXMode == 0 {
 		if rec.TXFreqHz != 0 || rec.TXFMNarrow || rec.TXToneType != 0 || rec.TXToneIndex != 0 || rec.TXCTCSSIndex != 0 || rec.Split || rec.DualRecv {
-			return "", newParseError(nil, "%s: this record has no second side mode but carries frequency-2 content (P9 = %d, P11 = %v, P12 = %q, P13 = %d, P14 = %d, P15 = %v, P16 = %v); a single memory channel's whole frequency-2 side is zero, which a split P15 or a dual-reception P16 contradicts (990:2946-2951, 990:2964-2965)", what, rec.TXFreqHz, rec.TXFMNarrow, rec.TXToneType, rec.TXToneIndex, rec.TXCTCSSIndex, rec.Split, rec.DualRecv)
+			return "", kw.NewParseError(nil, "%s: this record has no second side mode but carries frequency-2 content (P9 = %d, P11 = %v, P12 = %q, P13 = %d, P14 = %d, P15 = %v, P16 = %v); a single memory channel's whole frequency-2 side is zero, which a split P15 or a dual-reception P16 contradicts (990:2946-2951, 990:2964-2965)", what, rec.TXFreqHz, rec.TXFMNarrow, rec.TXToneType, rec.TXToneIndex, rec.TXCTCSSIndex, rec.Split, rec.DualRecv)
 		}
 		return strings.Repeat("0", ma990SecondHi-ma990SecondLo+1), nil
 	}
 	if err := checkFreq("P9, frequency 2", rec.TXFreqHz); err != nil {
-		return "", newParseError(nil, "%s: %v", what, err)
+		return "", kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkModeByte("P10, the mode for frequency 2", rec.TXMode); err != nil {
-		return "", newParseError(nil, "%s: %v", what, err)
+		return "", kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := checkToneType("P12, the FM tone function for frequency 2", rec.TXToneType); err != nil {
-		return "", newParseError(nil, "%s: %v", what, err)
+		return "", kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkToneIndex("P13, the tone frequency for frequency 2", rec.TXToneIndex); err != nil {
-		return "", newParseError(nil, "%s: %v", what, err)
+		return "", kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkCTCSSIndex("P14, the CTCSS frequency for frequency 2", rec.TXCTCSSIndex); err != nil {
-		return "", newParseError(nil, "%s: %v", what, err)
+		return "", kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	return encodeFreq(rec.TXFreqHz) +
 		string(rec.TXMode) +

@@ -77,7 +77,7 @@ func (l Layout) BuildMCRead() (Command, error) {
 // directions differing is the whole point.
 func (l Layout) BuildMCSet(s Slot) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "MC set: this layout is unconfigured and describes no radio")
+		return Command{}, NewParseError(nil, "MC set: this layout is unconfigured and describes no radio")
 	}
 	// checkSlot first, so a slot minted under another layout is reported as
 	// that rather than as a domain refusal: the two failures have different
@@ -86,7 +86,7 @@ func (l Layout) BuildMCSet(s Slot) (Command, error) {
 		return Command{}, err
 	}
 	if !mcSendValid(s.Class()) {
-		return Command{}, newParseError(nil, "MC set: slot %v is %v on the %s, and this milestone narrows the MC SET domain to ordinary memory (A16, L-DEC-2) — recalling a channel changes the radio's operating state, and 590:1345-1347's selectable section and extension numbers are deliberately not selected; the ANSWER domain is the full printed space", s, s.Class(), l.model)
+		return Command{}, NewParseError(nil, "MC set: slot %v is %v on the %s, and this milestone narrows the MC SET domain to ordinary memory (A16, L-DEC-2) — recalling a channel changes the radio's operating state, and 590:1345-1347's selectable section and extension numbers are deliberately not selected; the ANSWER domain is the full printed space", s, s.Class(), l.model)
 	}
 	wire, err := l.slotWire(s)
 	if err != nil {
@@ -97,7 +97,7 @@ func (l Layout) BuildMCSet(s Slot) (Command, error) {
 	frame = append(frame, wire...)
 	frame = append(frame, ';')
 	if len(frame) != MCSetLen {
-		return Command{}, newParseError(frame, "MC set: built %d bytes, want exactly %d (590:1333, 480:830)", len(frame), MCSetLen)
+		return Command{}, NewParseError(frame, "MC set: built %d bytes, want exactly %d (590:1333, 480:830)", len(frame), MCSetLen)
 	}
 	return newCommand(frame), nil
 }
@@ -187,11 +187,11 @@ func (l Layout) parseMCFields(what string, frame []byte) (MCChannel, error) {
 		case b >= '0' && b <= '9':
 			hundreds = int(b - '0')
 		default:
-			return MCChannel{}, newParseError(frame, "%s: position 3 is %q; on the %s it is the channel's 100's digit, which the chart prints as a digit or a space below 100 (590:1332-1337)", what, b, l.model)
+			return MCChannel{}, NewParseError(frame, "%s: position 3 is %q; on the %s it is the channel's 100's digit, which the chart prints as a digit or a space below 100 (590:1332-1337)", what, b, l.model)
 		}
 	case P2FixedZero:
 		if b != '0' {
-			return MCChannel{}, newParseError(frame, "%s: position 3 is %q, and the %s prints \"0: Always 0 for the TS-480 (Memory bank number)\" there (480:827) — that book prints no space convention", what, b, l.model)
+			return MCChannel{}, NewParseError(frame, "%s: position 3 is %q, and the %s prints \"0: Always 0 for the TS-480 (Memory bank number)\" there (480:827) — that book prints no space convention", what, b, l.model)
 		}
 	case P2Unused:
 		// The book prints nothing at all for this byte (P2Unused's own doc
@@ -199,20 +199,20 @@ func (l Layout) parseMCFields(what string, frame []byte) (MCChannel, error) {
 		// here either — the same "read but never asserted" treatment
 		// parseSlot gives the MR/MW record's own byte 4.
 	default:
-		return MCChannel{}, newParseError(frame, "%s: the 100's-digit policy is unset on this layout — refusing to guess whether position 3 is the channel's hundreds digit or a printed constant", what)
+		return MCChannel{}, NewParseError(frame, "%s: the 100's-digit policy is unset on this layout — refusing to guess whether position 3 is the channel's hundreds digit or a printed constant", what)
 	}
 
 	digits := frame[mcDigitsOff : mcDigitsOff+mcDigits]
 	for i, b := range digits {
 		if b < '0' || b > '9' {
-			return MCChannel{}, newParseError(frame, "%s: position %d is %q; the chart prints both digits of the channel number, zero-padded below 10 (590:1341-1343, 480:830)", what, mcDigitsOff+i+1, b)
+			return MCChannel{}, NewParseError(frame, "%s: position %d is %q; the chart prints both digits of the channel number, zero-padded below 10 (590:1341-1343, 480:830)", what, mcDigitsOff+i+1, b)
 		}
 	}
 	number := hundreds*100 + int(digits[0]-'0')*10 + int(digits[1]-'0')
 
 	class := l.classOf(number)
 	if class == SlotClassInvalid {
-		return MCChannel{}, newParseError(frame, "%s: channel %d is outside the %s's slot space %s", what, number, l.model, l.slotSpaceText())
+		return MCChannel{}, NewParseError(frame, "%s: channel %d is outside the %s's slot space %s", what, number, l.model, l.slotSpaceText())
 	}
 	return MCChannel{Number: number, Class: class}, nil
 }

@@ -95,7 +95,7 @@ func (l Layout) AllowedCommand(frame []byte) bool {
 	if len(frame) < kw.IDReadLen { // the shortest legal frame is "ID;"
 		return false
 	}
-	if !exactlyOneTrailingSemicolon(frame) {
+	if !kw.ExactlyOneTrailingSemicolon(frame) {
 		return false
 	}
 
@@ -126,21 +126,6 @@ func (l Layout) AllowedCommand(frame []byte) bool {
 	default:
 		return false
 	}
-}
-
-// exactlyOneTrailingSemicolon reports whether frame contains exactly one ';'
-// byte and that byte is the very last one.
-//
-// BOTH HALVES ARE LOAD-BEARING. A count-only check would admit ";ID" and a
-// suffix-only check would admit "ID;ID;", which is two commands the radio
-// would execute in turn — the injection this gate exists to refuse.
-//
-// IT IS THIS PACKAGE'S OWN because core/kw's is unexported. One line on
-// stdlib's bytes.IndexByte; the alternative, exporting kw's, would put a gate
-// internal on the family's public surface for no caller's benefit.
-func exactlyOneTrailingSemicolon(frame []byte) bool {
-	i := bytes.IndexByte(frame, ';')
-	return i >= 0 && i == len(frame)-1
 }
 
 // validEXRead admits the eight-byte EX READ whose address is in THIS ROW's
@@ -183,7 +168,7 @@ func (l Layout) validEXRead(frame []byte) bool {
 // validMA0Set's first act is ParseMA0Answer's ma0Prefix check, so a gate
 // keyed on "MA" and a length alone would already refuse MA5. The
 // frame[2] != '0' comparison below is a SECOND, INDEPENDENT refusal, kept
-// as defence in depth (the same class as exactlyOneTrailingSemicolon, T8
+// as defence in depth (the same class as kw.ExactlyOneTrailingSemicolon, T8
 // NIT-4) even though a mutation of it alone survives the suite.
 func (l Layout) validMA0Command(frame []byte) bool {
 	if frame[2] != '0' {

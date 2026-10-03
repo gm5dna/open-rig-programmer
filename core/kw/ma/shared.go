@@ -108,11 +108,11 @@ func (s Slot) String() string {
 // A zero Layout has no slot space and so admits no slot at all.
 func (l Layout) NewSlot(number int) (Slot, error) {
 	if !l.Configured() {
-		return Slot{}, newParseError(nil, "slot %d: this layout is unconfigured and describes no radio's slot space", number)
+		return Slot{}, kw.NewParseError(nil, "slot %d: this layout is unconfigured and describes no radio's slot space", number)
 	}
 	class := l.classOf(number)
 	if class == kw.SlotClassInvalid {
-		return Slot{}, newParseError(nil, "slot %d is outside the %s's slot space %s", number, l.model, l.slotSpaceText())
+		return Slot{}, kw.NewParseError(nil, "slot %d is outside the %s's slot space %s", number, l.model, l.slotSpaceText())
 	}
 	return Slot{number: number, class: class}, nil
 }
@@ -277,7 +277,7 @@ func (l Layout) ParseMA0Answer(frame []byte) (Record, error) {
 	case kw.Book990:
 		return l.parseMA0Answer990(frame)
 	}
-	return Record{}, newParseError(frame, "MA0 answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
+	return Record{}, kw.NewParseError(frame, "MA0 answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
 }
 
 // BuildMA0Set builds the memory-channel write for rec on this row's own grid.
@@ -294,7 +294,7 @@ func (l Layout) BuildMA0Set(rec Record) (Command, error) {
 	case kw.Book990:
 		return l.buildMA0Set990(rec)
 	}
-	return Command{}, newParseError(nil, "MA0 set: this layout is unconfigured and describes no radio")
+	return Command{}, kw.NewParseError(nil, "MA0 set: this layout is unconfigured and describes no radio")
 }
 
 // BuildMA0Read builds the memory-channel read for s: "M A 0 P1 P1 P1 ;",
@@ -312,14 +312,14 @@ func (l Layout) BuildMA0Set(rec Record) (Command, error) {
 // (L-HW-12): from VFO mode, with no MN sent, read channel 005.
 func (l Layout) BuildMA0Read(s Slot) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "MA0 read: this layout is unconfigured and describes no radio")
+		return Command{}, kw.NewParseError(nil, "MA0 read: this layout is unconfigured and describes no radio")
 	}
 	if err := l.checkSlot(s); err != nil {
-		return Command{}, newParseError(nil, "MA0 read: %v", err)
+		return Command{}, kw.NewParseError(nil, "MA0 read: %v", err)
 	}
 	frame := []byte(ma0Prefix + s.String() + ";")
 	if len(frame) != ma0ReadLen {
-		return Command{}, newParseError(frame, "MA0 read: built %d bytes, want exactly %d (890:3184-3186, 990:2916-2918)", len(frame), ma0ReadLen)
+		return Command{}, kw.NewParseError(frame, "MA0 read: built %d bytes, want exactly %d (890:3184-3186, 990:2916-2918)", len(frame), ma0ReadLen)
 	}
 	return newCommand(frame), nil
 }

@@ -124,13 +124,13 @@ func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
 // Answer), which is erratum E17.
 func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, error) {
 	if !l.Configured() {
-		return Record{}, newParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
+		return Record{}, NewParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
 	}
 	if err := l.checkRecordLen(command, len(frame), frame); err != nil {
 		return Record{}, err
 	}
 	if frame[recPrefixOff] != command[0] || frame[recPrefixOff+1] != command[1] {
-		return Record{}, newParseError(frame, "%s: missing %q prefix — MR has no Set and MW has no Answer on either radio (480:911, 480:985, erratum E17), so an %q frame is not an alternative spelling of this one", what, command, frame[:recPrefixLen])
+		return Record{}, NewParseError(frame, "%s: missing %q prefix — MR has no Set and MW has no Answer on either radio (480:911, 480:985, erratum E17), so an %q frame is not an alternative spelling of this one", what, command, frame[:recPrefixLen])
 	}
 	// hasTail is whether this row's record reaches past P8 (byte 22) at
 	// all — false only for a RecordLen:28 row (the TS-570), whose own
@@ -142,7 +142,7 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 	hasTail := l.recordLen == RecordLen
 	termOff := int(l.recordLen) - 1
 	if frame[termOff] != ';' {
-		return Record{}, newParseError(frame, "%s: missing ';' terminator at position %d", what, termOff+1)
+		return Record{}, NewParseError(frame, "%s: missing ';' terminator at position %d", what, termOff+1)
 	}
 	if err := l.checkPrintedFixed(what, frame); err != nil {
 		return Record{}, err
@@ -150,7 +150,7 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 
 	p1 := frame[recP1Off]
 	if p1 != '0' && p1 != '1' {
-		return Record{}, newParseError(frame, "%s: P1 is %q, and both books print only '0' and '1' (590:1519-1520, 480:951)", what, p1)
+		return Record{}, NewParseError(frame, "%s: P1 is %q, and both books print only '0' and '1' (590:1519-1520, 480:951)", what, p1)
 	}
 
 	slot, err := l.parseSlot(what, frame, p1)
@@ -192,7 +192,7 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 	if isEmptyWindow(frame, emptyHi) {
 		if hasTail {
 			if got := string(frame[recNameOff : recNameOff+recNameLen]); got != emptyName {
-				return Record{}, newParseError(frame, "%s: P4-P15 are all zero, which is the empty channel of 590:1492-1493, but P16 is %q — the same sentence says P16 \"will be blank\", and A3 reads blank as %d spaces", what, got, recNameLen)
+				return Record{}, NewParseError(frame, "%s: P4-P15 are all zero, which is the empty channel of 590:1492-1493, but P16 is %q — the same sentence says P16 \"will be blank\", and A3 reads blank as %d spaces", what, got, recNameLen)
 			}
 		}
 		rec.Empty = true
@@ -201,34 +201,34 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 
 	mode, ok := l.ParseMode(frame[recModeOff])
 	if !ok {
-		return Record{}, newParseError(frame, "%s: P5 is %q, which the %s's MD legend does not name as a mode; a frame whose P4-P15 are not all zero is not the empty channel of 590:1492-1493 (A18a)", what, frame[recModeOff], l.model)
+		return Record{}, NewParseError(frame, "%s: P5 is %q, which the %s's MD legend does not name as a mode; a frame whose P4-P15 are not all zero is not the empty channel of 590:1492-1493 (A18a)", what, frame[recModeOff], l.model)
 	}
 	rec.Mode = mode
 
 	freq, err := parseDigits(frame[recFreqOff:recFreqOff+recFreqDigits], "P4, the frequency")
 	if err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.FreqHz = freq
 
 	if b := frame[recByte19Off]; b == '0' || b == '1' {
 		rec.Byte19 = b
 	} else {
-		return Record{}, newParseError(frame, "%s: byte 19 is %q, and it is %v on the %s, whose book prints only '0' and '1' there", what, b, l.byte19, l.model)
+		return Record{}, NewParseError(frame, "%s: byte 19 is %q, and it is %v on the %s, whose book prints only '0' and '1' there", what, b, l.byte19, l.model)
 	}
 
 	tone := ToneMode(frame[recToneModeOff])
 	if !l.ValidToneMode(tone) {
-		return Record{}, newParseError(frame, "%s: P7 is %q, and the %s prints %s", what, byte(tone), l.model, l.toneModeText())
+		return Record{}, NewParseError(frame, "%s: P7 is %q, and the %s prints %s", what, byte(tone), l.model, l.toneModeText())
 	}
 	rec.ToneMode = tone
 
 	toneIdx, err := parseDigits(frame[recToneOff:recToneOff+recToneDigits], "P8, the tone number")
 	if err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	if toneIdx > MaxToneIndex {
-		return Record{}, newParseError(frame, "%s: P8 is %d, and TN prints 00 ~ %d (590:2291, 480:1557); an index outside its own chart is refused rather than clamped (A21)", what, toneIdx, MaxToneIndex)
+		return Record{}, NewParseError(frame, "%s: P8 is %d, and TN prints 00 ~ %d (590:2291, 480:1557); an index outside its own chart is refused rather than clamped (A21)", what, toneIdx, MaxToneIndex)
 	}
 	rec.ToneIndex = int(toneIdx)
 
@@ -246,49 +246,49 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 
 	ctcssIdx, err := parseDigits(frame[recCTCSSOff:recCTCSSOff+recCTCSSDigits], "P9, the CTCSS number")
 	if err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	if ctcssIdx > MaxCTCSSIndex {
-		return Record{}, newParseError(frame, "%s: P9 is %d, and CN prints 00 ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", what, ctcssIdx, MaxCTCSSIndex)
+		return Record{}, NewParseError(frame, "%s: P9 is %d, and CN prints 00 ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", what, ctcssIdx, MaxCTCSSIndex)
 	}
 	rec.CTCSSIndex = int(ctcssIdx)
 
 	dcs, err := parseDigits(frame[recDCSOff:recDCSOff+recDCSDigits], "P10, the DCS code")
 	if err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	if err := l.checkP10(dcs); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.DCSCode = int(dcs)
 
 	if err := l.checkByte28(frame[recByte28Off]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.Byte28 = frame[recByte28Off]
 
 	if err := l.checkP12(frame[recShiftOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.Shift = frame[recShiftOff]
 
 	offset, err := parseDigits(frame[recOffsetOff:recOffsetOff+recOffsetDigits], "P13, the offset frequency")
 	if err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	if err := l.checkP13(offset); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.OffsetHz = offset
 
 	b3940 := string(frame[recByte3940Off : recByte3940Off+recByte3940Len])
 	if err := l.checkByte3940(b3940); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.Byte3940 = b3940
 
 	if err := l.checkByte41(frame[recByte41Off]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.Byte41 = frame[recByte41Off]
 
@@ -336,7 +336,7 @@ func (l Layout) parseSlot(what string, frame []byte, p1 byte) (Slot, error) {
 		case p2 >= '0' && p2 <= '9':
 			hundreds = int(p2 - '0')
 		default:
-			return Slot{}, newParseError(frame, "%s: byte 4 is %q; on the %s it is the channel's hundreds digit, which MC prints as a digit or a space below 100 (590:1332-1337)", what, p2, l.model)
+			return Slot{}, NewParseError(frame, "%s: byte 4 is %q; on the %s it is the channel's hundreds digit, which MC prints as a digit or a space below 100 (590:1332-1337)", what, p2, l.model)
 		}
 	case P2FixedZero:
 		// checkPrintedFixed has already required '0' here, which is what the
@@ -351,20 +351,20 @@ func (l Layout) parseSlot(what string, frame []byte, p1 byte) (Slot, error) {
 		// (validateSlots) the same way a P2FixedZero row's does.
 		hundreds = 0
 	default:
-		return Slot{}, newParseError(frame, "%s: byte 4's policy is unset on this layout", what)
+		return Slot{}, NewParseError(frame, "%s: byte 4's policy is unset on this layout", what)
 	}
 
 	digits := frame[recP3Off : recP3Off+recP3Digits]
 	for i, b := range digits {
 		if b < '0' || b > '9' {
-			return Slot{}, newParseError(frame, "%s: P3 byte %d is %q; MC prints both digits of the channel number, zero-padded below 10 (590:1342-1343, 480:955)", what, i+1, b)
+			return Slot{}, NewParseError(frame, "%s: P3 byte %d is %q; MC prints both digits of the channel number, zero-padded below 10 (590:1342-1343, 480:955)", what, i+1, b)
 		}
 	}
 	number := hundreds*100 + int(digits[0]-'0')*10 + int(digits[1]-'0')
 
 	class := l.classOf(number)
 	if class == SlotClassInvalid {
-		return Slot{}, newParseError(frame, "%s: slot %d is outside the %s's slot space %s", what, number, l.model, l.slotSpaceText())
+		return Slot{}, NewParseError(frame, "%s: slot %d is outside the %s's slot space %s", what, number, l.model, l.slotSpaceText())
 	}
 	half := ScanHalfNone
 	if class == SlotScan {
@@ -391,7 +391,7 @@ func parseName(what string, frame []byte) (string, error) {
 	raw := frame[recNameOff : recNameOff+recNameLen]
 	for i, b := range raw {
 		if err := checkNameByte(b); err != nil {
-			return "", newParseError(frame, "%s: P16 byte %d: %v", what, i+1, err)
+			return "", NewParseError(frame, "%s: P16 byte %d: %v", what, i+1, err)
 		}
 	}
 	return strings.TrimRight(string(raw), " "), nil
@@ -439,7 +439,7 @@ func (l Layout) checkPrintedFixed(what string, frame []byte) error {
 	for _, ff := range l.printedFixed {
 		got := string(frame[ff.Pos-1 : ff.Pos-1+len(ff.Printed)])
 		if got != ff.Printed {
-			return newParseError(frame, "%s: positions %d-%d are %q, and the %s's book prints %q there (%s)", what, ff.Pos, ff.end(), got, l.model, ff.Printed, why)
+			return NewParseError(frame, "%s: positions %d-%d are %q, and the %s's book prints %q there (%s)", what, ff.Pos, ff.end(), got, l.model, ff.Printed, why)
 		}
 	}
 	return nil

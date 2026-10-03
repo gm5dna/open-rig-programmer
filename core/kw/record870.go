@@ -230,7 +230,7 @@ func isEmptyWindow870(frame []byte) bool {
 
 func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Record870, error) {
 	if !l.Configured() {
-		return Record870{}, newParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
+		return Record870{}, NewParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
 	}
 	if len(frame) != rec870Len {
 		n := len(frame)
@@ -246,26 +246,26 @@ func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Reco
 		}
 	}
 	if frame[rec870PrefixOff] != command[0] || frame[rec870PrefixOff+1] != command[1] {
-		return Record870{}, newParseError(frame, "%s: missing %q prefix", what, command)
+		return Record870{}, NewParseError(frame, "%s: missing %q prefix", what, command)
 	}
 	if frame[rec870TermOff] != ';' {
-		return Record870{}, newParseError(frame, "%s: missing ';' terminator at position %d", what, rec870TermOff+1)
+		return Record870{}, NewParseError(frame, "%s: missing ';' terminator at position %d", what, rec870TermOff+1)
 	}
 
 	p1 := frame[rec870P1Off]
 	if p1 != '0' {
-		return Record870{}, newParseError(frame, "%s: P1 is %q — this grid has no scan/extension class to select (channel 99's VFO-scan half is resolved the TS-480 way, matrix-ts870s.md), so P1 is always '0'", what, p1)
+		return Record870{}, NewParseError(frame, "%s: P1 is %q — this grid has no scan/extension class to select (channel 99's VFO-scan half is resolved the TS-480 way, matrix-ts870s.md), so P1 is always '0'", what, p1)
 	}
 
 	chanDigits := frame[rec870ChanOff : rec870ChanOff+rec870ChanDigits]
 	for i, b := range chanDigits {
 		if b < '0' || b > '9' {
-			return Record870{}, newParseError(frame, "%s: P3 byte %d is %q, not a digit", what, i+1, b)
+			return Record870{}, NewParseError(frame, "%s: P3 byte %d is %q, not a digit", what, i+1, b)
 		}
 	}
 	channel := int(chanDigits[0]-'0')*10 + int(chanDigits[1]-'0')
 	if channel < l.channelLo || channel > l.channelHi {
-		return Record870{}, newParseError(frame, "%s: channel %d is outside the %s's %d-%d bank", what, channel, l.model, l.channelLo, l.channelHi)
+		return Record870{}, NewParseError(frame, "%s: channel %d is outside the %s's %d-%d bank", what, channel, l.model, l.channelLo, l.channelHi)
 	}
 
 	// A18a's TS-870S reading, TESTED BEFORE ANY OTHER FIELD IS INTERPRETED
@@ -280,30 +280,30 @@ func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Reco
 
 	freq, err := parseDigits(frame[rec870FreqOff:rec870FreqOff+rec870FreqDigits], "P4, the frequency")
 	if err != nil {
-		return Record870{}, newParseError(frame, "%s: %v", what, err)
+		return Record870{}, NewParseError(frame, "%s: %v", what, err)
 	}
 
 	mode, ok := l.parseMode870(frame[rec870ModeOff])
 	if !ok {
-		return Record870{}, newParseError(frame, "%s: P5 is %q, which the %s's MD legend does not name as a mode", what, frame[rec870ModeOff], l.model)
+		return Record870{}, NewParseError(frame, "%s: P5 is %q, which the %s's MD legend does not name as a mode", what, frame[rec870ModeOff], l.model)
 	}
 
 	lockout := frame[rec870LockoutOff]
 	if lockout != '0' && lockout != '1' {
-		return Record870{}, newParseError(frame, "%s: P6 is %q, and this document prints only '0' Lockout OFF and '1' Lockout ON there", what, lockout)
+		return Record870{}, NewParseError(frame, "%s: P6 is %q, and this document prints only '0' Lockout OFF and '1' Lockout ON there", what, lockout)
 	}
 
 	tone := ToneMode(frame[rec870ToneModeOff])
 	if tone != ToneModeOff && tone != ToneModeTone {
-		return Record870{}, newParseError(frame, "%s: P7 is %q, and this document's P7 prints only '0' OFF and '1' TONE", what, byte(tone))
+		return Record870{}, NewParseError(frame, "%s: P7 is %q, and this document's P7 prints only '0' OFF and '1' TONE", what, byte(tone))
 	}
 
 	toneIdx, err := parseDigits(frame[rec870ToneOff:rec870ToneOff+rec870ToneDigits], "P8, the tone number")
 	if err != nil {
-		return Record870{}, newParseError(frame, "%s: %v", what, err)
+		return Record870{}, NewParseError(frame, "%s: %v", what, err)
 	}
 	if toneIdx < rec870MinToneIndex || toneIdx > rec870MaxToneIndex {
-		return Record870{}, newParseError(frame, "%s: P8 is %d, outside this row's own %02d-%d chart (matrix §1.9), not the family's 00-%d", what, toneIdx, rec870MinToneIndex, rec870MaxToneIndex, MaxToneIndex)
+		return Record870{}, NewParseError(frame, "%s: P8 is %d, outside this row's own %02d-%d chart (matrix §1.9), not the family's 00-%d", what, toneIdx, rec870MinToneIndex, rec870MaxToneIndex, MaxToneIndex)
 	}
 
 	return Record870{
@@ -319,10 +319,10 @@ func (l Layout870) parseRecordFrame870(command, what string, frame []byte) (Reco
 // BuildMWSet builds the 22-byte memory-channel write for rec.
 func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "MW set: this layout is unconfigured and describes no radio")
+		return Command{}, NewParseError(nil, "MW set: this layout is unconfigured and describes no radio")
 	}
 	if rec.Channel < l.channelLo || rec.Channel > l.channelHi {
-		return Command{}, newParseError(nil, "MW set: channel %d is outside the %s's %d-%d bank", rec.Channel, l.model, l.channelLo, l.channelHi)
+		return Command{}, NewParseError(nil, "MW set: channel %d is outside the %s's %d-%d bank", rec.Channel, l.model, l.channelLo, l.channelHi)
 	}
 	if rec.Empty {
 		// record.go's own rule, restated: the only documented clear on
@@ -332,25 +332,25 @@ func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 		// record would ask this builder to manufacture P4-P8 as zero,
 		// which is indistinguishable from a genuine 0 Hz/mode-'0' channel
 		// this document does not describe either.
-		return Command{}, newParseError(nil, "MW set: rec.Empty is true, and this codec builds no empty/erase MW frame for the TS-870S")
+		return Command{}, NewParseError(nil, "MW set: rec.Empty is true, and this codec builds no empty/erase MW frame for the TS-870S")
 	}
 	if rec.FreqHz == 0 {
-		return Command{}, newParseError(nil, "MW set: P4 is zero")
+		return Command{}, NewParseError(nil, "MW set: P4 is zero")
 	}
 	if rec.FreqHz > MaxRecordFreqHz {
 		return Command{}, &OutOfDomainError{Field: "P4, the memory frequency", Value: rec.FreqHz, Digits: rec870FreqDigits, Max: MaxRecordFreqHz}
 	}
 	if _, ok := l.parseMode870(rec.Mode.Wire()); !ok {
-		return Command{}, newParseError(nil, "MW set: P5 is %q, which the %s's MD legend does not name as a mode", rec.Mode.Wire(), l.model)
+		return Command{}, NewParseError(nil, "MW set: P5 is %q, which the %s's MD legend does not name as a mode", rec.Mode.Wire(), l.model)
 	}
 	if rec.Lockout != '0' && rec.Lockout != '1' {
-		return Command{}, newParseError(nil, "MW set: P6 is %q, and this document prints only '0'/'1'", rec.Lockout)
+		return Command{}, NewParseError(nil, "MW set: P6 is %q, and this document prints only '0'/'1'", rec.Lockout)
 	}
 	if rec.ToneMode != ToneModeOff && rec.ToneMode != ToneModeTone {
-		return Command{}, newParseError(nil, "MW set: P7 is %q, and this document's P7 prints only '0' OFF and '1' TONE", rec.ToneMode.Wire())
+		return Command{}, NewParseError(nil, "MW set: P7 is %q, and this document's P7 prints only '0' OFF and '1' TONE", rec.ToneMode.Wire())
 	}
 	if rec.ToneIndex < rec870MinToneIndex || rec.ToneIndex > rec870MaxToneIndex {
-		return Command{}, newParseError(nil, "MW set: P8 is %d, outside this row's own %02d-%d chart (matrix §1.9)", rec.ToneIndex, rec870MinToneIndex, rec870MaxToneIndex)
+		return Command{}, NewParseError(nil, "MW set: P8 is %d, outside this row's own %02d-%d chart (matrix §1.9)", rec.ToneIndex, rec870MinToneIndex, rec870MaxToneIndex)
 	}
 
 	frame := make([]byte, rec870Len)
@@ -365,7 +365,7 @@ func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 	frame[rec870TermOff] = ';'
 
 	if len(frame) != rec870Len {
-		return Command{}, newParseError(frame, "MW set: built %d bytes, want exactly %d", len(frame), rec870Len)
+		return Command{}, NewParseError(frame, "MW set: built %d bytes, want exactly %d", len(frame), rec870Len)
 	}
 	return newCommand(frame), nil
 }
@@ -379,7 +379,7 @@ func (l Layout870) BuildMWSet(rec Record870) (Command, error) {
 // rather than a second grammar description.
 func (l Layout870) BuildIDRead() (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "ID read: this layout is unconfigured and describes no radio")
+		return Command{}, NewParseError(nil, "ID read: this layout is unconfigured and describes no radio")
 	}
 	return newCommand([]byte(idReadFrame)), nil
 }
@@ -390,21 +390,21 @@ func (l Layout870) BuildIDRead() (Command, error) {
 // value (matrix §1.2, ts870s:8300-8302).
 func (l Layout870) ParseIDAnswer(frame []byte) (string, error) {
 	if !l.Configured() {
-		return "", newParseError(frame, "ID answer: this layout is unconfigured and describes no radio")
+		return "", NewParseError(frame, "ID answer: this layout is unconfigured and describes no radio")
 	}
 	if len(frame) != IDAnswerLen {
-		return "", newParseError(frame, "ID answer: got %d bytes, want exactly %d", len(frame), IDAnswerLen)
+		return "", NewParseError(frame, "ID answer: got %d bytes, want exactly %d", len(frame), IDAnswerLen)
 	}
 	if frame[0] != 'I' || frame[1] != 'D' {
-		return "", newParseError(frame, "ID answer: missing \"ID\" prefix")
+		return "", NewParseError(frame, "ID answer: missing \"ID\" prefix")
 	}
 	if frame[len(frame)-1] != ';' {
-		return "", newParseError(frame, "ID answer: missing ';' terminator")
+		return "", NewParseError(frame, "ID answer: missing ';' terminator")
 	}
 	field := frame[2 : 2+IDDigits]
 	for i, b := range field {
 		if b < '0' || b > '9' {
-			return "", newParseError(frame, "ID answer: P1 byte %d is %q, not a digit (matrix §1.2 prints three digits)", i+1, b)
+			return "", NewParseError(frame, "ID answer: P1 byte %d is %q, not a digit (matrix §1.2 prints three digits)", i+1, b)
 		}
 	}
 	return string(field), nil
@@ -418,10 +418,10 @@ func (l Layout870) ParseIDAnswer(frame []byte) (string, error) {
 // §1.4/§2.2).
 func (l Layout870) BuildMRRead(channel int) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "MR read: this layout is unconfigured and describes no radio")
+		return Command{}, NewParseError(nil, "MR read: this layout is unconfigured and describes no radio")
 	}
 	if channel < l.channelLo || channel > l.channelHi {
-		return Command{}, newParseError(nil, "MR read: channel %d is outside the %s's %d-%d bank", channel, l.model, l.channelLo, l.channelHi)
+		return Command{}, NewParseError(nil, "MR read: channel %d is outside the %s's %d-%d bank", channel, l.model, l.channelLo, l.channelHi)
 	}
 	frame := make([]byte, 0, 6)
 	frame = append(frame, 'M', 'R', '0')
@@ -478,7 +478,7 @@ func (l Layout870) AllowedCommand(frame []byte) bool {
 	if !l.Configured() {
 		return false
 	}
-	if len(frame) < IDReadLen || !exactlyOneTrailingSemicolon(frame) {
+	if len(frame) < IDReadLen || !ExactlyOneTrailingSemicolon(frame) {
 		return false
 	}
 	switch string(frame[:2]) {

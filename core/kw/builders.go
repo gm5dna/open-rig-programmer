@@ -18,7 +18,7 @@ import "fmt"
 // then store it under the half the caller asked for.
 func (l Layout) BuildMRRead(s Slot) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "MR read: this layout is unconfigured and describes no radio")
+		return Command{}, NewParseError(nil, "MR read: this layout is unconfigured and describes no radio")
 	}
 	if err := l.checkSlot("MR read", s); err != nil {
 		return Command{}, err
@@ -33,7 +33,7 @@ func (l Layout) BuildMRRead(s Slot) (Command, error) {
 	frame = append(frame, wire...)
 	frame = append(frame, ';')
 	if len(frame) != MRReadLen {
-		return Command{}, newParseError(frame, "MR read: built %d bytes, want exactly %d (590:1442, 480:918)", len(frame), MRReadLen)
+		return Command{}, NewParseError(frame, "MR read: built %d bytes, want exactly %d (590:1442, 480:918)", len(frame), MRReadLen)
 	}
 	return newCommand(frame), nil
 }
@@ -56,7 +56,7 @@ func (l Layout) BuildMRRead(s Slot) (Command, error) {
 // returns contains a byte no book describes.
 func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "MW set: this layout is unconfigured and describes no radio")
+		return Command{}, NewParseError(nil, "MW set: this layout is unconfigured and describes no radio")
 	}
 	if err := l.checkSlot("MW set", rec.Slot); err != nil {
 		return Command{}, err
@@ -77,7 +77,7 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	// ever reads a MEM slot answering P1='1', the message would be wrong as
 	// well as surprising and should be widened before that path lands.
 	if want := rec.Slot.P1(); rec.AnswerP1 != 0 && rec.AnswerP1 != want {
-		return Command{}, newParseError(nil, "MW set: this record was read with P1=%q but slot %v derives P1=%q from its class; writing it would put one half of a section-defined channel into the other (590:1529-1531)", rec.AnswerP1, rec.Slot, want)
+		return Command{}, NewParseError(nil, "MW set: this record was read with P1=%q but slot %v derives P1=%q from its class; writing it would put one half of a section-defined channel into the other (590:1529-1531)", rec.AnswerP1, rec.Slot, want)
 	}
 
 	// An empty channel is never written. The only documented way to clear a
@@ -85,10 +85,10 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	// build, and the TS-480 has no erase route at all — the one "clear" in
 	// its whole book is RC, "Clears the RIT offset frequency" (480:1205).
 	if rec.Empty {
-		return Command{}, newParseError(nil, "MW set: this record is the empty channel of 590:1492-1493 (A18a), and an empty channel is not written — the only documented clear is the short MW of 590:1579-1581, which this milestone never builds (decision 8, A5)")
+		return Command{}, NewParseError(nil, "MW set: this record is the empty channel of 590:1492-1493 (A18a), and an empty channel is not written — the only documented clear is the short MW of 590:1579-1581, which this milestone never builds (decision 8, A5)")
 	}
 	if rec.FreqHz == 0 {
-		return Command{}, newParseError(nil, "MW set: P4 is zero, which is the empty channel's own value (590:1492-1493) rather than a frequency to write")
+		return Command{}, NewParseError(nil, "MW set: P4 is zero, which is the empty channel's own value (590:1492-1493) rather than a frequency to write")
 	}
 	if rec.FreqHz > MaxRecordFreqHz {
 		return Command{}, &OutOfDomainError{Field: "P4, the memory frequency", Value: rec.FreqHz, Digits: recFreqDigits, Max: MaxRecordFreqHz}
@@ -103,14 +103,14 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	// both nibbles by construction (NewLayout refuses a legend naming
 	// either).
 	if _, ok := l.ParseMode(rec.Mode.Wire()); !ok {
-		return Command{}, newParseError(nil, "MW set: P5 is %q, which the %s's MD legend does not name as a mode; nibbles '0' and '8' are a setting failure or unused in both books and what a Set carrying one does is unprinted (A18b)", rec.Mode.Wire(), l.model)
+		return Command{}, NewParseError(nil, "MW set: P5 is %q, which the %s's MD legend does not name as a mode; nibbles '0' and '8' are a setting failure or unused in both books and what a Set carrying one does is unprinted (A18b)", rec.Mode.Wire(), l.model)
 	}
 
 	if rec.Byte19 != '0' && rec.Byte19 != '1' {
-		return Command{}, newParseError(nil, "MW set: byte 19 is %q, and it is %v on the %s, whose book prints only '0' and '1' there", rec.Byte19, l.byte19, l.model)
+		return Command{}, NewParseError(nil, "MW set: byte 19 is %q, and it is %v on the %s, whose book prints only '0' and '1' there", rec.Byte19, l.byte19, l.model)
 	}
 	if !l.ValidToneMode(rec.ToneMode) {
-		return Command{}, newParseError(nil, "MW set: P7 is %q, and the %s prints %s", rec.ToneMode.Wire(), l.model, l.toneModeText())
+		return Command{}, NewParseError(nil, "MW set: P7 is %q, and the %s prints %s", rec.ToneMode.Wire(), l.model, l.toneModeText())
 	}
 	// A21, and it is a REFUSAL rather than a clamp. The 590 pair print "An
 	// entered value of 43 or higher results in an error" for TN (590:2309)
@@ -119,7 +119,7 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	// Clamping would store a tone the user did not ask for and report
 	// success.
 	if rec.ToneIndex < MinToneIndex || rec.ToneIndex > MaxToneIndex {
-		return Command{}, newParseError(nil, "MW set: P8 is %d, and TN prints %02d ~ %d (590:2291, 480:1557); an index outside its own chart is refused rather than clamped (A21)", rec.ToneIndex, MinToneIndex, MaxToneIndex)
+		return Command{}, NewParseError(nil, "MW set: P8 is %d, and TN prints %02d ~ %d (590:2291, 480:1557); an index outside its own chart is refused rather than clamped (A21)", rec.ToneIndex, MinToneIndex, MaxToneIndex)
 	}
 	// hasTail is whether this row's record reaches past P8 at all — see
 	// parseRecordFrame's own hasTail for the citation. A row without a
@@ -130,32 +130,32 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	hasTail := l.recordLen == RecordLen
 	if hasTail {
 		if rec.CTCSSIndex < MinCTCSSIndex || rec.CTCSSIndex > MaxCTCSSIndex {
-			return Command{}, newParseError(nil, "MW set: P9 is %d, and CN prints %02d ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", rec.CTCSSIndex, MinCTCSSIndex, MaxCTCSSIndex)
+			return Command{}, NewParseError(nil, "MW set: P9 is %d, and CN prints %02d ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", rec.CTCSSIndex, MinCTCSSIndex, MaxCTCSSIndex)
 		}
 		if err := l.checkP10(uint64(rec.DCSCode)); err != nil {
-			return Command{}, newParseError(nil, "MW set: %v", err)
+			return Command{}, NewParseError(nil, "MW set: %v", err)
 		}
 		if err := l.checkByte28(rec.Byte28); err != nil {
-			return Command{}, newParseError(nil, "MW set: %v", err)
+			return Command{}, NewParseError(nil, "MW set: %v", err)
 		}
 		if err := l.checkP12(rec.Shift); err != nil {
-			return Command{}, newParseError(nil, "MW set: %v", err)
+			return Command{}, NewParseError(nil, "MW set: %v", err)
 		}
 		if err := l.checkP13(rec.OffsetHz); err != nil {
-			return Command{}, newParseError(nil, "MW set: %v", err)
+			return Command{}, NewParseError(nil, "MW set: %v", err)
 		}
 		if err := l.checkByte3940(rec.Byte3940Wire()); err != nil {
-			return Command{}, newParseError(nil, "MW set: %v", err)
+			return Command{}, NewParseError(nil, "MW set: %v", err)
 		}
 		if err := l.checkByte41(rec.Byte41); err != nil {
-			return Command{}, newParseError(nil, "MW set: %v", err)
+			return Command{}, NewParseError(nil, "MW set: %v", err)
 		}
 		if len(rec.Name) > recNameLen {
-			return Command{}, newParseError([]byte(rec.Name), "MW set: the memory name is %d bytes and P16 holds %d (590:1576, 480:984)", len(rec.Name), recNameLen)
+			return Command{}, NewParseError([]byte(rec.Name), "MW set: the memory name is %d bytes and P16 holds %d (590:1576, 480:984)", len(rec.Name), recNameLen)
 		}
 		for i := 0; i < len(rec.Name); i++ {
 			if err := checkNameByte(rec.Name[i]); err != nil {
-				return Command{}, newParseError([]byte(rec.Name), "MW set: memory name byte %d: %v (A2)", i+1, err)
+				return Command{}, NewParseError([]byte(rec.Name), "MW set: memory name byte %d: %v (A2)", i+1, err)
 			}
 		}
 	}
@@ -252,20 +252,20 @@ func (rec Record) Byte3940Wire() string {
 // of this builder.
 func (l Layout) checkSlot(what string, s Slot) error {
 	if s.IsZero() {
-		return newParseError(nil, "%s: the slot was never resolved against a layout's slot space", what)
+		return NewParseError(nil, "%s: the slot was never resolved against a layout's slot space", what)
 	}
 	class := l.classOf(s.number)
 	if class == SlotClassInvalid {
-		return newParseError(nil, "%s: slot %d is outside the %s's slot space %s", what, s.number, l.model, l.slotSpaceText())
+		return NewParseError(nil, "%s: slot %d is outside the %s's slot space %s", what, s.number, l.model, l.slotSpaceText())
 	}
 	if class != s.class {
-		return newParseError(nil, "%s: slot %d is %v on the %s, and this slot value carries %v — it was resolved against another layout", what, s.number, class, l.model, s.class)
+		return NewParseError(nil, "%s: slot %d is %v on the %s, and this slot value carries %v — it was resolved against another layout", what, s.number, class, l.model, s.class)
 	}
 	if class == SlotScan && s.half != ScanLower && s.half != ScanUpper {
-		return newParseError(nil, "%s: slot %d is a section-defined channel on the %s and the record does not say which of its two frequencies it carries (590:1529-1531)", what, s.number, l.model)
+		return NewParseError(nil, "%s: slot %d is a section-defined channel on the %s and the record does not say which of its two frequencies it carries (590:1529-1531)", what, s.number, l.model)
 	}
 	if class != SlotScan && s.half != ScanHalfNone {
-		return newParseError(nil, "%s: slot %d is %v on the %s, which holds one frequency, so it has no half to name", what, s.number, class, l.model)
+		return NewParseError(nil, "%s: slot %d is %v on the %s, which holds one frequency, so it has no half to name", what, s.number, class, l.model)
 	}
 	return nil
 }
@@ -300,7 +300,7 @@ func (l Layout) slotWire(s Slot) (string, error) {
 	switch l.p2 {
 	case P2FixedZero:
 		if s.number > maxFixedZeroSlot {
-			return "", newParseError(nil, "slot %d cannot be named on the %s: byte 4 prints \"Always 0\" there (480:953) and P3 holds \"00 ~ 99\" (480:955), so there is no digit to carry the hundreds", s.number, l.model)
+			return "", NewParseError(nil, "slot %d cannot be named on the %s: byte 4 prints \"Always 0\" there (480:953) and P3 holds \"00 ~ 99\" (480:955), so there is no digit to carry the hundreds", s.number, l.model)
 		}
 		return fmt.Sprintf("0%02d", s.number), nil
 	case P2Unused:
@@ -309,12 +309,12 @@ func (l Layout) slotWire(s Slot) (string, error) {
 		// the filler every other byte in this family's empty/unused
 		// positions uses, ASSUMED rather than printed.
 		if s.number > maxFixedZeroSlot {
-			return "", newParseError(nil, "slot %d cannot be named on the %s: byte 4 carries no hundreds digit (the %s's Parameter Table prints no meaning for it) and P3 holds two digits, so there is no digit to carry the hundreds", s.number, l.model, l.model)
+			return "", NewParseError(nil, "slot %d cannot be named on the %s: byte 4 carries no hundreds digit (the %s's Parameter Table prints no meaning for it) and P3 holds two digits, so there is no digit to carry the hundreds", s.number, l.model, l.model)
 		}
 		return fmt.Sprintf("0%02d", s.number), nil
 	case P2HundredsDigit:
 		return fmt.Sprintf("%03d", s.number), nil
 	default:
-		return "", newParseError(nil, "byte 4's policy is unset on this layout — refusing to guess whether it is the channel's hundreds digit or a printed constant")
+		return "", NewParseError(nil, "byte 4's policy is unset on this layout — refusing to guess whether it is the channel's hundreds digit or a printed constant")
 	}
 }

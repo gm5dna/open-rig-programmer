@@ -595,8 +595,8 @@ func TestExactlyOneTrailingSemicolon(t *testing.T) {
 		{";ID;", false},
 		{"", false},
 	} {
-		if got := exactlyOneTrailingSemicolon([]byte(tc.frame)); got != tc.want {
-			t.Errorf("exactlyOneTrailingSemicolon(%q) = %v, want %v", tc.frame, got, tc.want)
+		if got := ExactlyOneTrailingSemicolon([]byte(tc.frame)); got != tc.want {
+			t.Errorf("ExactlyOneTrailingSemicolon(%q) = %v, want %v", tc.frame, got, tc.want)
 		}
 	}
 }

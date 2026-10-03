@@ -92,17 +92,17 @@ const (
 // frame.
 func (l Layout) BuildEXRead(addr EXAddress) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "EX read: this layout is unconfigured and describes no radio")
+		return Command{}, NewParseError(nil, "EX read: this layout is unconfigured and describes no radio")
 	}
 	if addr.P1 > l.maxEXAddress {
-		return Command{}, newParseError(nil, "EX read: menu %d is outside %s's printed menu domain, 000 ~ %03d (590:543, 590:544, 480:401) — the two TS-590 rows print different domains and this codec will not send one row's address to the other", addr.P1, l.model, l.maxEXAddress)
+		return Command{}, NewParseError(nil, "EX read: menu %d is outside %s's printed menu domain, 000 ~ %03d (590:543, 590:544, 480:401) — the two TS-590 rows print different domains and this codec will not send one row's address to the other", addr.P1, l.model, l.maxEXAddress)
 	}
 	wire := addr.Wire()
 	if wire == "" {
-		return Command{}, newParseError(nil, "EX read: %v is not a Kenwood menu address — every Kenwood profile registers the AddressSingle form, whose P2 and P3 are zero, and rendering P1 alone from this value would discard what the caller supplied", addr)
+		return Command{}, NewParseError(nil, "EX read: %v is not a Kenwood menu address — every Kenwood profile registers the AddressSingle form, whose P2 and P3 are zero, and rendering P1 alone from this value would discard what the caller supplied", addr)
 	}
 	if len(wire) != exAddrLen {
-		return Command{}, newParseError([]byte(wire), "EX read: the address rendered %d bytes, and both books print three (590:552, 480:410)", len(wire))
+		return Command{}, NewParseError([]byte(wire), "EX read: the address rendered %d bytes, and both books print three (590:552, 480:410)", len(wire))
 	}
 	frame := make([]byte, 0, EXReadLen)
 	frame = append(frame, 'E', 'X')
@@ -110,7 +110,7 @@ func (l Layout) BuildEXRead(addr EXAddress) (Command, error) {
 	frame = append(frame, exP2Printed...)
 	frame = append(frame, exP3Printed, exP4Printed, ';')
 	if len(frame) != EXReadLen {
-		return Command{}, newParseError(frame, "EX read: built %d bytes, want exactly %d (590:552, 480:410)", len(frame), EXReadLen)
+		return Command{}, NewParseError(frame, "EX read: built %d bytes, want exactly %d (590:552, 480:410)", len(frame), EXReadLen)
 	}
 	return newCommand(frame), nil
 }
@@ -163,54 +163,54 @@ func (l Layout) BuildEXRead(addr EXAddress) (Command, error) {
 // both.
 func (l Layout) ParseEXAnswer(frame []byte, item EXItem) (string, error) {
 	if !l.Configured() {
-		return "", newParseError(frame, "EX answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
+		return "", NewParseError(frame, "EX answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
 	}
 	if item.Digits < 1 || item.Digits > MaxEXDigits {
-		return "", newParseError(frame, "EX answer: the inventory row for %v declares a printed width of %d, and this codec admits 1 to %d — a zero width is a row that was never transcribed, and a wider one describes an answer longer than this family's own %d-byte frame bound (A19)", item.Addr, item.Digits, MaxEXDigits, DefaultMaxFrame)
+		return "", NewParseError(frame, "EX answer: the inventory row for %v declares a printed width of %d, and this codec admits 1 to %d — a zero width is a row that was never transcribed, and a wider one describes an answer longer than this family's own %d-byte frame bound (A19)", item.Addr, item.Digits, MaxEXDigits, DefaultMaxFrame)
 	}
 	if item.Addr.P1 > l.maxEXAddress {
-		return "", newParseError(frame, "EX answer: menu %d is outside %s's printed menu domain, 000 ~ %03d (590:543, 590:544, 480:401) — the builder and the gate refuse to send that address, and an answer carrying it is not a setting this row has", item.Addr.P1, l.model, l.maxEXAddress)
+		return "", NewParseError(frame, "EX answer: menu %d is outside %s's printed menu domain, 000 ~ %03d (590:543, 590:544, 480:401) — the builder and the gate refuse to send that address, and an answer carrying it is not a setting this row has", item.Addr.P1, l.model, l.maxEXAddress)
 	}
 	if len(frame) < EXMinAnswerLen {
-		return "", newParseError(frame, "EX answer: the frame is %d bytes; the ten fixed bytes are followed by at least one character of P5, and a frame of exactly %d bytes is the READ (590:552, 480:410)", len(frame), EXReadLen)
+		return "", NewParseError(frame, "EX answer: the frame is %d bytes; the ten fixed bytes are followed by at least one character of P5, and a frame of exactly %d bytes is the READ (590:552, 480:410)", len(frame), EXReadLen)
 	}
 	if len(frame) > DefaultMaxFrame {
-		return "", newParseError(frame, "EX answer: the frame is %d bytes, past this family's own %d-byte bound, which its accumulator would have discarded as contamination", len(frame), DefaultMaxFrame)
+		return "", NewParseError(frame, "EX answer: the frame is %d bytes, past this family's own %d-byte bound, which its accumulator would have discarded as contamination", len(frame), DefaultMaxFrame)
 	}
 	if string(frame[exPrefixOff:exPrefixOff+2]) != "EX" {
-		return "", newParseError(frame, "EX answer: missing %q prefix, got %q", "EX", frame[exPrefixOff:exPrefixOff+2])
+		return "", NewParseError(frame, "EX answer: missing %q prefix, got %q", "EX", frame[exPrefixOff:exPrefixOff+2])
 	}
 	if frame[len(frame)-1] != ';' {
-		return "", newParseError(frame, "EX answer: missing ';' terminator at position %d", len(frame))
+		return "", NewParseError(frame, "EX answer: missing ';' terminator at position %d", len(frame))
 	}
 
 	got := string(frame[exAddrOff : exAddrOff+exAddrLen])
 	for i, b := range []byte(got) {
 		if b < '0' || b > '9' {
-			return "", newParseError(frame, "EX answer: address byte %d is %q; P1 is three decimal digits on both radios (590:552, 480:410)", i+1, b)
+			return "", NewParseError(frame, "EX answer: address byte %d is %q; P1 is three decimal digits on both radios (590:552, 480:410)", i+1, b)
 		}
 	}
 	if want := item.Addr.Wire(); got != want {
-		return "", newParseError(frame, "EX answer: this frame answers menu %s and the read asked for menu %s — every menu address answers with a frame starting \"EX\", so the whole address is what correlates an answer to its read (590:543-544, 480:401)", got, want)
+		return "", NewParseError(frame, "EX answer: this frame answers menu %s and the read asked for menu %s — every menu address answers with a frame starting \"EX\", so the whole address is what correlates an answer to its read (590:543-544, 480:401)", got, want)
 	}
 
 	if p2 := string(frame[exP2Off : exP2Off+exP2Len]); p2 != exP2Printed {
-		return "", newParseError(frame, "EX answer: P2 is %q, and both books print %q there (590:546-547, 480:402-403)", p2, exP2Printed)
+		return "", NewParseError(frame, "EX answer: P2 is %q, and both books print %q there (590:546-547, 480:402-403)", p2, exP2Printed)
 	}
 	if frame[exP3Off] != exP3Printed {
-		return "", newParseError(frame, "EX answer: P3 is %q, and both books print %q there (590:548-550, 480:404-405)", frame[exP3Off], exP3Printed)
+		return "", NewParseError(frame, "EX answer: P3 is %q, and both books print %q there (590:548-550, 480:404-405)", frame[exP3Off], exP3Printed)
 	}
 	if frame[exP4Off] != exP4Printed {
-		return "", newParseError(frame, "EX answer: P4 is %q, and both books print %q there (590:551-553, 480:406-407)", frame[exP4Off], exP4Printed)
+		return "", NewParseError(frame, "EX answer: P4 is %q, and both books print %q there (590:551-553, 480:406-407)", frame[exP4Off], exP4Printed)
 	}
 
 	p5 := frame[exP5Off : len(frame)-1]
 	if len(p5) > item.Digits {
-		return "", newParseError(frame, "EX answer: P5 is %d characters and the parameter list prints %d for menu %s (%s) — A19 is that an answer never exceeds its printed width, and a wider one is refused rather than truncated", len(p5), item.Digits, item.Addr.Wire(), item.Name)
+		return "", NewParseError(frame, "EX answer: P5 is %d characters and the parameter list prints %d for menu %s (%s) — A19 is that an answer never exceeds its printed width, and a wider one is refused rather than truncated", len(p5), item.Digits, item.Addr.Wire(), item.Name)
 	}
 	for i, b := range p5 {
 		if b < 0x20 || b > 0x7e || b == ';' {
-			return "", newParseError(frame, "EX answer: P5 byte %d is %#02x; the 480 forbids the control codes generally (480:127-129), an embedded ';' is a second frame to the radio's own parser, and A2's charset claim is bounded at 0x7E", i+1, b)
+			return "", NewParseError(frame, "EX answer: P5 byte %d is %#02x; the 480 forbids the control codes generally (480:127-129), an embedded ';' is a second frame to the radio's own parser, and A2's charset claim is bounded at 0x7E", i+1, b)
 		}
 	}
 	return string(p5), nil
