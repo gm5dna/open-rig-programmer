@@ -218,8 +218,8 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 	}
 }
 
-// ReadChannel implements driver.Session; its body is in read.go, beside
-// the slot map and the one read primitive it is made of.
+// ReadChannel implements driver.Session; read.go delegates it to the shared
+// engine in core/driver/internal/icom, with this radio's values from params.go.
 
 // WriteChannel implements driver.Session; its body is in write.go,
 // alongside the T5-ordered refusal ladder it is made of.

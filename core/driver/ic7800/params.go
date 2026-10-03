@@ -12,6 +12,16 @@ import (
 
 // params is this radio's own values for the shared Open and Read engine in
 // core/driver/internal/icom.
+//
+// WHY AN ALL-0xFF RECORD READS AS EMPTY (the engine's RecordIsAbsent): the
+// evidence is two separate, unverified entries and one capture cannot
+// establish both. D5 entry 2(a) / matrix lift R2a is the FA reading; D5
+// entry 2(b) / matrix lift R2b is the all-0xFF reading, and it is this
+// radio's own decision on its own model's evidence, as
+// civ.Profile.MemoryAnswerRecord's doc comment says. R2a's scope EXCLUDES
+// the scan edges (matrix erratum 2), so P1/P2 emptiness rides matrix lift
+// R18 instead, and R18's capture names P1 only, so P2 is uncovered even by
+// that.
 var params = icom.Params{
 	Name:         "ic7800",
 	Profile:      civic7800.Profile,
