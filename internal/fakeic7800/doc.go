@@ -19,7 +19,7 @@
 //
 // This package was authored independently of the production IC-7800 codec
 // and driver: their .go files were never opened while writing this one, and
-// TestNoCoreImports (imports_test.go, copied from fakeic7851's own, itself
+// TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go, copied from fakeic7851's own, itself
 // copied from internal/fakeicr8600's — see that file) makes the fence
 // mechanical rather than a matter of good intentions. It covers this
 // directory and every directory beneath it. The only project-internal import

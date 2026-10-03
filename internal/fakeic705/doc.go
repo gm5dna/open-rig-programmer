@@ -103,7 +103,7 @@
 // implementations are reading a diagram whose own indices disagree with its own
 // geometry.
 //
-// TestNoCoreImports (imports_test.go) enforces it with a go/parser scan, and
+// TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a go/parser scan, and
 // THAT SCAN WALKS SUBDIRECTORIES. This package has no subdirectory today; the
 // fence lands recursive anyway, so that anything added beneath it later arrives
 // inside a fence rather than in front of one, and

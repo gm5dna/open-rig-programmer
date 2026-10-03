@@ -36,7 +36,7 @@
 // tests — never by calling this package's own builders — is what makes that
 // class of bug visible.
 //
-// TestNoCoreImports (imports_test.go) enforces it with a go/parser scan that
+// TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a go/parser scan that
 // WALKS SUBDIRECTORIES, with vacuity guards and its own red proof. That file is
 // internal/fakedx101's, COPIED — copied rather than imported, because importing
 // the thing that enforces "import nothing" would break the rule it enforces.

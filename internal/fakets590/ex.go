@@ -29,9 +29,9 @@ import (
 //     (core/kw/ts590/menu590s.csv and menu590sg.csv) by internal/extable;
 //   - THESE inventories are generated from TRANSCRIPTION B by
 //     exinventory.go, which imports nothing project-internal at all
-//     (the recursive fence in imports_test.go enforces it for this directory
+//     (the recursive fence in internal/guards/fakes_imports_test.go enforces it for this directory
 //     and every one beneath it, and
-//     TestNoCoreImports_ReachesTheGenerator proves the scan really gets
+//     TestFakesImportNothingProjectInternal_ReachesTheGenerator proves the scan really gets
 //     there);
 //   - core/transport/ex_crosscheck_ts590_test.go proves the two agree,
 //     address for address and width for width, on BOTH rows, and drives every

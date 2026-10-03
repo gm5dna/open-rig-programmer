@@ -70,7 +70,7 @@
 // hand in tests — never by calling this package's own builders), is what makes
 // that class of bug visible.
 //
-// TestNoCoreImports (imports_test.go) enforces it with a go/parser scan, and
+// TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a go/parser scan, and
 // that scan WALKS SUBDIRECTORIES — internal/fakedx10's deliberate improvement
 // on fakeradio's copy of the same test, whose parser.ParseDir(".") is
 // non-recursive and would leave any subdirectory outside the fence entirely.

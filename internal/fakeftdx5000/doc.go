@@ -73,7 +73,7 @@
 // fakeftdx5000 MUST NOT import core/cat, core/driver, core/driver/ftdx5000,
 // core/driver/internal/yaesu, core/codeplug, core/spec, or any sibling fake.
 // Standard library only, in this directory and every directory beneath it,
-// with the one exception below. imports_test.go enforces it with a
+// with the one exception below. internal/guards/fakes_imports_test.go enforces it with a
 // recursive go/parser scan.
 //
 // This package's author was quarantined the same way: forbidden to read

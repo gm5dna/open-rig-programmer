@@ -724,7 +724,7 @@ func TestOptionPanicsNameTheirMistake(t *testing.T) {
 }
 
 // TestTheSilenceWindowActuallyReadsThePort is the silence helper's own red
-// proof, run green — the same shape as imports_test.go's fence proof, and here
+// proof, run green — the same shape as internal/guards/fakes_imports_test.go's fence proof, and here
 // for the same reason.
 //
 // Every "the radio says nothing" assertion in this file rests on readFrames(t,

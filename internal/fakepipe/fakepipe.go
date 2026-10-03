@@ -13,7 +13,7 @@
 // parser, image and reply builder, written independently from that radio's own
 // documentation. See any fake's doc.go, "A SIBLING, not a refactor".
 //
-// This package imports the standard library only (imports_test.go).
+// This package imports the standard library only (internal/guards/fakes_imports_test.go).
 package fakepipe
 
 import (

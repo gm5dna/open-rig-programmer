@@ -37,7 +37,7 @@
 // to mean anything, and it can only disagree if it was built from the manual
 // rather than from the code.
 //
-// The fence is enforced mechanically and recursively (imports_test.go): this
+// The fence is enforced mechanically and recursively (internal/guards/fakes_imports_test.go): this
 // directory and every one beneath it.
 //
 // # A SIBLING of internal/fakeft891, not a refactor of it

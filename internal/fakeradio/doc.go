@@ -22,7 +22,7 @@
 // implementations of the same protocol, checked against each other (and
 // against golden byte vectors recomputed by hand in tests — never by
 // calling fakeradio's own builders), is what makes that class of bug
-// visible. TestNoCoreImports (imports_test.go) enforces this with a
+// visible. TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces this with a
 // go/parser scan of the package's own source, asserting no
 // project-internal import path appears.
 //

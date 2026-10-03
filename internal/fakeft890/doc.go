@@ -5,7 +5,7 @@
 // run against, built the way every other fake in this fleet is — from the
 // radio's own manual and this milestone's capability matrix
 // (docs/superpowers/ft890-capability-matrix.md), never from driver source
-// (THE HARD RULE, imports_test.go; see any sibling fake's own doc.go for
+// (THE HARD RULE, internal/guards/fakes_imports_test.go; see any sibling fake's own doc.go for
 // the rationale: a systematic bug in the production codec must not be
 // able to pass end-to-end tests invisibly by also being present here).
 //

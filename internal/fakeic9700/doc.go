@@ -9,7 +9,7 @@
 // This package imports THE STANDARD LIBRARY AND NOTHING ELSE. Not
 // core/civ/ic9700, not its profile, not its golden vectors, not its field
 // ledger, not core/driver, not core/codeplug, not core/spec, and not another
-// fake. imports_test.go proves it, walking this directory and every directory
+// fake. internal/guards/fakes_imports_test.go proves it, walking this directory and every directory
 // beneath it, and it landed before any of the code below.
 //
 // The rule is not tidiness. A fake exists to be the OTHER witness in a test:

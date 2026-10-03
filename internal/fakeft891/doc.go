@@ -31,7 +31,7 @@
 // non-test file, in this directory AND every directory beneath it — which
 // now includes exinventory.go, the stdlib-only generator for this
 // radio's transcription B. The fence was recursive from birth for that
-// directory's sake, and TestNoCoreImports_ReachesTheGenerator asserts that the
+// directory's sake, and TestFakesImportNothingProjectInternal_ReachesTheGenerator asserts that the
 // scan of this package really does parse exinventory.go rather than merely being
 // capable of it.
 // Every byte offset, field width and validation rule below is re-derived from

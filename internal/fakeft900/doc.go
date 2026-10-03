@@ -5,7 +5,7 @@
 // run against, built the way every other fake in this fleet is — from the
 // radio's own manual and this milestone's capability matrix
 // (docs/superpowers/ft900-capability-matrix.md), never from driver source
-// (THE HARD RULE, imports_test.go). It is fakeft890's sibling, written
+// (THE HARD RULE, internal/guards/fakes_imports_test.go). It is fakeft890's sibling, written
 // independently rather than shared with it (see that package's doc.go for
 // why a bug shared between a fake and its production codec is the failure
 // mode this rule exists to prevent) — the two packages happen to end up

@@ -12,7 +12,7 @@
 // directory, or in any directory beneath it, may import anything under
 // github.com/gm5dna/open-rig-programmer/ — not core/civ, not core/civ/ic7300,
 // not core/driver, not core/codeplug, not core/spec, and not a sibling fake.
-// imports_test.go enforces it by walking the tree, and its own self-tests prove
+// internal/guards/fakes_imports_test.go enforces it by walking the tree, and its own self-tests prove
 // the walk bites.
 //
 // The rule exists so that this fake is an INDEPENDENT SECOND OPINION about the

@@ -35,7 +35,7 @@
 // the reply" test this project runs, and never surface. The fake disagreeing
 // with the codec is what makes the cross-check mean anything.
 //
-// The fence is enforced mechanically and recursively (imports_test.go): this
+// The fence is enforced mechanically and recursively (internal/guards/fakes_imports_test.go): this
 // directory and every one beneath it.
 //
 // # A DISTINCT GRID, NOT A MEMBER OF THE 590/480 FAMILY

@@ -12,7 +12,7 @@
 // fakets570 MUST NOT import any package of this project — not core/kw, not
 // core/kw/ts570, not core/codeplug, not core/spec, not core/driver/ts570, and
 // not any sibling fake. Standard library only, in every non-test file, in
-// this directory AND every directory beneath it (imports_test.go enforces
+// this directory AND every directory beneath it (internal/guards/fakes_imports_test.go enforces
 // this recursively). Every byte offset, field width and legend below is
 // re-derived from `docs/superpowers/ts570-capability-matrix.md` (itself
 // derived from the TS-570 Instruction Manual's "COMPUTER CONTROL COMMAND

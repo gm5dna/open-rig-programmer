@@ -28,9 +28,9 @@ import (
 //     from TRANSCRIPTION A (core/kw/ts480/menu480.csv) by internal/extable;
 //   - THIS inventory is generated from TRANSCRIPTION B by
 //     exinventory.go, which imports nothing project-internal at all
-//     (the recursive fence in imports_test.go enforces it for this directory
+//     (the recursive fence in internal/guards/fakes_imports_test.go enforces it for this directory
 //     and every one beneath it, and
-//     TestNoCoreImports_ReachesTheGenerator proves the scan really gets
+//     TestFakesImportNothingProjectInternal_ReachesTheGenerator proves the scan really gets
 //     there);
 //   - core/transport/ex_crosscheck_ts480_test.go proves the two agree, address
 //     for address and width for width, and drives every address over the wire.

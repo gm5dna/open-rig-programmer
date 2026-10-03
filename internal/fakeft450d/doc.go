@@ -47,7 +47,7 @@
 // not core/cat/ft450d, not core/driver/ft450d, not core/codeplug, not
 // core/spec, and not internal/fakeft950 or any sibling fake. Standard
 // library only, in every non-test file, in this directory and every
-// directory beneath it (imports_test.go). This package was built without
+// directory beneath it (internal/guards/fakes_imports_test.go). This package was built without
 // reading core/driver/ft450d's caps.go, its tests, or reviews/driver-
 // ft450d.md's detail section — only the matrix, the manual layout, and the
 // driver review's own `## Verdict` (a fact about the wire, never an

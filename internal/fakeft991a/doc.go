@@ -37,7 +37,7 @@
 // invisibly).
 // TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proved the
 // fence would bite there before the directory existed, and now that it does,
-// TestNoCoreImports_ReachesTheGenerator asserts by PATH that the real scan
+// TestFakesImportNothingProjectInternal_ReachesTheGenerator asserts by PATH that the real scan
 // reaches the real exinventory.go.
 //
 // Every byte offset, field width and validation rule below is re-derived from

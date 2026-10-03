@@ -41,7 +41,7 @@
 // to mean anything, and it can only disagree if it was built from the manual
 // rather than from the code.
 //
-// The fence is enforced mechanically and recursively (imports_test.go): this
+// The fence is enforced mechanically and recursively (internal/guards/fakes_imports_test.go): this
 // directory and every one beneath it.
 //
 // THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
@@ -63,7 +63,7 @@
 // shared, and is shared deliberately, is the pipe/reassembler/dispatch
 // scaffold around those tables: the hard rule above forbids importing it, so
 // the only way to reuse it at all is to copy the source, the same trade
-// imports_test.go names for itself. Roughly two thirds of this package's
+// internal/guards/fakes_imports_test.go names for itself. Roughly two thirds of this package's
 // top-level function bodies are byte-identical to internal/fakets590's for
 // that reason — checked against this book and correct for the TS-480 — so a
 // defect in the copied scaffold (not in a table or a legend) would sit in

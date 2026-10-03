@@ -143,7 +143,7 @@ mismatch**. If this fake derived its inventory from A, from the dialect, or with
 `extable`'s parser, both sides would rest on one reading of the chart and one
 parser, and a shared mistake would reproduce itself identically into both tables
 and be invisible. That is why `exinventory.go` is stdlib-only and why
-`imports_test.go`'s `TestNoCoreImports` walks this directory and every one
+`internal/guards/fakes_imports_test.go`'s `TestFakesImportNothingProjectInternal` walks this directory and every one
 beneath it.
 
 **If the cross-check fires, report the diff — do not edit either table to make

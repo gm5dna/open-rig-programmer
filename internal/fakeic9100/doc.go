@@ -29,7 +29,7 @@
 // THE HARD RULE: stdlib only, plus the one permitted share,
 // internal/fakepipe (the net.Pipe pair and its goroutine bookkeeping — sees
 // []byte and a duration, carries no framing and no field layout).
-// imports_test.go proves it, recursively.
+// internal/guards/fakes_imports_test.go proves it, recursively.
 //
 // # The headline finding this package follows
 //

@@ -18,7 +18,7 @@ layout of that document; the manual itself is gitignored
 rather than linking to it — the convention `core/kw/ma/doc.go` uses.
 
 This package imports nothing project-internal, in this directory or any
-beneath it, and `imports_test.go` enforces that mechanically and recursively.
+beneath it, and `internal/guards/fakes_imports_test.go` enforces that mechanically and recursively.
 The reason is in `doc.go` under THE HARD RULE, and it is the whole value of a
 fake: a test double built from the production codec cannot disagree with it, so
 a systematic bug in that codec — an off-by-one in a field offset, a validation
@@ -214,7 +214,7 @@ readings of one chart and a transport cross-check can assert they agree.
 - `exinventory.go` embeds the copy and projects it at init. It imports nothing
   project-internal — in particular not `internal/extable`, which generates the
   CODEC's side — so a shared parsing bug cannot reproduce itself identically
-  into both inventories and be invisible. `imports_test.go` enforces that
+  into both inventories and be invisible. `internal/guards/fakes_imports_test.go` enforces that
   recursively, this directory and every one beneath it. There is **no
   generator** and no generated file (the plan's P19).
 - `core/transport/ex_crosscheck_ts990_test.go` compares the two sides address

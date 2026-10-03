@@ -29,7 +29,7 @@
 // core/civ/ic7610, not core/driver/ic7610, not core/codeplug, not core/spec,
 // not internal/fakedx101, not internal/fakeradio, not internal/fakedx10.
 // Standard library only, in every non-test file, in this directory AND every
-// directory beneath it. TestNoCoreImports (imports_test.go) enforces it with a
+// directory beneath it. TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a
 // recursive go/parser scan, and that file was written and proven green BEFORE
 // a line of protocol code in this package existed.
 //

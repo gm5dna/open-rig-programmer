@@ -51,7 +51,7 @@
 // being written concurrently, elsewhere), not core/codeplug, not
 // core/spec, and not internal/fakeftdx3000 or any sibling fake — in any
 // non-test file, in this directory and every directory beneath it
-// (imports_test.go). Every field below is re-derived directly from
+// (internal/guards/fakes_imports_test.go). Every field below is re-derived directly from
 // `.superpowers/sdd/2026-09-18-v1100-ftx1/reviews/spec.md` (the FTX-1
 // manual's own reading, paper-only, no code) and from f1-report.md (the
 // core/cat seam this package's WIRE SHAPES happen to agree with, never

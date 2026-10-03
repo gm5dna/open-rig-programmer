@@ -36,7 +36,7 @@
 // the quarantine forbids reading core/driver/ts2000's report beyond its
 // Verdict, let alone its code.
 //
-// The fence is enforced mechanically and recursively (imports_test.go): this
+// The fence is enforced mechanically and recursively (internal/guards/fakes_imports_test.go): this
 // directory and every one beneath it.
 //
 // THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the goroutine

@@ -51,7 +51,7 @@
 // fakeic7410 MUST NOT import core/civ, core/civ/ic7410, core/driver,
 // core/driver/ic7410, core/codeplug, core/spec, or any sibling fake.
 // Standard library only, in this directory and every directory beneath
-// it, with the one exception below. imports_test.go enforces it with a
+// it, with the one exception below. internal/guards/fakes_imports_test.go enforces it with a
 // recursive go/parser scan, proven green before any protocol code in this
 // package existed.
 //

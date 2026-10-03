@@ -51,15 +51,15 @@ The directory listings of `core/civ/` and `core/driver/` were seen — file name
 only, in the course of confirming the worktree's shape. No file in either was
 opened.
 
-`internal/fakedx101/doc.go`, `fakedx101.go`, `imports_test.go` and
+`internal/fakedx101/doc.go`, `fakedx101.go`, `internal/guards/fakes_imports_test.go` and
 `PROVENANCE.md` **were** read, as the **structural** exemplar this package's
 brief named: the pipe-and-goroutine shape, the options list, the import fence,
 the shape of this document. **No protocol was taken from them.** CAT is ASCII
 and semicolon-terminated; CI-V is binary and addressed. They share a shape and
 nothing else.
 
-The import fence (`imports_test.go`) makes the code side of that rule
-mechanical rather than a matter of good intentions: `TestNoCoreImports` walks
+The import fence (`internal/guards/fakes_imports_test.go`) makes the code side of that rule
+mechanical rather than a matter of good intentions: `TestFakesImportNothingProjectInternal` walks
 this directory **and every directory beneath it** and fails on any import whose
 path begins with this project's module path. It was written and proven green
 **before a line of protocol code in this package existed**, so that anything

@@ -43,12 +43,12 @@ with no text layer consulted at all; each records its own crops, its own second
 independent pass and its own disagreements. **They agree on every field extent
 and on the total of 115 byte positions**, having been measured separately.
 
-`internal/fakedx101`'s `doc.go`, `fakedx101.go`, `imports_test.go` and
+`internal/fakedx101`'s `doc.go`, `fakedx101.go`, `internal/guards/fakes_imports_test.go` and
 `PROVENANCE.md` were read as a **structural pattern only**: the
 pipe-and-goroutine `Radio`, the bounded reassembler, the option shape, the
 `Image` contract, the register's form, and the recursive import fence, which is
 copied with its `modulePrefix` constant, its `TestIsForbiddenImport` table, its
-`TestNoCoreImports` with both vacuity guards, and its red proof
+`TestFakesImportNothingProjectInternal` with both vacuity guards, and its red proof
 `TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory`. **That
 package's protocol is ASCII CAT and this one's is binary CI-V. They share a
 shape and not one byte of wire behaviour**, and every frame rule in this package
@@ -192,7 +192,7 @@ question, and every one of those answers is in the register.**
 
 ## The import fence
 
-`imports_test.go` forbids every project-internal import, in this directory and
+`internal/guards/fakes_imports_test.go` forbids every project-internal import, in this directory and
 every directory beneath it. It is `internal/fakedx101`'s file copied, and it is
 copied **because the rule it enforces forbids importing anything to share**.
 

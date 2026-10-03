@@ -15,7 +15,7 @@
 // core/civ/ic7100, not its profile, not its record layout, not its golden
 // vectors, not its field ledger, not core/driver/ic7100, not core/spec, not
 // core/codeplug, not core/transport, and not another fake. Not a constant, not
-// a type, not a test helper. imports_test.go proves it, walking this directory
+// a type, not a test helper. internal/guards/fakes_imports_test.go proves it, walking this directory
 // and every directory beneath it, with vacuity guards and its own red proof,
 // and it landed before any of the code below.
 //

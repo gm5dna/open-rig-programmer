@@ -49,7 +49,7 @@ rendered page images was consulted.
 **These files were not copied into this package**, and nothing here reads them
 at run time or at test time. What was taken from them is written into
 `records.go` and `parser.go` by hand, with the printed evidence quoted beside
-each claim — which is why `imports_test.go`'s fence is the only thing keeping
+each claim — which is why `internal/guards/fakes_imports_test.go`'s fence is the only thing keeping
 the independence honest.
 
 ## What was actually taken

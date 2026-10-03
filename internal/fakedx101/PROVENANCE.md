@@ -79,8 +79,8 @@ transcription, or in either generator, surfaces as a **cross-check mismatch**.
 If this fake derived its inventory from A, from the dialect, or with `extable`'s
 parser, both sides would rest on one reading of the chart and one parser, and a
 shared mistake would reproduce itself identically into both tables and be
-invisible. That is why `exinventory.go` is stdlib-only and why `imports_test.go`'s
-`TestNoCoreImports` walks subdirectories: the fence is what keeps the
+invisible. That is why `exinventory.go` is stdlib-only and why `internal/guards/fakes_imports_test.go`'s
+`TestFakesImportNothingProjectInternal` walks subdirectories: the fence is what keeps the
 independence mechanical rather than a matter of good intentions. It was
 deliberately landed one task BEFORE this directory existed, so that the
 generator arrived inside a fence rather than in front of one.
