@@ -5,6 +5,8 @@ package kw
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 )
 
@@ -650,12 +652,8 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 		return Layout{}, err
 	}
 
-	names := make(map[Mode]string, len(cfg.ModeNames))
-	for m, n := range cfg.ModeNames {
-		names[m] = n
-	}
-	slots := make([]SlotRange, len(cfg.Slots))
-	copy(slots, cfg.Slots)
+	names := maps.Clone(cfg.ModeNames)
+	slots := slices.Clone(cfg.Slots)
 	fixed := make([]FixedField, len(cfg.PrintedFixed))
 	copy(fixed, cfg.PrintedFixed)
 	sort.Slice(fixed, func(i, j int) bool { return fixed[i].Pos < fixed[j].Pos })
@@ -872,18 +870,12 @@ func (l Layout) MaxEXAddress() uint8 { return l.maxEXAddress }
 
 // ModeNames returns an independent copy of this row's mode legend.
 func (l Layout) ModeNames() map[Mode]string {
-	out := make(map[Mode]string, len(l.modeNames))
-	for m, n := range l.modeNames {
-		out[m] = n
-	}
-	return out
+	return maps.Clone(l.modeNames)
 }
 
 // Slots returns an independent copy of this row's slot space.
 func (l Layout) Slots() []SlotRange {
-	out := make([]SlotRange, len(l.slots))
-	copy(out, l.slots)
-	return out
+	return slices.Clone(l.slots)
 }
 
 // PrintedFixed returns an independent copy of this row's hard-wired byte

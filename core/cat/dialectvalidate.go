@@ -4,7 +4,8 @@ package cat
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 )
 
 // maxEXDigits is the largest EXItem.Digits a dialect may declare.
@@ -203,15 +204,8 @@ func validateModeNames(cfg DialectConfig) error {
 	// Sorted iteration so the reported failure is the same one every run:
 	// map order is randomised, and a validator that reports a different
 	// offender per run makes a failing test look flaky.
-	keys := make([]int, 0, len(cfg.ModeNames))
-	for m := range cfg.ModeNames {
-		keys = append(keys, int(m))
-	}
-	sort.Ints(keys)
-
 	seen := make(map[string]Mode, len(cfg.ModeNames))
-	for _, k := range keys {
-		m := Mode(k)
+	for _, m := range slices.Sorted(maps.Keys(cfg.ModeNames)) {
 		name := cfg.ModeNames[m]
 		if !validWireByte(byte(m)) {
 			return fmt.Errorf("cat: ModeNames key %#02x is outside printable ASCII 0x20-0x7E excluding ';' — it would be written into an MW frame's P6 field and admitted by this dialect's own gate", byte(m))

@@ -4,7 +4,8 @@ package cat
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -110,14 +111,10 @@ func (d Dialect) ParseMode(c byte) (Mode, error) {
 // cannot produce) gets a sentence rather than an empty list, because "want "
 // followed by nothing tells a reader nothing.
 func (d Dialect) modeDomainText() string {
-	keys := make([]int, 0, len(d.modeNames))
-	for m := range d.modeNames {
-		keys = append(keys, int(byte(m)))
-	}
+	keys := slices.Sorted(maps.Keys(d.modeNames))
 	if len(keys) == 0 {
 		return "a mode this dialect declares, but it declares none"
 	}
-	sort.Ints(keys)
 
 	// Collapse consecutive byte values into ranges, so a contiguous table
 	// reads as a range and a table with holes shows them.
@@ -127,7 +124,7 @@ func (d Dialect) modeDomainText() string {
 		for j+1 < len(keys) && keys[j+1] == keys[j]+1 {
 			j++
 		}
-		lo, hi := rune(byte(keys[i])), rune(byte(keys[j]))
+		lo, hi := rune(keys[i]), rune(keys[j])
 		if lo == hi {
 			parts = append(parts, fmt.Sprintf("%q", lo))
 		} else {

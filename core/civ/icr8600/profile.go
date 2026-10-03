@@ -3,7 +3,8 @@
 package icr8600
 
 import (
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -122,11 +123,7 @@ func recordLayouts() []civ.RecordLayout {
 }
 
 func recordLayout(class string, length int, modes map[byte]string) civ.RecordLayout {
-	modeValues := make([]byte, 0, len(modes))
-	for value := range modes {
-		modeValues = append(modeValues, value)
-	}
-	sort.Slice(modeValues, func(i, j int) bool { return modeValues[i] < modeValues[j] })
+	modeValues := slices.Sorted(maps.Keys(modes))
 	fields := commonFields(modes)
 	if class == "FM" {
 		fields = append(fields, fmTailFields()...)

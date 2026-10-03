@@ -5,6 +5,7 @@ package kw
 import (
 	"bytes"
 	"fmt"
+	"maps"
 
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -163,11 +164,7 @@ func (l Layout870) MaxEXAddress() uint8 { return l.maxEXAddress }
 
 // ModeNames returns an independent copy of this row's mode legend.
 func (l Layout870) ModeNames() map[Mode]string {
-	out := make(map[Mode]string, len(l.modeNames))
-	for m, n := range l.modeNames {
-		out[m] = n
-	}
-	return out
+	return maps.Clone(l.modeNames)
 }
 
 // parseMode870 resolves a P5 wire byte against this layout's own legend.
