@@ -179,3 +179,16 @@ func fiveStateVocabulary() []ToneMode {
 		{Value: "DCS-ENC", Semantics: ToneModeDCSEncode},
 	}
 }
+
+// NeedsRxTone reports whether a channel in this tone mode must carry a
+// known FieldToneRx value for the mode to make sense.
+func (t ToneMode) NeedsRxTone() bool {
+	return t.Semantics == ToneModeCTCSSSquelch || t.Semantics == ToneModeCTCSSRxSquelch
+}
+
+// NeedsDTCS reports whether a channel in this tone mode must carry a
+// known FieldDTCSCode (and FieldDTCSPolarity) for the mode to make
+// sense.
+func (t ToneMode) NeedsDTCS() bool {
+	return t.Semantics == ToneModeDTCS
+}

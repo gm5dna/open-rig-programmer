@@ -20,12 +20,6 @@ import (
 // structural fact this family's frames have.
 const FrameLen = 5
 
-// BuildFrame returns a fresh 5-byte frame: args[0..3] followed by opcode.
-// The returned slice never aliases args.
-func BuildFrame(opcode byte, args [4]byte) []byte {
-	return []byte{args[0], args[1], args[2], args[3], opcode}
-}
-
 // ParseFrame splits frame back into its opcode and four argument bytes,
 // refusing anything not exactly FrameLen bytes.
 func ParseFrame(frame []byte) (opcode byte, args [4]byte, err error) {

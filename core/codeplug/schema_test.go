@@ -1485,3 +1485,10 @@ func TestSaveLoad_SparseV5WithNothingRecordedPreservesAbsent(t *testing.T) {
 		}
 	}
 }
+
+// tierFieldsRepresentableByOmission reports whether all seventeen fields
+// added by the two Icom model extensions are Unavailable, the only state
+// their omission from an older schema preserves.
+func (d ChannelData) tierFieldsRepresentableByOmission() bool {
+	return d.icomTierFieldsRepresentableByOmission() && d.receiverFieldsRepresentableByOmission()
+}
