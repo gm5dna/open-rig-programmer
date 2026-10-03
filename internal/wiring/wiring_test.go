@@ -23,6 +23,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft1000mp"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft2000"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft450d"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft890900"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft950"
@@ -93,7 +94,7 @@ func testCtx(t *testing.T) context.Context {
 // choreography (confirmation digest, per-slot
 // write-then-verify) and internal/guards' import-graph pin, not by a
 // capability veto. Asserted via realDrivers[DefaultModel] — task 39's
-// model-keyed real-driver table's FT-710 entry, which is NewRealDriver
+// model-keyed real-driver table's FT-710 entry, which is ft710.New(ft710.RealHardware)
 // itself and the exact constructor OpenRealSessionFor looks up — so no
 // serial port is ever opened.
 func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
@@ -111,7 +112,7 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 	d := realDrivers[DefaultModel](false, nil)
 	caps := d.Capabilities()
 	if len(caps.Banks) == 0 {
-		t.Fatal("NewRealDriver().Capabilities() has zero banks — sanity check failed, the guard below would pass vacuously")
+		t.Fatal("ft710.New(ft710.RealHardware).Capabilities() has zero banks — sanity check failed, the guard below would pass vacuously")
 	}
 	fieldsChecked := 0
 	for _, b := range caps.Banks {
@@ -1437,7 +1438,7 @@ func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
 		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error (the seam must have been consulted)", err)
 	}
 
-	want := NewRealDriver().Capabilities().DefaultBaud
+	want := ft710.New(ft710.RealHardware).Capabilities().DefaultBaud
 	if want != 38400 {
 		t.Fatalf("sanity check failed: the FT-710 driver reports DefaultBaud %d, want 38400", want)
 	}
@@ -1974,15 +1975,15 @@ func TestDriverTableKeysMatchDriverModel(t *testing.T) {
 // TestStaticCapabilities_FT710EqualsDriver pins StaticCapabilities'
 // equivalence to the table's own constructor: for DefaultModel, it must
 // return exactly what realDrivers[DefaultModel](false, nil).Capabilities() (i.e.
-// NewRealDriver().Capabilities()) reports.
+// ft710.New(ft710.RealHardware).Capabilities()) reports.
 func TestStaticCapabilities_FT710EqualsDriver(t *testing.T) {
 	got, err := StaticCapabilities(DefaultModel)
 	if err != nil {
 		t.Fatalf("StaticCapabilities(%q): unexpected error: %v", DefaultModel, err)
 	}
-	want := NewRealDriver().Capabilities()
+	want := ft710.New(ft710.RealHardware).Capabilities()
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("StaticCapabilities(%q) != NewRealDriver().Capabilities()", DefaultModel)
+		t.Errorf("StaticCapabilities(%q) != ft710.New(ft710.RealHardware).Capabilities()", DefaultModel)
 	}
 }
 
@@ -2002,7 +2003,7 @@ func TestStaticCapabilities_UnknownModel(t *testing.T) {
 // TestStaticSettingsDescriptor_FT710 pins StaticSettingsDescriptor's
 // equivalence to the table's own driver: for DefaultModel it must report
 // present=true and the exact tree
-// NewRealDriver().(driver.StaticSettingsProvider).StaticSettingsDescriptor()
+// ft710.New(ft710.RealHardware).(driver.StaticSettingsProvider).StaticSettingsDescriptor()
 // returns — the FT-710 driver implements the optional capability
 // unconditionally of profile (task 37).
 func TestStaticSettingsDescriptor_FT710(t *testing.T) {
@@ -2013,9 +2014,9 @@ func TestStaticSettingsDescriptor_FT710(t *testing.T) {
 	if !ok {
 		t.Fatalf("StaticSettingsDescriptor(%q): ok = false, want true (the FT-710 driver implements driver.StaticSettingsProvider)", DefaultModel)
 	}
-	provider, providerOK := NewRealDriver().(driver.StaticSettingsProvider)
+	provider, providerOK := ft710.New(ft710.RealHardware).(driver.StaticSettingsProvider)
 	if !providerOK {
-		t.Fatal("NewRealDriver() does not implement driver.StaticSettingsProvider — sanity check failed")
+		t.Fatal("ft710 real driver does not implement driver.StaticSettingsProvider — sanity check failed")
 	}
 	want := provider.StaticSettingsDescriptor()
 	if !reflect.DeepEqual(got, want) {
@@ -2054,7 +2055,7 @@ func TestSynthesiseDiscoveredBanks_UnknownModelFalse(t *testing.T) {
 // TestSynthesiseDiscoveredBanks_FT710MatchesDriver pins
 // SynthesiseDiscoveredBanks' equivalence to the table's own driver: for
 // DefaultModel it must report ok=true and the exact banks
-// NewRealDriver().(driver.DiscoveredBankSynthesizer).SynthesiseDiscoveredBanks
+// ft710.New(ft710.RealHardware).(driver.DiscoveredBankSynthesizer).SynthesiseDiscoveredBanks
 // returns for the same slot list (the same fixture
 // core/driver/ft710's TestSynthesiseDiscoveredBanks_MatchesLiveDiscovery
 // uses: a 60m pair, EMG, and one unclassifiable slot).
@@ -2066,9 +2067,9 @@ func TestSynthesiseDiscoveredBanks_FT710MatchesDriver(t *testing.T) {
 		t.Fatalf("SynthesiseDiscoveredBanks(%q, ...): ok = false, want true (the FT-710 driver implements driver.DiscoveredBankSynthesizer)", DefaultModel)
 	}
 
-	synth, synthOK := NewRealDriver().(driver.DiscoveredBankSynthesizer)
+	synth, synthOK := ft710.New(ft710.RealHardware).(driver.DiscoveredBankSynthesizer)
 	if !synthOK {
-		t.Fatal("NewRealDriver() does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
+		t.Fatal("ft710 real driver does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
 	}
 	want := synth.SynthesiseDiscoveredBanks(slots)
 	if !reflect.DeepEqual(got, want) {
@@ -2549,7 +2550,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		want        func() driver.Driver
 		wantConsent func() driver.Driver
 	}{
-		{model: DefaultModel, want: NewRealDriver},
+		{model: DefaultModel, want: func() driver.Driver { return ft710.New(ft710.RealHardware) }},
 		{model: FTdx10Model, want: func() driver.Driver { return ftdx10.New(ftdx10.RealHardware) }},
 		{model: FTdx101DModel, want: func() driver.Driver { return ftdx101.NewD(ftdx101.RealHardware) }},
 		{model: FTdx101MPModel, want: func() driver.Driver { return ftdx101.NewMP(ftdx101.RealHardware) }},

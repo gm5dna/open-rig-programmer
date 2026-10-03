@@ -256,10 +256,6 @@ const mcSetLen = 6
 // printed legend is refused, never quietly corrected, because a driver that
 // sent one would otherwise pass its own tests and fail on hardware.
 
-// validP1 reports whether b is one of P1's two printed values, "0: RX
-// frequency, 1: TX frequency" (480:908, 480:951).
-func validP1(b byte) bool { return b == '0' || b == '1' }
-
 // validModeByte reports whether b is a nibble the MD legend prints
 // (480:843-854). ALL TEN ARE ADMITTED, including the two this book calls
 // "No mode (Not used for the TS-480)" and "Tune (Not used for the

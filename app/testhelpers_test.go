@@ -193,28 +193,12 @@ func matchingCandidateFile(caps spec.Capabilities, populated map[string]*codeplu
 	}
 }
 
-// waitForEvent polls rec for the first event named event, up to timeout,
-// returning it (or failing the test).
-func waitForEvent(t *testing.T, rec *eventRecorder, event string, timeout time.Duration) recordedEvent {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for {
-		if got := rec.named(event); len(got) > 0 {
-			return got[0]
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out after %s waiting for event %q", timeout, event)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
 // waitForTransferDone polls rec for a transfer:done event whose Kind
 // equals kind, up to timeout. Filters by Kind (not just event name)
 // because a busy ReadRadio probe (see send_test.go's
 // cancel-mid-transfer test, which deliberately calls both from inside
 // Execute's own progress hook) ALSO emits a transfer:done event (Kind
-// "read"/"diff") — waitForEvent's plain first-match would otherwise
+// "read"/"diff") — a plain first-match by event name would otherwise
 // return the wrong one.
 func waitForTransferDone(t *testing.T, rec *eventRecorder, kind string, timeout time.Duration) TransferDoneEvent {
 	t.Helper()

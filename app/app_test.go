@@ -48,7 +48,7 @@ type recordedEvent struct {
 
 // eventRecorder is a thread-safe recorder for a.emit — ConfirmSend's
 // transfer goroutine calls record concurrently with the test's own
-// goroutine polling named/all (see waitForEvent), so this must be safe
+// goroutine polling named/all (see waitForTransferDone), so this must be safe
 // under `go test -race`.
 type eventRecorder struct {
 	mu     sync.Mutex
@@ -71,12 +71,6 @@ func (r *eventRecorder) named(event string) []recordedEvent {
 		}
 	}
 	return out
-}
-
-func (r *eventRecorder) all() []recordedEvent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]recordedEvent(nil), r.events...)
 }
 
 // fakeDialogs is the dialogAPI test double (task-15 brief §2: "Dialogs:
