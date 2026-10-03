@@ -123,7 +123,7 @@ func newLayout(model string) kw.Layout {
 		// still pinned to a real, cited number rather than left unset.
 		MaxEXAddress: 62,
 
-		ModeNames: modeNames(),
+		ModeNames: kw.StandardModeNames(),
 
 		// MEM 000-289 (ordinary memory), SCAN 290-299 (ten Program Scan
 		// channels, each a start/end pair addressed by the same slot
@@ -160,7 +160,7 @@ func newLayout(model string) kw.Layout {
 	})
 }
 
-// modeNames is the MD legend MR/MW's P5 is read against (ts2000:10611-10619,
+// ModeNames is kw.StandardModeNames, the MD legend MR/MW's P5 is read against (ts2000:10611-10619,
 // PDF p.126), in this programme's own spellings.
 //
 // EIGHT NAMES OVER NINE PRINTED NIBBLES. This document's own MD legend
@@ -174,15 +174,3 @@ func newLayout(model string) kw.Layout {
 // the TS-480's own "CWR" typo, exemplar erratum E12) — the published
 // spelling here is this project's own consistent CW-R, matching the two
 // registered rows' own nibble 7.
-func modeNames() map[kw.Mode]string {
-	return map[kw.Mode]string{
-		kw.ModeLSB:  "LSB",
-		kw.ModeUSB:  "USB",
-		kw.ModeCW:   "CW",
-		kw.ModeFM:   "FM",
-		kw.ModeAM:   "AM",
-		kw.ModeFSK:  "FSK",
-		kw.ModeCWR:  "CW-R",
-		kw.ModeFSKR: "FSK-R",
-	}
-}

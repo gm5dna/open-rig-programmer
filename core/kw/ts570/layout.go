@@ -87,7 +87,7 @@ func rowConfig(model string) kw.LayoutConfig {
 
 		MaxEXAddress: maxEXAddress,
 
-		ModeNames: modeNames(),
+		ModeNames: kw.StandardModeNames(),
 
 		// 000-099, one flat MEM bank (matrix §2 Banks): no hundreds
 		// digit exists (P2Unused), so the channel number is P3's two
@@ -106,21 +106,9 @@ func rowConfig(model string) kw.LayoutConfig {
 	}
 }
 
-// modeNames is the MD legend this row's P5 reads against (matrix §1.3):
+// ModeNames is kw.StandardModeNames, the MD legend this row's P5 reads against (matrix §1.3):
 // byte-for-byte the family's own eight named modes. MR/MW P5 carries no
 // legend of its own here either — the Parameter Table's Format 2 entry is
 // "0: No selection, 1: LSB, 2: USB, 3: CW, 4: FM, 5: AM, 6: FSK, 7: CW-R, 8:
 // No selection, 9: FSK-R" (matrix §1.3), the identical ten nibbles
 // core/kw.Mode already declares, so this row needs zero new vocabulary.
-func modeNames() map[kw.Mode]string {
-	return map[kw.Mode]string{
-		kw.ModeLSB:  "LSB",
-		kw.ModeUSB:  "USB",
-		kw.ModeCW:   "CW",
-		kw.ModeFM:   "FM",
-		kw.ModeAM:   "AM",
-		kw.ModeFSK:  "FSK",
-		kw.ModeCWR:  "CW-R",
-		kw.ModeFSKR: "FSK-R",
-	}
-}

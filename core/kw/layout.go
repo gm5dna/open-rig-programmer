@@ -868,6 +868,22 @@ func (l Layout) Satellite() bool { return l.satellite }
 // builds and admits no EX read at all.
 func (l Layout) MaxEXAddress() uint8 { return l.maxEXAddress }
 
+// StandardModeNames is the eight-name MD legend the TS-570, TS-2000, TS-480
+// and TS-590 rows share: the family's named modes, with nibbles 0 and 8
+// (no mode) left out. Each call returns a fresh map.
+func StandardModeNames() map[Mode]string {
+	return map[Mode]string{
+		ModeLSB:  "LSB",
+		ModeUSB:  "USB",
+		ModeCW:   "CW",
+		ModeFM:   "FM",
+		ModeAM:   "AM",
+		ModeFSK:  "FSK",
+		ModeCWR:  "CW-R",
+		ModeFSKR: "FSK-R",
+	}
+}
+
 // ModeNames returns an independent copy of this row's mode legend.
 func (l Layout) ModeNames() map[Mode]string {
 	return maps.Clone(l.modeNames)
