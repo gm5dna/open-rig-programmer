@@ -128,7 +128,7 @@
 // # 3. THE PROBE
 //
 // Open's whole wire traffic is: NOTHING for Init, one 19 00 read, and up
-// to probeSlotCount 1A 00 reads. TestOpen_InitWritesNothing compares the
+// to len(params.ProbeSlots) 1A 00 reads. TestOpen_InitWritesNothing compares the
 // exact byte sequence.
 //
 //   - NO RADIO MUTATION AT INIT, EVER. E1's InitSequence() is EMPTY
@@ -146,7 +146,7 @@
 //     future hardware lift to compare against. Three different tokens all
 //     open a session, and TestOpen_IDTokenIsRecordedNeverMatched pins that.
 //
-//   - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..probeSlotCount are
+//   - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..10 (params.ProbeSlots) are
 //     read until one answers with a record. A rejection means "empty, keep
 //     looking" — and under tier ruling T4 that branch keys on
 //     errors.Is(err, transport.ErrRejected), because Engine.Do consumes

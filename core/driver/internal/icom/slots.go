@@ -11,9 +11,7 @@ import (
 )
 
 // The two scan edges' wire channel numbers, and the last flat-addressed
-// memory channel — shared by every owning package's addressToSlot
-// wrapper below, and each package's own slotToAddress (which keeps its
-// own copies of these constants, since it stays outside this helper).
+// memory channel — shared by AddressToSlot and SlotToAddress below.
 const (
 	scanEdgeP1Channel = 100
 	scanEdgeP2Channel = 101
@@ -27,9 +25,9 @@ const (
 // (P1/P2 = 200/201) and ic705 (group-addressed) stay out: their P1/P2
 // channel numbers, or their slot shape, differ.
 //
-// Each owning package keeps a one-line addressToSlot(a civ.ChannelAddress)
-// wrapper naming its own model and format, so callers and read_test.go
-// are unaffected.
+// A package not yet on the engine keeps a one-line addressToSlot wrapper
+// naming its own model and format; one already on the engine has the
+// wrapper in helpers_test.go only, since nothing in production reads it.
 func AddressToSlot(model string, a civ.ChannelAddress, format string) (string, error) {
 	if a.Group != 0 {
 		return "", fmt.Errorf("%s: %s carries a group index; this radio's channel selector is a flat two-byte number", model, a)
