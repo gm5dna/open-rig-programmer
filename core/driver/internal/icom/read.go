@@ -95,6 +95,14 @@ func ReadRaw(ctx context.Context, p *Params, eng *transport.Engine, mismatches *
 	if RecordIsAbsent(raw) {
 		return civ.MemoryRecord{}, nil, true, nil
 	}
+	// AFTER the all-FF branch and BEFORE the parse: an all-FF record is an
+	// empty slot, not a malformed one. The check's error is returned as
+	// given, not wrapped with driver.ErrRecordDecode.
+	if p.ReadCheck != nil {
+		if err := p.ReadCheck(raw); err != nil {
+			return civ.MemoryRecord{}, nil, false, err
+		}
+	}
 	rec, err := prof.ParseMemoryAnswer(frame)
 	if err != nil {
 		return civ.MemoryRecord{}, nil, false, fmt.Errorf("%w: %w", driver.ErrRecordDecode, err)

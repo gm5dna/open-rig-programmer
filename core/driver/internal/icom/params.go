@@ -31,6 +31,9 @@ type Params struct {
 	// Domain refuses a channel carrying a value this radio's record
 	// cannot express. A read hands it a channel carrying only FreqHz.
 	Domain func(codeplug.ChannelData, spec.Capabilities) error
+	// ReadCheck, if set, refuses a record from its raw bytes after the
+	// empty-slot test and before the parse. Its error is returned as given.
+	ReadCheck func(raw []byte) error
 	// NewRecordLen wraps the engine's mismatch in the package's own error
 	// type, which owns the wording.
 	NewRecordLen func(RecordLengthMismatchError) error
