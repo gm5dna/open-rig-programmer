@@ -168,6 +168,18 @@ func ReadChannel(ctx context.Context, p *Params, eng *transport.Engine, caps spe
 		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: the record carries no mode", p.Name, slot)
 	}
 	name, _ := rec.Name.Get()
+	txFreq := codeplug.FreqField{State: codeplug.Unavailable}
+	if p.TXDuplicate {
+		v, ok := rec.TXFreqHz.Get()
+		if !ok {
+			// Unreachable through a layout that maps the TX-duplicate
+			// span unconditionally, but refused rather than defaulted.
+			return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: the record carries no TX-duplicate frequency", p.Name, slot)
+		}
+		// Always on the wire, so always Known, never Unavailable; this
+		// read reports whatever the radio held.
+		txFreq = codeplug.FreqField{State: codeplug.Known, Value: v}
+	}
 
 	data := &codeplug.ChannelData{
 		FreqHz: freq,
@@ -184,9 +196,9 @@ func ReadChannel(ctx context.Context, p *Params, eng *transport.Engine, caps spe
 		// UNAVAILABLE, because the 1A 00 record has no such field. Not
 		// Unknown: Unknown would claim the radio has one and this read
 		// did not learn it.
+		TxFreqHz:     txFreq,
 		TagDisplay:   codeplug.BoolField{State: codeplug.Unavailable},
 		CTCSSTone:    codeplug.ToneField{State: codeplug.Unavailable},
-		TxFreqHz:     codeplug.FreqField{State: codeplug.Unavailable},
 		Duplex:       codeplug.StringField{State: codeplug.Unavailable},
 		OffsetHz:     codeplug.FreqField{State: codeplug.Unavailable},
 		DTCSCode:     codeplug.IntField{State: codeplug.Unavailable},
