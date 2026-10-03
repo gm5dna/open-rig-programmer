@@ -298,18 +298,18 @@ func (s Slot) P1() byte {
 // A zero Layout has no slot space and so admits no slot at all.
 func (l Layout) NewSlot(number int, half ScanHalf) (Slot, error) {
 	if !l.Configured() {
-		return Slot{}, newParseError(nil, "slot %d: this layout is unconfigured and describes no radio's slot space", number)
+		return Slot{}, NewParseError(nil, "slot %d: this layout is unconfigured and describes no radio's slot space", number)
 	}
 	class := l.classOf(number)
 	if class == SlotClassInvalid {
-		return Slot{}, newParseError(nil, "slot %d is outside the %s's slot space %s", number, l.model, l.slotSpaceText())
+		return Slot{}, NewParseError(nil, "slot %d is outside the %s's slot space %s", number, l.model, l.slotSpaceText())
 	}
 	if class == SlotScan {
 		if half != ScanLower && half != ScanUpper {
-			return Slot{}, newParseError(nil, "slot %d is a section-defined channel on the %s, which holds a start and an end frequency (590:1529-1531), so a record naming it must say which half it carries", number, l.model)
+			return Slot{}, NewParseError(nil, "slot %d is a section-defined channel on the %s, which holds a start and an end frequency (590:1529-1531), so a record naming it must say which half it carries", number, l.model)
 		}
 	} else if half != ScanHalfNone {
-		return Slot{}, newParseError(nil, "slot %d is %v on the %s, which holds one frequency, so it has no half to name", number, class, l.model)
+		return Slot{}, NewParseError(nil, "slot %d is %v on the %s, which holds one frequency, so it has no half to name", number, class, l.model)
 	}
 	return Slot{number: number, class: class, half: half}, nil
 }

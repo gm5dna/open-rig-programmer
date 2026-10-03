@@ -47,7 +47,7 @@ beyond that one PDF's rendered page images was consulted.
 build time, and this package has no generator — what it took from B and W is two
 sentences' worth of fact, written into `image.go` by hand with the printed
 evidence quoted alongside. Nothing here reads those CSVs at run time or at test
-time, which is also why `imports_test.go`'s fence is the only thing keeping the
+time, which is also why `internal/guards/fakes_imports_test.go`'s fence is the only thing keeping the
 independence honest.
 
 ## What was actually taken
@@ -142,7 +142,7 @@ answer is this fake's filler and must never be read as a radio's contents.
 
 ## Why the fence, and why it landed first
 
-`imports_test.go` forbids this package — and every directory beneath it —
+`internal/guards/fakes_imports_test.go` forbids this package — and every directory beneath it —
 importing anything from this module, and it was written and committed before any
 of the code it guards.
 
@@ -157,7 +157,7 @@ nothing at all. The fence is what makes that separation mechanical rather than a
 matter of good intentions.
 
 It walks subdirectories rather than reading one directory, and
-`TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory` proves it
+`TestFakeImportViolations_Self` proves it
 would bite in a subdirectory that does not exist yet — so anything added later
 arrives inside a fence rather than in front of one.
 

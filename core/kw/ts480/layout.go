@@ -83,7 +83,7 @@ var layout480 = kw.MustNewLayout(kw.LayoutConfig{
 	// TS-590S's.
 	MaxEXAddress: 60,
 
-	ModeNames: modeNames(),
+	ModeNames: kw.StandardModeNames(),
 
 	// ONE FLAT BANK, "00 ~ 99: Memory channel number" (480:955).
 	//
@@ -133,7 +133,7 @@ var layout480 = kw.MustNewLayout(kw.LayoutConfig{
 // value yet. It is complete, tested and absent from SupportedModels().
 func Layout() kw.Layout { return layout480 }
 
-// modeNames is the MD legend this row reads MR/MW's P5 against
+// ModeNames is kw.StandardModeNames, the MD legend this row reads MR/MW's P5 against
 // (480:843-854), in this programme's own spellings.
 //
 // MR/MW P5 CARRIES NO LEGEND OF ITS OWN: both charts say "Mode. Refer to the
@@ -153,15 +153,3 @@ func Layout() kw.Layout { return layout480 }
 // refuses a legend naming either. The 590 pair's empty-channel rule for
 // nibble 0 (A18a) is NOT available here: this book prints no empty-channel
 // note anywhere, which is A4 and is the release gate for this row.
-func modeNames() map[kw.Mode]string {
-	return map[kw.Mode]string{
-		kw.ModeLSB:  "LSB",
-		kw.ModeUSB:  "USB",
-		kw.ModeCW:   "CW",
-		kw.ModeFM:   "FM",
-		kw.ModeAM:   "AM",
-		kw.ModeFSK:  "FSK",
-		kw.ModeCWR:  "CW-R",
-		kw.ModeFSKR: "FSK-R",
-	}
-}

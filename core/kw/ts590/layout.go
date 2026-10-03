@@ -166,7 +166,7 @@ func rowConfig(model string, byte28 kw.Byte28Policy, maxEXAddress uint8, slots [
 		// one an EX sweep that read the sibling's inventory would cross.
 		MaxEXAddress: maxEXAddress,
 
-		ModeNames: modeNames(),
+		ModeNames: kw.StandardModeNames(),
 		Slots:     slots,
 		// P10, P12 and P13 are the TS-2000 lift's three axes, pinned to
 		// their constant readings here so this row's frames stay
@@ -189,7 +189,7 @@ func rowConfig(model string, byte28 kw.Byte28Policy, maxEXAddress uint8, slots [
 	}
 }
 
-// modeNames is the MD legend both rows read MR/MW's P5 against
+// ModeNames is kw.StandardModeNames, the MD legend both rows read MR/MW's P5 against
 // (590:1353-1363), in this programme's own spellings.
 //
 // MR/MW P5 CARRIES NO LEGEND OF ITS OWN: both charts say "Mode (depending on
@@ -203,15 +203,3 @@ func rowConfig(model string, byte28 kw.Byte28Policy, maxEXAddress uint8, slots [
 // value — the empty channel's, "If the selected channel is empty, P4 ~ P15
 // will be 0 and P16 will be blank" (590:1492-1493), which is A18a — and the
 // record parser tests that window BEFORE it reaches this legend.
-func modeNames() map[kw.Mode]string {
-	return map[kw.Mode]string{
-		kw.ModeLSB:  "LSB",
-		kw.ModeUSB:  "USB",
-		kw.ModeCW:   "CW",
-		kw.ModeFM:   "FM",
-		kw.ModeAM:   "AM",
-		kw.ModeFSK:  "FSK",
-		kw.ModeCWR:  "CW-R",
-		kw.ModeFSKR: "FSK-R",
-	}
-}

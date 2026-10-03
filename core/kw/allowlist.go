@@ -95,7 +95,7 @@ func (l Layout) AllowedCommand(frame []byte) bool {
 	if len(frame) < IDReadLen { // the shortest legal frame is "ID;"
 		return false
 	}
-	if !exactlyOneTrailingSemicolon(frame) {
+	if !ExactlyOneTrailingSemicolon(frame) {
 		return false
 	}
 
@@ -152,7 +152,7 @@ func validSatBoolByte(b byte) bool { return b == '0' || b == '1' }
 // why it cannot call the generated per-row inventory.
 //
 // The bare read has no variable content once frame[:2] == "SA" and
-// exactlyOneTrailingSemicolon has already passed, so the three-byte case
+// ExactlyOneTrailingSemicolon has already passed, so the three-byte case
 // is a literal match. The Set is P1 (a plain bool digit), P2 (a plain
 // channel digit 0-9, with NO space-or-zero convention below 10 the way
 // MC's hundreds digit has — SA's chart prints only "0 ~ 9"), then P3-P7
@@ -198,13 +198,13 @@ func (l Layout) validSICommand(frame []byte) bool {
 	return frame[2] >= '0' && frame[2] <= '9' // P1
 }
 
-// exactlyOneTrailingSemicolon reports whether frame contains exactly one ';'
+// ExactlyOneTrailingSemicolon reports whether frame contains exactly one ';'
 // byte and that byte is the very last one.
 //
 // BOTH HALVES ARE LOAD-BEARING. A count-only check would admit ";ID" and a
 // suffix-only check would admit "ID;ID;", which is two commands the radio
 // would execute in turn — the injection this gate exists to refuse.
-func exactlyOneTrailingSemicolon(frame []byte) bool {
+func ExactlyOneTrailingSemicolon(frame []byte) bool {
 	i := bytes.IndexByte(frame, ';')
 	return i >= 0 && i == len(frame)-1
 }

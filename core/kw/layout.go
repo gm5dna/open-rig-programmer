@@ -5,6 +5,8 @@ package kw
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 )
 
@@ -650,12 +652,8 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 		return Layout{}, err
 	}
 
-	names := make(map[Mode]string, len(cfg.ModeNames))
-	for m, n := range cfg.ModeNames {
-		names[m] = n
-	}
-	slots := make([]SlotRange, len(cfg.Slots))
-	copy(slots, cfg.Slots)
+	names := maps.Clone(cfg.ModeNames)
+	slots := slices.Clone(cfg.Slots)
 	fixed := make([]FixedField, len(cfg.PrintedFixed))
 	copy(fixed, cfg.PrintedFixed)
 	sort.Slice(fixed, func(i, j int) bool { return fixed[i].Pos < fixed[j].Pos })
@@ -870,20 +868,30 @@ func (l Layout) Satellite() bool { return l.satellite }
 // builds and admits no EX read at all.
 func (l Layout) MaxEXAddress() uint8 { return l.maxEXAddress }
 
+// StandardModeNames is the eight-name MD legend the TS-570, TS-2000, TS-480
+// and TS-590 rows share: the family's named modes, with nibbles 0 and 8
+// (no mode) left out. Each call returns a fresh map.
+func StandardModeNames() map[Mode]string {
+	return map[Mode]string{
+		ModeLSB:  "LSB",
+		ModeUSB:  "USB",
+		ModeCW:   "CW",
+		ModeFM:   "FM",
+		ModeAM:   "AM",
+		ModeFSK:  "FSK",
+		ModeCWR:  "CW-R",
+		ModeFSKR: "FSK-R",
+	}
+}
+
 // ModeNames returns an independent copy of this row's mode legend.
 func (l Layout) ModeNames() map[Mode]string {
-	out := make(map[Mode]string, len(l.modeNames))
-	for m, n := range l.modeNames {
-		out[m] = n
-	}
-	return out
+	return maps.Clone(l.modeNames)
 }
 
 // Slots returns an independent copy of this row's slot space.
 func (l Layout) Slots() []SlotRange {
-	out := make([]SlotRange, len(l.slots))
-	copy(out, l.slots)
-	return out
+	return slices.Clone(l.slots)
 }
 
 // PrintedFixed returns an independent copy of this row's hard-wired byte

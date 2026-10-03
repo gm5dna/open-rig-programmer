@@ -187,16 +187,14 @@
 // IC-7300, and proves NOTHING about whether it is an IC-7100 or an
 // IC-9700", so its probe refuses a foreign record length with a
 // driver.WrongRadioError carrying the two RECORD-ONLY lengths and NO
-// model name. A name appears there only when a caller injects one through
-// WithSiblingRecordLengths — which no registered composition passes, so
-// the refusal renders as the ID-only form, exactly as the IC-905's does.
+// model name, so the refusal renders as the ID-only form, exactly as the
+// IC-905's does.
 //
 // The three drivers that DO mint one on a length mismatch are the IC-7300
 // and IC-7300MK2 (each with a one-entry sibling hint for the other,
-// rendered *provisional*) and the IC-905 (whose attribution comes from a
-// caller-supplied WithSiblingRecordLengths table — which no registered
-// composition passes, so its refusal today populates neither model field
-// and renders as the ID-only form).
+// rendered *provisional*) and the IC-905 (which carries no sibling table,
+// so its refusal populates neither model field and renders as the ID-only
+// form).
 //
 // AND EVERY NUMBER HERE IS AN ASSUMED DERIVATION. No document in this
 // tier prints a record total; each per-model package derives its length

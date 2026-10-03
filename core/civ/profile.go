@@ -5,6 +5,8 @@ package civ
 import (
 	"bytes"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 )
 
@@ -149,11 +151,7 @@ func NewProfile(cfg ProfileConfig) (Profile, error) {
 		}
 		p.fieldsByIDByLayout[i] = byID
 	}
-	p.acceptedLengths = make([]int, 0, len(lengthSet))
-	for length := range lengthSet {
-		p.acceptedLengths = append(p.acceptedLengths, length)
-	}
-	sort.Ints(p.acceptedLengths)
+	p.acceptedLengths = slices.Sorted(maps.Keys(lengthSet))
 
 	return p, nil
 }
@@ -245,9 +243,7 @@ func (p Profile) BuildRecordLengthFor(mode string) int {
 // RecordLengths returns this profile's accepted record lengths — the SET
 // of spec D1 — in ascending order, as a fresh slice.
 func (p Profile) RecordLengths() []int {
-	out := make([]int, len(p.acceptedLengths))
-	copy(out, p.acceptedLengths)
-	return out
+	return slices.Clone(p.acceptedLengths)
 }
 
 // AcceptsRecordLength reports whether n is in this profile's accepted set.

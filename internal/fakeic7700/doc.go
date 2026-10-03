@@ -18,8 +18,8 @@
 // fakeic7700 MUST NOT import any package of this project — not core/civ, not
 // core/civ/ic7700, not core/driver/ic7700, not core/codeplug, not core/spec,
 // not any sibling fake. Standard library only, in every non-test file, in
-// this directory and every directory beneath it. TestNoCoreImports
-// (imports_test.go) enforces it with a recursive go/parser scan.
+// this directory and every directory beneath it. TestFakesImportNothingProjectInternal
+// (internal/guards/fakes_imports_test.go) enforces it with a recursive go/parser scan.
 //
 // This package was authored under quarantine: the agent that wrote it was
 // forbidden to open core/civ/ic7700/*.go or core/driver/ic7700/*.go, and did
@@ -36,11 +36,8 @@
 // one protocol, checked against each other, is what makes that class of bug
 // visible.
 //
-// THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the goroutine
-// bookkeeping, the interruptible latency wait and the raw write. It is
-// PROTOCOL-FREE — it sees []byte and a duration and nothing else, so it
-// carries no framing, no field layout and no reply building. Everything
-// above the wire stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # Framing
 //

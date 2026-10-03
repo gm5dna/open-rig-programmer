@@ -333,7 +333,6 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 		"unchanged":            diff.Unchanged,
 		"blocked":              diff.Blocked,
 	}); err != nil {
-		s.logger.Printf("clone: journal %s: failed to append %q event: %v", journal.Path(), "prepare", err)
 		return nil, fmt.Errorf("clone: PrepareSend: %w", &JournalFailedError{Event: "prepare", Cause: err})
 	}
 

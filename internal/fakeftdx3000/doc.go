@@ -29,7 +29,7 @@
 // fakeftdx3000 MUST NOT import any package of this project — not core/cat,
 // not core/cat/ftdx3000, not core/codeplug, not core/spec, and not
 // internal/fakeft2000 or any sibling fake — in any non-test file, in this
-// directory and every directory beneath it (imports_test.go). THE
+// directory and every directory beneath it (internal/guards/fakes_imports_test.go). THE
 // QUARANTINE GOES FURTHER for this package: it was built without reading
 // core/cat/ftdx3000 or core/driver/ftdx3000 at all — not even for a byte
 // offset or an enum spelling — precisely so that a systematic error in
@@ -41,6 +41,9 @@
 // docs/superpowers/ftdx3000-capability-matrix.md, cited "layout:NNN"
 // throughout — a citation names where the chart is, not a link, since the
 // manual itself is never committed.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING of internal/fakeft2000, not a refactor of it
 //

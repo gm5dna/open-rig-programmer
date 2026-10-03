@@ -30,7 +30,7 @@
 // fakeftdx9000 MUST NOT import any package of this project — not core/cat, not
 // core/driver/ftdx9000, not core/codeplug, not core/spec, and not any sibling
 // fake. Standard library only, in every non-test file, in this directory and
-// every directory beneath it (imports_test.go, copied from
+// every directory beneath it (internal/guards/fakes_imports_test.go, copied from
 // internal/fakeft991a's recursive scan).
 //
 // Every byte offset, field width and validation rule below is re-derived from
@@ -44,6 +44,9 @@
 // that a systematic bug in that understanding cannot sit on both sides of every
 // cross-check test and go unnoticed — internal/fakets590's "THE HARD RULE",
 // restated here for the same reason).
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # What this fake deliberately does NOT model
 //

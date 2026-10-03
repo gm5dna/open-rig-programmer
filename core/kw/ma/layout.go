@@ -4,6 +4,7 @@ package ma
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -462,11 +463,7 @@ func (l Layout) ModeName(b byte) (string, bool) {
 
 // ModeNames is this row's whole legend, as a copy.
 func (l Layout) ModeNames() map[byte]string {
-	out := make(map[byte]string, len(l.modeNames))
-	for k, v := range l.modeNames {
-		out[k] = v
-	}
-	return out
+	return maps.Clone(l.modeNames)
 }
 
 // MaxToneIndex is the highest TN index this row's chart prints, 50 on both

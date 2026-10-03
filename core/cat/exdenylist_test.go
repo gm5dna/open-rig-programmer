@@ -5,6 +5,7 @@ package cat
 import (
 	"os"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/internal/extable"
@@ -179,4 +180,25 @@ func TestEXDenylist_MatchesTable2ByAddress(t *testing.T) {
 	for addr := range wantHeld {
 		t.Errorf("held set is missing expected address %v", addr)
 	}
+}
+
+// exKeyingDenied reports whether p4 (the manual's parameter-description
+// legend for the address, table2.csv's p4 column) is the RTS/DTR/DAKY
+// keying-port legend: PTT and CW keying routed over the CAT-1 serial lines
+// rather than a dedicated keying line. Matched by LEGEND, not name, because
+// the legend is what every RPTT SELECT item shares with PC KEYING (its name
+// alone does not say "keying port"). 12 addresses: eleven RPTT SELECT items
+// plus PC KEYING (table2.csv:59,78,94,116,132,149,151,266,284,302,320,338).
+func exKeyingDenied(p4 string) bool {
+	return containsAll(p4, "RTS", "DTR", "DAKY")
+}
+
+// containsAll reports whether s contains every one of subs, in any order.
+func containsAll(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
 }

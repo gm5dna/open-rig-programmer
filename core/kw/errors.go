@@ -90,9 +90,9 @@ func (e *ParseError) Error() string {
 
 func (e *ParseError) Unwrap() error { return ErrParse }
 
-// newParseError builds a ParseError from the offending input, copying and
+// NewParseError builds a ParseError from the offending input, copying and
 // truncating it.
-func newParseError(input []byte, format string, args ...any) *ParseError {
+func NewParseError(input []byte, format string, args ...any) *ParseError {
 	n := min(len(input), maxParseErrorFrameLen)
 	return &ParseError{Frame: bytes.Clone(input[:n]), Reason: fmt.Sprintf(format, args...)}
 }

@@ -3,7 +3,6 @@
 package ma
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/gm5dna/open-rig-programmer/core/kw"
@@ -105,23 +104,6 @@ const (
 	fvReadFrame = "FV;"
 )
 
-// maxParseErrorFrameLen bounds how much offending input a ParseError
-// retains, so malformed or hostile input cannot make a log line unbounded.
-// It is core/kw's own bound, restated because kw's constant is unexported.
-const maxParseErrorFrameLen = 64
-
-// newParseError builds a *kw.ParseError from the offending input, copying and
-// truncating it.
-//
-// THE TYPE IS core/kw'S AND THE MINTER IS THIS PACKAGE'S. kw.ParseError's
-// fields are exported, so this package's refusals are the SAME type a driver
-// already tests for and wrap the SAME kw.ErrParse sentinel — which is what
-// lets one driver-side errors.As arm cover both codecs of one family.
-func newParseError(input []byte, format string, args ...any) *kw.ParseError {
-	n := min(len(input), maxParseErrorFrameLen)
-	return &kw.ParseError{Frame: bytes.Clone(input[:n]), Reason: fmt.Sprintf(format, args...)}
-}
-
 // BuildIDRead builds the transceiver-identity read, "ID;" (890:2735,
 // 990:2614). Both books print the same three bytes, so this builder has
 // exactly one output on every row.
@@ -185,11 +167,8 @@ func (l Layout) BuildFVRead() (Command, error) {
 // BuildEXRead applies to its own output, so that a literal edited without its
 // length constant, or the reverse, fails here rather than on a radio.
 func (l Layout) buildFixedFrame(what, frame string, wantLen int) (Command, error) {
-	if !l.Configured() {
-		return Command{}, newParseError(nil, "%s: this layout is unconfigured and describes no radio", what)
-	}
-	if len(frame) != wantLen {
-		return Command{}, newParseError([]byte(frame), "%s: built %d bytes, want exactly %d", what, len(frame), wantLen)
+	if err := kw.CheckFixedFrame(l.Configured(), what, frame, wantLen); err != nil {
+		return Command{}, err
 	}
 	return newCommand([]byte(frame)), nil
 }
@@ -214,7 +193,7 @@ func (l Layout) ParseIDAnswer(frame []byte) (string, error) {
 	field := frame[2 : 2+kw.IDDigits]
 	for i, b := range field {
 		if b < '0' || b > '9' {
-			return "", newParseError(frame, "ID answer: P1 byte %d is %q; both books print P1 as three digits (890:2738, 990:2617), and this family's answer is %d bytes with %d digits where a Yaesu one is 7 bytes with 4", i+1, b, kw.IDAnswerLen, kw.IDDigits)
+			return "", kw.NewParseError(frame, "ID answer: P1 byte %d is %q; both books print P1 as three digits (890:2738, 990:2617), and this family's answer is %d bytes with %d digits where a Yaesu one is 7 bytes with 4", i+1, b, kw.IDAnswerLen, kw.IDDigits)
 		}
 	}
 	return string(field), nil
@@ -243,7 +222,7 @@ func (l Layout) ParseFVAnswer(frame []byte) (string, error) {
 	field := frame[2 : 2+kw.FVChars]
 	for i, b := range field {
 		if b < 0x20 || b > 0x7e || b == ';' {
-			return "", newParseError(frame, "FV answer: P1 byte %d is %#02x, which is not a printable ASCII character this codec will read as part of a version string (A2's charset claim is bounded at 0x7E, and an embedded ';' is a second frame to the radio's own parser)", i+1, b)
+			return "", kw.NewParseError(frame, "FV answer: P1 byte %d is %#02x, which is not a printable ASCII character this codec will read as part of a version string (A2's charset claim is bounded at 0x7E, and an embedded ';' is a second frame to the radio's own parser)", i+1, b)
 		}
 	}
 	return string(field), nil
@@ -259,19 +238,7 @@ func (l Layout) ParseFVAnswer(frame []byte) (string, error) {
 // asserting "the length first" is asserting one rule rather than several
 // copies of one.
 func (l Layout) checkAnswerShape(what string, frame []byte, prefix string, wantLen int) error {
-	if !l.Configured() {
-		return newParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
-	}
-	if len(frame) != wantLen {
-		return newParseError(frame, "%s: the frame is %d bytes, want exactly %d", what, len(frame), wantLen)
-	}
-	if string(frame[:len(prefix)]) != prefix {
-		return newParseError(frame, "%s: missing %q prefix, got %q", what, prefix, frame[:len(prefix)])
-	}
-	if frame[wantLen-1] != ';' {
-		return newParseError(frame, "%s: missing ';' terminator at position %d", what, wantLen)
-	}
-	return nil
+	return kw.CheckAnswerShape(l.Configured(), what, frame, prefix, wantLen)
 }
 
 // WireEXAddress renders addr as this family's EX address field: FIVE
@@ -319,21 +286,21 @@ func (l Layout) WireEXAddress(addr kw.EXAddress) string {
 // disagree about what this radio has.
 func (l Layout) BuildEXRead(addr kw.EXAddress) (Command, error) {
 	if !l.Configured() {
-		return Command{}, newParseError(nil, "EX read: this layout is unconfigured and describes no radio")
+		return Command{}, kw.NewParseError(nil, "EX read: this layout is unconfigured and describes no radio")
 	}
 	if _, ok := l.EXItem(addr); !ok {
-		return Command{}, newParseError(nil, "EX read: menu %d %02d %02d is not in %s's transcribed menu inventory — both books' charts are sparse, and the book says an address the chart does not print \"causes an error to occur\" (890:1904, 990:1727)", addr.P1, addr.P2, addr.P3, l.model)
+		return Command{}, kw.NewParseError(nil, "EX read: menu %d %02d %02d is not in %s's transcribed menu inventory — both books' charts are sparse, and the book says an address the chart does not print \"causes an error to occur\" (890:1904, 990:1727)", addr.P1, addr.P2, addr.P3, l.model)
 	}
 	wire := l.WireEXAddress(addr)
 	if len(wire) != exAddrLen {
-		return Command{}, newParseError(nil, "EX read: %v does not render as a %d-character menu address; P1 is 0 or 1 and P2 and P3 are two digits each (890:1897-1911, 990:1720-1735)", addr, exAddrLen)
+		return Command{}, kw.NewParseError(nil, "EX read: %v does not render as a %d-character menu address; P1 is 0 or 1 and P2 and P3 are two digits each (890:1897-1911, 990:1720-1735)", addr, exAddrLen)
 	}
 	frame := make([]byte, 0, EXReadLen)
 	frame = append(frame, 'E', 'X')
 	frame = append(frame, wire...)
 	frame = append(frame, ';')
 	if len(frame) != EXReadLen {
-		return Command{}, newParseError(frame, "EX read: built %d bytes, want exactly %d (890:1907, 990:1736)", len(frame), EXReadLen)
+		return Command{}, kw.NewParseError(frame, "EX read: built %d bytes, want exactly %d (890:1907, 990:1736)", len(frame), EXReadLen)
 	}
 	return newCommand(frame), nil
 }
@@ -406,14 +373,14 @@ func (l Layout) BuildEXRead(addr kw.EXAddress) (Command, error) {
 // A19).
 func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 	if !l.Configured() {
-		return "", newParseError(frame, "EX answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
+		return "", kw.NewParseError(frame, "EX answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
 	}
 	if item.Digits < 1 || item.Digits > kw.MaxEXDigits {
-		return "", newParseError(frame, "EX answer: the inventory row for %v declares a printed width of %d, and this codec admits 1 to %d — a zero width is a row that was never transcribed, and a wider one describes an answer longer than this family's own %d-byte frame bound (A19)", item.Addr, item.Digits, kw.MaxEXDigits, kw.DefaultMaxFrame)
+		return "", kw.NewParseError(frame, "EX answer: the inventory row for %v declares a printed width of %d, and this codec admits 1 to %d — a zero width is a row that was never transcribed, and a wider one describes an answer longer than this family's own %d-byte frame bound (A19)", item.Addr, item.Digits, kw.MaxEXDigits, kw.DefaultMaxFrame)
 	}
 	row, ok := l.EXItem(item.Addr)
 	if !ok {
-		return "", newParseError(frame, "EX answer: menu %v is not in %s's transcribed menu inventory — the builder and the gate refuse to send that address, and an answer carrying it is not a setting this row has", item.Addr, l.model)
+		return "", kw.NewParseError(frame, "EX answer: menu %v is not in %s's transcribed menu inventory — the builder and the gate refuse to send that address, and an answer carrying it is not a setting this row has", item.Addr, l.model)
 	}
 	// C-MED-2 / S1-MED-1: the width bound is the INVENTORY ROW's Digits, not
 	// the caller's copy — kw.Layout.EXItems deliberately hands out mutable
@@ -421,32 +388,32 @@ func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 	// wrongly must be told, not silently corrected by substituting the
 	// canonical row underneath it.
 	if item.Digits != row.Digits {
-		return "", newParseError(frame, "EX answer: the caller's item for menu %d %02d %02d declares a printed width of %d, and this row's own inventory declares %d — the width comes from the inventory row, and the two must agree (A19)", item.Addr.P1, item.Addr.P2, item.Addr.P3, item.Digits, row.Digits)
+		return "", kw.NewParseError(frame, "EX answer: the caller's item for menu %d %02d %02d declares a printed width of %d, and this row's own inventory declares %d — the width comes from the inventory row, and the two must agree (A19)", item.Addr.P1, item.Addr.P2, item.Addr.P3, item.Digits, row.Digits)
 	}
 	if len(frame) < exAnswerMinLen {
-		return "", newParseError(frame, "EX answer: the frame is %d bytes; the eight positions through P4 are followed by the terminator, and a frame of exactly %d bytes is the READ, which carries no P4 at all (890:1907, 990:1736)", len(frame), EXReadLen)
+		return "", kw.NewParseError(frame, "EX answer: the frame is %d bytes; the eight positions through P4 are followed by the terminator, and a frame of exactly %d bytes is the READ, which carries no P4 at all (890:1907, 990:1736)", len(frame), EXReadLen)
 	}
 	if len(frame) > kw.DefaultMaxFrame {
-		return "", newParseError(frame, "EX answer: the frame is %d bytes, past this family's own %d-byte bound, which its accumulator would have discarded as contamination", len(frame), kw.DefaultMaxFrame)
+		return "", kw.NewParseError(frame, "EX answer: the frame is %d bytes, past this family's own %d-byte bound, which its accumulator would have discarded as contamination", len(frame), kw.DefaultMaxFrame)
 	}
 	if string(frame[:2]) != "EX" {
-		return "", newParseError(frame, "EX answer: missing %q prefix, got %q", "EX", frame[:2])
+		return "", kw.NewParseError(frame, "EX answer: missing %q prefix, got %q", "EX", frame[:2])
 	}
 	if frame[len(frame)-1] != ';' {
-		return "", newParseError(frame, "EX answer: missing ';' terminator at position %d", len(frame))
+		return "", kw.NewParseError(frame, "EX answer: missing ';' terminator at position %d", len(frame))
 	}
 
 	got := string(frame[exAddrOff : exAddrOff+exAddrLen])
 	for i, b := range []byte(got) {
 		if b < '0' || b > '9' {
-			return "", newParseError(frame, "EX answer: address byte %d is %q; the address is five decimal digits on both radios, P1 + P2P2 + P3P3 (890:1900, 990:1723)", i+1, b)
+			return "", kw.NewParseError(frame, "EX answer: address byte %d is %q; the address is five decimal digits on both radios, P1 + P2P2 + P3P3 (890:1900, 990:1723)", i+1, b)
 		}
 	}
 	if want := l.WireEXAddress(item.Addr); got != want {
-		return "", newParseError(frame, "EX answer: this frame answers menu %s and the read asked for menu %s — every menu address answers with a frame starting \"EX\", so the whole address is what correlates an answer to its read", got, want)
+		return "", kw.NewParseError(frame, "EX answer: this frame answers menu %s and the read asked for menu %s — every menu address answers with a frame starting \"EX\", so the whole address is what correlates an answer to its read", got, want)
 	}
 	if frame[exP4Off] != exP4Answer {
-		return "", newParseError(frame, "EX answer: P4 is %q, and both books print \"Response is always a space\" (890:1912-1915, 990:1737-1741)", frame[exP4Off])
+		return "", kw.NewParseError(frame, "EX answer: P4 is %q, and both books print \"Response is always a space\" (890:1912-1915, 990:1737-1741)", frame[exP4Off])
 	}
 
 	p5 := frame[exP5Off : len(frame)-1]
@@ -455,7 +422,7 @@ func (l Layout) ParseEXAnswer(frame []byte, item kw.EXItem) (string, error) {
 	}
 	for i, b := range p5 {
 		if b < 0x20 || b > 0x7e || b == ';' {
-			return "", newParseError(frame, "EX answer: P5 byte %d is %#02x; both books forbid the control codes generally, an embedded ';' is a second frame to the radio's own parser, and A2's charset claim is bounded at 0x7E", i+1, b)
+			return "", kw.NewParseError(frame, "EX answer: P5 byte %d is %#02x; both books forbid the control codes generally, an embedded ';' is a second frame to the radio's own parser, and A2's charset claim is bounded at 0x7E", i+1, b)
 		}
 	}
 	return string(p5), nil
@@ -486,11 +453,11 @@ func (l Layout) checkEXP5Width(frame, p5 []byte, item kw.EXItem) error {
 			return nil
 		}
 		if len(frame) > ex990AnswerLen {
-			return newParseError(frame, "EX answer: the frame is %d bytes and this book draws its EX Answer to %d, with P5 in a %d-wide window at positions 9-%d (E19; 990:1738-1747)", len(frame), ex990AnswerLen, ex990P5Window, exP5Off+ex990P5Window)
+			return kw.NewParseError(frame, "EX answer: the frame is %d bytes and this book draws its EX Answer to %d, with P5 in a %d-wide window at positions 9-%d (E19; 990:1738-1747)", len(frame), ex990AnswerLen, ex990P5Window, exP5Off+ex990P5Window)
 		}
 	}
 	if len(p5) > item.Digits {
-		return newParseError(frame, "EX answer: P5 is %d characters and the parameter list prints %d for menu %s (%s) — A19 is that an answer never exceeds its printed width, and a wider one is refused rather than truncated", len(p5), item.Digits, l.WireEXAddress(item.Addr), item.Name)
+		return kw.NewParseError(frame, "EX answer: P5 is %d characters and the parameter list prints %d for menu %s (%s) — A19 is that an answer never exceeds its printed width, and a wider one is refused rather than truncated", len(p5), item.Digits, l.WireEXAddress(item.Addr), item.Name)
 	}
 	return nil
 }

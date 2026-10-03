@@ -15,7 +15,7 @@
 // core/civ/ic7100, not its profile, not its record layout, not its golden
 // vectors, not its field ledger, not core/driver/ic7100, not core/spec, not
 // core/codeplug, not core/transport, and not another fake. Not a constant, not
-// a type, not a test helper. imports_test.go proves it, walking this directory
+// a type, not a test helper. internal/guards/fakes_imports_test.go proves it, walking this directory
 // and every directory beneath it, with vacuity guards and its own red proof,
 // and it landed before any of the code below.
 //
@@ -32,14 +32,8 @@
 // in the same place, which is evidence. Where one of them imported the other,
 // agreement would be a tautology and the evidence would be worth nothing.
 //
-// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
-// the goroutine bookkeeping, the interruptible latency wait and the raw write.
-// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
-// and nothing else, so it carries no framing, no field layout and no reply
-// building. A bug in it therefore cannot make a wrong codec look right; it can
-// only stop bytes moving, which this package's own tests notice at once.
-// Everything above the wire — the reassembler, the parser, the image, the
-// replies — stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # WHERE THIS FAKE'S KNOWLEDGE CAME FROM
 //

@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
-	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // stubDriver is a minimal Driver implementation for exercising Registry:
@@ -205,8 +205,8 @@ func TestRegistry_Register_RejectsConsentedUnverifiedBaseline(t *testing.T) {
 // driver built the way production builds them.)
 func TestRegistry_Register_RealCompositionRootStillRegisters(t *testing.T) {
 	r := driver.NewRegistry()
-	if err := r.Register(wiring.NewRealDriver()); err != nil {
-		t.Fatalf("Register(wiring.NewRealDriver()): unexpected error: %v", err)
+	if err := r.Register(ft710.New(ft710.RealHardware)); err != nil {
+		t.Fatalf("Register(ft710.New(ft710.RealHardware)): unexpected error: %v", err)
 	}
 	if got := r.Models(); len(got) != 1 {
 		t.Fatalf("Models() = %v, want exactly one registered model", got)

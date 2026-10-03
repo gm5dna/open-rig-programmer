@@ -33,7 +33,7 @@
 // not core/cat/ftdx1200, not core/codeplug, not core/spec, and not
 // internal/fakeft2000 or any sibling fake. Standard library only, in every
 // non-test file, in this directory and every directory beneath it
-// (imports_test.go). This package was built without reading
+// (internal/guards/fakes_imports_test.go). This package was built without reading
 // core/driver/ftdx1200 at all — not even for a byte offset or an enum
 // spelling — precisely so that a systematic error in that driver's own
 // reading of the manual cannot sit on both sides of the cross-check
@@ -43,6 +43,9 @@
 // matrix itself cites "layout:NNN" against the gitignored manual layout
 // extraction — not re-cited here, to avoid restating a citation this
 // package never opened).
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING of internal/fakeft2000, not a refactor of it
 //

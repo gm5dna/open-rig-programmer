@@ -9,7 +9,7 @@
 // This package imports THE STANDARD LIBRARY AND NOTHING ELSE. Not
 // core/civ/ic9700, not its profile, not its golden vectors, not its field
 // ledger, not core/driver, not core/codeplug, not core/spec, and not another
-// fake. imports_test.go proves it, walking this directory and every directory
+// fake. internal/guards/fakes_imports_test.go proves it, walking this directory and every directory
 // beneath it, and it landed before any of the code below.
 //
 // The rule is not tidiness. A fake exists to be the OTHER witness in a test:
@@ -20,14 +20,8 @@
 // the record would agree with itself end to end and every test would go green
 // while proving nothing.
 //
-// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
-// the goroutine bookkeeping, the interruptible latency wait and the raw write.
-// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
-// and nothing else, so it carries no framing, no field layout and no reply
-// building. A bug in it therefore cannot make a wrong codec look right; it can
-// only stop bytes moving, which this package's own tests notice at once.
-// Everything above the wire — the reassembler, the parser, the image, the
-// replies — stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # WHERE THIS FAKE'S KNOWLEDGE CAME FROM
 //

@@ -22,7 +22,7 @@ citations name where a chart is rather than linking to it — the convention
 (`ts870s-manual-provenance.md`, this document's own provenance note).
 
 This package imports nothing project-internal, in this directory or any
-beneath it, and `imports_test.go` enforces that mechanically and recursively.
+beneath it, and `internal/guards/fakes_imports_test.go` enforces that mechanically and recursively.
 The reason is in `doc.go` under THE HARD RULE: a fake built from the
 production codec cannot disagree with it, so a systematic bug in that codec
 would be applied identically on both sides of every "send a command, check

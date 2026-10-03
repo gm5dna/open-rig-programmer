@@ -81,7 +81,7 @@ func TestAddressEncodingUsesFourPackedBCDBytes(t *testing.T) {
 }
 
 func TestAddressSparseMemoryBankUsesZeroBasedCanonicalSlots(t *testing.T) {
-	bank := icr8600.MemoryBank()
+	bank := memoryBank()
 	if bank.ID != spec.BankMemory || !bank.Sparse {
 		t.Errorf("MemoryBank() identity = %q Sparse=%v, want MEM sparse", bank.ID, bank.Sparse)
 	}
@@ -110,9 +110,30 @@ func TestAddressSparseMemoryBankUsesZeroBasedCanonicalSlots(t *testing.T) {
 		}
 	}
 
-	again := icr8600.MemoryBank()
+	again := memoryBank()
 	bank.Slots = append(bank.Slots, "G00-000")
 	if len(again.Slots) != 0 {
 		t.Errorf("MemoryBank() shares mutable Slots storage: second value has %v", again.Slots)
+	}
+}
+
+// memoryBank returns the IC-R8600's one currently declared neutral memory
+// bank. A fresh value is returned on every call so a later driver may attach
+// materialised Slots and field-support labels without mutating package state.
+//
+// The populated-channel capacity is unresolved (register icr8600-budget;
+// Stage R lift: fill ordinary memories until the receiver refuses another),
+// so BudgetUnstated is the positive declaration and Budget remains zero.
+// Groups 0100 and 0101 are deliberately absent, and 0102 remains absent while
+// icr8600-scan-edge-encoding awaits its Stage R scan-edge-read capture.
+func memoryBank() spec.Bank {
+	return spec.Bank{
+		ID:             spec.BankMemory,
+		Sparse:         true,
+		Groups:         icr8600.MemoryGroups,
+		GroupBase:      icr8600.MemoryGroupBase,
+		PerGroup:       icr8600.MemoryChannelsPerGroup,
+		ChannelBase:    icr8600.MemoryChannelBase,
+		BudgetUnstated: true,
 	}
 }

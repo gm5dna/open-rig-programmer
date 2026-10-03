@@ -3,10 +3,10 @@
 package icr8600
 
 import (
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
-	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // Stable model data shared with the eventual driver. These constants are
@@ -52,27 +52,6 @@ const (
 	// TestTailTemplatesAndFMToneFieldsEncodeEveryDeclaredClass.
 	DigitalTailRefusalReason = "D-STAR/P25/NXDN/DCR/dPMR digital-squelch bytes differ from the assumed template — set them at the radio"
 )
-
-// MemoryBank returns the IC-R8600's one currently declared neutral memory
-// bank. A fresh value is returned on every call so a later driver may attach
-// materialised Slots and field-support labels without mutating package state.
-//
-// The populated-channel capacity is unresolved (register icr8600-budget;
-// Stage R lift: fill ordinary memories until the receiver refuses another),
-// so BudgetUnstated is the positive declaration and Budget remains zero.
-// Groups 0100 and 0101 are deliberately absent, and 0102 remains absent while
-// icr8600-scan-edge-encoding awaits its Stage R scan-edge-read capture.
-func MemoryBank() spec.Bank {
-	return spec.Bank{
-		ID:             spec.BankMemory,
-		Sparse:         true,
-		Groups:         MemoryGroups,
-		GroupBase:      MemoryGroupBase,
-		PerGroup:       MemoryChannelsPerGroup,
-		ChannelBase:    MemoryChannelBase,
-		BudgetUnstated: true,
-	}
-}
 
 // Profile returns the IC-R8600's CI-V dialect.
 func Profile() civ.Profile { return profile }
@@ -122,11 +101,7 @@ func recordLayouts() []civ.RecordLayout {
 }
 
 func recordLayout(class string, length int, modes map[byte]string) civ.RecordLayout {
-	modeValues := make([]byte, 0, len(modes))
-	for value := range modes {
-		modeValues = append(modeValues, value)
-	}
-	sort.Slice(modeValues, func(i, j int) bool { return modeValues[i] < modeValues[j] })
+	modeValues := slices.Sorted(maps.Keys(modes))
 	fields := commonFields(modes)
 	if class == "FM" {
 		fields = append(fields, fmTailFields()...)

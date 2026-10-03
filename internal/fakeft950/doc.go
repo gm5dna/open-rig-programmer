@@ -52,7 +52,7 @@
 // core/cat/ft950, not core/codeplug, not core/spec, and not
 // internal/fakeft2000 or any sibling fake. Standard library only, in every
 // non-test file, in this directory and every directory beneath it
-// (imports_test.go). This package was built without reading core/kw/ft950 or
+// (internal/guards/fakes_imports_test.go). This package was built without reading core/kw/ft950 or
 // core/driver/ft950 at all — not even for a byte offset or an enum spelling —
 // precisely so that a systematic error in that driver's own reading of the
 // manual (an off-by-one offset, a validation rule subtly wrong) cannot sit on
@@ -63,6 +63,9 @@
 // gitignored) and from docs/superpowers/ft950-capability-matrix.md, cited
 // "layout:NNN" throughout — a citation names where the chart is, not a link,
 // since the manual itself is never committed.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING of internal/fakeft2000, not a refactor of it
 //

@@ -12,18 +12,12 @@
 // fakets570 MUST NOT import any package of this project — not core/kw, not
 // core/kw/ts570, not core/codeplug, not core/spec, not core/driver/ts570, and
 // not any sibling fake. Standard library only, in every non-test file, in
-// this directory AND every directory beneath it (imports_test.go enforces
+// this directory AND every directory beneath it (internal/guards/fakes_imports_test.go enforces
 // this recursively). Every byte offset, field width and legend below is
 // re-derived from `docs/superpowers/ts570-capability-matrix.md` (itself
 // derived from the TS-570 Instruction Manual's "COMPUTER CONTROL COMMAND
 // TABLES" appendix, cited "PDF p.N (printed M)") and from the manual's own
 // layout text directly — never from core/kw/ts570 or core/driver/ts570.
-//
-// THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the goroutine
-// bookkeeping, the interruptible latency wait and the raw write. It is
-// PROTOCOL-FREE — it carries no framing, no field layout and no reply
-// building — so a bug in it cannot make a wrong codec look right; it can only
-// stop bytes moving, which this package's own tests notice at once.
 //
 // The reasoning for the fence as a whole is internal/fakets590's own: if this
 // fake reused core/kw's or core/driver/ts570's understanding of the wire, a
@@ -31,6 +25,9 @@
 // rule subtly wrong — would sit on both sides of every "send a command, check
 // the reply" test this project runs, and never surface. The fake disagreeing
 // with the codec is what makes the cross-check mean anything.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # Three rows, one Option
 //

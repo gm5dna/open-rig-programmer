@@ -18,7 +18,7 @@ citations here name a line rather than link to it) and from
 `docs/superpowers/ts2000-capability-matrix.md`'s own transcription and
 grading of that appendix — and from nothing else. This package imports
 nothing project-internal, in this directory or any beneath it,
-`imports_test.go` enforces that mechanically and recursively, and the reason
+`internal/guards/fakes_imports_test.go` enforces that mechanically and recursively, and the reason
 is doc.go's THE HARD RULE: a fake built from the production codec cannot
 disagree with it, so a systematic bug there would sit on both sides of every
 test and never surface.

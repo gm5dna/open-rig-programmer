@@ -66,24 +66,6 @@ func capsExpressesCTCSSState(caps spec.Capabilities) bool {
 	return false
 }
 
-// valuesOf returns the Value of every entry in items, in order, via the
-// caller's own accessor — for building a caps-driven vocabulary list for
-// an error message without re-deriving a []string by hand at the call
-// site. Shared by shiftOptionValues, duplexOptionValues and
-// toneModeValues below, whose item types differ.
-func valuesOf[T any](items []T, value func(T) string) []string {
-	out := make([]string, len(items))
-	for i, it := range items {
-		out[i] = value(it)
-	}
-	return out
-}
-
-// shiftOptionValues returns the Value of every entry in opts, in order.
-func shiftOptionValues(opts []spec.ShiftOption) []string {
-	return valuesOf(opts, func(o spec.ShiftOption) string { return o.Value })
-}
-
 // quotedList formats vals as a comma-separated list of double-quoted
 // values, e.g. []string{"OFF", "ENC"} -> `"OFF", "ENC"` — so a Validate
 // error message names caps' own vocabulary list rather than a hardcoded
@@ -361,7 +343,7 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 	if checkCTCSS && !ctcssKnown {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSState, Severity: SeverityError,
-			Msg: fmt.Sprintf("slot %q: ctcss %q must be one of %s", slot, d.CTCSS, quotedList(toneModeValues(caps.ToneModes))),
+			Msg: fmt.Sprintf("slot %q: ctcss %q must be one of %s", slot, d.CTCSS, quotedList(spec.ToneModeValues(caps.ToneModes))),
 		})
 	}
 
@@ -405,10 +387,10 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 
 	// The Yaesu shift vocabulary check, capability-keyed on caps' own
 	// ShiftOptions for exactly the reason the CTCSS check above gives.
-	if len(caps.ShiftOptions) > 0 && !slices.Contains(shiftOptionValues(caps.ShiftOptions), d.Shift) {
+	if len(caps.ShiftOptions) > 0 && !slices.Contains(spec.ShiftOptionValues(caps.ShiftOptions), d.Shift) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldShift, Severity: SeverityError,
-			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(shiftOptionValues(caps.ShiftOptions))),
+			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(spec.ShiftOptionValues(caps.ShiftOptions))),
 		})
 	}
 
@@ -543,9 +525,9 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 	// (ProgramTuningStepHz).
 	validFor := map[spec.Field]func() error{
 		spec.FieldTxFrequency:       func() error { return d.TxFreqHz.Valid() },
-		spec.FieldDuplex:            func() error { return d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)) },
+		spec.FieldDuplex:            func() error { return d.Duplex.Valid(spec.DuplexOptionValues(caps.DuplexOptions)) },
 		spec.FieldOffset:            func() error { return d.OffsetHz.Valid() },
-		spec.FieldToneMode:          func() error { return d.ToneMode.Valid(toneModeValues(caps.ToneModes)) },
+		spec.FieldToneMode:          func() error { return d.ToneMode.Valid(spec.ToneModeValues(caps.ToneModes)) },
 		spec.FieldToneTx:            func() error { return d.ToneTx.Valid(caps) },
 		spec.FieldToneRx:            func() error { return d.ToneRx.Valid(caps) },
 		spec.FieldDTCSCode:          func() error { return d.DTCSCode.Valid(caps.DTCSCodes) },
@@ -580,18 +562,6 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 		}
 	}
 	return issues
-}
-
-// duplexOptionValues returns the Value of every entry in opts, in order
-// — caps' own duplex vocabulary as the plain []string StringField.Valid
-// takes.
-func duplexOptionValues(opts []spec.DuplexOption) []string {
-	return valuesOf(opts, func(o spec.DuplexOption) string { return o.Value })
-}
-
-// toneModeValues returns the Value of every entry in modes, in order.
-func toneModeValues(modes []spec.ToneMode) []string {
-	return valuesOf(modes, func(m spec.ToneMode) string { return m.Value })
 }
 
 // HasErrors reports whether issues contains at least one SeverityError

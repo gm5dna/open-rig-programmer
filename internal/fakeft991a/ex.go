@@ -25,7 +25,7 @@ import "strings"
 //     from TRANSCRIPTION A (core/cat/ft991a/table2.csv) by internal/extable;
 //   - THIS inventory is generated from TRANSCRIPTION B by
 //     exinventory.go, which imports nothing project-internal at all —
-//     not extable, not core/cat (the recursive fence in imports_test.go
+//     not extable, not core/cat (the recursive fence in internal/guards/fakes_imports_test.go
 //     enforces it for this directory and every one beneath it);
 //   - core/transport/ex_crosscheck_ft991a_test.go proves the two agree, address
 //     for address and width for width, and drives every address over the wire.

@@ -29,7 +29,7 @@
 // core/civ/ic7610, not core/driver/ic7610, not core/codeplug, not core/spec,
 // not internal/fakedx101, not internal/fakeradio, not internal/fakedx10.
 // Standard library only, in every non-test file, in this directory AND every
-// directory beneath it. TestNoCoreImports (imports_test.go) enforces it with a
+// directory beneath it. TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a
 // recursive go/parser scan, and that file was written and proven green BEFORE
 // a line of protocol code in this package existed.
 //
@@ -49,14 +49,8 @@
 // two evidence artefacts named in PROVENANCE.md and a quarantined block of
 // wire facts read off the manual by other agents.
 //
-// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
-// the goroutine bookkeeping, the interruptible latency wait and the raw write.
-// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
-// and nothing else, so it carries no framing, no field layout and no reply
-// building. A bug in it therefore cannot make a wrong codec look right; it can
-// only stop bytes moving, which this package's own tests notice at once.
-// Everything above the wire — the reassembler, the parser, the image, the
-// replies — stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # Framing
 //

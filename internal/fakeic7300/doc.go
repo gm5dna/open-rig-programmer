@@ -12,7 +12,7 @@
 // directory, or in any directory beneath it, may import anything under
 // github.com/gm5dna/open-rig-programmer/ — not core/civ, not core/civ/ic7300,
 // not core/driver, not core/codeplug, not core/spec, and not a sibling fake.
-// imports_test.go enforces it by walking the tree, and its own self-tests prove
+// internal/guards/fakes_imports_test.go enforces it by walking the tree, and its own self-tests prove
 // the walk bites.
 //
 // The rule exists so that this fake is an INDEPENDENT SECOND OPINION about the
@@ -27,14 +27,8 @@
 // nothing else in this repository. No golden file, no field ledger, no plan and
 // no production source was consulted. record.go carries the derivation.
 //
-// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
-// the goroutine bookkeeping, the interruptible latency wait and the raw write.
-// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
-// and nothing else, so it carries no framing, no field layout and no reply
-// building. A bug in it therefore cannot make a wrong codec look right; it can
-// only stop bytes moving, which this package's own tests notice at once.
-// Everything above the wire — the reassembler, the parser, the image, the
-// replies — stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # The address is not a literal
 //

@@ -22,7 +22,7 @@
 // implementations of the same protocol, checked against each other (and
 // against golden byte vectors recomputed by hand in tests — never by
 // calling fakeradio's own builders), is what makes that class of bug
-// visible. TestNoCoreImports (imports_test.go) enforces this with a
+// visible. TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces this with a
 // go/parser scan of the package's own source, asserting no
 // project-internal import path appears.
 //
@@ -34,6 +34,9 @@
 // only stop bytes moving, which this package's own tests notice at once.
 // Everything above the wire — the reassembler, the parser, the image, the
 // replies — stays here, written independently.
+//
+// This is the canonical statement of the rule: every other internal/fake*
+// package's doc.go points here rather than restating it.
 //
 // # The ASSUMED register
 //

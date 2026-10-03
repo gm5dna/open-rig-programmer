@@ -5,6 +5,8 @@ package ma
 import (
 	"bytes"
 	"strings"
+
+	"github.com/gm5dna/open-rig-programmer/core/kw"
 )
 
 // THE TS-890S MA0 CODEC, HAND-WRITTEN AGAINST THAT BOOK'S OWN POSITION RULER.
@@ -100,22 +102,22 @@ func ma0AnswerMatcher890(prefix string) func(frame []byte) bool {
 func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 	const what = "MA0 answer"
 	if len(frame) < ma890MinLen || len(frame) > ma890MaxLen {
-		return Record{}, newParseError(frame, "%s: the frame is %d bytes, and the TS-890S grid runs 40 to 50 — thirty-nine printed positions, a name of up to ten characters (890:3208-3209) and a terminator that floats at 40 + len(name) (890:3181-3182); the 40-byte minimum is A17", what, len(frame))
+		return Record{}, kw.NewParseError(frame, "%s: the frame is %d bytes, and the TS-890S grid runs 40 to 50 — thirty-nine printed positions, a name of up to ten characters (890:3208-3209) and a terminator that floats at 40 + len(name) (890:3181-3182); the 40-byte minimum is A17", what, len(frame))
 	}
 	if string(frame[:len(ma0Prefix)]) != ma0Prefix {
-		return Record{}, newParseError(frame, "%s: missing %q prefix, got %q", what, ma0Prefix, frame[:len(ma0Prefix)])
+		return Record{}, kw.NewParseError(frame, "%s: missing %q prefix, got %q", what, ma0Prefix, frame[:len(ma0Prefix)])
 	}
 	// THE TERMINATOR IS SCANNED FOR, NOT INDEXED. It floats, so its
 	// position is a reading rather than a constant; and requiring the FIRST
 	// ';' to be the last byte is what makes "one frame" mean the same thing
 	// here as it does to the radio's own parser.
 	if i := bytes.IndexByte(frame, ';'); i != len(frame)-1 {
-		return Record{}, newParseError(frame, "%s: the ';' terminator is not the last byte — the ruler heads it \"x\" and it floats at 40 + len(name) (890:3181-3182), so a frame carrying an earlier ';' is two frames to the radio's own parser", what)
+		return Record{}, kw.NewParseError(frame, "%s: the ';' terminator is not the last byte — the ruler heads it \"x\" and it floats at 40 + len(name) (890:3181-3182), so a frame carrying an earlier ';' is two frames to the radio's own parser", what)
 	}
 
 	slot, err := l.parseSlotField(frame)
 	if err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	rec := Record{Slot: slot}
 
@@ -140,24 +142,24 @@ func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 	}
 
 	if rec.FreqHz, err = decodeDigits("P2, the frequency", frame[ma890FreqOff:ma890FreqOff+ma0FreqDigits]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if err = l.checkModeByte("P3, the mode", frame[ma890ModeOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.Mode = frame[ma890ModeOff]
 	if rec.FMNarrow, err = decodeFlag("P4, the FM normal/narrow information", frame[ma890NarrowOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if err = checkToneType("P5, the FM tone type", frame[ma890ToneTypeOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.ToneType = frame[ma890ToneTypeOff]
 	if rec.ToneIndex, err = parseToneIndex("P6, the tone frequency", frame[ma890ToneOff:ma890ToneOff+ma0ToneDigits], l.checkToneIndex); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if rec.CTCSSIndex, err = parseToneIndex("P7, the CTCSS frequency", frame[ma890CTCSSOff:ma890CTCSSOff+ma0ToneDigits], l.checkCTCSSIndex); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 
 	// THE SPLIT SIDE IS DOMAIN-CHECKED ONLY WHEN IT CARRIES CONTENT (A16).
@@ -166,22 +168,22 @@ func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 	// it unconditionally would refuse every unsplit channel on the radio.
 	if !allBytes(frame[ma890SecondLo:ma890SecondHi+1], '0') {
 		if rec.TXFreqHz, err = decodeDigits("P8, the split transmission frequency", frame[ma890TXFreqOff:ma890TXFreqOff+ma0FreqDigits]); err != nil {
-			return Record{}, newParseError(frame, "%s: %v", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 		}
 		if err = l.checkModeByte("P9, the split transmission mode", frame[ma890TXModeOff]); err != nil {
-			return Record{}, newParseError(frame, "%s: %v — a frame whose P8-P10 are not all zero is not the single memory channel of 890:3217-3218 (A16)", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v — a frame whose P8-P10 are not all zero is not the single memory channel of 890:3217-3218 (A16)", what, err)
 		}
 		rec.TXMode = frame[ma890TXModeOff]
 		if rec.TXFMNarrow, err = decodeFlag("P10, the split transmission FM normal/narrow information", frame[ma890TXNarrowOff]); err != nil {
-			return Record{}, newParseError(frame, "%s: %v", what, err)
+			return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 		}
 	}
 
 	if rec.Split, err = decodeFlag("P11, the split information", frame[ma890SplitOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	if rec.Lockout, err = decodeFlag("P12, the scan lockout", frame[ma890LockoutOff]); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	// C-MED-1 REVERSAL (adjudication): the terminator FLOATS at 40 + len(name)
 	// (890:3181-3182), so "...AB ;" and "...AB;" are DISTINCT, unambiguous
@@ -189,7 +191,7 @@ func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 	// applies. checkName is domain-only (length, ';', printable); no trim.
 	// A1's pad/trim rule is TS-990S ONLY (parseName, doc.go A1).
 	if err = checkName("P13, the channel name", string(frame[ma890NameOff:len(frame)-1])); err != nil {
-		return Record{}, newParseError(frame, "%s: %v", what, err)
+		return Record{}, kw.NewParseError(frame, "%s: %v", what, err)
 	}
 	rec.Name = string(frame[ma890NameOff : len(frame)-1])
 	return rec, nil
@@ -203,7 +205,7 @@ func (l Layout) parseMA0Answer890(frame []byte) (Record, error) {
 func (l Layout) buildMA0Set890(rec Record) (Command, error) {
 	const what = "MA0 set"
 	if err := l.checkRecordCommon(rec); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 
 	// THE FIELDS THIS GRID DOES NOT HAVE ARE REFUSED, NOT DROPPED. The
@@ -212,29 +214,29 @@ func (l Layout) buildMA0Set890(rec Record) (Command, error) {
 	// other radio, and emitting a frame that silently omitted them would be
 	// data loss wearing a successful write.
 	if rec.TXToneType != 0 || rec.TXToneIndex != 0 || rec.TXCTCSSIndex != 0 {
-		return Command{}, newParseError(nil, "%s: this record carries a second tone tuple (P12-P14 on the TS-990S, 990:2935-2945) and the TS-890S grid has one tone pair, at P6-P7 (890:3186-3190) — there is no position to put it in", what)
+		return Command{}, kw.NewParseError(nil, "%s: this record carries a second tone tuple (P12-P14 on the TS-990S, 990:2935-2945) and the TS-890S grid has one tone pair, at P6-P7 (890:3186-3190) — there is no position to put it in", what)
 	}
 	if rec.DualRecv {
-		return Command{}, newParseError(nil, "%s: this record carries dual reception (P16 on the TS-990S, 990:2949-2951) and the TS-890S grid has no such parameter", what)
+		return Command{}, kw.NewParseError(nil, "%s: this record carries dual reception (P16 on the TS-990S, 990:2949-2951) and the TS-890S grid has no such parameter", what)
 	}
 	if rec.Class != 0 && rec.Class != '0' {
-		return Command{}, newParseError(nil, "%s: this record carries a channel type of %q (P2 on the TS-990S, 990:2897-2903) and the TS-890S grid has no channel type byte", what, rec.Class)
+		return Command{}, kw.NewParseError(nil, "%s: this record carries a channel type of %q (P2 on the TS-990S, 990:2897-2903) and the TS-890S grid has no channel type byte", what, rec.Class)
 	}
 
 	if err := checkFreq("P2, the frequency", rec.FreqHz); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkModeByte("P3, the mode", rec.Mode); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := checkToneType("P5, the FM tone type", rec.ToneType); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkToneIndex("P6, the tone frequency", rec.ToneIndex); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkCTCSSIndex("P7, the CTCSS frequency", rec.CTCSSIndex); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	// C-MED-1 REVERSAL (adjudication): checkName's domain (length, ';',
 	// printable) is the whole of P13's rule on this row. THIS ROW'S GRID
@@ -244,7 +246,7 @@ func (l Layout) buildMA0Set890(rec Record) (Command, error) {
 	// therefore ADMITS a trailing-space name rather than refusing it; A1's
 	// pad/trim rule is TS-990S ONLY (doc.go A1).
 	if err := checkName("P13, the channel name", rec.Name); err != nil {
-		return Command{}, newParseError(nil, "%s: %v", what, err)
+		return Command{}, kw.NewParseError(nil, "%s: %v", what, err)
 	}
 
 	second, err := l.buildSecond890(what, rec)
@@ -269,7 +271,7 @@ func (l Layout) buildMA0Set890(rec Record) (Command, error) {
 
 	frame := []byte(b.String())
 	if want := ma890MinLen + len(rec.Name); len(frame) != want {
-		return Command{}, newParseError(frame, "%s: built %d bytes, want %d = 40 + len(name) (890:3181-3182)", what, len(frame), want)
+		return Command{}, kw.NewParseError(frame, "%s: built %d bytes, want %d = 40 + len(name) (890:3181-3182)", what, len(frame), want)
 	}
 	return newCommand(frame), nil
 }
@@ -295,18 +297,18 @@ func (l Layout) buildSecond890(what string, rec Record) (string, error) {
 		// it while carrying split content is refused rather than half
 		// emitted.
 		if rec.TXFreqHz != 0 || rec.TXFMNarrow || rec.Split {
-			return "", newParseError(nil, "%s: this record has no second side mode but carries split transmission content (P8 = %d, P10 = %v, P11 = %v); a single memory channel's whole split side is zero, which a split P11 contradicts (890:3201-3203, 890:3217-3218)", what, rec.TXFreqHz, rec.TXFMNarrow, rec.Split)
+			return "", kw.NewParseError(nil, "%s: this record has no second side mode but carries split transmission content (P8 = %d, P10 = %v, P11 = %v); a single memory channel's whole split side is zero, which a split P11 contradicts (890:3201-3203, 890:3217-3218)", what, rec.TXFreqHz, rec.TXFMNarrow, rec.Split)
 		}
 		return strings.Repeat("0", ma0FreqDigits+2), nil
 	}
 	if err := checkFreq("P8, the split transmission frequency", rec.TXFreqHz); err != nil {
-		return "", newParseError(nil, "%s: %v", what, err)
+		return "", kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if err := l.checkModeByte("P9, the split transmission mode", rec.TXMode); err != nil {
-		return "", newParseError(nil, "%s: %v", what, err)
+		return "", kw.NewParseError(nil, "%s: %v", what, err)
 	}
 	if rec.TXFMNarrow != rec.FMNarrow {
-		return "", newParseError(nil, "%s: the receive side's FM normal/narrow information is %v and the transmission side's is %v — the book requires \"the same setting on the transmission side and the reception side for FM normal / narrow information (P4, P10)\" when setting a split memory channel (890:3219-3221)", what, rec.FMNarrow, rec.TXFMNarrow)
+		return "", kw.NewParseError(nil, "%s: the receive side's FM normal/narrow information is %v and the transmission side's is %v — the book requires \"the same setting on the transmission side and the reception side for FM normal / narrow information (P4, P10)\" when setting a split memory channel (890:3219-3221)", what, rec.FMNarrow, rec.TXFMNarrow)
 	}
 	return encodeFreq(rec.TXFreqHz) + string(rec.TXMode) + string(flagByte(rec.TXFMNarrow)), nil
 }

@@ -39,7 +39,7 @@ import (
 // Radio.Port(), an in-memory duplex connection, and the fake is asked nothing
 // but what a CI-V controller may ask over it. Neither package imports the
 // other: fakeicr8600 imports nothing of this repository at all (its own
-// TestNoCoreImports enforces that), and this file's only use of the fake is
+// TestFakesImportNothingProjectInternal enforces that), and this file's only use of the fake is
 // its constructor, its Options, its Port, its Frames and its Record.
 //
 // WHAT THE FAKE'S DEFAULT IMAGE IS, AND WHY THE EXPECTATIONS BELOW ARE

@@ -36,19 +36,13 @@
 // tests — never by calling this package's own builders — is what makes that
 // class of bug visible.
 //
-// TestNoCoreImports (imports_test.go) enforces it with a go/parser scan that
+// TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a go/parser scan that
 // WALKS SUBDIRECTORIES, with vacuity guards and its own red proof. That file is
 // internal/fakedx101's, COPIED — copied rather than imported, because importing
 // the thing that enforces "import nothing" would break the rule it enforces.
 //
-// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
-// the goroutine bookkeeping, the interruptible latency wait and the raw write.
-// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
-// and nothing else, so it carries no framing, no field layout and no reply
-// building. A bug in it therefore cannot make a wrong codec look right; it can
-// only stop bytes moving, which this package's own tests notice at once.
-// Everything above the wire — the reassembler, the parser, the image, the
-// replies — stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # What this fake does
 //

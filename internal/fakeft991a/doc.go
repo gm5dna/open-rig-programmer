@@ -35,9 +35,9 @@
 // exactly the import this package must not have (one parser on both sides of
 // the EX cross-check would reproduce a shared parsing bug into both inventories
 // invisibly).
-// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proved the
+// TestFakeImportViolations_Self proved the
 // fence would bite there before the directory existed, and now that it does,
-// TestNoCoreImports_ReachesTheGenerator asserts by PATH that the real scan
+// TestFakesImportNothingProjectInternal asserts by PATH that the real scan
 // reaches the real exinventory.go.
 //
 // Every byte offset, field width and validation rule below is re-derived from
@@ -46,14 +46,8 @@
 // records are core/cat/ft991a/testdata/{mt,mr,mc,mw,ex}-vectors.golden and
 // provenance.md.
 //
-// This is not a style preference, and the reasoning is internal/fakeradio's
-// verbatim: if this fake reused core/cat's codec, a systematic bug in that
-// codec — an off-by-one in a field offset, a validation rule subtly wrong —
-// would be applied identically on both sides of every "send a command, check
-// the reply" test this project runs. The bug would never surface. The fake has
-// to be able to DISAGREE with the production codec for a test against it to
-// mean anything, and it can only disagree if it was built from the manual
-// rather than from the code.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING of internal/fakeft891, not a refactor of it
 //

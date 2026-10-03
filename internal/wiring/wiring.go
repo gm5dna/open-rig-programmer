@@ -1559,17 +1559,6 @@ func registerDriver(d driver.Driver) error {
 	return nil
 }
 
-// NewRealDriver builds the ft710 driver for a real-hardware session:
-// profile ft710.RealHardware, the zero value. It is split out from
-// OpenRealSessionWith so the capability set it implies — post-M5b-flip,
-// write-capable for EXACTLY the six hardware-verified fields and
-// nothing else (ft710.CapabilitiesRealHardware; before the flip,
-// nothing writable at all) — can be pinned by a unit test that never
-// opens a serial port (see TestNewRealDriver_HWVerifiedWriteSet).
-func NewRealDriver() driver.Driver {
-	return ft710.New(ft710.RealHardware)
-}
-
 // openSerial is OpenRealSessionWith's test seam: production code always
 // leaves this at transport.OpenSerial, and OpenRealSessionWith calls it
 // instead of transport.OpenSerial directly. It exists for exactly one
@@ -1699,7 +1688,7 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 }
 
 // StaticCapabilities returns model's static baseline capability
-// description — the same value NewRealDriver().Capabilities() reports for
+// description — the same value ft710.New(ft710.RealHardware).Capabilities() reports for
 // DefaultModel — via a registry lookup (mirroring OpenRealSessionWith's own
 // construction, so Registry.Register's Capabilities().Validate check runs
 // here too) plus Driver.Capabilities(). Fails with *UnknownModelError for

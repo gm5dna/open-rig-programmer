@@ -15,7 +15,7 @@ import (
 //
 // The parsing below imports nothing project-internal, and in particular NOT
 // internal/extable — the machinery that derives the DIALECT's inventory from
-// transcription A. imports_test.go's recursive fence enforces that
+// transcription A. internal/guards/fakes_imports_test.go's recursive fence enforces that
 // mechanically, and the reason is the design this file exists to serve: the
 // dialect's inventory comes from transcription A (core/kw/ma/menu990s.csv) by
 // one piece of code, this fake's from transcription B by the code below, and

@@ -65,3 +65,9 @@ func TestCommandString(t *testing.T) {
 		t.Fatalf("String() = %q, want %q", got, want)
 	}
 }
+
+// BuildFrame returns a fresh 5-byte frame: args[0..3] followed by opcode.
+// The returned slice never aliases args.
+func BuildFrame(opcode byte, args [4]byte) []byte {
+	return []byte{args[0], args[1], args[2], args[3], opcode}
+}

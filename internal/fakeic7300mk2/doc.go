@@ -63,10 +63,13 @@
 // expectations recomputed by hand in tests, is what makes that class of bug
 // visible.
 //
-// TestNoCoreImports (imports_test.go) enforces it with a go/parser scan that
+// TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a go/parser scan that
 // WALKS SUBDIRECTORIES, and three sibling tests keep the scan itself honest,
 // including the vacuity guards that would otherwise let it pass having
 // examined nothing.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING, not a refactor
 //

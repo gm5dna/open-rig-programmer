@@ -120,13 +120,23 @@ func (l Layout) BuildTYRead() (Command, error) {
 // edited without its length constant, or the reverse, fails here rather than
 // on a radio.
 func (l Layout) buildFixedFrame(what, frame string, wantLen int) (Command, error) {
-	if !l.Configured() {
-		return Command{}, newParseError(nil, "%s: this layout is unconfigured and describes no radio", what)
-	}
-	if len(frame) != wantLen {
-		return Command{}, newParseError([]byte(frame), "%s: built %d bytes, want exactly %d", what, len(frame), wantLen)
+	if err := CheckFixedFrame(l.Configured(), what, frame, wantLen); err != nil {
+		return Command{}, err
 	}
 	return newCommand([]byte(frame)), nil
+}
+
+// CheckFixedFrame is buildFixedFrame's refusals, shared with core/kw/ma,
+// whose Layout and Command are its own types. configured is the caller's
+// Layout.Configured().
+func CheckFixedFrame(configured bool, what, frame string, wantLen int) error {
+	if !configured {
+		return NewParseError(nil, "%s: this layout is unconfigured and describes no radio", what)
+	}
+	if len(frame) != wantLen {
+		return NewParseError([]byte(frame), "%s: built %d bytes, want exactly %d", what, len(frame), wantLen)
+	}
+	return nil
 }
 
 // requireBook refuses a command whose chart is printed in only one of the
@@ -139,10 +149,10 @@ func (l Layout) buildFixedFrame(what, frame string, wantLen int) (Command, error
 // report a refusal it could not explain.
 func (l Layout) requireBook(what string, want Book) error {
 	if !l.Configured() {
-		return newParseError(nil, "%s: this layout is unconfigured and describes no radio", what)
+		return NewParseError(nil, "%s: this layout is unconfigured and describes no radio", what)
 	}
 	if l.book != want {
-		return newParseError(nil, "%s: this command is printed only in the %v, and the %s speaks the %v", what, want, l.model, l.book)
+		return NewParseError(nil, "%s: this command is printed only in the %v, and the %s speaks the %v", what, want, l.model, l.book)
 	}
 	return nil
 }
@@ -168,7 +178,7 @@ func (l Layout) ParseIDAnswer(frame []byte) (string, error) {
 	field := frame[2 : 2+IDDigits]
 	for i, b := range field {
 		if b < '0' || b > '9' {
-			return "", newParseError(frame, "ID answer: P1 byte %d is %q; both books print P1 as three digits (590:1114-1116, 480:678), and a Kenwood answer is %d bytes with %d digits where a Yaesu one is 7 bytes with 4", i+1, b, IDAnswerLen, IDDigits)
+			return "", NewParseError(frame, "ID answer: P1 byte %d is %q; both books print P1 as three digits (590:1114-1116, 480:678), and a Kenwood answer is %d bytes with %d digits where a Yaesu one is 7 bytes with 4", i+1, b, IDAnswerLen, IDDigits)
 		}
 	}
 	return string(field), nil
@@ -202,7 +212,7 @@ func (l Layout) ParseFVAnswer(frame []byte) (string, error) {
 	field := frame[2 : 2+FVChars]
 	for i, b := range field {
 		if b < 0x20 || b > 0x7e || b == ';' {
-			return "", newParseError(frame, "FV answer: P1 byte %d is %#02x, which is not a printable ASCII character this codec will read as part of a version string (480:127-129 states the control-code rule; A2's claim is bounded at 0x7E)", i+1, b)
+			return "", NewParseError(frame, "FV answer: P1 byte %d is %#02x, which is not a printable ASCII character this codec will read as part of a version string (480:127-129 states the control-code rule; A2's claim is bounded at 0x7E)", i+1, b)
 		}
 	}
 	return string(field), nil
@@ -288,12 +298,12 @@ func (l Layout) ParseTYAnswer(frame []byte) (TYAnswer, error) {
 	reserved := frame[2 : 2+TYReservedLen]
 	for i, b := range reserved {
 		if b < 0x20 || b == ';' {
-			return TYAnswer{}, newParseError(frame, "TY answer: P1 byte %d is %#02x; P1 is printed \"Reserved\" (480:1623) and is accepted opaquely, but the document forbids the control codes 00-1Fh and ';' in any parameter (480:127-129)", i+1, b)
+			return TYAnswer{}, NewParseError(frame, "TY answer: P1 byte %d is %#02x; P1 is printed \"Reserved\" (480:1623) and is accepted opaquely, but the document forbids the control codes 00-1Fh and ';' in any parameter (480:127-129)", i+1, b)
 		}
 	}
 	variant := frame[2+TYReservedLen]
 	if variant < '0' || variant > '3' {
-		return TYAnswer{}, newParseError(frame, "TY answer: P2 is %q, and the document prints exactly four variants, '0'..'3' (480:1626-1629); decision 4 refuses a fifth rather than reporting it as an unknown variant or defaulting it to one of the four", variant)
+		return TYAnswer{}, NewParseError(frame, "TY answer: P2 is %q, and the document prints exactly four variants, '0'..'3' (480:1626-1629); decision 4 refuses a fifth rather than reporting it as an unknown variant or defaulting it to one of the four", variant)
 	}
 	return TYAnswer{Reserved: string(reserved), Variant: variant}, nil
 }
@@ -308,17 +318,23 @@ func (l Layout) ParseTYAnswer(frame []byte) (TYAnswer, error) {
 // test asserting "the length first" is asserting one rule rather than four
 // copies of one.
 func (l Layout) checkAnswerShape(what string, frame []byte, prefix string, wantLen int) error {
-	if !l.Configured() {
-		return newParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
+	return CheckAnswerShape(l.Configured(), what, frame, prefix, wantLen)
+}
+
+// CheckAnswerShape is checkAnswerShape for core/kw/ma too; configured is the
+// caller's Layout.Configured().
+func CheckAnswerShape(configured bool, what string, frame []byte, prefix string, wantLen int) error {
+	if !configured {
+		return NewParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
 	}
 	if len(frame) != wantLen {
-		return newParseError(frame, "%s: the frame is %d bytes, want exactly %d", what, len(frame), wantLen)
+		return NewParseError(frame, "%s: the frame is %d bytes, want exactly %d", what, len(frame), wantLen)
 	}
 	if string(frame[:len(prefix)]) != prefix {
-		return newParseError(frame, "%s: missing %q prefix, got %q", what, prefix, frame[:len(prefix)])
+		return NewParseError(frame, "%s: missing %q prefix, got %q", what, prefix, frame[:len(prefix)])
 	}
 	if frame[wantLen-1] != ';' {
-		return newParseError(frame, "%s: missing ';' terminator at position %d", what, wantLen)
+		return NewParseError(frame, "%s: missing ';' terminator at position %d", what, wantLen)
 	}
 	return nil
 }

@@ -88,13 +88,13 @@ that arithmetic against the table.
 
 Read for **shape**, never for protocol: its `Radio`/`Option`/`Port`/`Close`
 layout, its `net.Pipe` and `Close` reasoning, its separation of state, options,
-image and parser into files, and its `imports_test.go`, which was **copied**
+image and parser into files, and its `internal/guards/fakes_imports_test.go`, which was **copied**
 (the recursive version, with its vacuity guards and its red proof) and adapted
 only in its package clause and its prose.
 
 **Its protocol is ASCII CAT and this one is binary CI-V; not one protocol byte,
 offset or rule crossed over.** `fakedx101` is not imported — it could not be,
-and `TestNoCoreImports` proves it is not.
+and `TestFakesImportNothingProjectInternal` proves it is not.
 
 ## What was NOT read
 

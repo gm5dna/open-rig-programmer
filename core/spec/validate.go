@@ -49,7 +49,7 @@ func validateVocabEntries(fieldName string, values []string) []string {
 // caller's own accessor — so a vocabulary list can be checked against the
 // same blank/duplicate rules every other vocabulary gets, without a
 // []string being built by hand at the call site. Shared by
-// shiftOptionValues, duplexOptionValues and toneModeValues below, whose
+// ShiftOptionValues, DuplexOptionValues and ToneModeValues below, whose
 // item types differ.
 func valuesOf[T any](items []T, value func(T) string) []string {
 	out := make([]string, len(items))
@@ -59,8 +59,8 @@ func valuesOf[T any](items []T, value func(T) string) []string {
 	return out
 }
 
-// shiftOptionValues returns the Value of every entry in opts, in order.
-func shiftOptionValues(opts []ShiftOption) []string {
+// ShiftOptionValues returns the Value of every entry in opts, in order.
+func ShiftOptionValues(opts []ShiftOption) []string {
 	return valuesOf(opts, func(o ShiftOption) string { return o.Value })
 }
 
@@ -73,15 +73,15 @@ func validShiftDirection(d ShiftDirection) bool {
 	return d >= ShiftNone && d <= ShiftDown
 }
 
-// duplexOptionValues returns the Value of every entry in opts, in order,
+// DuplexOptionValues returns the Value of every entry in opts, in order,
 // so validateVocabEntries can check a DuplexOption list with the same
 // blank and duplicate rules every other vocabulary gets.
-func duplexOptionValues(opts []DuplexOption) []string {
+func DuplexOptionValues(opts []DuplexOption) []string {
 	return valuesOf(opts, func(o DuplexOption) string { return o.Value })
 }
 
-// toneModeValues returns the Value of every entry in modes, in order.
-func toneModeValues(modes []ToneMode) []string {
+// ToneModeValues returns the Value of every entry in modes, in order.
+func ToneModeValues(modes []ToneMode) []string {
 	return valuesOf(modes, func(m ToneMode) string { return m.Value })
 }
 
@@ -392,7 +392,7 @@ func (c Capabilities) Validate() error {
 	if len(c.ShiftOptions) == 0 && len(c.DuplexOptions) == 0 && c.anyBankReaches(FieldShift, FieldDuplex) {
 		problems = append(problems, "ShiftOptions must not be empty")
 	}
-	problems = append(problems, validateVocabEntries("ShiftOptions", shiftOptionValues(c.ShiftOptions))...)
+	problems = append(problems, validateVocabEntries("ShiftOptions", ShiftOptionValues(c.ShiftOptions))...)
 
 	// Every ShiftOptions entry's Direction must be a declared, meaningful
 	// ShiftDirection — never ShiftUnspecified, its zero value: an option
@@ -432,7 +432,7 @@ func (c Capabilities) Validate() error {
 	// declared semantics, one option per semantic — and contributes
 	// nothing at all when empty, which is every radio registered before
 	// that tier.
-	problems = append(problems, validateVocabEntries("DuplexOptions", duplexOptionValues(c.DuplexOptions))...)
+	problems = append(problems, validateVocabEntries("DuplexOptions", DuplexOptionValues(c.DuplexOptions))...)
 	for _, o := range c.DuplexOptions {
 		if !validDuplexDirection(o.Direction) {
 			problems = append(problems, fmt.Sprintf("DuplexOptions %q has invalid Direction %d", o.Value, o.Direction))
@@ -452,7 +452,7 @@ func (c Capabilities) Validate() error {
 		func(o DuplexOption) bool { return o.Canonical },
 	))...)
 
-	problems = append(problems, validateVocabEntries("ToneModes", toneModeValues(c.ToneModes))...)
+	problems = append(problems, validateVocabEntries("ToneModes", ToneModeValues(c.ToneModes))...)
 	for _, m := range c.ToneModes {
 		if !validToneModeSemantics(m.Semantics) {
 			problems = append(problems, fmt.Sprintf("ToneModes %q has invalid Semantics %d", m.Value, m.Semantics))

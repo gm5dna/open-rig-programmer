@@ -10,7 +10,7 @@
 // cites (docs/fixtures-private/manuals/ft1000mp*, gitignored, Yaesu
 // copyright — "layout:N" citations name where a chart is, not a link)
 // ONLY. core/driver/ft1000mp was never read, and does not exist on this
-// branch — see imports_test.go's fence.
+// branch — see internal/guards/fakes_imports_test.go's fence.
 //
 // # Scope this milestone actually ships
 //
@@ -64,7 +64,7 @@
 // invisibly, the whole reason this family of fakes exists independently),
 // not core/driver/ft1000mp (absent on this branch anyway), not core/civ,
 // not core/spec, not any sibling fake. internal/fakepipe (protocol-free
-// net.Pipe plumbing) is the one permitted share (imports_test.go).
+// net.Pipe plumbing) is the one permitted share (internal/guards/fakes_imports_test.go).
 package fakeft1000mp
 
 // writeTrialsComplete records this package's one honest status line: NO

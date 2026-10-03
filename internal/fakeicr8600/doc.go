@@ -29,14 +29,8 @@
 // imported the other, agreement would be a tautology, and the evidence would be
 // worth nothing.
 //
-// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
-// the goroutine bookkeeping, the interruptible latency wait and the raw write.
-// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
-// and nothing else, so it carries no framing, no field layout and no reply
-// building. A bug in it therefore cannot make a wrong codec look right; it can
-// only stop bytes moving, which this package's own tests notice at once.
-// Everything above the wire — the reassembler, the parser, the image, the
-// replies — stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # THE EVIDENCE BASE IS B, W AND G — WIDER THAN THE PLAN SAID
 //
@@ -51,7 +45,7 @@
 // records which printed page each golden vector's bytes were read from, and
 // nothing else. It is not Stage 1 or Stage 2 code, and NOTHING IN THIS PACKAGE
 // DEPENDS ON STAGE 1/2 CODE. The hard rule above is unweakened by the widening,
-// and TestNoCoreImports still proves that mechanically rather than on trust.
+// and TestFakesImportNothingProjectInternal still proves that mechanically rather than on trust.
 //
 // The reasoning is internal/fakeradio's, and it is worth restating because it
 // is the entire point of the rule: if this fake reused the production codec, a
@@ -63,7 +57,7 @@
 // tests — never by calling this package's own tables — is what makes that class
 // of bug visible.
 //
-// TestNoCoreImports (imports_test.go) enforces it with a go/parser scan that
+// TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a go/parser scan that
 // WALKS SUBDIRECTORIES, with vacuity guards and its own red proof. That file is
 // internal/fakeic905's, COPIED — copied rather than imported, because importing
 // the thing that enforces "import nothing" would break the rule it enforces.

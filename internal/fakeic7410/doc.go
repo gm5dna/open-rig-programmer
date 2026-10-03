@@ -51,7 +51,7 @@
 // fakeic7410 MUST NOT import core/civ, core/civ/ic7410, core/driver,
 // core/driver/ic7410, core/codeplug, core/spec, or any sibling fake.
 // Standard library only, in this directory and every directory beneath
-// it, with the one exception below. imports_test.go enforces it with a
+// it, with the one exception below. internal/guards/fakes_imports_test.go enforces it with a
 // recursive go/parser scan, proven green before any protocol code in this
 // package existed.
 //
@@ -68,10 +68,8 @@
 // implementations checked against each other is what makes that bug
 // visible.
 //
-// THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the
-// goroutine bookkeeping, the interruptible latency wait and the raw
-// write. PROTOCOL-FREE — []byte and a duration, nothing else — so a bug
-// in it cannot make a wrong codec look right.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # Framing
 //

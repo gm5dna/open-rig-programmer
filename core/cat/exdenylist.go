@@ -2,8 +2,6 @@
 
 package cat
 
-import "strings"
-
 // This file is HAND-MAINTAINED, not generated: unlike exinventory_gen.go
 // (internal/extable/gen, driven by table2.csv), nothing here is derived
 // mechanically from the CSV. Each predicate below encodes one of the six
@@ -47,17 +45,6 @@ func exCATLinkDenied(name string) bool {
 	default:
 		return false
 	}
-}
-
-// exKeyingDenied reports whether p4 (the manual's parameter-description
-// legend for the address, table2.csv's p4 column) is the RTS/DTR/DAKY
-// keying-port legend: PTT and CW keying routed over the CAT-1 serial lines
-// rather than a dedicated keying line. Matched by LEGEND, not name, because
-// the legend is what every RPTT SELECT item shares with PC KEYING (its name
-// alone does not say "keying port"). 12 addresses: eleven RPTT SELECT items
-// plus PC KEYING (table2.csv:59,78,94,116,132,149,151,266,284,302,320,338).
-func exKeyingDenied(p4 string) bool {
-	return containsAll(p4, "RTS", "DTR", "DAKY")
 }
 
 // exTunerRoutingDenied reports whether name is one of the two tuner/antenna
@@ -104,16 +91,6 @@ func exUnintendedTXSourceDenied(name string) bool {
 // controls. 6 addresses (table2.csv:233,249,267,285,303,321).
 func exTextDenied(text bool) bool {
 	return text
-}
-
-// containsAll reports whether s contains every one of subs, in any order.
-func containsAll(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if !strings.Contains(s, sub) {
-			return false
-		}
-	}
-	return true
 }
 
 // exHeldTriples lists the four addresses held read-only for v1.11.0 —

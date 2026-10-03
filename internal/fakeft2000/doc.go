@@ -43,7 +43,7 @@
 // core/cat/ft2000, not core/codeplug, not core/spec, and not
 // internal/fakeft991a or any sibling fake. Standard library only, in every
 // non-test file, in this directory and every directory beneath it
-// (imports_test.go). THE QUARANTINE GOES FURTHER for this package than for
+// (internal/guards/fakes_imports_test.go). THE QUARANTINE GOES FURTHER for this package than for
 // most: it was built without reading core/kw/ft2000 or core/driver/ft2000 at
 // all — not even for a byte offset or an enum spelling — precisely so that a
 // systematic error in that driver's own reading of the manual (an off-by-one
@@ -55,6 +55,9 @@
 // docs/superpowers/ft2000-capability-matrix.md, cited "layout:NNN" throughout
 // — a citation names where the chart is, not a link, since the manual itself
 // is never committed.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING of internal/fakeft991a, not a refactor of it
 //

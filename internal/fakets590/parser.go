@@ -239,10 +239,6 @@ const mcSetLen = 6
 // printed legend is refused, never quietly corrected, because a driver that
 // sent one would otherwise pass its own tests and fail on hardware.
 
-// validP1 reports whether b is one of P1's two printed values, "0: Simplex"
-// and "1: Split" (590:1441-1443, 590:1519-1520).
-func validP1(b byte) bool { return b == '0' || b == '1' }
-
 // validHundredsByte reports whether b is a legal spelling of the channel
 // number's 100's digit on a REQUEST: "When entering a setting command, enter
 // 0 or a space for a channel number less than 100." (590:1334-1335), which

@@ -2,7 +2,10 @@
 
 package cat
 
-import "sort"
+import (
+	"maps"
+	"slices"
+)
 
 // slotSpace describes one radio family's memory slot numbering: which
 // 3-byte wire forms exist and what each means. DATA, not code, so a
@@ -319,13 +322,8 @@ var FT710 = Dialect{
 // package, which bypass validation.
 func buildModeByName(names map[Mode]string) map[string]Mode {
 	out := make(map[string]Mode, len(names))
-	keys := make([]int, 0, len(names))
-	for m := range names {
-		keys = append(keys, int(m))
-	}
-	sort.Ints(keys)
-	for _, k := range keys {
-		out[names[Mode(k)]] = Mode(k)
+	for _, m := range slices.Sorted(maps.Keys(names)) {
+		out[names[m]] = m
 	}
 	return out
 }

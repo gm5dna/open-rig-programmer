@@ -25,28 +25,14 @@
 // itself is gitignored) — and from docs/superpowers/ts2000-capability-matrix.md,
 // never from core/kw/ts2000 or core/driver/ts2000.
 //
-// This is not a style preference: if this fake reused core/kw's codec, a
-// systematic bug in that codec — an off-by-one in a field offset, a
-// validation rule subtly wrong — would be applied identically on both sides
-// of every "send a command, check the reply" test this project runs. The bug
-// would never surface. The fake has to be able to DISAGREE with the
-// production codec for a test against it to mean anything, and it can only
-// disagree if it was built from the manual rather than from the code. The
-// reasoning is internal/fakets590's own, restated for this package because
-// the quarantine forbids reading core/driver/ts2000's report beyond its
-// Verdict, let alone its code.
-//
-// The fence is enforced mechanically and recursively (imports_test.go): this
+// The fence is enforced mechanically and recursively (internal/guards/fakes_imports_test.go): this
 // directory and every one beneath it.
 //
-// THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the goroutine
-// bookkeeping, the interruptible latency wait and the raw write. It is
-// permitted because it is PROTOCOL-FREE — it sees []byte and a duration and
-// nothing else, so it carries no framing, no field layout and no reply
-// building. A bug in it therefore cannot make a wrong codec look right; it
-// can only stop bytes moving, which this package's own tests notice at once.
-// Everything above the wire — the reassembler, the parser, the image, the
-// replies — stays here, written independently of every sibling Kenwood fake.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
+// The quarantine forbids reading core/driver/ts2000's report beyond its
+// Verdict, let alone its code, so this package cannot borrow the argument from
+// there.
 //
 // # A SIBLING of internal/fakets590 and internal/fakets480, sharing no table
 //

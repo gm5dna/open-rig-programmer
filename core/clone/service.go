@@ -34,19 +34,6 @@ const generatorID = "open-rig-programmer/core/clone"
 // slot is the canonical wire-form slot just processed.
 type Progress func(phase string, done, total int, slot string)
 
-// Logger is the injectable sink a Service uses to report diagnostics.
-// Mirrors transport.Logger's shape so a caller can plug the same
-// implementation into both layers. NewService defaults to a Logger that
-// drops everything.
-type Logger interface {
-	Printf(format string, args ...any)
-}
-
-// nopLogger is the default Logger: it drops everything.
-type nopLogger struct{}
-
-func (nopLogger) Printf(string, ...any) {}
-
 // nopProgress is the default Progress: it drops everything.
 func nopProgress(string, int, int, string) {}
 
@@ -79,7 +66,6 @@ type Service struct {
 	// journalAppender that fails on a chosen event (see journalAppender).
 	openJournal func(snapshotPath string) journalAppender
 
-	logger   Logger
 	now      func() time.Time
 	progress Progress
 
@@ -107,16 +93,6 @@ type Service struct {
 // Option configures a *Service at construction time. See NewService.
 type Option func(*Service)
 
-// WithLogger sets the Logger a Service uses to report diagnostics. A nil
-// Logger is ignored (the nopLogger default is kept).
-func WithLogger(l Logger) Option {
-	return func(s *Service) {
-		if l != nil {
-			s.logger = l
-		}
-	}
-}
-
 // WithNow overrides the clock a Service uses for every timestamp it
 // records (RadioInfo.ReadAt, snapshot filenames, journal lines) — this is
 // how tests get determinism without waiting on the real wall clock. A nil
@@ -139,8 +115,8 @@ func WithProgress(p Progress) Option {
 	}
 }
 
-// journalAppend appends one journal line, logging (never returning) a
-// failure via s.logger. Reserved for the journal lines the ratified
+// journalAppend appends one journal line, dropping (never returning) a
+// failure. Reserved for the journal lines the ratified
 // fail-safe policy (doc.go) does NOT gate anything further on:
 // "abort" (already terminating the run;
 // nothing left to protect), and "completion" (the run already fully
@@ -150,21 +126,16 @@ func WithProgress(p Progress) Option {
 // verify_result) and PrepareSend's "prepare" line use a CHECKED append
 // instead — see appendDeltaJournal and PrepareSend.
 func (s *Service) journalAppend(j journalAppender, event string, fields map[string]any) {
-	if err := j.Append(s.now(), event, fields); err != nil {
-		s.logger.Printf("clone: journal %s: failed to append %q event: %v", j.Path(), event, err)
-	}
+	_ = j.Append(s.now(), event, fields)
 }
 
 // appendDeltaJournal appends one journal line during Execute's
 // delta-write loop and, on a durability failure, returns the
 // *JournalFailedError the ratified fail-safe policy (doc.go) requires:
 // nil on success, a non-nil error the caller must abort on otherwise.
-// Logs the underlying cause via s.logger too, exactly as journalAppend
-// does, so the diagnostic is never lost even though this path also
-// surfaces the failure to the caller.
+// The failure reaches the caller as the returned error.
 func (s *Service) appendDeltaJournal(j journalAppender, event, slot string, fields map[string]any) *JournalFailedError {
 	if err := j.Append(s.now(), event, fields); err != nil {
-		s.logger.Printf("clone: journal %s: failed to append %q event: %v", j.Path(), event, err)
 		return &JournalFailedError{Event: event, Slot: slot, Cause: err}
 	}
 	return nil
@@ -211,12 +182,11 @@ func (s *Service) releaseOp() {
 // NewService constructs a Service bound to sess, persisting snapshots and
 // journals under store. See Service's doc comment for why sess is bound
 // for the Service's whole lifetime, and Option for the available
-// WithLogger/WithNow/WithProgress overrides.
+// WithNow/WithProgress overrides.
 func NewService(sess driver.Session, store SnapshotStore, opts ...Option) *Service {
 	s := &Service{
 		sess:       sess,
 		store:      store,
-		logger:     nopLogger{},
 		now:        time.Now,
 		progress:   nopProgress,
 		generation: atomic.AddInt64(&serviceGeneration, 1),

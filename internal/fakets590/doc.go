@@ -28,17 +28,11 @@
 // linking to it, because the manual itself is gitignored
 // (docs/fixtures-private/manuals/).
 //
-// This is not a style preference, and the reasoning is internal/fakeradio's
-// verbatim: if this fake reused core/kw's codec, a systematic bug in that
-// codec — an off-by-one in a field offset, a validation rule subtly wrong —
-// would be applied identically on both sides of every "send a command, check
-// the reply" test this project runs. The bug would never surface. The fake
-// has to be able to DISAGREE with the production codec for a test against it
-// to mean anything, and it can only disagree if it was built from the manual
-// rather than from the code.
-//
-// The fence is enforced mechanically and recursively (imports_test.go): this
+// The fence is enforced mechanically and recursively (internal/guards/fakes_imports_test.go): this
 // directory and every one beneath it.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING of internal/fakeft891, not a refactor of it
 //

@@ -2,7 +2,10 @@
 
 package cat
 
-import "fmt"
+import (
+	"fmt"
+	"maps"
+)
 
 // enumName renders one of this package's small named-constant enums: the
 // case name if v is a key of names, or "label(N)" otherwise — e.g. an
@@ -805,10 +808,7 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 		return Dialect{}, err
 	}
 
-	modes := make(map[Mode]string, len(cfg.ModeNames))
-	for m, name := range cfg.ModeNames {
-		modes[m] = name
-	}
+	modes := maps.Clone(cfg.ModeNames)
 
 	items := make([]EXItem, len(cfg.EXItems))
 	copy(items, cfg.EXItems)
