@@ -29,21 +29,10 @@ const (
 // Option configures the sessions produced by New.
 type Option func(*ic9100Driver)
 
-// SiblingLengths maps a foreign record-only length to a model name. Empty
-// in Stage 2: this matrix declares no registered sibling and tier
-// integration owns any later cross-model attribution.
-type SiblingLengths map[int]string
-
 // WithConsentedUnverifiedWrites records user consent for this session only.
 // The static capability set remains Unverified and FieldErase remains zero.
 func WithConsentedUnverifiedWrites() Option {
 	return func(d *ic9100Driver) { d.Consented = true }
-}
-
-// WithSiblingRecordLengths supplies a foreign-length attribution table for
-// the probe's WrongRadioError diagnostics.
-func WithSiblingRecordLengths(s SiblingLengths) Option {
-	return func(d *ic9100Driver) { d.siblingLengths = s }
 }
 
 // New constructs the IC-9100 driver. It intentionally returns only the
@@ -58,7 +47,6 @@ func New(profile driver.Profile, opts ...Option) driver.Driver {
 
 type ic9100Driver struct {
 	driver.Base
-	siblingLengths SiblingLengths
 }
 
 func (d *ic9100Driver) Model() string { return "IC-9100" }
@@ -99,7 +87,7 @@ func (d *ic9100Driver) Open(ctx context.Context, port transport.Port, id driver.
 
 func (d *ic9100Driver) open(ctx context.Context, eng *transport.Engine, stats civ.AccumulatorStatsReporter, id driver.Identity) (*Session, error) {
 	p := civic9100.Profile()
-	s := &Session{eng: eng, stats: stats, profile: p, caps: d.SessionCaps(d.Capabilities()), siblingLengths: d.siblingLengths}
+	s := &Session{eng: eng, stats: stats, profile: p, caps: d.SessionCaps(d.Capabilities())}
 	if err := eng.Init(ctx); err != nil {
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
 			return nil, fmt.Errorf("ic9100: Open: %w", err)
@@ -185,11 +173,6 @@ func (s *Session) wrongRecordLength(lengthErr *civ.RecordLengthError) error {
 	want := fmt.Sprintf("record %d", civic9100.RecordLength)
 	got := fmt.Sprintf("record %d", lengthErr.Got)
 	wrong := &driver.WrongRadioError{Want: want, Got: got}
-	if model, ok := s.siblingLengths[lengthErr.Got]; ok {
-		wrong.WantModel = civic9100.Profile().Model()
-		wrong.GotModel = model
-		return fmt.Errorf("ic9100: Open: record-length fingerprint: %w — attribution is PROVISIONAL because the compared record lengths are ASSUMED derivations", wrong)
-	}
 	return fmt.Errorf("ic9100: Open: record-length fingerprint: %w", wrong)
 }
 
@@ -212,9 +195,6 @@ type Session struct {
 	profile civ.Profile
 	caps    spec.Capabilities
 	id      driver.Identity
-	// siblingLengths is an optional diagnostic table and never widens the
-	// profile's accepted record-length set.
-	siblingLengths SiblingLengths
 
 	mu      sync.Mutex
 	diag    CIVDiagnostics
