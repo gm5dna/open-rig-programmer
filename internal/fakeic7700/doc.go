@@ -36,11 +36,8 @@
 // one protocol, checked against each other, is what makes that class of bug
 // visible.
 //
-// THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the goroutine
-// bookkeeping, the interruptible latency wait and the raw write. It is
-// PROTOCOL-FREE — it sees []byte and a duration and nothing else, so it
-// carries no framing, no field layout and no reply building. Everything
-// above the wire stays here, written independently.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # Framing
 //

@@ -61,10 +61,8 @@
 // never surface; two independent implementations checked against each
 // other is what makes that bug visible.
 //
-// THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the
-// goroutine bookkeeping, the interruptible latency wait and the raw
-// write. PROTOCOL-FREE — []byte and a duration, nothing else — so a bug
-// in it cannot make a wrong codec look right.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # Framing
 //

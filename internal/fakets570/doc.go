@@ -19,18 +19,15 @@
 // TABLES" appendix, cited "PDF p.N (printed M)") and from the manual's own
 // layout text directly — never from core/kw/ts570 or core/driver/ts570.
 //
-// THE ONE EXCEPTION IS internal/fakepipe: the net.Pipe pair, the goroutine
-// bookkeeping, the interruptible latency wait and the raw write. It is
-// PROTOCOL-FREE — it carries no framing, no field layout and no reply
-// building — so a bug in it cannot make a wrong codec look right; it can only
-// stop bytes moving, which this package's own tests notice at once.
-//
 // The reasoning for the fence as a whole is internal/fakets590's own: if this
 // fake reused core/kw's or core/driver/ts570's understanding of the wire, a
 // systematic bug in that understanding — an off-by-one offset, a validation
 // rule subtly wrong — would sit on both sides of every "send a command, check
 // the reply" test this project runs, and never surface. The fake disagreeing
 // with the codec is what makes the cross-check mean anything.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # Three rows, one Option
 //

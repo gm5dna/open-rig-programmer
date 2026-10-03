@@ -90,25 +90,17 @@
 // internal/fakeradio and not internal/fakedx101. Standard library only, in
 // every non-test file, in this directory AND every directory beneath it.
 //
-// This is not a style preference, and the reasoning is internal/fakeradio's
-// verbatim: if this fake reused the production codec, a systematic bug in that
-// codec — an off-by-one in a field offset, a validation rule subtly wrong —
-// would be applied identically on both sides of every "send a command, check
-// the reply" test this project runs. The bug would never surface. The fake
-// would misbehave in exactly the way the buggy codec expects, and every
-// end-to-end test would pass anyway. Two independent implementations of one
-// protocol, checked against each other — and against expectations recomputed by
-// hand in tests, never by calling this package's own builders — is what makes
-// that class of bug visible. It bites twice as hard here, because the two
-// implementations are reading a diagram whose own indices disagree with its own
-// geometry.
-//
 // TestFakesImportNothingProjectInternal (internal/guards/fakes_imports_test.go) enforces it with a go/parser scan, and
 // THAT SCAN WALKS SUBDIRECTORIES. This package has no subdirectory today; the
 // fence lands recursive anyway, so that anything added beneath it later arrives
 // inside a fence rather than in front of one, and
-// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proves it
+// TestFakeImportViolations_Self proves it
 // would bite before any such directory exists.
+//
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go
+// It bites twice as hard here, because the two implementations are reading a
+// diagram whose own indices disagree with its own geometry.
 //
 // # A SIBLING of internal/fakeradio and internal/fakedx101, not a refactor
 //

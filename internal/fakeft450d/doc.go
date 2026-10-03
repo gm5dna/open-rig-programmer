@@ -61,6 +61,9 @@
 // "layout:NNN" throughout — a citation names where the chart is, not a
 // link, since the manual itself is never committed.
 //
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
+//
 // # A SIBLING of fakeft950, not a refactor of it
 //
 // This package copies a good deal of that sibling's SHAPE: the

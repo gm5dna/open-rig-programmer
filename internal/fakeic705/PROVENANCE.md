@@ -49,7 +49,7 @@ pipe-and-goroutine `Radio`, the bounded reassembler, the option shape, the
 `Image` contract, the register's form, and the recursive import fence, which is
 copied with its `modulePrefix` constant, its `TestIsForbiddenImport` table, its
 `TestFakesImportNothingProjectInternal` with both vacuity guards, and its red proof
-`TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory`. **That
+`TestFakeImportViolations_Self`. **That
 package's protocol is ASCII CAT and this one's is binary CI-V. They share a
 shape and not one byte of wire behaviour**, and every frame rule in this package
 was written from the grammar rather than adapted from a sibling's code.
@@ -206,7 +206,7 @@ disagreement the same way, and a wrong resolution would be invisible.
 The scan **walks subdirectories**, where `internal/fakeradio`'s original uses a
 non-recursive `parser.ParseDir(".")`. This package has no subdirectory today;
 the fence lands recursive anyway, so anything added later arrives inside it.
-`TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory` proves the
+`TestFakeImportViolations_Self` proves the
 scan would bite before any such directory exists, and it was additionally run
 **red against a real forbidden import inserted into `state.go`**, which it
 caught by file and by path, before that import was reverted.

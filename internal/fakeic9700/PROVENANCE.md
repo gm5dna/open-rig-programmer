@@ -157,7 +157,7 @@ nothing at all. The fence is what makes that separation mechanical rather than a
 matter of good intentions.
 
 It walks subdirectories rather than reading one directory, and
-`TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory` proves it
+`TestFakeImportViolations_Self` proves it
 would bite in a subdirectory that does not exist yet — so anything added later
 arrives inside a fence rather than in front of one.
 

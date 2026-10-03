@@ -44,6 +44,9 @@
 // extraction — not re-cited here, to avoid restating a citation this
 // package never opened).
 //
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
+//
 // # A SIBLING of internal/fakeft2000, not a refactor of it
 //
 // This package copies that sibling's SHAPE: the pipe-and-goroutine Radio,

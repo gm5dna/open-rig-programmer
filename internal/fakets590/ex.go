@@ -31,7 +31,7 @@ import (
 //     exinventory.go, which imports nothing project-internal at all
 //     (the recursive fence in internal/guards/fakes_imports_test.go enforces it for this directory
 //     and every one beneath it, and
-//     TestFakesImportNothingProjectInternal_ReachesTheGenerator proves the scan really gets
+//     TestFakesImportNothingProjectInternal proves the scan really gets
 //     there);
 //   - core/transport/ex_crosscheck_ts590_test.go proves the two agree,
 //     address for address and width for width, on BOTH rows, and drives every

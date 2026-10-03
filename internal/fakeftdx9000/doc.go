@@ -45,6 +45,9 @@
 // cross-check test and go unnoticed — internal/fakets590's "THE HARD RULE",
 // restated here for the same reason).
 //
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
+//
 // # What this fake deliberately does NOT model
 //
 // AN MT COMMAND. This radio has none (checked mechanically over the full

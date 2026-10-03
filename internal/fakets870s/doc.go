@@ -38,6 +38,9 @@
 // The fence is enforced mechanically and recursively (internal/guards/fakes_imports_test.go): this
 // directory and every one beneath it.
 //
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
+//
 // # A DISTINCT GRID, NOT A MEMBER OF THE 590/480 FAMILY
 //
 // This radio's own document gives its MR/MW frame ONLY 22 BYTES, six live

@@ -31,7 +31,7 @@
 // non-test file, in this directory AND every directory beneath it — which
 // now includes exinventory.go, the stdlib-only generator for this
 // radio's transcription B. The fence was recursive from birth for that
-// directory's sake, and TestFakesImportNothingProjectInternal_ReachesTheGenerator asserts that the
+// directory's sake, and TestFakesImportNothingProjectInternal asserts that the
 // scan of this package really does parse exinventory.go rather than merely being
 // capable of it.
 // Every byte offset, field width and validation rule below is re-derived from
@@ -39,14 +39,8 @@
 // as cited by core/cat/ft891/doc.go's reused-command verification and by
 // core/cat/ft891/testdata/provenance.md's frame-geometry witness.
 //
-// This is not a style preference, and the reasoning is internal/fakeradio's
-// verbatim: if this fake reused core/cat's codec, a systematic bug in that
-// codec — an off-by-one in a field offset, a validation rule subtly wrong —
-// would be applied identically on both sides of every "send a command, check
-// the reply" test this project runs. The bug would never surface. The fake
-// has to be able to DISAGREE with the production codec for a test against it
-// to mean anything, and it can only disagree if it was built from the manual
-// rather than from the code.
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
 //
 // # A SIBLING of internal/fakedx10, not a refactor of it
 //

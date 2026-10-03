@@ -59,6 +59,9 @@
 // future core/driver/ftx1's own reading of the manual cannot sit on both
 // sides of a cross-check run against a fake shaped like this one.
 //
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
+//
 // # A SIBLING of internal/fakeftdx3000, not a refactor of it
 //
 // This package copies that sibling's SHAPE: the pipe-and-goroutine Radio,

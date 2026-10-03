@@ -35,6 +35,9 @@
 // Everything above the wire — the reassembler, the parser, the image, the
 // replies — stays here, written independently.
 //
+// This is the canonical statement of the rule: every other internal/fake*
+// package's doc.go points here rather than restating it.
+//
 // # The ASSUMED register
 //
 // The manual (FT-710 CAT Operation Reference Manual, 2306-C) does not

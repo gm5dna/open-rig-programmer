@@ -68,6 +68,9 @@
 // including the vacuity guards that would otherwise let it pass having
 // examined nothing.
 //
+// The reasoning for this rule, and the one permitted exception (internal/fakepipe),
+// are stated once, in internal/fakeradio/doc.go.
+//
 // # A SIBLING, not a refactor
 //
 // This package duplicates a good deal of internal/fakedx101, whose shape it
