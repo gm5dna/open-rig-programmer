@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package icom holds the struct shapes six or eight Icom driver packages
-// (ic7200, ic7410, ic7600, ic7610, ic7700, ic7760, ic7800, ic7851) each
-// minted their own byte-identical copy of, mirroring
-// core/driver/internal/yaesu's own reason for existing. Unlike that
-// package this one holds no shared Params — only the two struct shapes
-// whose FIELDS are identical across their owning packages while their
-// Error() wording is not: each owning package keeps its own Error() by
-// embedding one of these, so a merged field layout costs nothing in
-// wire-facing text. It holds one shared BEHAVIOUR: AddressToSlot
-// (slots.go), the addressToSlot body seven flat-addressed packages minted
-// byte-identical copies of.
+// Package icom is what the flat-address Icom driver packages share. It
+// mirrors core/driver/internal/yaesu's reason for existing, and its shape:
+// the engine functions (Open, ReadChannel and the read primitive beneath
+// them) take a *Params holding one radio's own values beside that
+// package's own state, and hold no model literal. It also holds the two
+// struct shapes whose FIELDS are identical across their owning packages
+// while their Error() wording is not: each owning package keeps its own
+// Error() by embedding one of these, so a merged field layout costs
+// nothing in wire-facing text. AddressToSlot and SlotToAddress (slots.go)
+// are the flat slot grammar.
 package icom
 
 import (

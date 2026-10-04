@@ -80,7 +80,7 @@
 // # 3. THE PROBE
 //
 // Open's whole wire traffic is: NOTHING for Init, one 19 00 read, and up
-// to probeSlotCount 1A 00 reads.
+// to len(params.ProbeSlots) 1A 00 reads.
 //
 //   - NO RADIO MUTATION AT INIT, EVER. E1's InitSequence() is EMPTY.
 //
@@ -90,7 +90,7 @@
 //     MATCHED: Session.Identity().CATID is the static address followed by
 //     the observed token.
 //
-//   - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..probeSlotCount are
+//   - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..10 (params.ProbeSlots) are
 //     read until one answers with a record. A rejection means "empty,
 //     keep looking" (tier ruling T4, errors.Is(err, transport.ErrRejected)).
 //

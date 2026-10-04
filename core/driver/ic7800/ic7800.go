@@ -4,30 +4,15 @@ package ic7800
 
 import (
 	"context"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"sync/atomic"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
-	civic7800 "github.com/gm5dna/open-rig-programmer/core/civ/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
-
-// probeSlotCount is how many memory channels Open's occupied-slot search
-// reads before giving up and opening UNFINGERPRINTED.
-//
-// BOUNDED ON PURPOSE. The fingerprint's job is to confirm a record length,
-// which one occupied channel settles; walking all 99 to find a radio's
-// only populated memory would put ninety-nine exchanges into every open
-// for no further evidence. Ten is enough to clear a radio whose first few
-// memories happen to be empty and short enough that an entirely empty
-// radio opens promptly — on address evidence alone, which spec D3.2
-// explicitly allows.
-const probeSlotCount = 10
 
 // New returns the IC-7800 driver built with profile.
 //
@@ -143,202 +128,21 @@ var ErrAnswerMismatch = driver.ErrAnswerMismatch
 // channel is the corruption this whole project refuses.
 type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]
 
-// Open implements driver.Driver.
-//
-// The choreography, and nothing else on the wire: build the CI-V framing,
-// build the engine, Init (which for CI-V is a DRAIN ALONE — E1's
-// InitSequence is EMPTY, so no radio mutation ever happens here), probe
-// 19 00 for an address-matched reply, then read up to probeSlotCount
-// memory channels for a record whose length confirms the fingerprint.
-//
-// Open takes ownership of port on BOTH outcomes: the Session's Close
-// releases it on success, and Open itself closes it before returning an
-// error.
+// Open implements driver.Driver: the shared Open choreography in
+// core/driver/internal/icom, wrapped in this package's Session. It takes
+// ownership of port on BOTH outcomes.
 func (d *ic7800Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	// ONE ENGINE PER NewFraming VALUE (enablers fix wave X1): the adapter
-	// refuses a second NewAccumulator call loudly, so the framing is built
-	// HERE, per Open, and never cached on the driver or shared across
-	// sessions.
-	framing, err := civ.NewFraming(civic7800.Profile())
+	o, err := icom.Open(ctx, &params, port, id)
 	if err != nil {
-		_ = port.Close()
-		return nil, fmt.Errorf("ic7800: framing: %w", err)
-	}
-	// THE DIAGNOSTICS CARRIER, and why the assertion is two-result:
-	// NewFraming's declared result is transport.Framing, the neutral seam
-	// type, so the adapter's own counters are reachable only through the
-	// house optional-capability pattern. Without them a driver would have
-	// to reach for Engine.UnexpectedFrames, which on a CI-V bus answers a
-	// different question and reports a healthy zero on a line saturated
-	// with transceive — the accumulator swallowed those frames first.
-	stats, ok := framing.(civ.AccumulatorStatsReporter)
-	if !ok {
-		_ = port.Close()
-		return nil, fmt.Errorf("ic7800: the CI-V framing does not report accumulator stats — this driver's diagnostics require civ.AccumulatorStatsReporter")
-	}
-	eng, err := transport.NewEngineWith(port, framing)
-	if err != nil {
-		// NewEngineWith has not taken the port on this path (it refuses
-		// before touching it), so closing it here is Open's own ownership
-		// obligation, not a double close.
-		_ = port.Close()
-		return nil, fmt.Errorf("ic7800: Open: %w", err)
-	}
-	sess, err := d.open(ctx, eng, stats, id)
-	if err != nil {
-		// eng owns port from here on, so closing eng is what releases it.
-		_ = eng.Close()
 		return nil, err
 	}
-	return sess, nil
-}
-
-// open is Open's body, factored so the error path closes eng in exactly
-// one place.
-func (d *ic7800Driver) open(ctx context.Context, eng *transport.Engine, stats civ.AccumulatorStatsReporter, id driver.Identity) (*Session, error) {
-	p := civic7800.Profile()
-	var report OpenReport
-
-	// R9-SPLIT, THE NONFATAL HALF. Init is a drain alone on CI-V, and the
-	// drain is bounded by an ABSOLUTE cap precisely so it cannot fail the
-	// open: a line saturated with traffic addressed to this controller
-	// never yields the idle gap, and refusing to open on that basis would
-	// make a busy bus indistinguishable from a broken radio. So the
-	// INITIAL failure is recorded and stepped over.
-	//
-	// EVERY LATER DRAIN FAILURE IS FATAL, and the asymmetry is the point:
-	// once the session is exchanging frames, a drain that cannot find
-	// quiet means this program can no longer tell its own answers from
-	// somebody else's, and continuing would be guessing. Nothing below
-	// tolerates a drain-cap error, and TestOpen_LaterQuarantineFailureFailsClosed
-	// holds that down.
-	//
-	// A BROADCAST FLOOD NEVER GETS HERE AT ALL. Frames addressed to 0x00
-	// are counted and dropped by the accumulator before any engine event,
-	// so they never re-arm the drain's timer; InitDrainCapExceeded can
-	// only ever be true under a CONTROLLER-ADDRESSED flood.
-	if err := eng.Init(ctx); err != nil {
-		if !errors.Is(err, transport.ErrDrainCapExceeded) {
-			return nil, fmt.Errorf("ic7800: Open: %w", err)
-		}
-		report.InitDrainCapExceeded = true
-	}
-
-	// THE IDENTITY PROBE (spec D3.2). What identifies the radio is that an
-	// ADDRESS-MATCHED 19 00 reply arrived at all: the reply VALUE is
-	// undocumented on every model in this tier (D5 entry 7, matrix lift
-	// R7), so it is recorded as a diagnostic and compared against nothing.
-	//
-	// The address check belongs to the CODEC — the matcher comes from
-	// Profile.TransceiverIDAnswerMatcher and checks both the `to` and the
-	// `from` byte — and is never a rule written here (adjudication R1).
-	// One retry: an identity read is idempotent, and an open should
-	// survive a single swallowed reply.
-	idCmd, err := p.BuildTransceiverIDRead()
-	if err != nil {
-		return nil, fmt.Errorf("ic7800: Open: building the 19 00 read: %w", err)
-	}
-	frame, err := eng.Do(ctx, idCmd, civ.CIVReadSpec(p.TransceiverIDAnswerMatcher(), 1))
-	if err != nil {
-		// A RADIO AT ANOTHER CI-V ADDRESS LANDS HERE, as a timeout and
-		// not as a wrong-radio refusal — nothing was heard from, so
-		// nothing can be attributed (spec D3.3). A radio at a CI-V baud
-		// other than the assumed 19200 lands here identically, which is
-		// why a wrong default-baud guess costs a clean timeout and never
-		// a wrong byte (OQ2).
-		return nil, fmt.Errorf("ic7800: Open: 19 00 identity probe: %w", err)
-	}
-	token, err := p.ParseTransceiverID(frame)
-	if err != nil {
-		return nil, fmt.Errorf("ic7800: Open: 19 00 identity probe: %w", err)
-	}
-	// hex.DecodeString rather than re-slicing the frame: the token is the
-	// codec's own rendering of the answer's data bytes, and taking them
-	// back from it keeps every piece of frame geometry inside core/civ.
-	// An odd-length token cannot arise (the codec renders whole bytes),
-	// and if one ever did the raw form is simply not recorded.
-	if raw, derr := hex.DecodeString(token); derr == nil {
-		report.IDToken = raw
-	}
-	// The static CATID is the address alone (spec D3.2); the session's is
-	// that address followed by what this radio actually answered.
-	id.CATID = fmt.Sprintf("%02x%s", p.RadioAddress(), token)
-
-	// THE OCCUPIED-SLOT SEARCH, and the fingerprint it confirms. A
-	// rejection means "empty, keep looking" (tier ruling T4); a record
-	// confirms the length; any other error aborts the open.
-	for ch := 1; ch <= probeSlotCount; ch++ {
-		report.SlotsTried = ch
-		raw, empty, err := probeSlot(ctx, eng, p, civ.ChannelAddress{Channel: ch})
-		if err != nil {
-			return nil, err
-		}
-		if empty {
-			continue
-		}
-		report.Fingerprinted = true
-		report.RecordLength = len(raw)
-		break
-	}
-	// AN EMPTY RADIO OPENS ANYWAY, on address evidence alone (spec D3.2,
-	// D5 entry 2(a), matrix lift R2a). Refusing here would make a radio
-	// whose memories are all empty unprogrammable by this programme, which
-	// is precisely the radio a user most wants to programme.
-
-	report.WireAtOpen = stats.AccumulatorStats()
-
 	return &Session{
-		eng:    eng,
-		stats:  stats,
-		id:     id,
+		eng:    o.Eng,
+		stats:  o.Stats,
+		id:     o.ID,
 		caps:   d.SessionCaps(d.Capabilities()),
-		report: report,
+		report: o.Report,
 	}, nil
-}
-
-// probeSlot performs ONE 1A 00 read for the occupied-slot search and
-// reports the raw record, or that the slot is empty.
-//
-// T4 — FA IS AN ERROR, NOT A FRAME. Engine.Do consumes the FA and returns
-// transport.ErrRejected with NO frame, so the empty branch keys on
-// errors.Is(err, transport.ErrRejected) and never on "an FA arrived".
-// Nothing in this driver calls civ.IsRejection; that stays the framing's
-// internal concern.
-//
-// T2 — ANSWER-ADDRESS EQUALITY. The landed MemoryAnswerMatcher is
-// deliberately envelope-only (to/from/cn/sc), so the DRIVER compares the
-// decoded ChannelAddress against the one it asked for. That comparison is
-// NOT the first check: MemoryAnswerRecord rejects a record of the wrong
-// length (*civ.RecordLengthError, turned into RecordLengthMismatchError
-// below) before this function ever sees a ChannelAddress to compare. Only
-// once the length is accepted does the address get checked. The upshot: a
-// wrong-channel answer that also happens to be the wrong length is
-// reported as a length mismatch, not an address mismatch — the caller
-// never learns the address was wrong too. Both outcomes fail closed.
-func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.ChannelAddress) ([]byte, bool, error) {
-	cmd, err := p.BuildMemoryRead(a)
-	if err != nil {
-		return nil, false, fmt.Errorf("ic7800: Open: building the 1A 00 read for %s: %w", a, err)
-	}
-	frame, err := eng.Do(ctx, cmd, civ.CIVReadSpec(p.MemoryAnswerMatcher(), 1))
-	if errors.Is(err, transport.ErrRejected) {
-		return nil, true, nil
-	}
-	if err != nil {
-		return nil, false, fmt.Errorf("ic7800: Open: probing %s: %w", a, err)
-	}
-	got, raw, err := p.MemoryAnswerRecord(frame)
-	if err != nil {
-		var lengthErr *civ.RecordLengthError
-		if errors.As(err, &lengthErr) {
-			return nil, false, &RecordLengthMismatchError{icom.RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7800.RecordOnlyLength, Slot: a}}
-		}
-		return nil, false, fmt.Errorf("ic7800: Open: probing %s: %w", a, err)
-	}
-	if got != a {
-		return nil, false, &AnswerMismatchError{Model: "ic7800", Requested: a, Answered: got}
-	}
-	return raw, false, nil
 }
 
 // Session is one open, probed connection to an IC-7800.
@@ -414,8 +218,8 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 	}
 }
 
-// ReadChannel implements driver.Session; its body is in read.go, beside
-// the slot map and the one read primitive it is made of.
+// ReadChannel implements driver.Session; read.go delegates it to the shared
+// engine in core/driver/internal/icom, with this radio's values from params.go.
 
 // WriteChannel implements driver.Session; its body is in write.go,
 // alongside the T5-ordered refusal ladder it is made of.
