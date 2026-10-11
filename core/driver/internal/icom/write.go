@@ -40,9 +40,8 @@ type WriteText struct {
 	// Unwritable is the reason's tail after "this session cannot write
 	// these fields on bank <bank>: ".
 	Unwritable string
-	// TagCharsetTail names where the radio's name charset is printed; it
-	// closes "...which is not in this radio's printed memory-name charset
-	// (<tail>)".
+	// TagCharsetTail is the whole phrase closing "...which is not in this
+	// radio's <tail>", a phrase naming the radio's printed charset.
 	TagCharsetTail string
 	// NoDefaultTone is the whole reason for a tone span with no source on a
 	// CREATE.
@@ -103,7 +102,9 @@ var ConditionalRequestedFields = []conditionalField{
 
 // RequestedFields is every spec.Field a write of d would TRANSMIT or
 // REQUEST, in ChannelData declaration order: the seven fields the 1A 00
-// record maps, then every conditional field the caller carries Known.
+// record maps (plus tx_frequency when p.TXDuplicate, since that record always
+// carries its own TX frequency), then every conditional field the caller
+// carries Known.
 //
 // THE CONDITIONALS ARE WHAT MAKE THE GATE HONEST. A caller who hands
 // WriteChannel a Known value this radio cannot express must meet a
@@ -111,7 +112,7 @@ var ConditionalRequestedFields = []conditionalField{
 // UNMAPPED FIELDS A DRIVER REFUSES ON PURPOSE. core/codeplug/diff.go is
 // explicit that Known conditional fields are never filtered out even when
 // unreachable, which is what makes the gate able to REFUSE rather than DROP.
-func RequestedFields(d codeplug.ChannelData) []spec.Field {
+func RequestedFields(p *Params, d codeplug.ChannelData) []spec.Field {
 	fields := []spec.Field{
 		spec.FieldFrequency,
 		spec.FieldMode,
@@ -121,8 +122,11 @@ func RequestedFields(d codeplug.ChannelData) []spec.Field {
 		spec.FieldToneRx,
 		spec.FieldFilter,
 	}
+	if p.TXDuplicate {
+		fields = append(fields, spec.FieldTxFrequency)
+	}
 	for _, c := range ConditionalRequestedFields {
-		if c.Present(d) {
+		if c.Present(d) && !(p.TXDuplicate && c.Field == spec.FieldTxFrequency) {
 			fields = append(fields, c.Field)
 		}
 	}
@@ -192,7 +196,7 @@ func WriteChannel(ctx context.Context, p *Params, eng *transport.Engine, caps sp
 	// effective capabilities. Defence in depth below the clone service,
 	// which has already made the same check.
 	var unwritable []spec.Field
-	for _, f := range RequestedFields(d) {
+	for _, f := range RequestedFields(p, d) {
 		if !caps.FieldSupport(bank, f).CanWrite() {
 			unwritable = append(unwritable, f)
 		}
@@ -284,6 +288,13 @@ func WriteChannel(ctx context.Context, p *Params, eng *transport.Engine, caps sp
 		ToneRXDeciHz: civ.Available(toneRx),
 		Name:         civ.Available(d.Tag),
 	}
+	if p.TXDuplicate {
+		tx := d.FreqHz
+		if d.TxFreqHz.State == codeplug.Known {
+			tx = d.TxFreqHz.Value
+		}
+		rec.TXFreqHz = civ.Available(tx)
+	}
 	prof := p.Profile()
 	cmd, err := prof.BuildMemorySet(rec)
 	if err != nil {
@@ -343,7 +354,7 @@ func missingMandatory(p *Params, d codeplug.ChannelData) (spec.Field, string) {
 	charset := prof.NameCharset()
 	for i := 0; i < len(d.Tag); i++ {
 		if bytes.IndexByte(charset, d.Tag[i]) < 0 {
-			return spec.FieldTag, fmt.Sprintf("the tag carries byte %#02x at index %d, which is not in this radio's printed memory-name charset (%s)", d.Tag[i], i, p.Text.TagCharsetTail)
+			return spec.FieldTag, fmt.Sprintf("the tag carries byte %#02x at index %d, which is not in this radio's %s", d.Tag[i], i, p.Text.TagCharsetTail)
 		}
 	}
 	if len(d.Tag) > prof.NameLength() {

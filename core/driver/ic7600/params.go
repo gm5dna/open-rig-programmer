@@ -62,7 +62,7 @@ var params = icom.Params{
 	Text: icom.WriteText{
 		Erase:          "this radio's memory-clear forms are printed in its document but no IC-7600 has ever been asked to use one, so FieldErase carries the zero FieldSupport and consent structurally never reaches it (spec D4 \"Erase\"; matrix §3.13)",
 		Unwritable:     "either no IC-7600 has ever been written to by this project and no consent was recorded, or the field is one ruling E6 leaves UNMAPPED (scan_skip, data_mode) and therefore one this driver refuses rather than collapses 4->2",
-		TagCharsetTail: "PDF p.12's two character tables",
+		TagCharsetTail: "printed memory-name charset (PDF p.12's two character tables)",
 		NoDefaultTone:  "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — all 17 pages were swept for the matrix and no \"Default:\" line appears against the tone frequency; the only tone material is the 1B 00 / 1B 01 digit strip. Tier ruling T1(5)'s REFUSE arm rather than its default arm; register entry ic7600-default-tone-undocumented, whose lift is a capture of 1B 00 and 1B 01 on an IC-7600 taken to All Reset",
 		LayoutNote:     "single 25-byte layout",
 		ModeWhere:      "the record's ⑨ is a mode enum, and PDF p.11's \"①Receiving mode\" column prints these ten codes and no more",

@@ -43,7 +43,7 @@ const memorySetStep = icom.MemorySetStep
 
 var conditionalRequestedFields = icom.ConditionalRequestedFields
 
-func requestedFields(d codeplug.ChannelData) []spec.Field { return icom.RequestedFields(d) }
+func requestedFields(d codeplug.ChannelData) []spec.Field { return icom.RequestedFields(&params, d) }
 
 func outsideVocabulary(d codeplug.ChannelData, caps spec.Capabilities) (spec.Field, string) {
 	return icom.OutsideVocabulary(&params, d, caps)
