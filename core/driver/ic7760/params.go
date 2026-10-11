@@ -5,10 +5,7 @@ package ic7760
 import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7760 "github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
-	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // params is this radio's own values for the shared Open and Read engine in
@@ -37,13 +34,8 @@ var params = icom.Params{
 	// TestProbeScheduleIncludesP1AndP2AfterBoundedMEMSearch pins the exact
 	// frames and stop point.
 	ProbeSlots: append(icom.ChannelRange(1, 10), civ.ChannelAddress{Channel: 100}, civ.ChannelAddress{Channel: 101}),
-	Domain: func(d codeplug.ChannelData, _ spec.Capabilities) error {
-		if d.FreqHz > MaxEncodableFreqHz {
-			return &OutOfDomainError{driver.OutOfDomainError{
-				Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz,
-			}}
-		}
-		return nil
-	},
+	// Domain is write.go's rung-4 helper: a read refuses a frequency the
+	// write would refuse.
+	Domain:       domainRefusal,
 	NewRecordLen: func(e icom.RecordLengthMismatchError) error { return &RecordLengthMismatchError{e} },
 }

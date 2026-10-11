@@ -112,6 +112,27 @@ func (e *OutOfDomainError) Error() string {
 // Unwrap lets errors.Is(err, ErrOutOfDomain) match.
 func (e *OutOfDomainError) Unwrap() error { return ErrOutOfDomain }
 
+// domainRefusal applies WriteChannel's rung 4 to one channel. Params.Domain
+// names it too, so a read refuses a frequency the write would refuse. The
+// capability set is unused: this radio's bounds are the package constants.
+func domainRefusal(d codeplug.ChannelData, _ spec.Capabilities) error {
+	if d.FreqHz > MaxEncodableFreqHz {
+		return &OutOfDomainError{driver.OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz}}
+	}
+	for _, tt := range []struct {
+		field spec.Field
+		tone  codeplug.ToneField
+	}{
+		{spec.FieldToneTx, d.ToneTx},
+		{spec.FieldToneRx, d.ToneRx},
+	} {
+		if tt.tone.State == codeplug.Known && uint64(tt.tone.Value) > MaxToneDeciHz {
+			return &OutOfDomainError{driver.OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: MaxToneDeciHz}}
+		}
+	}
+	return nil
+}
+
 // requestedFields is every spec.Field a write of d would TRANSMIT or
 // REQUEST, in ChannelData declaration order.
 //
@@ -297,21 +318,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// RUNG 4 — NUMERIC DOMAINS. Defence in depth and NOT the gate; see
 	// OutOfDomainError and ic7610/doc.go §6.
-	if d.FreqHz > MaxEncodableFreqHz {
-		return driver.WriteResult{Steps: []driver.WriteStep{}},
-			&OutOfDomainError{driver.OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz}}
-	}
-	for _, tt := range []struct {
-		field spec.Field
-		tone  codeplug.ToneField
-	}{
-		{spec.FieldToneTx, d.ToneTx},
-		{spec.FieldToneRx, d.ToneRx},
-	} {
-		if tt.tone.State == codeplug.Known && uint64(tt.tone.Value) > MaxToneDeciHz {
-			return driver.WriteResult{Steps: []driver.WriteStep{}},
-				&OutOfDomainError{driver.OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: MaxToneDeciHz}}
-		}
+	if err := domainRefusal(d, s.caps); err != nil {
+		return driver.WriteResult{Steps: []driver.WriteStep{}}, err
 	}
 
 	// RUNG 4b — THE FIELD-STATE WALK. core/driver.CheckFieldStates is
