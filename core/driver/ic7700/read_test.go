@@ -175,6 +175,33 @@ func TestReadChannel_TxFrequencyAlwaysKnown(t *testing.T) {
 	}
 }
 
+// TestReadChannel_RefusesTxFrequencyAboveCeiling pins that the
+// TX-duplicate span is judged by the same domain rung as the RX span: a
+// read never builds a Known TxFreqHz the write would refuse.
+func TestReadChannel_RefusesTxFrequencyAboveCeiling(t *testing.T) {
+	img := occupiedImage(t)
+	img.records[42] = buildRecord(t, civ.MemoryRecord{
+		Address: civ.ChannelAddress{Channel: 42}, RXFreqHz: civ.Available[uint64](MaxFreqHz), TXFreqHz: civ.Available[uint64](MaxFreqHz + 1),
+		Mode: civ.Available("USB"), Filter: civ.Available("FIL1"), ToneMode: civ.Available("OFF"),
+		ToneTXDeciHz: civ.Available[uint64](0), ToneRXDeciHz: civ.Available[uint64](0), Name: civ.Available("X"),
+	})
+	s, _ := openScripted(t, img)
+	ch, err := s.ReadChannel(t.Context(), "042")
+	var domain *OutOfDomainError
+	if !errors.As(err, &domain) {
+		t.Fatalf("ReadChannel = (%+v, %v), want *OutOfDomainError", ch, err)
+	}
+	if domain.Field != spec.FieldTxFrequency || domain.Value != MaxFreqHz+1 {
+		t.Errorf("OutOfDomainError = %+v, want tx_frequency %d", domain, uint64(MaxFreqHz+1))
+	}
+	if !strings.HasPrefix(err.Error(), "ic7700: ReadChannel 042: ") {
+		t.Errorf("error %q lacks the ReadChannel model and slot prefix", err)
+	}
+	if !ch.Empty() {
+		t.Errorf("refused read returned a populated channel: %+v", ch)
+	}
+}
+
 // TestReadChannel_FreshReadSurvivesSaveLoad pins the fresh-read rule: a
 // freshly read occupied channel survives a save/load round trip
 // field-for-field.

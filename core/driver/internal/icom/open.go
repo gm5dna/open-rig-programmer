@@ -34,6 +34,10 @@ type Opened struct {
 // releases it on success, and Open itself closes it before returning an
 // error.
 func Open(ctx context.Context, p *Params, port transport.Port, id driver.Identity) (Opened, error) {
+	if err := p.validate(); err != nil {
+		_ = port.Close()
+		return Opened{}, err
+	}
 	// ONE ENGINE PER NewFraming VALUE: the adapter refuses a second
 	// NewAccumulator call loudly, so the framing is built HERE, per Open,
 	// and never cached or shared across sessions.
