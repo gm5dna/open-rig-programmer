@@ -222,7 +222,7 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // engine in core/driver/internal/icom, with this radio's values from params.go.
 
 // WriteChannel implements driver.Session; its body is in write.go,
-// alongside the T5-ordered refusal ladder it is made of.
+// delegating to the shared T5-ordered refusal ladder in internal/icom.
 
 // Compile-time proof that this package really does implement the neutral
 // seams it claims.
