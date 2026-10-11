@@ -45,8 +45,9 @@ type Params struct {
 	// explicitly allows. Each package's params.go gives its own count.
 	ProbeSlots []civ.ChannelAddress
 	// Domain, if set, refuses a channel carrying a value this radio's
-	// record cannot express. A read hands it a channel carrying only
-	// FreqHz, plus TxFreqHz (Known) when TXDuplicate is set.
+	// record cannot express. A write hands it the whole channel (rung 4); a
+	// read hands it a channel carrying only FreqHz, plus TxFreqHz (Known)
+	// when TXDuplicate is set.
 	Domain func(codeplug.ChannelData, spec.Capabilities) error
 	// ReadCheck, if set, refuses a record from its raw bytes after the
 	// empty-slot test and before the parse. Its error is returned as given.
@@ -58,6 +59,22 @@ type Params struct {
 	// NewRecordLen wraps the engine's mismatch in the package's own error
 	// type, which owns the wording. Required.
 	NewRecordLen func(RecordLengthMismatchError) error
+
+	// The rest is WriteChannel's, and a package that does not call it may
+	// leave all four unset.
+	//
+	// Unmapped lists the record regions a write does not map, in the order
+	// that decides which refusal a caller meets; each is compared with
+	// Template and a difference is refused, never rewritten.
+	Unmapped []Region
+	// Template is the profile's Fixed record, the value every unmapped
+	// region must hold.
+	Template []byte
+	// NewUnmapped wraps the engine's E6 refusal in the package's own error
+	// type, which owns the wording.
+	NewUnmapped func(driver.UnmappedRegionError) error
+	// Text is the wording only this radio can supply.
+	Text WriteText
 }
 
 // validate refuses a Params missing a field the engine cannot do without,

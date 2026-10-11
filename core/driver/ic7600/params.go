@@ -4,6 +4,7 @@ package ic7600
 
 import (
 	civic7600 "github.com/gm5dna/open-rig-programmer/core/civ/ic7600"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 )
 
@@ -25,8 +26,47 @@ var params = icom.Params{
 	RecordLength: civic7600.RecordOnlyLength,
 	// ProbeSlots: see icom.Params.ProbeSlots for the bound. Ten, not all 99.
 	ProbeSlots: icom.ChannelRange(1, 10),
-	// Domain is write.go's rung-4 helper: a read refuses a frequency the
-	// write would refuse.
+	// Domain is write.go's rung-4 helper: a write refuses a value it
+	// cannot encode, and a read refuses a frequency the write would refuse.
 	Domain:       domainRefusal,
 	NewRecordLen: func(e icom.RecordLengthMismatchError) error { return &RecordLengthMismatchError{e} },
+
+	// The rest is the shared write ladder's (icom.WriteChannel).
+	//
+	// WHY THESE REGIONS: record byte 0 ENTIRELY, printed ③, this radio's own
+	// undivided four-valued SELECT-group marker, compared WHOLE because this
+	// page prints no nibble split for it (matrix S3.15(a); a GENUINE
+	// DIVERGENCE from the IC-7610's own two-nibble-split page, recorded in
+	// core/civ/ic7600's SelectByteOffset comment), and record byte 8's HIGH
+	// nibble, printed ⑪'s left nibble, the four-valued data mode (no
+	// divergence from the IC-7610 here, matrix S2 row 20). Byte 8's LOW
+	// nibble is tone_mode and IS mapped. The order decides which error fires.
+	//
+	// WRITE-SIDE EVIDENCE NOTES. FieldErase: the memory-clear forms are
+	// printed but have never been used on the IC-7600, and no builder for either
+	// shape exists in this tier (doc.go §7). The write sends the 25 record
+	// bytes in full (register entry ic7600-full-record-mandatory, matrix lift
+	// R15: the document prints one full-record form and one three-index
+	// clear form and never says whether a short record is accepted). That a
+	// 1A 00 SET is answered by FB or FA is ASSUMED (register entry
+	// ic7600-1a00-set-ack, matrix lift R14: the CODES are MANUAL-EVIDENCED, but
+	// the nearest printed statement is about command 29, which this driver
+	// does not read across). The numeric domain (Domain, doc.go §6) is
+	// defence in depth and not the gate.
+	Unmapped: []icom.Region{
+		{Offset: civic7600.SelectByteOffset, Nibble: "whole"},
+		{Offset: civic7600.DataModeNibbleOffset, Nibble: "high"},
+	},
+	Template:    civic7600.FixedTemplate(),
+	NewUnmapped: func(e driver.UnmappedRegionError) error { return &UnmappedRegionError{e} },
+	Text: icom.WriteText{
+		Erase:          "this radio's memory-clear forms are printed in its document but no IC-7600 has ever been asked to use one, so FieldErase carries the zero FieldSupport and consent structurally never reaches it (spec D4 \"Erase\"; matrix §3.13)",
+		Unwritable:     "either no IC-7600 has ever been written to by this project and no consent was recorded, or the field is one ruling E6 leaves UNMAPPED (scan_skip, data_mode) and therefore one this driver refuses rather than collapses 4->2",
+		TagCharsetTail: "PDF p.12's two character tables",
+		NoDefaultTone:  "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — all 17 pages were swept for the matrix and no \"Default:\" line appears against the tone frequency; the only tone material is the 1B 00 / 1B 01 digit strip. Tier ruling T1(5)'s REFUSE arm rather than its default arm; register entry ic7600-default-tone-undocumented, whose lift is a capture of 1B 00 and 1B 01 on an IC-7600 taken to All Reset",
+		LayoutNote:     "single 25-byte layout",
+		ModeWhere:      "the record's ⑨ is a mode enum, and PDF p.11's \"①Receiving mode\" column prints these ten codes and no more",
+		FilterWhere:    "the record's ⑩ is a filter enum, and PDF p.11's \"Filter setting\" column prints these three values and no default",
+		ToneModeWhere:  "the record's ⑪ low nibble is a tone-mode enum, and PDF p.12's ⑪ sub-diagram prints these three values",
+	},
 }
