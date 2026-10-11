@@ -182,7 +182,7 @@
 //	    opens a session against three different tokens, which is what makes
 //	    "never matched" a demonstrated claim.
 //
-//	  - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..10 (params.ProbeSlots) are
+//	  - THE BOUNDED OCCUPIED-SLOT SEARCH. The channels in params.ProbeSlots are
 //	    read until one answers with a record. A rejection means "empty, keep
 //	    looking", and that branch keys on errors.Is(err,
 //	    transport.ErrRejected) because Engine.Do consumes the FA and returns

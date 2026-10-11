@@ -23,7 +23,7 @@ var params = icom.Params{
 	Name:         "ic7600",
 	Profile:      civic7600.Profile,
 	RecordLength: civic7600.RecordOnlyLength,
-	// ProbeSlots: see icom.Params.ProbeSlots for why ten and not all 99.
+	// ProbeSlots: see icom.Params.ProbeSlots for the bound. Ten, not all 99.
 	ProbeSlots: icom.ChannelRange(1, 10),
 	// Domain is write.go's rung-4 helper: a read refuses a frequency the
 	// write would refuse.
