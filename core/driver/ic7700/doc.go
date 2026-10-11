@@ -6,6 +6,9 @@
 // core/civ/ic7700's profile, which it never bypasses: every frame this
 // package sends goes through civ.Profile.AllowedCommand.
 //
+// Shared mechanics live in core/driver/internal/icom; every value in this
+// package is this radio's own reading.
+//
 // # Provenance
 //
 // Everything model-specific here comes from the reviewed capability matrix

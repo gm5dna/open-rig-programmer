@@ -7,36 +7,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7851 "github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
-	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
-
-// slotToAddress maps a canonical wire-form slot to the channel address the
-// codec addresses it by, and to the bank it belongs to.
-//
-// "001".."099" are the memories; "P1" and "P2" are the scan edges. Nothing
-// else is a slot on this radio: "000" (there is no channel zero), "100"
-// (the memories stop at 99), "P0"/"P3", a bare "1", "" and the sparse
-// group form "G05-012" (which belongs to the group-addressed models, not
-// to this flat one) are all errors.
-//
-// MATRIX §3.15(d): P1 AND P2 ARE NOT A SEPARATE BANK IN THE WIRE
-// PROTOCOL. They are two more values of the same two-byte selector — PDF
-// p.263 (folio 18-14), field ①,②, prints "0001–0099: Memory channel 1 to
-// 99", "0100: Programmed scan edge P1", "0101: Programmed scan edge P2",
-// one contiguous space with three printed forms, corroborated by command
-// 08 at PDF p.252 (folio 18-3) — and core/civ/ic7851's profile declares
-// exactly that range (ChannelLo 1, ChannelHi 101).
-//
-// This project models them as a SCAN bank only because the neutral memory
-// model needs the distinction between a memory and a scan edge; the codec
-// knows nothing of it.
-func slotToAddress(slot string) (civ.ChannelAddress, spec.BankID, error) {
-	return icom.SlotToAddress(params.Name, slot)
-}
 
 // ErrFixedDigit is the sentinel for a record whose printed-fixed digit
 // bytes carry something other than zero.
@@ -103,12 +77,6 @@ func fixedDigitsDiffer(raw []byte) error {
 		}
 	}
 	return nil
-}
-
-// readRaw is the one read primitive, shared with WriteChannel's E6
-// preservation read.
-func (s *Session) readRaw(ctx context.Context, a civ.ChannelAddress) (civ.MemoryRecord, []byte, bool, error) {
-	return icom.ReadRaw(ctx, &params, s.eng, &s.answerMismatches, a)
 }
 
 // AnswerMismatches reports how many memory answers this session has seen

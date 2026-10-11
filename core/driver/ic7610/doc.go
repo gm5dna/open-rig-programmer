@@ -6,6 +6,9 @@
 // driver.Driver/Session seam, and the first driver in this tree to sit on
 // a BINARY codec rather than a ';'-terminated one.
 //
+// Shared mechanics live in core/driver/internal/icom; every value in this
+// package is this radio's own reading.
+//
 // The wire codec lives next door in core/civ/ic7610 and is imported here
 // as civic7610, exactly as core/driver/ftdx101 imports core/cat/ftdx101 as
 // catftdx101. NOTHING in this package builds a frame, a matcher, a

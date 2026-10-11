@@ -5,6 +5,9 @@
 // serial-framing report. It sits above the neutral driver.Driver/Session
 // seam on a BINARY codec rather than a ';'-terminated one.
 //
+// Shared mechanics live in core/driver/internal/icom; every value in this
+// package is this radio's own reading.
+//
 // The wire codec lives next door in core/civ/ic7851 and is imported here
 // as civic7851. NOTHING in this package builds a frame, a matcher, a
 // command-spec helper or a drain policy of its own: the CI-V framing
@@ -326,8 +329,9 @@
 // THE COST OF THAT EXCLUSION IS ON THE READ PATH, and this driver pays it
 // rather than hiding it: the record parser no longer looks at those bytes,
 // so a radio answering with a digit in one would be read as a value 100
-// times smaller and written back with the byte quietly zeroed. readRaw
-// refuses such a record instead (*FixedDigitError), after the all-FF empty
+// times smaller and written back with the byte quietly zeroed. The
+// engine's read refuses such a record instead, through this package's
+// ReadCheck (fixedDigitsDiffer, *FixedDigitError), after the all-FF empty
 // branch and before the parse. TestFixedDigitBytesAreRefusedOnRead and
 // TestE2E_FixedDigitRecordIsRefusedOnTheWire cover both halves.
 //

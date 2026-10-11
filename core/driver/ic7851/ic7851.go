@@ -239,7 +239,7 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // the slot map and the one read primitive it is made of.
 
 // WriteChannel implements driver.Session; its body is in write.go,
-// alongside the T5-ordered refusal ladder it is made of.
+// delegating to the shared T5-ordered refusal ladder in internal/icom.
 
 // Compile-time proof that this package really does implement the neutral
 // seams it claims.

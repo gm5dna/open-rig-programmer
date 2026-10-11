@@ -5,6 +5,9 @@
 // report. It sits above the neutral driver.Driver/Session seam, on a
 // BINARY codec, exactly as core/driver/ic7610 does.
 //
+// Shared mechanics live in core/driver/internal/icom; every value in this
+// package is this radio's own reading.
+//
 // The wire codec lives next door in core/civ/ic7600 and is imported here
 // as civic7600. NOTHING in this package builds a frame, a matcher, a
 // command-spec helper or a drain policy of its own: the CI-V framing
