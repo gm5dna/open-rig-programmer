@@ -10,6 +10,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7700 "github.com/gm5dna/open-rig-programmer/core/civ/ic7700"
+	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
@@ -194,11 +195,46 @@ func TestReadChannel_RefusesTxFrequencyAboveCeiling(t *testing.T) {
 	if domain.Field != spec.FieldTxFrequency || domain.Value != MaxFreqHz+1 {
 		t.Errorf("OutOfDomainError = %+v, want tx_frequency %d", domain, uint64(MaxFreqHz+1))
 	}
-	if !strings.HasPrefix(err.Error(), "ic7700: ReadChannel 042: ") {
-		t.Errorf("error %q lacks the ReadChannel model and slot prefix", err)
+	if !strings.HasPrefix(err.Error(), "ReadChannel 042: ic7700: ") || strings.Count(err.Error(), "ic7700:") != 1 {
+		t.Errorf("error %q lacks the ReadChannel slot prefix or names the model more than once", err)
+	}
+	// A per-slot decode failure, so a whole-radio read records it rather
+	// than aborting; the package's own sentinel still matches.
+	if !errors.Is(err, driver.ErrRecordDecode) || !errors.Is(err, ErrOutOfDomain) {
+		t.Errorf("errors.Is(%v, ErrRecordDecode) or ErrOutOfDomain = false", err)
 	}
 	if !ch.Empty() {
 		t.Errorf("refused read returned a populated channel: %+v", ch)
+	}
+}
+
+// TestReadAll_TxFrequencyAboveCeilingFailsOneSlot pins that one slot whose
+// TX-duplicate span decodes above the ceiling lands in FailedSlots, and
+// every other channel survives, rather than the whole radio read aborting.
+func TestReadAll_TxFrequencyAboveCeilingFailsOneSlot(t *testing.T) {
+	img := occupiedImage(t)
+	img.records[42] = buildRecord(t, civ.MemoryRecord{
+		Address: civ.ChannelAddress{Channel: 42}, RXFreqHz: civ.Available[uint64](MaxFreqHz), TXFreqHz: civ.Available[uint64](MaxFreqHz + 1),
+		Mode: civ.Available("USB"), Filter: civ.Available("FIL1"), ToneMode: civ.Available("OFF"),
+		ToneTXDeciHz: civ.Available[uint64](0), ToneRXDeciHz: civ.Available[uint64](0), Name: civ.Available("X"),
+	})
+	s, _ := openScripted(t, img)
+	cp, err := clone.NewService(s, clone.SnapshotStore{Dir: t.TempDir()}).ReadAll(t.Context())
+	if err != nil {
+		t.Fatalf("ReadAll aborted on one out-of-domain slot: %v", err)
+	}
+	if len(cp.Radio.FailedSlots) != 1 || cp.Radio.FailedSlots[0].Slot != "042" {
+		t.Fatalf("FailedSlots = %+v, want exactly slot 042", cp.Radio.FailedSlots)
+	}
+	var kept bool
+	for _, ch := range cp.Channels {
+		if ch.Slot == "042" {
+			t.Errorf("failed slot 042 appears in Channels: %+v", ch)
+		}
+		kept = kept || (ch.Slot == "001" && ch.Data != nil)
+	}
+	if !kept {
+		t.Error("slot 001 missing or empty - one slot's failure must not affect it")
 	}
 }
 

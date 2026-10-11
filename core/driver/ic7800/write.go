@@ -14,6 +14,7 @@ import (
 	civic7800 "github.com/gm5dna/open-rig-programmer/core/civ/ic7800"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -112,21 +113,7 @@ func (e *OutOfDomainError) Unwrap() error { return ErrOutOfDomain }
 // names it too, so a read refuses a frequency the write would refuse. The
 // capability set is unused: this radio's bounds are the package constants.
 func domainRefusal(d codeplug.ChannelData, _ spec.Capabilities) error {
-	if d.FreqHz > MaxEncodableFreqHz {
-		return &OutOfDomainError{driver.OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz}}
-	}
-	for _, tt := range []struct {
-		field spec.Field
-		tone  codeplug.ToneField
-	}{
-		{spec.FieldToneTx, d.ToneTx},
-		{spec.FieldToneRx, d.ToneRx},
-	} {
-		if tt.tone.State == codeplug.Known && uint64(tt.tone.Value) > MaxToneDeciHz {
-			return &OutOfDomainError{driver.OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: MaxToneDeciHz}}
-		}
-	}
-	return nil
+	return icom.CeilingRefusal(d, MaxEncodableFreqHz, MaxToneDeciHz, func(e driver.OutOfDomainError) error { return &OutOfDomainError{e} })
 }
 
 // requestedFields is every spec.Field a write of d would TRANSMIT or

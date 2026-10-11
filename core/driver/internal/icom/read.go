@@ -41,6 +41,10 @@ func RecordIsAbsent(raw []byte) bool {
 // ReadRaw performs ONE 1A 00 read and returns the decoded record together
 // with its raw bytes.
 //
+// PRECONDITION: p is a Params Open accepted (Profile set). Open validates
+// once; every caller holds a Session that exists only after a successful
+// Open, so ReadRaw does not re-check per slot.
+//
 // IT IS THE ONE READ PRIMITIVE. ReadChannel and a write's preservation
 // read both go through it, so the address check and the rejection branch
 // exist in exactly one place and cannot drift apart.
@@ -63,9 +67,6 @@ func RecordIsAbsent(raw []byte) bool {
 // express. Two reads would open a window in which the slot could change
 // between them.
 func ReadRaw(ctx context.Context, p *Params, eng *transport.Engine, mismatches *atomic.Uint64, a civ.ChannelAddress) (civ.MemoryRecord, []byte, bool, error) {
-	if err := p.validate(); err != nil {
-		return civ.MemoryRecord{}, nil, false, err
-	}
 	prof := p.Profile()
 	cmd, err := prof.BuildMemoryRead(a)
 	if err != nil {
@@ -159,6 +160,16 @@ func ReadChannel(ctx context.Context, p *Params, eng *transport.Engine, caps spe
 		// a fabricated 0 Hz channel.
 		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: the record carries no frequency", p.Name, slot)
 	}
+	// A read must not construct a value codeplug.Validate or the write
+	// path will reject. The RX judgement keeps its early position, ahead
+	// of the mode, so a record out of domain and without a mode reports
+	// the refusal. The synthetic ChannelData carries only FreqHz, plus
+	// TxFreqHz once the TX-duplicate value is decoded; every other field
+	// is at its zero value, which is not FieldState Known, so a domain
+	// hook's tone arms never trip on this call.
+	if err := readDomain(p, caps, slot, codeplug.ChannelData{FreqHz: freq}); err != nil {
+		return codeplug.Channel{}, err
+	}
 	mode, ok := rec.Mode.Get()
 	if !ok {
 		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: the record carries no mode", p.Name, slot)
@@ -173,17 +184,10 @@ func ReadChannel(ctx context.Context, p *Params, eng *transport.Engine, caps spe
 			return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: the record carries no TX-duplicate frequency", p.Name, slot)
 		}
 		// Always on the wire, so always Known, never Unavailable; this
-		// read reports whatever the radio held.
+		// read reports whatever the radio held, once Domain has judged it.
 		txFreq = codeplug.FreqField{State: codeplug.Known, Value: v}
-	}
-	// A read must not construct a value codeplug.Validate or the write
-	// path will reject. The synthetic ChannelData carries only FreqHz and
-	// TxFreqHz (Known only when the record carries one); every other field
-	// is at its zero value, which is not FieldState Known, so a domain
-	// hook's tone arms never trip on this call.
-	if p.Domain != nil {
-		if err := p.Domain(codeplug.ChannelData{FreqHz: freq, TxFreqHz: txFreq}, caps); err != nil {
-			return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", p.Name, slot, err)
+		if err := readDomain(p, caps, slot, codeplug.ChannelData{FreqHz: freq, TxFreqHz: txFreq}); err != nil {
+			return codeplug.Channel{}, err
 		}
 	}
 
@@ -233,6 +237,30 @@ func ReadChannel(ctx context.Context, p *Params, eng *transport.Engine, caps spe
 	// VOCABULARY being supplied, do not run on them.
 
 	return codeplug.Channel{Slot: slot, Data: data}, nil
+}
+
+// decodeRefusal marks a read-side Domain refusal as a per-slot decode
+// failure: errors.Is matches driver.ErrRecordDecode, so core/clone's readAll
+// records the slot in FailedSlots instead of aborting the whole radio read,
+// while Unwrap keeps the package's own out-of-domain error (errors.Is and
+// errors.As) intact. Its text is the wrapped error's, unchanged.
+type decodeRefusal struct{ error }
+
+func (e decodeRefusal) Unwrap() error { return e.error }
+
+func (decodeRefusal) Is(target error) bool { return target == driver.ErrRecordDecode }
+
+// readDomain applies p.Domain, if set, to a decoded channel. The wrapper
+// carries the slot only: each package's out-of-domain error already opens
+// with the model.
+func readDomain(p *Params, caps spec.Capabilities, slot string, d codeplug.ChannelData) error {
+	if p.Domain == nil {
+		return nil
+	}
+	if err := p.Domain(d, caps); err != nil {
+		return fmt.Errorf("ReadChannel %s: %w", slot, decodeRefusal{err})
+	}
+	return nil
 }
 
 // optionalString maps a civ tri-state string to codeplug's: present

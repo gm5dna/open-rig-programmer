@@ -7,6 +7,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -15,9 +16,9 @@ import (
 // model literal and no default that would act as a claim about a model,
 // so an unset field means "not this radio" and never "the usual".
 // Profile and NewRecordLen are the exceptions: without them there is no
-// radio and no error type to raise, so Open and ReadRaw refuse a Params
-// that leaves either unset. Domain, ReadCheck and TXDuplicate may be left
-// unset.
+// radio and no error type to raise, so Open refuses a Params that leaves
+// either unset; ReadRaw trusts a Params Open accepted. Domain, ReadCheck
+// and TXDuplicate may be left unset.
 //
 // Each driver package declares one Params value and passes a pointer to
 // it into the engine functions beside its own state, which stays on its
@@ -36,12 +37,12 @@ type Params struct {
 	// Open reads, in order, before giving up and opening UNFINGERPRINTED.
 	//
 	// BOUNDED ON PURPOSE. The fingerprint's job is to confirm a record length,
-	// which one occupied channel settles; walking all 99 to find a radio's
-	// only populated memory would put ninety-nine exchanges into every open
-	// for no further evidence. Ten is enough to clear a radio whose first few
-	// memories happen to be empty and short enough that an entirely empty
-	// radio opens promptly — on address evidence alone, which spec D3.2
-	// explicitly allows.
+	// which one occupied channel settles; walking every channel to find a
+	// radio's only populated memory would put a long run of exchanges into
+	// every open for no further evidence. A short schedule clears a radio
+	// whose first few memories happen to be empty and lets an entirely empty
+	// radio open promptly — on address evidence alone, which spec D3.2
+	// explicitly allows. Each package's params.go gives its own count.
 	ProbeSlots []civ.ChannelAddress
 	// Domain, if set, refuses a channel carrying a value this radio's
 	// record cannot express. A read hands it a channel carrying only
@@ -64,6 +65,29 @@ type Params struct {
 func (p *Params) validate() error {
 	if p.Profile == nil || p.NewRecordLen == nil {
 		return fmt.Errorf("%s: the engine's Params leaves Profile or NewRecordLen unset", p.Name)
+	}
+	return nil
+}
+
+// CeilingRefusal is WriteChannel's rung 4 for a radio whose only bounds are
+// its record's encodable maxima: a frequency above maxFreqHz, or a Known
+// tone above maxToneDeciHz, is refused through wrap, which builds the
+// package's own error type around the shared fields. The capability set is
+// not consulted.
+func CeilingRefusal(d codeplug.ChannelData, maxFreqHz, maxToneDeciHz uint64, wrap func(driver.OutOfDomainError) error) error {
+	if d.FreqHz > maxFreqHz {
+		return wrap(driver.OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: maxFreqHz})
+	}
+	for _, tt := range []struct {
+		field spec.Field
+		tone  codeplug.ToneField
+	}{
+		{spec.FieldToneTx, d.ToneTx},
+		{spec.FieldToneRx, d.ToneRx},
+	} {
+		if tt.tone.State == codeplug.Known && uint64(tt.tone.Value) > maxToneDeciHz {
+			return wrap(driver.OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: maxToneDeciHz})
+		}
 	}
 	return nil
 }
