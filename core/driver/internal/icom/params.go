@@ -7,6 +7,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -64,6 +65,29 @@ type Params struct {
 func (p *Params) validate() error {
 	if p.Profile == nil || p.NewRecordLen == nil {
 		return fmt.Errorf("%s: the engine's Params leaves Profile or NewRecordLen unset", p.Name)
+	}
+	return nil
+}
+
+// CeilingRefusal is WriteChannel's rung 4 for a radio whose only bounds are
+// its record's encodable maxima: a frequency above maxFreqHz, or a Known
+// tone above maxToneDeciHz, is refused through wrap, which builds the
+// package's own error type around the shared fields. The capability set is
+// not consulted.
+func CeilingRefusal(d codeplug.ChannelData, maxFreqHz, maxToneDeciHz uint64, wrap func(driver.OutOfDomainError) error) error {
+	if d.FreqHz > maxFreqHz {
+		return wrap(driver.OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: maxFreqHz})
+	}
+	for _, tt := range []struct {
+		field spec.Field
+		tone  codeplug.ToneField
+	}{
+		{spec.FieldToneTx, d.ToneTx},
+		{spec.FieldToneRx, d.ToneRx},
+	} {
+		if tt.tone.State == codeplug.Known && uint64(tt.tone.Value) > maxToneDeciHz {
+			return wrap(driver.OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: maxToneDeciHz})
+		}
 	}
 	return nil
 }
