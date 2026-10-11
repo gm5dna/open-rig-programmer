@@ -5,6 +5,7 @@ package ic7760
 import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7760 "github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 )
 
@@ -37,4 +38,34 @@ var params = icom.Params{
 	// write would refuse.
 	Domain:       domainRefusal,
 	NewRecordLen: func(e icom.RecordLengthMismatchError) error { return &RecordLengthMismatchError{e} },
+
+	// The rest is the shared write ladder's (icom.WriteChannel).
+	//
+	// WHY THESE REGIONS: record byte 0 ENTIRELY, printed ③, whose HIGH nibble
+	// is the page's Fixed 0 and whose LOW nibble is the four-valued
+	// SELECT-group marker, and record byte 8's HIGH nibble, printed ⑪'s left
+	// nibble, the four-valued data mode. Byte 8's LOW nibble is tone_mode and
+	// IS mapped. The order decides which error fires. The template is the
+	// profile's zero-valued Fixed record (Stage 1 layout, E6).
+	//
+	// WRITE-SIDE EVIDENCE NOTES. FieldErase: the memory-clear forms are
+	// printed in two shapes (matrix §3.13, assumption register entry
+	// ic7760-clear-scope) and no builder for either exists in this tier.
+	Unmapped: []icom.Region{
+		{Offset: 0, Nibble: "high"},
+		{Offset: 0, Nibble: "low"},
+		{Offset: 8, Nibble: "high"},
+	},
+	Template:    make([]byte, civic7760.RecordOnlyLength),
+	NewUnmapped: func(e driver.UnmappedRegionError) error { return &UnmappedRegionError{e} },
+	Text: icom.WriteText{
+		Erase:          "this radio's memory-clear forms are printed in its document but no IC-7760 has ever been asked to use one, so FieldErase carries the zero FieldSupport and consent structurally never reaches it (spec D4 \"Erase\"; matrix §3.13)",
+		Unwritable:     "either no IC-7760 has ever been written to by this project and no consent was recorded, or the field is one ruling E6 leaves UNMAPPED (scan_skip, data_mode) and therefore one this driver refuses rather than collapses 4->2",
+		TagCharsetTail: "printed memory-name charset (PDF p.20, folio 19, the two \"Codes for character entries\" tables)",
+		NoDefaultTone:  "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — all 28 pages of the revision 2 guide were swept for the matrix and no \"Default:\" line appears against the tone frequency; the only tone material is the 1B 00 / 1B 01 digit strip on PDF p.24 (folio 23). Tier ruling T1(5)'s REFUSE arm rather than its default arm; register entry ic7760-tone-domain, whose lift reads the lowest and highest tone the front panel offers on an IC-7760",
+		LayoutNote:     "single 25-byte layout",
+		ModeWhere:      "the record's ⑨ is a mode enum, and PDF p.18 (folio 17)'s \"Operating mode\" table, column ①, prints these ten codes and no more",
+		FilterWhere:    "the record's ⑩ is a filter enum, and PDF p.18 (folio 17)'s \"Operating mode\" table, column ② \"Filter setting\", prints these three values and no default",
+		ToneModeWhere:  "the record's ⑪ low nibble is a tone-mode enum, and PDF p.20 (folio 19)'s ⑪ sub-diagram prints these three values",
+	},
 }
