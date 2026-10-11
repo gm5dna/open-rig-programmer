@@ -69,6 +69,9 @@ func (e *AnswerMismatchError[T]) Is(target error) bool { return target == ErrAns
 // those as fatal, same as today), and never a semantic/mapping failure
 // after a successful decode (an unrecognised mode byte, an out-of-range
 // value) — those stay fatal too, since the record itself decoded fine.
+// The one exception is the shared Icom engine's read-side Domain refusal
+// (core/driver/internal/icom), which wraps it so one out-of-domain slot is
+// a FailedSlot rather than the loss of the whole radio read.
 //
 // core/clone/read.go's readAll checks this alongside ErrAnswerMismatch:
 // a slot whose read fails this way is recorded in

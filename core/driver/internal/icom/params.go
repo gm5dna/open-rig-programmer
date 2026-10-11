@@ -15,9 +15,9 @@ import (
 // model literal and no default that would act as a claim about a model,
 // so an unset field means "not this radio" and never "the usual".
 // Profile and NewRecordLen are the exceptions: without them there is no
-// radio and no error type to raise, so Open and ReadRaw refuse a Params
-// that leaves either unset. Domain, ReadCheck and TXDuplicate may be left
-// unset.
+// radio and no error type to raise, so Open refuses a Params that leaves
+// either unset; ReadRaw trusts a Params Open accepted. Domain, ReadCheck
+// and TXDuplicate may be left unset.
 //
 // Each driver package declares one Params value and passes a pointer to
 // it into the engine functions beside its own state, which stays on its
