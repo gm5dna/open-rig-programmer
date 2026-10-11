@@ -4,6 +4,9 @@
 // dialect core/civ/ic7800 declares. It owns probing, capabilities and
 // write policy; the wire geometry lives next door.
 //
+// Shared mechanics live in core/driver/internal/icom; every value in this
+// package is this radio's own reading.
+//
 // # Shape
 //
 // This driver is a literal copy of core/driver/ic7610's mechanics — Open's

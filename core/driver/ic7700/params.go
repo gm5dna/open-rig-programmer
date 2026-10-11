@@ -51,7 +51,14 @@ var params = icom.Params{
 		{Offset: civic7700.SplitSelectByteOffset, Nibble: "low"},
 		{Offset: civic7700.DataModeNibbleOffset, Nibble: "high"},
 	}, txDupRegions()...),
-	// WRITE-SIDE EVIDENCE NOTE. The acknowledgement CODES are
+	// The IC-7700 profile's Fixed template is the all-zero record (Stage-1
+	// geometry test). Kept local: the profile's public API intentionally
+	// exposes layout, not a writable template accessor.
+	Template:    make([]byte, civic7700.RecordOnlyLength),
+	NewUnmapped: func(e driver.UnmappedRegionError) error { return &UnmappedRegionError{e} },
+
+	// WRITE-SIDE EVIDENCE NOTE (about the acknowledgement path; it is not a note on
+	// Template). The acknowledgement CODES are
 	// MANUAL-EVIDENCED (matrix §3.10) — PDF p.202 (folio 14-2), "D Data
 	// format", prints the set frame FE FE 74 E0 Cn Sc <data> FD and the
 	// acknowledgement FE FE E0 74 FB FD (OK) / FE FE E0 74 FA FD (NG) — but
@@ -60,12 +67,7 @@ var params = icom.Params{
 	// form and one three-byte clear form and never says whether a short
 	// record is accepted (matrix §3.10 grades the "mandatory" half CANNOT
 	// ESTABLISH).
-	//
-	// The IC-7700 profile's Fixed template is the all-zero record (Stage-1
-	// geometry test). Kept local: the profile's public API intentionally
-	// exposes layout, not a writable template accessor.
-	Template:    make([]byte, civic7700.RecordOnlyLength),
-	NewUnmapped: func(e driver.UnmappedRegionError) error { return &UnmappedRegionError{e} },
+
 	Text: icom.WriteText{
 		Erase:          "this radio's memory-clear forms are printed in its document but no IC-7700 has ever been asked to use one, so FieldErase carries the zero FieldSupport and consent structurally never reaches it (spec D4 \"Erase\"; matrix §3.13)",
 		Unwritable:     "either no IC-7700 has ever been written to by this project and no consent was recorded, or the field is one ruling E6 leaves UNMAPPED (scan_skip, data_mode) and therefore one this driver refuses rather than collapses 4->2",

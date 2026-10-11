@@ -2,6 +2,9 @@
 
 // Package ic7760 implements the IC-7760 CI-V memory driver.
 //
+// Shared mechanics live in core/driver/internal/icom; every value in this
+// package is this radio's own reading.
+//
 // # Provenance and scope
 //
 // The sole radio authority is the IC-7760 CI-V Reference Guide, Revision 2,
