@@ -32,7 +32,16 @@ type Params struct {
 	// RecordLength is the record-only length the profile declares, named
 	// in RecordLengthMismatchError.
 	RecordLength int
-	// ProbeSlots is the occupied-slot search schedule, in order.
+	// ProbeSlots is the occupied-slot search schedule: the memory channels
+	// Open reads, in order, before giving up and opening UNFINGERPRINTED.
+	//
+	// BOUNDED ON PURPOSE. The fingerprint's job is to confirm a record length,
+	// which one occupied channel settles; walking all 99 to find a radio's
+	// only populated memory would put ninety-nine exchanges into every open
+	// for no further evidence. Ten is enough to clear a radio whose first few
+	// memories happen to be empty and short enough that an entirely empty
+	// radio opens promptly — on address evidence alone, which spec D3.2
+	// explicitly allows.
 	ProbeSlots []civ.ChannelAddress
 	// Domain, if set, refuses a channel carrying a value this radio's
 	// record cannot express. A read hands it a channel carrying only

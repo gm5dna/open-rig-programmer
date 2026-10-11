@@ -20,24 +20,10 @@ import (
 // an unwritten channel is the driver's decision on its own model's
 // evidence, as civ.Profile.MemoryAnswerRecord's own doc comment says.
 var params = icom.Params{
-	Name: "ic7700",
-	// Profile's Open identity probe: what identifies the radio is that an
-	// ADDRESS-MATCHED 19 00 reply arrived at all. The reply VALUE is
-	// undocumented on every model in this tier — PDF p.204 (folio 14-4)
-	// prints the 19 00 row with no reply value and no cross-reference — so
-	// it is recorded as a diagnostic and compared against nothing.
+	Name:         "ic7700",
 	Profile:      civic7700.Profile,
 	RecordLength: civic7700.RecordOnlyLength,
-	// ProbeSlots are the memory channels Open's occupied-slot search
-	// reads, in order, before giving up and opening UNFINGERPRINTED.
-	//
-	// BOUNDED ON PURPOSE. The fingerprint's job is to confirm a record length,
-	// which one occupied channel settles; walking all 99 to find a radio's
-	// only populated memory would put ninety-nine exchanges into every open
-	// for no further evidence. Ten is enough to clear a radio whose first few
-	// memories happen to be empty and short enough that an entirely empty
-	// radio opens promptly — on address evidence alone, which spec D3.2
-	// explicitly allows.
+	// ProbeSlots: see icom.Params.ProbeSlots for why ten and not all 99.
 	ProbeSlots: icom.ChannelRange(1, 10),
 	// Domain is write.go's rung-4 helper: a read refuses a frequency the
 	// write would refuse.

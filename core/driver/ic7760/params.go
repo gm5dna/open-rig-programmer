@@ -26,11 +26,10 @@ var params = icom.Params{
 	Name:         "ic7760",
 	Profile:      civic7760.Profile,
 	RecordLength: civic7760.RecordOnlyLength,
-	// ProbeSlots is the bounded occupied-slot fingerprint search: ten early
-	// MEM slots followed by both SCAN selectors P1/P2 (channels 100 and
-	// 101). Walking all 99 memories would add no evidence once one occupied
-	// record has fixed the length, but omitting P1/P2 would miss a radio
-	// whose early memories are empty and a scan edge is occupied.
+	// ProbeSlots: see icom.Params.ProbeSlots for the bound. This radio adds
+	// both SCAN selectors P1/P2 (channels 100 and 101) after the ten early
+	// MEM slots: omitting them would miss a radio whose early memories are
+	// empty and a scan edge is occupied.
 	// TestProbeScheduleIncludesP1AndP2AfterBoundedMEMSearch pins the exact
 	// frames and stop point.
 	ProbeSlots: append(icom.ChannelRange(1, 10), civ.ChannelAddress{Channel: 100}, civ.ChannelAddress{Channel: 101}),
