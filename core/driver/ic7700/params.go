@@ -71,7 +71,7 @@ var params = icom.Params{
 		Unwritable:     "either no IC-7700 has ever been written to by this project and no consent was recorded, or the field is one ruling E6 leaves UNMAPPED (scan_skip, data_mode) and therefore one this driver refuses rather than collapses 4->2",
 		TagCharsetTail: "derived memory-name charset (matrix §1 row 30, PDF p.211 folio 14-11's character-availability table)",
 		NoDefaultTone:  "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — the matrix's own sweep found no \"Default:\" line against the tone frequency; the only tone material is PDF p.211 (folio 14-11)'s 1B 00 / 1B 01 digit strip. Tier ruling T1(5)'s REFUSE arm rather than its default arm",
-		LayoutNote:     "single 25-byte layout",
+		LayoutNote:     "single 39-byte layout",
 		ModeWhere:      "the record's ⑨ is a mode enum, and PDF p.210's operating-mode column prints these ten codes and no more",
 		FilterWhere:    "the record's ⑩ is a filter enum, and PDF p.210's filter column prints these three values and no default",
 		ToneModeWhere:  "the record's ⑪ low nibble is a tone-mode enum, and PDF p.213's !1 sub-diagram prints these three values",
