@@ -75,6 +75,14 @@
 // an address-matched 19 00 reply, so a wrong guess costs a clean timeout,
 // never a wrong byte.
 //
+// # The 19 00 identity probe
+//
+// Open's identity probe: what identifies the radio is that an
+// ADDRESS-MATCHED 19 00 reply arrived at all. The reply VALUE is
+// undocumented on every model in this tier — PDF p.204 (folio 14-4)
+// prints the 19 00 row with no reply value and no cross-reference — so
+// it is recorded as a diagnostic and compared against nothing.
+//
 // # Driver-homed register entries
 //
 // Every entry below is named in the matrix's own §5 register (which also
@@ -91,7 +99,7 @@
 //   - ic7700-empty-channel-reply / ic7700-all-ff-empty — the two SEPARATE
 //     readings of what an unwritten channel answers (FA, per the general
 //     OK/NG scheme) and of whether an all-FF record also means empty.
-//     recordIsAbsent (read.go) implements the all-FF half; T4's
+//     icom.RecordIsAbsent (the shared engine) implements the all-FF half; T4's
 //     transport.ErrRejected handling implements the FA half.
 //   - ic7700-name-pad-byte — the pad byte for a name shorter than ten
 //     characters (0x20, ASSUMED).

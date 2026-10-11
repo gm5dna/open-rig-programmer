@@ -156,7 +156,7 @@
 // # 4. THE PROBE
 //
 // Open's whole wire traffic is: NOTHING for Init, one 19 00 read, and up
-// to probeSlotCount 1A 00 reads. TestE2E_InitAndProbeSendNothingElse
+// to len(params.ProbeSlots) 1A 00 reads. TestE2E_InitAndProbeSendNothingElse
 // compares the exact byte sequence against
 //
 //		FE FE 8E E0 19 00 FD
@@ -182,7 +182,7 @@
 //	    opens a session against three different tokens, which is what makes
 //	    "never matched" a demonstrated claim.
 //
-//	  - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..probeSlotCount are
+//	  - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..10 (params.ProbeSlots) are
 //	    read until one answers with a record. A rejection means "empty, keep
 //	    looking", and that branch keys on errors.Is(err,
 //	    transport.ErrRejected) because Engine.Do consumes the FA and returns

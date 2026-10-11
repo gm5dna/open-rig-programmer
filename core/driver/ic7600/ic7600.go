@@ -185,7 +185,7 @@ func (s *Session) Close() error { return s.eng.Close() }
 // Fingerprint reports the record-only length Open confirmed, and whether
 // it confirmed one at all.
 //
-// AN IC7610-PACKAGE ACCESSOR, NOT A NEUTRAL-SEAM ADDITION.
+// AN IC7600-PACKAGE ACCESSOR, NOT A NEUTRAL-SEAM ADDITION.
 // driver.SessionDiagnostics carries only UnexpectedFrames, and widening
 // the neutral seam to carry a per-tier fingerprint is a tier-shared change
 // five worktrees would want a say in. A caller that needs this reaches for

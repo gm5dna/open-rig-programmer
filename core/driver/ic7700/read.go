@@ -53,7 +53,7 @@ func (s *Session) AnswerMismatches() uint64 { return s.answerMismatches.Load() }
 // that would abort a caller's ReadAll — the neutral contract at
 // core/driver/driver.go. Both of this model's two unverified empty
 // readings land there: a rejected read (T4) and an all-0xFF record (see
-// recordIsAbsent).
+// icom.RecordIsAbsent).
 //
 // A WRONG RECORD LENGTH IS AN ERROR, and deliberately not an empty
 // channel: no partial parse, no fake Unavailable channel (spec D4,
