@@ -63,6 +63,9 @@ func RecordIsAbsent(raw []byte) bool {
 // express. Two reads would open a window in which the slot could change
 // between them.
 func ReadRaw(ctx context.Context, p *Params, eng *transport.Engine, mismatches *atomic.Uint64, a civ.ChannelAddress) (civ.MemoryRecord, []byte, bool, error) {
+	if err := p.validate(); err != nil {
+		return civ.MemoryRecord{}, nil, false, err
+	}
 	prof := p.Profile()
 	cmd, err := prof.BuildMemoryRead(a)
 	if err != nil {
@@ -156,13 +159,6 @@ func ReadChannel(ctx context.Context, p *Params, eng *transport.Engine, caps spe
 		// a fabricated 0 Hz channel.
 		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: the record carries no frequency", p.Name, slot)
 	}
-	// A read must not construct a frequency codeplug.Validate will reject.
-	// The synthetic ChannelData carries only FreqHz; every other field is
-	// at its zero value, which is not FieldState Known, so a domain hook's
-	// tone arms never trip on this call.
-	if err := p.Domain(codeplug.ChannelData{FreqHz: freq}, caps); err != nil {
-		return codeplug.Channel{}, err
-	}
 	mode, ok := rec.Mode.Get()
 	if !ok {
 		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: the record carries no mode", p.Name, slot)
@@ -179,6 +175,16 @@ func ReadChannel(ctx context.Context, p *Params, eng *transport.Engine, caps spe
 		// Always on the wire, so always Known, never Unavailable; this
 		// read reports whatever the radio held.
 		txFreq = codeplug.FreqField{State: codeplug.Known, Value: v}
+	}
+	// A read must not construct a value codeplug.Validate or the write
+	// path will reject. The synthetic ChannelData carries only FreqHz and
+	// TxFreqHz (Known only when the record carries one); every other field
+	// is at its zero value, which is not FieldState Known, so a domain
+	// hook's tone arms never trip on this call.
+	if p.Domain != nil {
+		if err := p.Domain(codeplug.ChannelData{FreqHz: freq, TxFreqHz: txFreq}, caps); err != nil {
+			return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", p.Name, slot, err)
+		}
 	}
 
 	data := &codeplug.ChannelData{
