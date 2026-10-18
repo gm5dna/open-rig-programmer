@@ -11,7 +11,10 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
-## [1.11.0] - 2026-10-18
+## [1.11.1] - 2026-10-18
+
+The first release of the 1.11 line. v1.11.0 was tagged but never
+released: its Windows build failed. 1.11.1 is v1.11.0 plus that fix.
 
 ### Added
 - **FT-710 menu settings gain a write path**, characterised on hardware
@@ -738,8 +741,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.11.0...HEAD
-[1.11.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.10.0...v1.11.0
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.11.1...HEAD
+[1.11.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.10.0...v1.11.1
 [1.10.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.2...v1.9.0
 [1.8.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.1...v1.8.2

@@ -20,6 +20,8 @@ Which radios are supported, and how far each has been tested, is in [docs/radio-
 
 ## What changed in this version
 
+v1.11.0 was tagged but never released: its Windows build failed. This release is v1.11.0 plus that fix.
+
 A minor release: the FT-710 gains a menu-settings write path, the Yaesu FT-817, FT-857 and FT-897 families gain a clone-mode read, seven more grid columns become dropdowns, and a corrupted or mis-addressed slot no longer aborts a whole-radio read.
 
 - **FT-710 menu settings gain a write path**, characterised on hardware address by address: `rigprog write --settings FILE` and the app's editable settings cells write only a menu address whose Set behaviour was confirmed on a real FT-710, then read it back byte-for-byte to check. 58 of the FT-710's 296 menu addresses are permanently read-only: the CAT link settings, PTT and keying over RTS, DTR or DAKY (including PC KEYING), tuner and antenna routing, TX power and safety, MOD SOURCE, and the text fields. The other 238 were each set, read back and restored on a real FT-710 (Session W, 18/10/2026). Menu writes have no consent step, unlike an opt-in radio's channel writes: the manual's own settings chart has already been shown wrong three times (TONE FREQ takes a three-digit Set; MARK FREQUENCY codes are 0 and 1; SHIFT FREQUENCY code 0 is 170 Hz), so only testing on hardware can be trusted. Every other radio's menu settings stay read-only.

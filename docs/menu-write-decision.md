@@ -2,8 +2,8 @@
 
 **Decided 25/07/2026 by Stuart Henderson (project owner); amended
 05/09/2026 and 19/09/2026 — see "Amendments" below. Status: a
-characterised write subset is being built for v1.11.0 (238 of 296
-addresses, admitted for characterisation, not for immediate write); every
+characterised write subset shipped in v1.11.1 (238 of 296
+addresses, each write-verified on a real FT-710 on 18/10/2026); every
 other address, and the permanently-denied classes, stay read-only with no
 reopening.**
 
