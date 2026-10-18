@@ -88,9 +88,15 @@ check_machine() {
 # `(Get-Item $path).VersionInfo.ProductVersion` came back EMPTY for
 # both raw GUI exes even though `.rsrc/0/version.txt` held the correct
 # StringFileInfo block — the block was language-neutral ("000004b0"),
-# a shape .NET's FileVersionInfo does not resolve. info.json now writes
-# "040904b0" (en-US, Unicode), which it does; the greps below match
-# either block, and release.yml keeps the .NET read as a diagnostic.
+# a shape .NET's FileVersionInfo does not resolve. info.json now keys
+# its strings "0409" (en-US); winres adds the 04b0 code page, so the
+# block is "040904b0" under resource language 1033 (.rsrc/1033/). The
+# key must be the 4-digit language id: winres reads it as a uint16 and
+# silently drops an 8-digit "040904b0" key, emitting no version
+# resource at all (release run 39166706131, 18/10/2026). The extract
+# below takes version.txt from whichever language folder holds it; the
+# greps match either block, and release.yml keeps the .NET read as a
+# diagnostic.
 # `7z`/`7zz x` extracts the resource as UTF-16LE-with-embedded-NUL
 # text; `tr -d '\0\r'` collapses it to plain ASCII for grep.
 check_version_resource() {
@@ -99,9 +105,9 @@ check_version_resource() {
   vdir="${scratch}/${arch}-ver"
   rm -rf "$vdir"
   mkdir -p "$vdir"
-  "$SEVENZ" x -y -o"$vdir" "$f" ".rsrc/0/version.txt" >/dev/null 2>&1
-  vtxt="${vdir}/.rsrc/0/version.txt"
-  [ -f "$vtxt" ] || { err "$label ($f): could not extract .rsrc/0/version.txt"; return; }
+  "$SEVENZ" x -y -o"$vdir" "$f" -ir'!version.txt' >/dev/null 2>&1
+  vtxt="$(find "$vdir" -name version.txt | head -n 1)"
+  [ -n "$vtxt" ] && [ -f "$vtxt" ] || { err "$label ($f): could not extract .rsrc/*/version.txt"; return; }
   txt="$(tr -d '\0\r' < "$vtxt")"
   IFS=. read -r a b c <<< "$numeric"
   printf '%s\n' "$txt" | grep -qE "VALUE \"ProductVersion\",[[:space:]]+\"${numeric}\"" \
