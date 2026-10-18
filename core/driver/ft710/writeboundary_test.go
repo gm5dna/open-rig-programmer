@@ -76,3 +76,19 @@ func TestWriteBoundaryRows_WidthIsSentinelZero(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteBoundaryRows_ToneFreqSizedFromObservedRead pins Session W
+// (18/10/2026): 010321 answers 3 bytes (manual Digits 2) and a 2-digit Set
+// was refused, so its row sizes Sets at 3; its domain stays 0-49.
+func TestWriteBoundaryRows_ToneFreqSizedFromObservedRead(t *testing.T) {
+	for _, r := range WriteBoundaryRows() {
+		if r.ID != "010321" {
+			continue
+		}
+		if r.ReadWidth != 3 || r.Lo != 0 || r.Hi != 49 {
+			t.Errorf("010321 = readWidth %d, %d-%d; want 3, 0-49", r.ReadWidth, r.Lo, r.Hi)
+		}
+		return
+	}
+	t.Fatal("010321 missing from write-boundary rows")
+}

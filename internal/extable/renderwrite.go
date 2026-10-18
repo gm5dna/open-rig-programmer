@@ -132,10 +132,15 @@ func RenderWriteGo(rows []Row, observed map[string]WriteObserved) ([]byte, error
 	buf.WriteString("var ft710ExWrite = []EXWriteItem{\n")
 	for _, r := range sorted {
 		domain, ok := ParseP4Domain(r.P4)
-		if r.P1 == 1 && r.P2 == 5 && r.P3 == 16 {
+		switch {
+		case r.P1 == 1 && r.P2 == 5 && r.P3 == 16:
 			// SHIFT FREQUENCY: the manual prints "1:" twice and no "0"; Session R
 			// (18/10/2026) showed code 0 = 170 Hz (core/cat/table2-corrections.csv).
 			domain, ok = Domain{Codes: []int{0, 1, 2, 3}}, true
+		case r.P1 == 1 && r.P2 == 5 && r.P3 == 15:
+			// RTTY MARK FREQUENCY: the manual prints codes 1-2; Session W
+			// (18/10/2026) refused code 2, so the codes are 0 = 1275 Hz, 1 = 2125 Hz.
+			domain, ok = Domain{Codes: []int{0, 1}}, true
 		}
 		if !ok {
 			fmt.Fprintf(os.Stderr, "extable: RenderWriteGo: legend does not parse, held read-only: %02d/%02d/%02d %s (%q)\n", r.P1, r.P2, r.P3, r.Name, r.P4)

@@ -475,3 +475,17 @@ func TestShiftFrequencyDomain_Codes0To3(t *testing.T) {
 		t.Error("domain accepts 4")
 	}
 }
+
+// TestMarkFrequencyDomain_Codes0And1 pins the Session W (18/10/2026)
+// correction: 01-05-15 writes codes 0 and 1, not the manual's 1 and 2.
+func TestMarkFrequencyDomain_Codes0And1(t *testing.T) {
+	domain, _, admitted := FT710.EXWriteDescriptor(EXAddress{P1: 1, P2: 5, P3: 15})
+	if !admitted {
+		t.Fatal("01-05-15 not admitted to the write gate")
+	}
+	for v, want := range map[int]bool{0: true, 1: true, 2: false} {
+		if domain.Contains(v) != want {
+			t.Errorf("Contains(%d) = %t, want %t", v, !want, want)
+		}
+	}
+}
