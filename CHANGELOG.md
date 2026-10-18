@@ -11,7 +11,36 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-18
+
 ### Added
+- **FT-710 menu settings gain a write path**, characterised on hardware
+  address by address: `rigprog write --settings FILE` and the app's
+  editable settings cells write only a menu address whose Set
+  behaviour was confirmed on a real FT-710, then read it back
+  byte-for-byte to check. 58 of the FT-710's 296 menu addresses are
+  permanently read-only: the CAT link settings, PTT and keying over
+  RTS, DTR or DAKY (including PC KEYING), tuner and antenna routing,
+  TX power and safety, MOD SOURCE, and the text fields. The other 238
+  were each set, read back and restored on a real FT-710 (Session W,
+  18/10/2026). Menu writes have no consent step, unlike an opt-in
+  radio's channel writes: the manual's own settings chart has already
+  been shown wrong, so only testing on hardware can be trusted.
+  Hardware testing corrected the chart three times: TONE FREQ takes a
+  three-digit Set, MARK FREQUENCY codes are 0 (1275 Hz) and 1
+  (2125 Hz), and SHIFT FREQUENCY code 0 is 170 Hz. Every other radio's
+  menu settings stay read-only.
+- **Clone-mode read for the Yaesu FT-817, FT-857 and FT-897 families**:
+  `rigprog read --clone` and the app read a whole memory image over the
+  radio's own clone cable procedure instead of CAT. The model is
+  named by you, never inferred from the wire. Read only: no write route
+  reaches a clone-mode model. No clone-mode read has been tried on a
+  radio. The FT-817 family's baud rate comes from CHIRP, not a manual;
+  the FT-857 and FT-897 baud rates are ASSUMED. Adds file schema 7, which carries the raw
+  image (schema 6 files stay readable).
+- **`--transport-log FILE`** on `rigprog probe`, `read`, `diff` and
+  `write` appends transport diagnostics to FILE (off by default; some
+  drivers only).
 - **A radio read survives one or more corrupted/mis-addressed slot
   replies** instead of aborting the whole read: `rigprog read`, the
   app's Read Radio, and `PrepareSend`'s own fresh baseline read now
@@ -34,21 +63,17 @@ tag. The full release notes for each version are on the
   list and an Icom/Kenwood radio from its own new list, since the two
   families express that field differently. Free text remains the
   fallback for any radio that declares no such vocabulary.
-- **FT-710 menu settings gain a write path**, hardware-characterised
-  address by address: `rigprog write --settings FILE` and the app's
-  editable settings cells write only a menu address whose Set
-  behaviour Stuart has confirmed on a real FT-710, then read it back
-  byte-for-byte to check. 58 of the FT-710's 296 menu addresses are
-  permanently read-only — the CAT link settings, PTT and keying over
-  RTS, DTR or DAKY (including PC KEYING), tuner and antenna routing,
-  TX power and safety, MOD SOURCE, and the text fields; the rest become
-  writable as each one's hardware characterisation lands. There is no
-  consent step for menu writes, unlike an opt-in radio's channel
-  writes: the manual's own settings chart has already been shown
-  wrong, so only testing on hardware can be trusted. Every other
-  radio's menu settings stay read-only.
+- **Homebrew cask**: macOS install now also available as
+  `brew install --cask gm5dna/amateur-radio/open-rig-programmer`.
 
 ### Fixed
+- Windows installer: Programs and Features now shows the install
+  location, the executable's version resource carries the `040904b0`
+  language block (English, Unicode), and the console switches to UTF-8 for an
+  attached console. These changes have not yet been tested on a Windows
+  virtual machine.
+- FTdx5000: a channel read now takes the session lock like every other
+  Yaesu driver, so it can no longer interleave with a write.
 - FT-710, FTdx10 and FTdx101: a channel write no longer accepts a
   frequency outside the radio's own 30 kHz-75 MHz storable range;
   previously only the wire codec's 9-digit field width was checked.
@@ -63,6 +88,22 @@ tag. The full release notes for each version are on the
   treating the radio as lacking a field it has. A field whose column IS
   present, including an explicit "n/a" cell, is left exactly as the file
   states.
+- The channel grid's CTCSS column no longer appears on an Icom or
+  Kenwood radio, which expresses that state through the Tone mode
+  column instead: the column previously opened an empty, unusable
+  dropdown on these radios and a new row silently carried a stray
+  `ctcss` value.
+
+### Changed
+- The appearance select moved from the Settings tab to the status bar.
+- Internal: Yaesu channel read and write for the FT-450D, FT-950,
+  FT-2000, FTdx1200, FTdx3000, FTdx5000, FTdx9000 and FTX-1 now share
+  one core, as do the Yaesu CTCSS helpers. No user-visible behaviour
+  change apart from the FTdx5000 fix above.
+- Internal: the Icom drivers' open, read and write paths moved onto one
+  shared engine, and two repo-wide audits for over-engineering removed
+  dead code and consolidated shared helpers. No user-visible behaviour
+  change.
 
 ## [1.10.0] - 2026-09-18
 
@@ -697,7 +738,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.2...v1.9.0
 [1.8.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.8.1...v1.8.2
