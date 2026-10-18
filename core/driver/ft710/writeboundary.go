@@ -2,7 +2,11 @@
 
 package ft710
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/gm5dna/open-rig-programmer/core/cat"
+)
 
 // WriteBoundaryRow is one EX address admitted to this driver's write gate
 // (post denylist/held filter), in plain, core/cat-free form — the shape
@@ -40,7 +44,7 @@ func WriteBoundaryRows() []WriteBoundaryRow {
 		}
 		rows = append(rows, WriteBoundaryRow{
 			ID:        fmt.Sprintf("%02d%02d%02d", it.Addr.P1, it.Addr.P2, it.Addr.P3),
-			ReadWidth: it.Digits,
+			ReadWidth: readWidth(it),
 			Width:     width,
 			Codes:     domain.Codes,
 			Lo:        domain.Lo,
@@ -50,4 +54,14 @@ func WriteBoundaryRows() []WriteBoundaryRow {
 		})
 	}
 	return rows
+}
+
+// readWidth is the width a bench Set is sized from: the width the radio
+// answered with when that was observed, else the manual's Digits. They differ
+// at 010321 TONE FREQ (manual 2, radio 3; Session W refused a 2-digit Set).
+func readWidth(it cat.EXItem) int {
+	if it.ObservedReadWidth != 0 {
+		return it.ObservedReadWidth
+	}
+	return it.Digits
 }

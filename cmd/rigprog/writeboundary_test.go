@@ -12,9 +12,9 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
-// TestWriteBoundaryRows_234AdmittedDeniedAndHeldAbsent and
+// TestWriteBoundaryRows_238AdmittedAndDeniedAbsent and
 // TestWriteBoundaryRows_WidthIsSentinelZero — the row-derivation pins,
-// including the 58-denied/4-held golden lists — moved to
+// including the 58-denied golden list — moved to
 // core/driver/ft710/writeboundary_test.go (task h2 guard fix): the
 // derivation they pin moved there too, since this package may not import
 // core/cat (internal/guards' composition-root discipline).
@@ -46,13 +46,13 @@ func TestWriteBoundaryCSV_RoundTripsAndDeclaresSafetyBoundary(t *testing.T) {
 		}
 		dataLines++
 	}
-	if dataLines != 234 {
-		t.Errorf("write-boundary CSV data lines = %d, want 234", dataLines)
+	if dataLines != 238 {
+		t.Errorf("write-boundary CSV data lines = %d, want 238", dataLines)
 	}
 
 	// One admitted address's shape, spot-checked: 010101 AF TREBLE GAIN,
 	// a signed -20..+10 range, no enumerated codes.
-	if !strings.Contains(out, "010101,3,0,,-20,10,1,true") {
+	if !strings.Contains(out, "010101,3,3,,-20,10,1,true") {
 		t.Errorf("write-boundary CSV missing/wrong row for 010101 (AF TREBLE GAIN); got:\n%s", out)
 	}
 }

@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-// writeBoundaryDeniedGolden and writeBoundaryHeldGolden mirror
-// core/cat/exdenylist_test.go's own golden lists (58 denied, 4 held) by
+// writeBoundaryDeniedGolden mirrors
+// core/cat/exdenylist_test.go's own golden lists (58 denied) by
 // (P1,P2,P3) triple — a second, independent pin against the exact same
 // milestone spec table, from this driver's own write-boundary dump, so a
 // future change that broke EITHER side's filter fails at least one of the
@@ -34,24 +34,18 @@ var writeBoundaryDeniedGolden = [][3]int{
 	{6, 5, 1}, {6, 5, 2}, {6, 5, 3}, {6, 5, 4}, {6, 5, 15}, {6, 5, 18},
 }
 
-var writeBoundaryHeldGolden = [][3]int{
-	{1, 5, 16}, {3, 1, 12}, {3, 1, 13}, {3, 1, 14},
-}
-
 func tripleID(t [3]int) string {
 	return fmt.Sprintf("%02d%02d%02d", t[0], t[1], t[2])
 }
 
-// TestWriteBoundaryRows_234AdmittedDeniedAndHeldAbsent pins task-h2's own
-// safety-critical counts against the shipped FT-710 dialect: exactly 234
-// rows, none of the 58 denied or 4 held addresses present among them, and
-// every denied/held address individually confirmed absent by id (not
-// just by count — a count match alone would not catch one held address
-// swapped for one denied one).
-func TestWriteBoundaryRows_234AdmittedDeniedAndHeldAbsent(t *testing.T) {
+// TestWriteBoundaryRows_238AdmittedAndDeniedAbsent pins task-h2's own
+// safety-critical counts against the shipped FT-710 dialect: exactly 238
+// rows, none of the 58 denied addresses present among them, and every
+// denied address individually confirmed absent by id (not just by count).
+func TestWriteBoundaryRows_238AdmittedAndDeniedAbsent(t *testing.T) {
 	rows := WriteBoundaryRows()
-	if len(rows) != 234 {
-		t.Fatalf("WriteBoundaryRows() returned %d rows, want 234", len(rows))
+	if len(rows) != 238 {
+		t.Fatalf("WriteBoundaryRows() returned %d rows, want 238", len(rows))
 	}
 
 	present := make(map[string]bool, len(rows))
@@ -64,26 +58,35 @@ func TestWriteBoundaryRows_234AdmittedDeniedAndHeldAbsent(t *testing.T) {
 			t.Errorf("denied address %s present in write-boundary dump", tripleID(triple))
 		}
 	}
-	for _, triple := range writeBoundaryHeldGolden {
-		if present[tripleID(triple)] {
-			t.Errorf("held address %s present in write-boundary dump", tripleID(triple))
-		}
-	}
 }
 
-// TestWriteBoundaryRows_WidthIsSentinelZero pins the "no zero sentinel
-// renders as writable" fact this dump exists to carry forward (spec A1):
-// every row's width is 0 — table2-write-observed.csv is empty until
-// Session W actually runs — and every row's ReadWidth is a real, nonzero
-// manual Digits value.
-func TestWriteBoundaryRows_WidthIsSentinelZero(t *testing.T) {
+// TestWriteBoundaryRows_WidthIsObserved pins that Session W (18/10/2026)
+// filled table2-write-observed.csv: every row carries a real, nonzero Set
+// width and a real, nonzero ReadWidth.
+func TestWriteBoundaryRows_WidthIsObserved(t *testing.T) {
 	rows := WriteBoundaryRows()
 	for _, r := range rows {
-		if r.Width != 0 {
-			t.Errorf("row %s width = %d, want 0 (table2-write-observed.csv is empty)", r.ID, r.Width)
+		if r.Width == 0 {
+			t.Errorf("row %s width = 0, want the Session W observed Set width", r.ID)
 		}
 		if r.ReadWidth == 0 {
 			t.Errorf("row %s readWidth = 0, want the manual's real Digits value", r.ID)
 		}
 	}
+}
+
+// TestWriteBoundaryRows_ToneFreqSizedFromObservedRead pins Session W
+// (18/10/2026): 010321 answers 3 bytes (manual Digits 2) and a 2-digit Set
+// was refused, so its row sizes Sets at 3; its domain stays 0-49.
+func TestWriteBoundaryRows_ToneFreqSizedFromObservedRead(t *testing.T) {
+	for _, r := range WriteBoundaryRows() {
+		if r.ID != "010321" {
+			continue
+		}
+		if r.ReadWidth != 3 || r.Width != 3 || r.Lo != 0 || r.Hi != 49 {
+			t.Errorf("010321 = readWidth %d, %d-%d; want 3, 0-49", r.ReadWidth, r.Lo, r.Hi)
+		}
+		return
+	}
+	t.Fatal("010321 missing from write-boundary rows")
 }

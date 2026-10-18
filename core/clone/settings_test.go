@@ -643,8 +643,11 @@ func TestPrepareSend_PerformsNoSettingsTraffic(t *testing.T) {
 	if exAfterA != 0 {
 		t.Errorf("EX writes after PrepareSend(nil Menus) = %d, want 0", exAfterA)
 	}
-	if exAfterB != exAfterA {
-		t.Errorf("EX writes after PrepareSend(non-nil Menus) = %d, want unchanged at %d", exAfterB, exAfterA)
+	// Since Session W 010101 is write-characterised, so PrepareSend's
+	// opportunistic settings diff reads exactly that one named item: one
+	// EX READ frame, never a Set.
+	if exAfterB != exAfterA+1 {
+		t.Errorf("EX frames after PrepareSend(non-nil Menus) = %d, want %d (one read of the one named, characterised item)", exAfterB, exAfterA+1)
 	}
 
 	if planA.ConfirmationDigest() != planB.ConfirmationDigest() {

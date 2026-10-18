@@ -41,8 +41,7 @@ tag. The full release notes for each version are on the
   byte-for-byte to check. 58 of the FT-710's 296 menu addresses are
   permanently read-only — the CAT link settings, PTT and keying over
   RTS, DTR or DAKY (including PC KEYING), tuner and antenna routing,
-  TX power and safety, MOD SOURCE, and the text fields — and 4 more
-  are held read-only pending further investigation; the rest become
+  TX power and safety, MOD SOURCE, and the text fields; the rest become
   writable as each one's hardware characterisation lands. There is no
   consent step for menu writes, unlike an opt-in radio's channel
   writes: the manual's own settings chart has already been shown

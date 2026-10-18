@@ -191,16 +191,22 @@ const correctionsFile = `# FT-710 Table 2 corrections settled by hardware observ
 # Scope: two successive full passive EX sweeps of one UK FT-710, CAT ID
 #   0800, firmware V01-12, in one configuration, 24 July 2026,
 #   controller-driven, read-only. Session record: docs/hardware-notes.md.
+#   Plus one front-panel comparison of 01-05-16 SHIFT FREQUENCY on the same
+#   radio, Session R, 18/10/2026, and one of 01-05-15 MARK FREQUENCY,
+#   Session W, 18/10/2026.
 #
-# PRIVACY: the operator consented (25/07/2026) to publishing the two
-#   numeric values quoted below, both protocol-relevant and personally
-#   innocuous. No other captured value appears in any committed file, and
-#   no text-item value (MY CALL, PRESET NAME) ever will.
+# PRIVACY: the operator consented (25/07/2026; for the SHIFT FREQUENCY
+#   and MARK FREQUENCY mappings, 18/10/2026) to publishing the numeric
+#   values quoted below,
+#   all protocol-relevant and personally innocuous. No other captured
+#   value appears in any committed file, and no text-item value (MY CALL,
+#   PRESET NAME) ever will.
 #
 # Columns: p1,p2,p3,kind,manual_text,hardware_evidence
 #   kind: enum_code | field_width
-01,03,21,field_width,"Digits column prints 2","answered a 3-byte P4: EX010321012;"
-01,05,16,enum_code,"1: 170 Hz 1: 200 Hz 2: 425 Hz 3: 850 Hz","answered 0; a 0 code therefore exists and the printed duplicate 1: is wrong. WHICH label maps to 0 is NOT established: no front-panel check of this item was made"
+01,03,21,field_width,"Digits column prints 2","answered a 3-byte P4: EX010321012;. Set evidence (Session W, 18/10/2026): a width-2 Set was refused and a width-3 Set accepted"
+01,05,16,enum_code,"1: 170 Hz 1: 200 Hz 2: 425 Hz 3: 850 Hz","answered 0 while the front panel showed 170 Hz (Session R, 18/10/2026), so code 0 = 170 Hz and the printed first 1: is a typo for 0:"
+01,05,15,enum_code,"1: 1275 Hz 2: 2125 Hz","answered 1 while the front panel showed 2125 Hz and a Set of code 2 was refused (Session W, 18/10/2026), so code 0 = 1275 Hz and code 1 = 2125 Hz"
 `
 
 // TestCorrectionsCSV_IsPinnedByteForByte is the privacy and review gate

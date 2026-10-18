@@ -7,11 +7,12 @@ package cat
 // mechanically from the CSV. Each predicate below encodes one of the six
 // permanently-denied classes from docs/menu-write-decision.md ("What this
 // decision is not") and the milestone spec's §1 scope table
-// (.superpowers/sdd/2026-09-19-v1110-settings-write/reviews/spec.md), plus
-// the four addresses HELD read-only pending further evidence (same §1).
+// (.superpowers/sdd/2026-09-19-v1110-settings-write/reviews/spec.md).
+// The four addresses once held read-only were unheld after Session R
+// (18/10/2026).
 // TestEXDenylist_MatchesTable2ByAddress (exdenylist_test.go) is the guard: it
 // walks table2.csv through internal/extable.ParseCSV and pins the exact
-// denied/held/admitted counts and the denied set address by address, so a
+// denied/admitted counts and the denied set address by address, so a
 // future edit to table2.csv that silently moves an address in or out of a
 // class fails the build rather than shipping quietly.
 //
@@ -19,7 +20,7 @@ package cat
 // buildFT710ExWrite: task (c)'s single reconciliation point between this
 // file's classification and (b2)'s generated write-descriptor table. An
 // admitted-but-uncharacterised address is refused there by its Width 0
-// sentinel (domain.go); a denied or held one never reaches d.exWrite at
+// sentinel (domain.go); a denied one never reaches d.exWrite at
 // all, regardless of what the write descriptor table says.
 //
 // A predicate here matches on BEHAVIOUR — the legend text (what the address
@@ -93,38 +94,9 @@ func exTextDenied(text bool) bool {
 	return text
 }
 
-// exHeldTriples lists the four addresses held read-only for v1.11.0 —
-// excluded from the admitted set but NOT permanently denied, revisited
-// without silence once the evidence below exists (spec §1):
-//
-//   - (01,05,16) SHIFT FREQUENCY: the manual prints the code "1:" twice and
-//     offers no "0"; M8c's hardware answer of 0 proves a 0-code exists but
-//     not which label it means. Held until Session R's front-panel trial
-//     settles the mapping.
-//   - (03,01,12) QMB CH, (03,01,13) BAND STACK, (03,01,14) MEM GROUP: MEM
-//     GROUP may change how the radio organises memory channels, which may
-//     change the slot addressing core/clone's channel write path (MR/MW/MT)
-//     assumes. Held pending Session R's investigative step.
-var exHeldTriples = [4][3]int{
-	{1, 5, 16},
-	{3, 1, 12},
-	{3, 1, 13},
-	{3, 1, 14},
-}
-
-// exHeld reports whether (p1,p2,p3) is one of exHeldTriples.
-func exHeld(p1, p2, p3 int) bool {
-	for _, t := range exHeldTriples {
-		if t[0] == p1 && t[1] == p2 && t[2] == p3 {
-			return true
-		}
-	}
-	return false
-}
-
 // exWriteDenied reports whether it (a runtime EXItem, exinventory_gen.go)
 // should be excluded from a dialect's write table — denied by one of the
-// six classes above, or held. It is this file's five name/text/triple
+// six classes above. It is this file's five name/text/triple
 // predicates applied AT RUNTIME, against EXItem rather than
 // internal/extable.Row, for one reason: EXItem deliberately does not carry
 // the manual's P4 legend text (exinventory.go's own EXItem doc comment),
@@ -145,6 +117,5 @@ func exWriteDenied(it EXItem) bool {
 		exTunerRoutingDenied(it.Name) ||
 		exTXSafetyDenied(p1, p2, p3, it.Name) ||
 		exUnintendedTXSourceDenied(it.Name) ||
-		exTextDenied(it.Text) ||
-		exHeld(p1, p2, p3)
+		exTextDenied(it.Text)
 }

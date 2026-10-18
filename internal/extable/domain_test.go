@@ -108,14 +108,14 @@ var signedGolden = [][3]int{
 }
 
 // admittedUnparseableGolden is the known-hard remainder: P4 legends among
-// the 234 admitted addresses that ParseP4Domain refuses. It is empty today
+// the 238 admitted addresses that ParseP4Domain refuses. It is empty today
 // — every admitted legend parses — and is asserted exactly empty below, so
 // a parser change that starts refusing legends fails the build loudly
 // (spec §10.3, plan risk 3) rather than quietly shrinking the write set.
 var admittedUnparseableGolden = [][3]int{}
 
-// TestParseP4Domain_AdmittedAddresses feeds every P4 legend for the 234
-// admitted addresses (task (a)'s exdenylist.go predicates plus exHeld)
+// TestParseP4Domain_AdmittedAddresses feeds every P4 legend for the 238
+// admitted addresses (task (a)'s exdenylist.go predicates)
 // through ParseP4Domain and checks the result against
 // admittedUnparseableGolden.
 func TestParseP4Domain_AdmittedAddresses(t *testing.T) {
@@ -128,7 +128,6 @@ func TestParseP4Domain_AdmittedAddresses(t *testing.T) {
 		t.Fatalf("ParseCSV(table2.csv): %v", err)
 	}
 
-	held := map[[3]int]bool{{1, 5, 16}: true, {3, 1, 12}: true, {3, 1, 13}: true, {3, 1, 14}: true}
 	deniedNames := map[string]bool{
 		"CAT-1 RATE": true, "CAT-1 TIME OUT TIMER": true, "CAT-1 CAT-3 STOP BIT": true,
 		"CAT-2 RATE": true, "CAT-2 TIME OUT TIMER": true,
@@ -143,7 +142,7 @@ func TestParseP4Domain_AdmittedAddresses(t *testing.T) {
 	for _, r := range rows {
 		addr := [3]int{r.P1, r.P2, r.P3}
 		txSafetyDenied := r.P1 == 3 && r.P2 == 4 && (r.P3 == 1 || r.P3 == 2 || r.P3 == 3 || r.P3 == 4 || r.P3 == 6 || r.P3 == 7)
-		if held[addr] || deniedNames[r.Name] || r.Text || txSafetyDenied || containsAllKeying(r.P4) {
+		if deniedNames[r.Name] || r.Text || txSafetyDenied || containsAllKeying(r.P4) {
 			continue
 		}
 		admittedCount++
@@ -159,8 +158,8 @@ func TestParseP4Domain_AdmittedAddresses(t *testing.T) {
 		}
 	}
 
-	if admittedCount != 234 {
-		t.Fatalf("admitted count = %d, want 234 — this test's own denylist mirror has drifted from core/cat/exdenylist.go", admittedCount)
+	if admittedCount != 238 {
+		t.Fatalf("admitted count = %d, want 238 — this test's own denylist mirror has drifted from core/cat/exdenylist.go", admittedCount)
 	}
 
 	sort.Slice(unparseable, func(i, j int) bool {

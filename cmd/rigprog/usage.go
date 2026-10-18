@@ -372,7 +372,7 @@ value.
 
 WRITE-BOUNDARY SUB-MODE: see "rigprog settings write-boundary --help". In
 outline: dumps every address admitted to this build's write gate (denied
-and held addresses excluded by construction) with its read width, current
+addresses excluded by construction) with its read width, current
 Set width (0 until Session W) and value domain — the safety-boundary data
 file the out-of-repo Session W bench tool depends on entirely, since that
 tool cannot import core/cat.
@@ -470,18 +470,18 @@ Flags:
 OFFLINE: does not open a radio session, does not read a codeplug file, and
 does not read a radio's identity — this dumps a BUILD-time fact, this
 binary's own core/cat write descriptor (core/cat/exwrite_gen.go, filtered
-through core/cat/exdenylist.go's denylist/held predicates), never
+through core/cat/exdenylist.go's denylist predicates), never
 anything captured from hardware.
 
-One row per address ADMITTED to the write gate: every denied (58) and
-held (4) address is absent from the output by construction, not by a
+One row per address ADMITTED to the write gate: every denied (58)
+address is absent from the output by construction, not by a
 runtime check anything downstream performs. Columns: id, read_width (the
 manual's Digits column — a READ width, never a Set width), width
 (ObservedSetWidth — 0 until Session W characterises this address), and
 the value domain (codes, lo, hi, step, signed).
 
 THIS OUTPUT IS THE ONLY THING KEEPING THE OUT-OF-REPO SESSION W BENCH
-TOOL (docs/fixtures-private/session-w/, gitignored) OFF THE DENIED/HELD
+TOOL (docs/fixtures-private/session-w/, gitignored) OFF THE DENIED
 ADDRESSES AND OFF ILLEGAL VALUES: that tool cannot import core/cat (spec
 §3) and trusts this file completely. Regenerate with "--out FILE --force"
 immediately before every Session W run; never hand-edit the result.

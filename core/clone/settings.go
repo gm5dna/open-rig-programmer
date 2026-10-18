@@ -214,10 +214,10 @@ type SettingDelta struct {
 // wanted may be nil (a candidate carrying no menu data): nothing can be
 // diffed against nothing, so this returns (nil, nil) WITHOUT reading
 // anything — the same "Menus is inert" guarantee
-// TestPrepareSend_PerformsNoSettingsTraffic already pins for the common
-// case, where every registered radio has zero characterised addresses
-// today (table2-write-observed.csv is still empty) and the loop below
-// would find nothing to read regardless.
+// TestPrepareSend_PerformsNoSettingsTraffic pins. Since Session W
+// (18/10/2026) the FT-710's 238 admitted addresses are characterised, so a
+// non-nil Menus costs one EX read per characterised item it names; every
+// other registered radio still has none and reads nothing.
 //
 // A session whose concrete type does not implement driver.SettingsReader
 // likewise returns (nil, nil): this is an OPPORTUNISTIC diff, not a

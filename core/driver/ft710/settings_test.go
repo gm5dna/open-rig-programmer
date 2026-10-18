@@ -193,13 +193,9 @@ func TestSession_ReadSetting_UnknownID_RefusedBeforeWire(t *testing.T) {
 // WriteSetting refuses every id/value combination that cannot possibly be
 // legal to Set — before any wire traffic — for each of the reasons
 // s.dialect.BuildEXSet's one gate (core/cat/ex.go's exSetP4OK) folds
-// together. At this milestone's shipped state, table2-write-observed.csv
-// is empty (bootstrap-closed, spec §3): every admitted address's write
-// descriptor Width is still the zero sentinel, so the "uncharacterised",
-// "out-of-domain" and "wrong-width" cases below are refused for the SAME
-// underlying reason (Width == 0) as "denied"/"held" today — exactly the
-// folding exSetP4OK's own doc comment describes — and will diverge once
-// Session W lands a row for 010101 without this test changing at all.
+// together. Since Session W (18/10/2026) every admitted address has a real
+// Set width, so the admitted cases below are refused on their value (domain
+// or width), not on a zero sentinel.
 func TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -209,11 +205,12 @@ func TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire(t *testing.T) {
 		{"unknown id (malformed shape)", "not-an-address", "0"},
 		{"unknown id (out of inventory)", "050101", "0"},
 		{"denied (CAT-1 RATE)", "030105", "0"},
-		{"held (SHIFT FREQUENCY)", "010516", "0"},
-		{"uncharacterised admitted address, plausible value", "010101", "000"},
-		{"uncharacterised admitted address, out-of-domain-shaped value", "010101", "999"},
-		{"uncharacterised admitted address, wrong-width value", "010101", "00"},
-		{"uncharacterised admitted address, zero-width value", "010101", ""},
+		{"admitted address, out-of-domain value", "010101", "999"},
+		{"admitted address, wrong-width value", "010101", "00"},
+		{"admitted address, zero-width value", "010101", ""},
+		{"SHIFT FREQUENCY, code past its 0-3 domain", "010516", "4"},
+		{"MARK FREQUENCY, code 2 refused by the radio", "010515", "2"},
+		{"TONE FREQ, manual width 2 refused by the radio", "010321", "12"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -316,10 +313,9 @@ func TestWriteSetting_OutcomeMatrix(t *testing.T) {
 	})
 
 	t.Run(driver.SettingWriteRefused.String(), func(t *testing.T) {
-		// No fakeradio.WithEXSetWidth: the fake stays uncharacterised for
-		// addr even though the dialect admits it, so the Set itself draws
-		// "?;" within its error window.
-		_, sess := openSessionWithDriverOpts(t, Simulated, dopts)
+		// The fake is characterised at a DIFFERENT width than the dialect
+		// sends, so the Set itself draws "?;" within its error window.
+		_, sess := openSessionWithDriverOpts(t, Simulated, dopts, fakeradio.WithEXSetWidth(addr, width+1))
 
 		res, err := sess.WriteSetting(testCtx(t), addr, wanted)
 		if !errors.Is(err, cat.ErrRejected) {
