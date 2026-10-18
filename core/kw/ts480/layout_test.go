@@ -105,12 +105,12 @@ func TestLayout_EveryAxisByValue(t *testing.T) {
 	// SIXTEEN of the 47 parameter bytes, in six runs: the three both books
 	// print plus this radio's own P2, P11 and P15.
 	wantFixed := []kw.FixedField{
-		{Pos: 4, Printed: "0"},          // P2  (480:953)
-		{Pos: 25, Printed: "000"},       // P10 (480:971)
-		{Pos: 28, Printed: "0"},         // P11 (480:973)
-		{Pos: 29, Printed: "0"},         // P12 (480:975)
-		{Pos: 30, Printed: "000000000"}, // P13 (480:977)
-		{Pos: 41, Printed: "0"},         // P15 (480:982)
+		{Pos: 4, Printed: "0", Cite: "480:953"},          // P2
+		{Pos: 25, Printed: "000", Cite: "480:971"},       // P10
+		{Pos: 28, Printed: "0", Cite: "480:973"},         // P11
+		{Pos: 29, Printed: "0", Cite: "480:975"},         // P12
+		{Pos: 30, Printed: "000000000", Cite: "480:977"}, // P13
+		{Pos: 41, Printed: "0", Cite: "480:982"},         // P15
 	}
 	if got := l.PrintedFixed(); !reflect.DeepEqual(got, wantFixed) {
 		t.Errorf("the hard-wired set is %v, want %v", got, wantFixed)

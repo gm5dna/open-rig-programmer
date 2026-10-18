@@ -307,15 +307,9 @@ func TestReadChannel_ASpaceInByteFourIsCORRELATEDANDTHENREFUSED(t *testing.T) {
 	if errors.Is(err, transport.ErrTimeout) {
 		t.Error("a correlated answer was reported as a timeout; the frame reached the parser and the parser is what refused it")
 	}
-	// THE MESSAGE NAMES THE POSITION, THE PRINTED VALUE AND A24 — and NOT
-	// the line 480:953, which is where core/kw/ts480/layout.go's own
-	// PrintedFixed entry carries it. core/kw's checkPrintedFixed builds one
-	// message for six runs on this row and thirteen bytes on the 590 pair's,
-	// and kw.FixedField has no citation member for it to quote; adding one
-	// would be a core/kw change, outside this task's files. What the refusal
-	// DOES carry is enough to find the line: the position, the byte the book
-	// prints there, and A24 by name.
-	for _, want := range []string{"positions 4-4", `"0"`, "A24"} {
+	// THE MESSAGE NAMES THE POSITION, THE PRINTED VALUE, THE LINE 480:953
+	// (kw.FixedField.Cite) AND A24.
+	for _, want := range []string{"positions 4-4", `"0"`, "480:953", "A24"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want the message to name %s", err, want)
 		}

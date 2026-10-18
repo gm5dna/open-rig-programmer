@@ -134,9 +134,9 @@ func layout480() Layout {
 		PrintedFixed: append(commonPrintedFixed(),
 			// The 480's three extra hard-wirings, each printed "Always 0
 			// for the TS-480".
-			FixedField{Pos: 4, Printed: "0"},  // P2  (480:953)
-			FixedField{Pos: 28, Printed: "0"}, // P11 (480:973)
-			FixedField{Pos: 41, Printed: "0"}, // P15 (480:982)
+			FixedField{Pos: 4, Printed: "0", Cite: "480:953"},  // P2  (480:953)
+			FixedField{Pos: 28, Printed: "0", Cite: "480:973"}, // P11 (480:973)
+			FixedField{Pos: 41, Printed: "0", Cite: "480:982"}, // P15 (480:982)
 		),
 	})
 }

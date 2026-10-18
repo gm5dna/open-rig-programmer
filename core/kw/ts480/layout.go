@@ -113,12 +113,12 @@ var layout480 = kw.MustNewLayout(kw.LayoutConfig{
 	// and as a possible member of this set, and the two would otherwise be
 	// one edit from disagreeing with nothing failing.
 	PrintedFixed: []kw.FixedField{
-		{Pos: 4, Printed: "0"},          // P2  (480:953)
-		{Pos: 25, Printed: "000"},       // P10 (480:971)
-		{Pos: 28, Printed: "0"},         // P11 (480:973)
-		{Pos: 29, Printed: "0"},         // P12 (480:975)
-		{Pos: 30, Printed: "000000000"}, // P13 (480:977)
-		{Pos: 41, Printed: "0"},         // P15 (480:982)
+		{Pos: 4, Printed: "0", Cite: "480:953"},          // P2
+		{Pos: 25, Printed: "000", Cite: "480:971"},       // P10
+		{Pos: 28, Printed: "0", Cite: "480:973"},         // P11
+		{Pos: 29, Printed: "0", Cite: "480:975"},         // P12
+		{Pos: 30, Printed: "000000000", Cite: "480:977"}, // P13
+		{Pos: 41, Printed: "0", Cite: "480:982"},         // P15
 	},
 })
 

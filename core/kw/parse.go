@@ -439,7 +439,11 @@ func (l Layout) checkPrintedFixed(what string, frame []byte) error {
 	for _, ff := range l.printedFixed {
 		got := string(frame[ff.Pos-1 : ff.Pos-1+len(ff.Printed)])
 		if got != ff.Printed {
-			return NewParseError(frame, "%s: positions %d-%d are %q, and the %s's book prints %q there (%s)", what, ff.Pos, ff.end(), got, l.model, ff.Printed, why)
+			cite := ""
+			if ff.Cite != "" {
+				cite = ", " + ff.Cite
+			}
+			return NewParseError(frame, "%s: positions %d-%d are %q, and the %s's book prints %q there%s (%s)", what, ff.Pos, ff.end(), got, l.model, ff.Printed, cite, why)
 		}
 	}
 	return nil

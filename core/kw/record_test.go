@@ -740,3 +740,21 @@ func TestEmptyName_IsEightSpaces(t *testing.T) {
 		}
 	}
 }
+
+// TestParseMRAnswer_PrintedFixedRefusalNamesTheRowsOwnCite pins that a
+// refusal quotes FixedField.Cite where the row carries one: the 480's
+// space in P2 names 480:953, and a 590 refusal never quotes a 480 line.
+func TestParseMRAnswer_PrintedFixedRefusalNamesTheRowsOwnCite(t *testing.T) {
+	frame := answer480().frame(t)
+	frame[3] = ' '
+	_, err := layout480().ParseMRAnswer(frame)
+	if err == nil || !strings.Contains(err.Error(), "480:953") {
+		t.Errorf("err = %v, want a refusal naming 480:953", err)
+	}
+	frame = answer590().frame(t)
+	frame[24] = '9'
+	_, err = layout590SG().ParseMRAnswer(frame)
+	if err == nil || strings.Contains(err.Error(), "480:") {
+		t.Errorf("err = %v, want a 590 refusal that does not cite a 480 line", err)
+	}
+}

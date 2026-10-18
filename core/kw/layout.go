@@ -347,6 +347,9 @@ type SlotRange struct {
 type FixedField struct {
 	Pos     int
 	Printed string
+	// Cite is the book's own "480:953" style line cite for the run, quoted
+	// by the refusal. Optional: empty where both books print the constant.
+	Cite string
 }
 
 // end returns the 1-indexed position of f's last byte.
