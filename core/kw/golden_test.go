@@ -73,7 +73,8 @@ import (
 //     (TestGoldenVectors_InitSequenceIsTheAI0Vector); EXAddress.Wire against
 //     the address field of all seventeen EX vectors
 //     (TestGoldenVectors_TheEXAddressFieldIsWhatWireRenders); and
-//     PrefixLenMatcher against every answer vector
+//     the matcher each driver uses against every answer vector, which is
+//     PrefixLenMatcher for all but MR and Layout.MRAnswerMatcher for MR
 //     (TestGoldenVectors_EveryAnswerIsMatchedByItsOwnReadsMatcher), the
 //     answer-correlation half of the codec.
 //  4. Replays every vector THROUGH ITS OWN GRAMMAR
@@ -970,9 +971,42 @@ var answerMatcherSpecs = map[string]int{
 	"EX": 0,
 }
 
+// mrSlotOfAnswer is the slot an MR answer vector answers, taken from its own
+// paired read frame ("mr590_read_ch03_..." for "mr590_answer_ch03_..."), so
+// the matcher under test is told the slot independently of the answer it
+// then has to recognise. If a file holds no paired read it falls back to the
+// slot the answer itself parses to, which is weaker (the parser then marks
+// its own work), so a missing pair is worth fixing in the file.
+func mrSlotOfAnswer(t *testing.T, l Layout, vectors []goldenVector, answer goldenVector) Slot {
+	t.Helper()
+	ch := strings.Split(answer.name, "_")[2]
+	for _, r := range vectors {
+		if strings.Contains(r.name, "_read_"+ch+"_") {
+			// "MR" P1 then three digits of channel number, in both books.
+			n, err := strconv.Atoi(r.frame[3:6])
+			if err != nil {
+				t.Fatalf("%s: cannot read a channel number from %q: %v", r.name, r.frame, err)
+			}
+			for _, h := range []ScanHalf{ScanHalfNone, ScanLower, ScanUpper} {
+				if s, err := l.NewSlot(n, h); err == nil {
+					return s
+				}
+			}
+			t.Fatalf("%s: slot %d does not resolve on this layout", r.name, n)
+		}
+	}
+	rec, err := l.ParseMRAnswer([]byte(answer.frame))
+	if err != nil {
+		t.Fatalf("%s has no paired read and does not parse: %v", answer.name, err)
+	}
+	return rec.Slot
+}
+
 // TestGoldenVectors_EveryAnswerIsMatchedByItsOwnReadsMatcher replays every
-// radio-sent vector through PrefixLenMatcher — the answer-correlation half of
-// the codec, and the last shipped piece of it these vectors can reach.
+// radio-sent vector through its read's matcher as the drivers build it:
+// PrefixLenMatcher, except MR, which is Layout.MRAnswerMatcher for the
+// vector's own slot. It is the answer-correlation half of the codec, and the
+// last shipped piece of it these vectors can reach.
 //
 // Three properties, and the second and third are what stop it being a
 // restatement of the length roster:
@@ -981,6 +1015,8 @@ var answerMatcherSpecs = map[string]int{
 //   - Every OTHER command's matcher REFUSES it. A matcher that accepted
 //     anything would correlate an ID answer as an MR record and hand the
 //     engine 6 bytes where 50 were expected.
+//   - An MR answer for slot N is REFUSED by the matcher for slot M, which
+//     is the leg a frame-length matcher cannot give.
 //   - THE COMMAND'S OWN READ FRAME is refused by that command's answer
 //     matcher. This is the leg that binds exactLen rather than the prefix:
 //     "ID;" and "ID023;" share every byte the prefix test looks at and
@@ -999,7 +1035,12 @@ func TestGoldenVectors_EveryAnswerIsMatchedByItsOwnReadsMatcher(t *testing.T) {
 	answers := 0
 	for _, spec := range goldenSpecs {
 		t.Run(spec.file, func(t *testing.T) {
-			for _, v := range loadGoldenVectors(t, spec.file) {
+			l := replayLayout(t, spec.book)
+			vectors := loadGoldenVectors(t, spec.file)
+			slotThree := mustSlot(t, l, 3, ScanHalfNone)
+			var mrAnswers []goldenVector
+			mrSlots := map[string]Slot{}
+			for _, v := range vectors {
 				if roleOf(t, v) != roleAnswer {
 					continue
 				}
@@ -1016,22 +1057,40 @@ func TestGoldenVectors_EveryAnswerIsMatchedByItsOwnReadsMatcher(t *testing.T) {
 				if cmd == "EX" {
 					prefix = v.frame[:5]
 				}
-				if !PrefixLenMatcher(prefix, exactLen)(([]byte)(v.frame)) {
+				match := PrefixLenMatcher(prefix, exactLen)
+				if cmd == "MR" {
+					slot := mrSlotOfAnswer(t, l, vectors, v)
+					mrAnswers = append(mrAnswers, v)
+					mrSlots[v.name] = slot
+					match = l.MRAnswerMatcher(slot)
+				}
+				if !match(([]byte)(v.frame)) {
 					t.Errorf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP, NOT A TEST TO ADJUST.\n"+
 						"  vector   %s (%s:%d)\n"+
-						"  matcher  PrefixLenMatcher(%q, %d)\n"+
+						"  matcher  %s for %q (length %d)\n"+
 						"  golden   %q (%d bytes)\n"+
 						"The answer the manual's own chart prints is not correlated as the\n"+
 						"answer to its own read.",
-						v.name, v.file, v.line, prefix, exactLen, v.frame, len(v.frame))
+						v.name, v.file, v.line, "the read's matcher", prefix, exactLen, v.frame, len(v.frame))
 				}
 				for otherCmd, otherLen := range answerMatcherSpecs {
 					if otherCmd == cmd {
 						continue
 					}
-					if PrefixLenMatcher(otherCmd, otherLen)(([]byte)(v.frame)) {
+					other := PrefixLenMatcher(otherCmd, otherLen)
+					if otherCmd == "MR" {
+						other = l.MRAnswerMatcher(slotThree)
+					}
+					if other(([]byte)(v.frame)) {
 						t.Errorf("%s (%s:%d): %q is correlated by the %s read's matcher as well as its own; an answer two reads both claim is one the engine could deliver to the wrong caller",
 							v.name, v.file, v.line, v.frame, otherCmd)
+					}
+				}
+			}
+			for _, a := range mrAnswers {
+				for _, b := range mrAnswers {
+					if mrSlots[a.name] != mrSlots[b.name] && l.MRAnswerMatcher(mrSlots[b.name])(([]byte)(a.frame)) {
+						t.Errorf("%s: the MR answer for slot %v is correlated by the matcher for slot %v", a.name, mrSlots[a.name], mrSlots[b.name])
 					}
 				}
 			}
