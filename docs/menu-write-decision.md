@@ -2,7 +2,7 @@
 
 **Decided 25/07/2026 by Stuart Henderson (project owner); amended
 05/09/2026 and 19/09/2026 — see "Amendments" below. Status: a
-characterised write subset is being built for v1.11.0 (234 of 296
+characterised write subset is being built for v1.11.0 (238 of 296
 addresses, admitted for characterisation, not for immediate write); every
 other address, and the permanently-denied classes, stay read-only with no
 reopening.**
@@ -45,8 +45,8 @@ passive read can check, and the chart failed both:
 
 - TONE FREQ is documented as 2 digits; the radio answers 3.
 - SHIFT FREQUENCY's chart prints the code `1:` twice and offers no `0`;
-  the radio answered `0`. The printed codes are wrong, and which label
-  `0` actually selects is still unestablished.
+  the radio answered `0`. The printed codes are wrong; Session R
+  (18/10/2026) showed `0` selects 170 Hz.
 
 Two checks, two errors. That is a small sample, but it is the whole
 sample, and it points one way. Building 296 write descriptors on that
@@ -147,12 +147,14 @@ denied classes never in scope — is unchanged by the reframing.
 originally-proposed cosmetic subset: `TX BPF SEL`, `VOX SELECT`, `REF
 FREQ ADJ`, all nineteen `03-03` TX AUDIO items, `CW BK-IN TYPE`, `CW WAVE
 SHAPE`, `METER DETECTOR` (display ballistics only — no RF/power/keying
-path), the `KEYER` group and the `PRESET` survivors — 234 of the 296
-Table 2 addresses in total. All 234 are admitted for characterisation
+path), the `KEYER` group and the `PRESET` survivors — 238 of the 296
+Table 2 addresses in total. All 238 are admitted for characterisation
 only: each stays read-only until its own hardware write-characterisation
 session produces a result for it. Four addresses (`SHIFT FREQUENCY`,
-`QMB CH`, `BAND STACK`, `MEM GROUP`) are held back, neither admitted nor
-denied, pending further evidence. The permanently-denied classes above
+`QMB CH`, `BAND STACK`, `MEM GROUP`) were held back pending further
+evidence; Session R (18/10/2026) settled both questions and they are
+admitted (SHIFT FREQUENCY: code 0 = 170 Hz; MEM GROUP does not change CAT
+slot addressing). The permanently-denied classes above
 gain two members found on this pass: `PC KEYING` (it shares its legend
 with the RTS/DTR/DAKY keying items, so a name-only rule had missed it)
 and `MOD SOURCE` (an unintended-transmission-source class in its own
@@ -164,7 +166,7 @@ still read as originally written. As written, conditions 1 and 2 remain
 unmet: condition 2 asks for a chart proven trustworthy, or a way to work
 without one, and the FT-710 chart was wrong in both places M8c could
 check it. v1.11.0 does not meet condition 2 in that form. It works
-around it instead: every one of the 234 admitted addresses is
+around it instead: every one of the 238 admitted addresses is
 characterised against real hardware before it becomes writable, rather
 than the chart being trusted at all. Stuart is overriding condition 2's
 original form, dated 19/09/2026 — hardware characterisation stands in

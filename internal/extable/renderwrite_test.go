@@ -27,7 +27,7 @@ func ft710Table2Rows(t *testing.T) []Row {
 // TestRenderWriteGo_PartialJoinNeverRequiresSetEquality is the plan's own
 // named test for (b2): unlike RenderGo's ObservationsRequired regime,
 // RenderWriteGo must accept an EMPTY, a PARTIAL, and a FULL observation map
-// over the same 296 rows — Session W characterises the 234 admitted
+// over the same 296 rows — Session W characterises the 238 admitted
 // addresses incrementally, over hours at the radio, and a partial sweep
 // must never fail the whole generation.
 func TestRenderWriteGo_PartialJoinNeverRequiresSetEquality(t *testing.T) {

@@ -82,8 +82,8 @@ var exDenylistGolden = [][3]int{
 // TestEXDenylist_MatchesTable2ByAddress walks table2.csv via
 // internal/extable.ParseCSV — the same parser exinventory_gen.go is
 // generated from — and classifies every row through this file's six
-// denylist predicates plus exHeld. It pins spec §1's exact counts (58
-// denied, 4 held, 234 admitted, across 21 (P1,P2) groups) and the denied set
+// denylist predicates. It pins spec §1's exact counts (58
+// denied, 238 admitted, across 21 (P1,P2) groups) and the denied set
 // address by address against exDenylistGolden, so a future table2.csv edit
 // that silently moves an address in or out of a class fails the build
 // rather than shipping quietly.
@@ -104,7 +104,7 @@ func TestEXDenylist_MatchesTable2ByAddress(t *testing.T) {
 		t.Fatalf("ParseCSV(table2.csv): %v", err)
 	}
 
-	var denied, held, admitted [][3]int
+	var denied, admitted [][3]int
 	groups := map[[2]int]bool{}
 	for _, r := range rows {
 		groups[[2]int{r.P1, r.P2}] = true
@@ -116,16 +116,10 @@ func TestEXDenylist_MatchesTable2ByAddress(t *testing.T) {
 			exTXSafetyDenied(r.P1, r.P2, r.P3, r.Name) ||
 			exUnintendedTXSourceDenied(r.Name) ||
 			exTextDenied(r.Text)
-		isHeld := exHeld(r.P1, r.P2, r.P3)
 
-		switch {
-		case isDenied && isHeld:
-			t.Fatalf("address %v (%s): denied AND held — the two sets must be disjoint", addr, r.Name)
-		case isDenied:
+		if isDenied {
 			denied = append(denied, addr)
-		case isHeld:
-			held = append(held, addr)
-		default:
+		} else {
 			admitted = append(admitted, addr)
 		}
 	}
@@ -136,10 +130,7 @@ func TestEXDenylist_MatchesTable2ByAddress(t *testing.T) {
 	if got, want := len(denied), 58; got != want {
 		t.Errorf("denied count = %d, want %d", got, want)
 	}
-	if got, want := len(held), 4; got != want {
-		t.Errorf("held count = %d, want %d", got, want)
-	}
-	if got, want := len(admitted), 234; got != want {
+	if got, want := len(admitted), 238; got != want {
 		t.Errorf("admitted count = %d, want %d", got, want)
 	}
 	if got, want := len(groups), 21; got != want {
@@ -163,22 +154,6 @@ func TestEXDenylist_MatchesTable2ByAddress(t *testing.T) {
 		}
 	} else {
 		t.Errorf("denied set has %d addresses, exDenylistGolden has %d — set:\n%v", len(denied), len(exDenylistGolden), denied)
-	}
-
-	wantHeld := map[[3]int]bool{
-		{1, 5, 16}: true,
-		{3, 1, 12}: true,
-		{3, 1, 13}: true,
-		{3, 1, 14}: true,
-	}
-	for _, addr := range held {
-		if !wantHeld[addr] {
-			t.Errorf("held set contains unexpected address %v", addr)
-		}
-		delete(wantHeld, addr)
-	}
-	for addr := range wantHeld {
-		t.Errorf("held set is missing expected address %v", addr)
 	}
 }
 

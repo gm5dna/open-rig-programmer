@@ -93,7 +93,7 @@ func ParseWriteObservedCSV(data []byte) (map[string]WriteObserved, error) {
 //
 // observed may be nil, partial, or cover every row — RenderWriteGo never
 // requires set equality between rows and observed, unlike RenderGo's
-// ObservationsRequired regime: Session W characterises the 234 admitted
+// ObservationsRequired regime: Session W characterises the 238 admitted
 // addresses incrementally, over hours at the radio, and a row with no entry
 // yet renders ObservedSetWidth's zero sentinel rather than failing the
 // whole generation. A legend that fails to parse (ParseP4Domain's ok ==
@@ -132,6 +132,11 @@ func RenderWriteGo(rows []Row, observed map[string]WriteObserved) ([]byte, error
 	buf.WriteString("var ft710ExWrite = []EXWriteItem{\n")
 	for _, r := range sorted {
 		domain, ok := ParseP4Domain(r.P4)
+		if r.P1 == 1 && r.P2 == 5 && r.P3 == 16 {
+			// SHIFT FREQUENCY: the manual prints "1:" twice and no "0"; Session R
+			// (18/10/2026) showed code 0 = 170 Hz (core/cat/table2-corrections.csv).
+			domain, ok = Domain{Codes: []int{0, 1, 2, 3}}, true
+		}
 		if !ok {
 			fmt.Fprintf(os.Stderr, "extable: RenderWriteGo: legend does not parse, held read-only: %02d/%02d/%02d %s (%q)\n", r.P1, r.P2, r.P3, r.Name, r.P4)
 		}

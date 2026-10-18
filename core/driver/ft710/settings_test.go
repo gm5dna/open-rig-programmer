@@ -197,7 +197,7 @@ func TestSession_ReadSetting_UnknownID_RefusedBeforeWire(t *testing.T) {
 // is empty (bootstrap-closed, spec §3): every admitted address's write
 // descriptor Width is still the zero sentinel, so the "uncharacterised",
 // "out-of-domain" and "wrong-width" cases below are refused for the SAME
-// underlying reason (Width == 0) as "denied"/"held" today — exactly the
+// underlying reason (Width == 0) as "denied" today — exactly the
 // folding exSetP4OK's own doc comment describes — and will diverge once
 // Session W lands a row for 010101 without this test changing at all.
 func TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire(t *testing.T) {
@@ -209,7 +209,7 @@ func TestWriteSetting_RefusesUnknownOrUnwritableBeforeWire(t *testing.T) {
 		{"unknown id (malformed shape)", "not-an-address", "0"},
 		{"unknown id (out of inventory)", "050101", "0"},
 		{"denied (CAT-1 RATE)", "030105", "0"},
-		{"held (SHIFT FREQUENCY)", "010516", "0"},
+		{"unheld but uncharacterised (SHIFT FREQUENCY)", "010516", "0"},
 		{"uncharacterised admitted address, plausible value", "010101", "000"},
 		{"uncharacterised admitted address, out-of-domain-shaped value", "010101", "999"},
 		{"uncharacterised admitted address, wrong-width value", "010101", "00"},

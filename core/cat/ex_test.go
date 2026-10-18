@@ -301,8 +301,8 @@ func FuzzParseEXAnswer(f *testing.F) {
 // TestCanSetEX_FalseForEveryAddressWithoutAWriteRow is spec A1's named
 // test: with core/cat/table2-write-observed.csv still empty (Session W
 // has not run), every one of the 296 addresses is refused at BOTH
-// CanSetEX and BuildEXSet — the admitted 234 because their write
-// descriptor's Width is the rendered zero sentinel, the denied/held 62
+// CanSetEX and BuildEXSet — the admitted 238 because their write
+// descriptor's Width is the rendered zero sentinel, the denied 58
 // because they never reach d.exWrite at all (dialect.go's
 // buildFT710ExWrite). No zero sentinel renders as writable anywhere.
 func TestCanSetEX_FalseForEveryAddressWithoutAWriteRow(t *testing.T) {
@@ -400,26 +400,20 @@ func TestBuildEXSet_SignedShape(t *testing.T) {
 // filter, not just its effect on the shipped, empty-CSV table: a stray
 // write-observed row for a denylisted or held address must never make it
 // into d.exWrite, whatever ft710ExWrite itself says. CAT-1 RATE
-// (03,01,05) is denied (exCATLinkDenied); SHIFT FREQUENCY (01,05,16) is
-// held (exHeldTriples); AF TREBLE GAIN (01,01,01) is admitted, and its
+// (03,01,05) is denied (exCATLinkDenied); AF TREBLE GAIN (01,01,01) is admitted, and its
 // row's Width must survive the filter unchanged.
 func TestDialectExWrite_ExcludesDeniedAndHeld(t *testing.T) {
 	deniedAddr := EXAddress{P1: 3, P2: 1, P3: 5}
-	heldAddr := EXAddress{P1: 1, P2: 5, P3: 16}
 	admittedAddr := EXAddress{P1: 1, P2: 1, P3: 1}
 
 	rows := []EXWriteItem{
 		{Addr: deniedAddr, Domain: Domain{Lo: 0, Hi: 9, Step: 1}, ObservedSetWidth: 2},
-		{Addr: heldAddr, Domain: Domain{Lo: 0, Hi: 9, Step: 1}, ObservedSetWidth: 2},
 		{Addr: admittedAddr, Domain: Domain{Lo: -20, Hi: 10, Step: 1, Signed: true}, ObservedSetWidth: 3},
 	}
 	got := buildFT710ExWrite(rows, FT710.EXItems())
 
 	if _, ok := got[deniedAddr]; ok {
 		t.Errorf("buildFT710ExWrite kept denied address %v — a stray write-observed row must never make a denylisted address writable", deniedAddr)
-	}
-	if _, ok := got[heldAddr]; ok {
-		t.Errorf("buildFT710ExWrite kept held address %v", heldAddr)
 	}
 	desc, ok := got[admittedAddr]
 	if !ok {
@@ -436,8 +430,8 @@ func TestDialectExWrite_ExcludesDeniedAndHeld(t *testing.T) {
 // TestEXWriteDescriptor_MembershipOnly pins EXWriteDescriptor's contract
 // against the shipped FT710 dialect (table2-write-observed.csv empty):
 // an admitted address is reported present (admitted == true) with its
-// real Domain and the Width 0 sentinel; a denied and a held address are
-// both reported absent, exactly as d.exWrite itself excludes them —
+// real Domain and the Width 0 sentinel; a denied address is
+// reported absent, exactly as d.exWrite itself excludes them —
 // task h2's "settings write-boundary" sub-mode is built on this method
 // alone, so its membership boundary must match buildFT710ExWrite's
 // exactly, not merely CanSetEX's (which Width 0 would also make false
@@ -446,7 +440,6 @@ func TestDialectExWrite_ExcludesDeniedAndHeld(t *testing.T) {
 func TestEXWriteDescriptor_MembershipOnly(t *testing.T) {
 	admittedAddr := EXAddress{P1: 1, P2: 1, P3: 1} // AF TREBLE GAIN
 	deniedAddr := EXAddress{P1: 3, P2: 1, P3: 5}   // CAT-1 RATE
-	heldAddr := EXAddress{P1: 1, P2: 5, P3: 16}    // SHIFT FREQUENCY
 
 	domain, width, admitted := FT710.EXWriteDescriptor(admittedAddr)
 	if !admitted {
@@ -462,7 +455,23 @@ func TestEXWriteDescriptor_MembershipOnly(t *testing.T) {
 	if _, _, admitted := FT710.EXWriteDescriptor(deniedAddr); admitted {
 		t.Errorf("EXWriteDescriptor(%v) admitted = true, want false (denied)", deniedAddr)
 	}
-	if _, _, admitted := FT710.EXWriteDescriptor(heldAddr); admitted {
-		t.Errorf("EXWriteDescriptor(%v) admitted = true, want false (held)", heldAddr)
+}
+
+// TestShiftFrequencyDomain_Codes0To3 pins the Session R (18/10/2026)
+// correction: 01-05-16 is admitted, and its write domain is codes 0-3
+// although the manual prints "1:" twice. Domain is checked directly: the
+// Set width is still the Session W sentinel, so CanSetEX is false until then.
+func TestShiftFrequencyDomain_Codes0To3(t *testing.T) {
+	domain, _, admitted := FT710.EXWriteDescriptor(EXAddress{P1: 1, P2: 5, P3: 16})
+	if !admitted {
+		t.Fatal("01-05-16 not admitted to the write gate")
+	}
+	for v := 0; v <= 3; v++ {
+		if !domain.Contains(v) {
+			t.Errorf("domain refuses %d", v)
+		}
+	}
+	if domain.Contains(4) {
+		t.Error("domain accepts 4")
 	}
 }
