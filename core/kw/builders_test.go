@@ -164,6 +164,20 @@ func TestBuildMWSet_RefusesARecordWhoseAnswerP1DisagreesWithItsSlot(t *testing.T
 	if _, err := l.BuildMWSet(rec); err != nil {
 		t.Errorf("BuildMWSet refused a record whose AnswerP1 agrees with its slot: %v", err)
 	}
+
+	// The refusal's citations are per book: 590 lines on the 590, none on the 480.
+	rec.AnswerP1 = '0'
+	_, err := l.BuildMWSet(rec)
+	if err == nil || !strings.Contains(err.Error(), "590:1529-1531") {
+		t.Errorf("590 refusal = %v, want it to cite 590:1529-1531", err)
+	}
+	l480 := layout480()
+	rec = populatedRecord(mustSlot(t, l480, 5, ScanHalfNone))
+	rec.AnswerP1 = '1'
+	_, err = l480.BuildMWSet(rec)
+	if err == nil || strings.Contains(err.Error(), "590:") || !strings.Contains(err.Error(), "480:955") {
+		t.Errorf("480 refusal = %v, want a refusal that cites 480 lines and no 590 line", err)
+	}
 }
 
 // TestBuildMWSet_RefusesASlotFromAnotherLayout: a Slot is a value and may

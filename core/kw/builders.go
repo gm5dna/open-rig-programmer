@@ -69,14 +69,19 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	// slot: the silent data loss decision 11 exists to prevent.
 	//
 	// ON THIS MILESTONE'S PATHS THE REFUSAL IS LATENT RATHER THAN LIVE, and
-	// that is worth saying because the message names only section-defined
-	// channels. Plan P13 reads MR with P1=0 on every MEM slot and P1=1 only
-	// on a SCAN 'U' slot — A8 and A9 are why — so a MEM record can only ever
+	// that is worth saying because the 590's message names only
+	// section-defined channels. Plan P13 reads MR with P1=0 on every MEM slot and
+	// P1=1 only on a SCAN 'U' slot — A8 and A9 are why — so a MEM record can only ever
 	// carry AnswerP1='0', which is exactly what Slot.P1() derives for it, and
 	// no MEM read on this milestone can reach this refusal. If a later path
 	// ever reads a MEM slot answering P1='1', the message would be wrong as
 	// well as surprising and should be widened before that path lands.
 	if want := rec.Slot.P1(); rec.AnswerP1 != 0 && rec.AnswerP1 != want {
+		// The 590's text is shipped and byte-stable. The 480 has one flat
+		// 00-99 bank (480:830-838, 480:955) and no section channels to cite.
+		if l.book == Book480 {
+			return Command{}, NewParseError(nil, "MW set: this record was read with P1=%q but slot %v derives P1=%q from its class; the TS-480 has no section-defined channels, only one flat 00-99 bank (480:830-838, 480:955)", rec.AnswerP1, rec.Slot, want)
+		}
 		return Command{}, NewParseError(nil, "MW set: this record was read with P1=%q but slot %v derives P1=%q from its class; writing it would put one half of a section-defined channel into the other (590:1529-1531)", rec.AnswerP1, rec.Slot, want)
 	}
 
