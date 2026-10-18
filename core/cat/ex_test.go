@@ -298,26 +298,75 @@ func FuzzParseEXAnswer(f *testing.F) {
 
 // --- CanSetEX / BuildEXSet ---
 
-// TestCanSetEX_FalseForEveryAddressWithoutAWriteRow is spec A1's named
-// test: with core/cat/table2-write-observed.csv still empty (Session W
-// has not run), every one of the 296 addresses is refused at BOTH
-// CanSetEX and BuildEXSet — the admitted 238 because their write
-// descriptor's Width is the rendered zero sentinel, the denied 58
-// because they never reach d.exWrite at all (dialect.go's
-// buildFT710ExWrite). No zero sentinel renders as writable anywhere.
-func TestCanSetEX_FalseForEveryAddressWithoutAWriteRow(t *testing.T) {
+// TestCanSetEX_TrueForExactlyTheAdmittedAddresses is spec A1's named test
+// after Session W (18/10/2026) filled table2-write-observed.csv: CanSetEX
+// is true for exactly the 238 admitted addresses, each with a non-zero
+// observed Set width, and false (with a BuildEXSet error) for the 58
+// denied ones, which never reach d.exWrite. No zero sentinel renders as
+// writable anywhere.
+func TestCanSetEX_TrueForExactlyTheAdmittedAddresses(t *testing.T) {
 	items := FT710.EXItems()
 	if len(items) != 296 {
 		t.Fatalf("test fixture bug: EXItems() returned %d items, want 296", len(items))
 	}
+	var admittedCount int
 	for _, it := range items {
-		if FT710.CanSetEX(it.Addr) {
-			t.Errorf("CanSetEX(%v) = true, want false (table2-write-observed.csv is empty)", it.Addr)
+		_, width, admitted := FT710.EXWriteDescriptor(it.Addr)
+		if admitted {
+			admittedCount++
+			if width == 0 {
+				t.Errorf("admitted %v has Width 0, want a Session W observed width", it.Addr)
+			}
 		}
-		p4 := strings.Repeat("0", it.Digits)
-		if cmd, err := FT710.BuildEXSet(it.Addr, p4); err == nil {
-			t.Errorf("BuildEXSet(%v, %q) = %q, want an error (table2-write-observed.csv is empty)", it.Addr, p4, cmd.Bytes())
+		if got := FT710.CanSetEX(it.Addr); got != admitted {
+			t.Errorf("CanSetEX(%v) = %t, want %t (admitted)", it.Addr, got, admitted)
 		}
+		if !admitted {
+			p4 := strings.Repeat("0", it.Digits)
+			if cmd, err := FT710.BuildEXSet(it.Addr, p4); err == nil {
+				t.Errorf("BuildEXSet(%v, %q) = %q, want an error (denied)", it.Addr, p4, cmd.Bytes())
+			}
+		}
+	}
+	if admittedCount != 238 {
+		t.Errorf("admitted addresses = %d, want 238", admittedCount)
+	}
+}
+
+// TestSessionWCorrections_BuildEXSetEndToEnd pins the three Session W
+// findings through CanSetEX and BuildEXSet on the real FT710: 01-03-21
+// TONE FREQ builds a 3-digit Set (manual Digits says 2; width 2 was
+// refused by the radio), and 01-05-15 / 01-05-16 accept their corrected
+// codes (0-1 and 0-3).
+func TestSessionWCorrections_BuildEXSetEndToEnd(t *testing.T) {
+	for _, c := range []struct {
+		addr  EXAddress
+		value string
+		want  string
+	}{
+		{EXAddress{P1: 1, P2: 3, P3: 21}, "012", "EX010321012;"},
+		{EXAddress{P1: 1, P2: 5, P3: 15}, "0", "EX0105150;"},
+		{EXAddress{P1: 1, P2: 5, P3: 15}, "1", "EX0105151;"},
+		{EXAddress{P1: 1, P2: 5, P3: 16}, "0", "EX0105160;"},
+		{EXAddress{P1: 1, P2: 5, P3: 16}, "3", "EX0105163;"},
+	} {
+		if !FT710.CanSetEX(c.addr) {
+			t.Errorf("CanSetEX(%v) = false, want true", c.addr)
+		}
+		cmd, err := FT710.BuildEXSet(c.addr, c.value)
+		if err != nil {
+			t.Errorf("BuildEXSet(%v, %q): unexpected error: %v", c.addr, c.value, err)
+			continue
+		}
+		if got := string(cmd.Bytes()); got != c.want {
+			t.Errorf("BuildEXSet(%v, %q) = %q, want %q", c.addr, c.value, got, c.want)
+		}
+	}
+	if _, err := FT710.BuildEXSet(EXAddress{P1: 1, P2: 3, P3: 21}, "12"); err == nil {
+		t.Error("BuildEXSet(01-03-21, two digits) succeeded, want an error (width 2 refused by the radio)")
+	}
+	if _, err := FT710.BuildEXSet(EXAddress{P1: 1, P2: 5, P3: 15}, "2"); err == nil {
+		t.Error("BuildEXSet(01-05-15, 2) succeeded, want an error (code 2 refused by the radio)")
 	}
 }
 
@@ -428,9 +477,9 @@ func TestDialectExWrite_ExcludesDeniedAndHeld(t *testing.T) {
 }
 
 // TestEXWriteDescriptor_MembershipOnly pins EXWriteDescriptor's contract
-// against the shipped FT710 dialect (table2-write-observed.csv empty):
-// an admitted address is reported present (admitted == true) with its
-// real Domain and the Width 0 sentinel; a denied address is
+// against the shipped FT710 dialect: an admitted address is reported
+// present (admitted == true) with its real Domain and Session W's
+// observed Set width (3); a denied address is
 // reported absent, exactly as d.exWrite itself excludes them —
 // task h2's "settings write-boundary" sub-mode is built on this method
 // alone, so its membership boundary must match buildFT710ExWrite's
@@ -445,8 +494,8 @@ func TestEXWriteDescriptor_MembershipOnly(t *testing.T) {
 	if !admitted {
 		t.Errorf("EXWriteDescriptor(%v) admitted = false, want true", admittedAddr)
 	}
-	if width != 0 {
-		t.Errorf("EXWriteDescriptor(%v) width = %d, want 0 (unrun Session W sentinel)", admittedAddr, width)
+	if width != 3 {
+		t.Errorf("EXWriteDescriptor(%v) width = %d, want 3 (Session W observed)", admittedAddr, width)
 	}
 	if !domain.Signed || domain.Lo != -20 || domain.Hi != 10 {
 		t.Errorf("EXWriteDescriptor(%v) domain = %+v, want {-20,10,1,true}", admittedAddr, domain)
@@ -459,8 +508,7 @@ func TestEXWriteDescriptor_MembershipOnly(t *testing.T) {
 
 // TestShiftFrequencyDomain_Codes0To3 pins the Session R (18/10/2026)
 // correction: 01-05-16 is admitted, and its write domain is codes 0-3
-// although the manual prints "1:" twice. Domain is checked directly: the
-// Set width is still the Session W sentinel, so CanSetEX is false until then.
+// although the manual prints "1:" twice.
 func TestShiftFrequencyDomain_Codes0To3(t *testing.T) {
 	domain, _, admitted := FT710.EXWriteDescriptor(EXAddress{P1: 1, P2: 5, P3: 16})
 	if !admitted {

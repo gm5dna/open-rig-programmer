@@ -52,7 +52,7 @@ func TestWriteBoundaryCSV_RoundTripsAndDeclaresSafetyBoundary(t *testing.T) {
 
 	// One admitted address's shape, spot-checked: 010101 AF TREBLE GAIN,
 	// a signed -20..+10 range, no enumerated codes.
-	if !strings.Contains(out, "010101,3,0,,-20,10,1,true") {
+	if !strings.Contains(out, "010101,3,3,,-20,10,1,true") {
 		t.Errorf("write-boundary CSV missing/wrong row for 010101 (AF TREBLE GAIN); got:\n%s", out)
 	}
 }

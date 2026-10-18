@@ -60,16 +60,14 @@ func TestWriteBoundaryRows_238AdmittedAndDeniedAbsent(t *testing.T) {
 	}
 }
 
-// TestWriteBoundaryRows_WidthIsSentinelZero pins the "no zero sentinel
-// renders as writable" fact this dump exists to carry forward (spec A1):
-// every row's width is 0 — table2-write-observed.csv is empty until
-// Session W actually runs — and every row's ReadWidth is a real, nonzero
-// manual Digits value.
-func TestWriteBoundaryRows_WidthIsSentinelZero(t *testing.T) {
+// TestWriteBoundaryRows_WidthIsObserved pins that Session W (18/10/2026)
+// filled table2-write-observed.csv: every row carries a real, nonzero Set
+// width and a real, nonzero ReadWidth.
+func TestWriteBoundaryRows_WidthIsObserved(t *testing.T) {
 	rows := WriteBoundaryRows()
 	for _, r := range rows {
-		if r.Width != 0 {
-			t.Errorf("row %s width = %d, want 0 (table2-write-observed.csv is empty)", r.ID, r.Width)
+		if r.Width == 0 {
+			t.Errorf("row %s width = 0, want the Session W observed Set width", r.ID)
 		}
 		if r.ReadWidth == 0 {
 			t.Errorf("row %s readWidth = 0, want the manual's real Digits value", r.ID)
@@ -85,7 +83,7 @@ func TestWriteBoundaryRows_ToneFreqSizedFromObservedRead(t *testing.T) {
 		if r.ID != "010321" {
 			continue
 		}
-		if r.ReadWidth != 3 || r.Lo != 0 || r.Hi != 49 {
+		if r.ReadWidth != 3 || r.Width != 3 || r.Lo != 0 || r.Hi != 49 {
 			t.Errorf("010321 = readWidth %d, %d-%d; want 3, 0-49", r.ReadWidth, r.Lo, r.Hi)
 		}
 		return

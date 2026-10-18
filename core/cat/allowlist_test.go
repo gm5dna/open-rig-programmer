@@ -289,44 +289,28 @@ func TestAllowedCommand_EXPropertyAll296Reads(t *testing.T) {
 // arm (validEXRead's doc comment, allowlist.go) at inventory scale, after
 // the M8d 25/07/2026 no-go's 19/09/2026 reopening (spec v1.11.0 §3).
 //
-// REJECTION ARM (Opus-3 M3): for every one of the 296 Table 2 items
-// except the one address below, the EX Set/Answer-shaped frame -- "EX" +
-// address + a width-correct P4 body sized from the MANUAL's Digits column
-// (all '0' for numeric items, 12 spaces for the six Text items, per
-// exinventory.go's EXItem.Digits/Text docs) + ";" -- is rejected outbound
-// on the real, unmutated FT710, whose table2-write-observed.csv is empty:
-// every admitted address's ObservedSetWidth is the zero sentinel, so
-// exSetP4OK refuses by construction. Sizing from ObservedSetWidth instead
-// would be zero-length with the CSV empty -- byte-identical to the EX
-// READ frame the gate must keep accepting -- and the arm would fail by
-// construction rather than testing anything, which is why it stays
-// pinned to Digits.
+// REJECTION ARM: for every one of the 296 Table 2 items that is NOT
+// admitted to the write table (the 58 denied), the EX Set/Answer-shaped
+// frame -- "EX" + address + a P4 body sized from the MANUAL's Digits column
+// (all '0' for numeric items, 12 spaces for the six Text items) + ";" -- is
+// rejected outbound on the real FT710.
 //
-// ACCEPT ARM: (01,03,21) TONE FREQ is the one address this test proves
-// differently. Its manual Digits is 2, but table2-observed.csv:82 records
-// the radio's own read answer at 3 bytes -- the documented Digits-column
-// error table2-corrections.csv also carries. A LOCAL COPY of FT710 (never
-// the package var -- every other test's FT710 stays untouched) gets an
-// injected write descriptor for this one address, ObservedSetWidth 3,
-// standing in for the Session W row real hardware characterisation would
-// produce. A well-formed EX Answer at that width, inside the injected
-// domain, IS a well-formed Set under this copy and passes -- the cost of
-// loosening the gate, stated as a test rather than left as prose.
+// ACCEPT ARM: since Session W (18/10/2026) filled
+// table2-write-observed.csv, the 238 admitted addresses are Set-capable at
+// their observed widths. (01,03,21) TONE FREQ is the one whose observed Set
+// width (3) differs from the manual Digits (2): a 3-digit Set inside its
+// domain is accepted and the manual-width 2-digit Set is refused.
 func TestAllowedCommand_EXAnswersRejectedOutboundAll296(t *testing.T) {
 	items := FT710.EXItems()
 	if len(items) != 296 {
 		t.Fatalf("test fixture bug: EXItems() returned %d items, want 296", len(items))
 	}
 
-	acceptAddr := EXAddress{P1: 1, P2: 3, P3: 21} // TONE FREQ; table2-observed.csv:82
-	characterised := FT710
-	characterised.exWrite = map[EXAddress]exWriteDescriptor{
-		acceptAddr: {Domain: Domain{Lo: 0, Hi: 49, Step: 1}, Width: 3},
-	}
+	acceptAddr := EXAddress{P1: 1, P2: 3, P3: 21} // TONE FREQ; Set width 3 observed in Session W
 
 	for _, it := range items {
-		if it.Addr == acceptAddr {
-			continue // the accept arm, below
+		if _, _, admitted := FT710.EXWriteDescriptor(it.Addr); admitted {
+			continue // admitted addresses are Set-capable now; see the accept arm
 		}
 		var p4 string
 		if it.Text {
@@ -336,13 +320,17 @@ func TestAllowedCommand_EXAnswersRejectedOutboundAll296(t *testing.T) {
 		}
 		frame := "EX" + FT710.EXWire(it.Addr) + p4 + ";"
 		if FT710.AllowedCommand([]byte(frame)) {
-			t.Errorf("AllowedCommand(%q) = true, want false (table2-write-observed.csv is empty) for %v", frame, it.Addr)
+			t.Errorf("AllowedCommand(%q) = true, want false (denied address) for %v", frame, it.Addr)
 		}
 	}
 
-	acceptFrame := "EX" + characterised.EXWire(acceptAddr) + "007" + ";"
-	if !characterised.AllowedCommand([]byte(acceptFrame)) {
+	acceptFrame := "EX" + FT710.EXWire(acceptAddr) + "007" + ";"
+	if !FT710.AllowedCommand([]byte(acceptFrame)) {
 		t.Errorf("AllowedCommand(%q) = false, want true (admitted, characterised address, well-formed Set inside its domain)", acceptFrame)
+	}
+	// The manual's 2-digit width is the one the radio refused.
+	if FT710.AllowedCommand([]byte("EX" + FT710.EXWire(acceptAddr) + "07;")) {
+		t.Error("AllowedCommand accepts a 2-digit Set at 01-03-21, want false (Session W: width 2 refused)")
 	}
 }
 
