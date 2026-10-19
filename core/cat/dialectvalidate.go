@@ -138,6 +138,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateClarifier,        // V10
 		validateMWWriteKind,      // V11
 		validateEXAddressForm,    // V12
+		validateEXWrite,          // V20
 		validateMCSelects,        // V13
 		validateMemoryP5,         // V14
 		validateToneStates,       // V16
@@ -612,6 +613,97 @@ func validateEXItems(cfg DialectConfig) error {
 		}
 	}
 	return nil
+}
+
+// validateEXWrite is V20: cfg.EXWrite is write-gate data, so each row must be
+// well-formed before NewDialect turns it into a Set width. Unlike the
+// FT-710 builder, which silently drops an address with no inventory row,
+// this path refuses it. A row needs: an address in EXItems (once); a
+// non-zero Domain whose range, if any, has Lo <= Hi and Step >= 1 (a
+// Lo with Hi == 0 would be an invisible range); no negative or repeated
+// code and no code inside the range; every bound and code printable in
+// the row's width (Digits, or a non-zero ObservedSetWidth), a signed value
+// counting its sign. EXWritePaperWidths with an ObservedSetWidth is a
+// contradiction (hardware evidence and paper cannot both size a row).
+func validateEXWrite(cfg DialectConfig) error {
+	digits := make(map[EXAddress]int, len(cfg.EXItems))
+	for _, it := range cfg.EXItems {
+		digits[it.Addr] = it.Digits
+	}
+	seen := make(map[EXAddress]bool, len(cfg.EXWrite))
+	for i, r := range cfg.EXWrite {
+		d, ok := digits[r.Addr]
+		if !ok {
+			return fmt.Errorf("cat: EXWrite[%d] address %v is not in EXItems", i, r.Addr)
+		}
+		if seen[r.Addr] {
+			return fmt.Errorf("cat: EXWrite[%d] repeats address %v", i, r.Addr)
+		}
+		seen[r.Addr] = true
+		dm := r.Domain
+		if len(dm.Codes) == 0 && dm.Hi == 0 && dm.Lo == 0 {
+			return fmt.Errorf("cat: EXWrite[%d] (%v) has a zero Domain", i, r.Addr)
+		}
+		if dm.Lo > dm.Hi || (dm.Hi == 0 && dm.Lo != 0) {
+			return fmt.Errorf("cat: EXWrite[%d] (%v) has Lo %d > Hi %d (or a Lo with no Hi)", i, r.Addr, dm.Lo, dm.Hi)
+		}
+		if dm.Hi != 0 && dm.Step < 1 {
+			return fmt.Errorf("cat: EXWrite[%d] (%v) has a range with Step %d, want >= 1", i, r.Addr, dm.Step)
+		}
+		if cfg.EXWritePaperWidths {
+			if r.ObservedSetWidth != 0 {
+				return fmt.Errorf("cat: EXWrite[%d] (%v) has ObservedSetWidth %d under EXWritePaperWidths — hardware evidence and paper widths contradict", i, r.Addr, r.ObservedSetWidth)
+			}
+			if d < 1 {
+				return fmt.Errorf("cat: EXWrite[%d] (%v) has Digits %d, so it cannot take a paper width", i, r.Addr, d)
+			}
+		} else if r.ObservedSetWidth != 0 {
+			d = r.ObservedSetWidth
+		}
+		seenCode := make(map[int]bool, len(dm.Codes))
+		for _, c := range dm.Codes {
+			switch {
+			case c < 0:
+				return fmt.Errorf("cat: EXWrite[%d] (%v) has negative code %d", i, r.Addr, c)
+			case seenCode[c]:
+				return fmt.Errorf("cat: EXWrite[%d] (%v) repeats code %d", i, r.Addr, c)
+			case dm.Hi != 0 && c >= dm.Lo && c <= dm.Hi && (c-dm.Lo)%max(dm.Step, 1) == 0:
+				return fmt.Errorf("cat: EXWrite[%d] (%v) has code %d inside its range %d..%d", i, r.Addr, c, dm.Lo, dm.Hi)
+			case !exValueFits(c, d, dm.Signed):
+				return fmt.Errorf("cat: EXWrite[%d] (%v) code %d does not fit in width %d", i, r.Addr, c, d)
+			}
+			seenCode[c] = true
+		}
+		if dm.Hi != 0 {
+			for _, b := range []int{dm.Lo, dm.Hi} {
+				if !exValueFits(b, d, dm.Signed) {
+					return fmt.Errorf("cat: EXWrite[%d] (%v) bound %d does not fit in width %d", i, r.Addr, b, d)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// exValueFits reports whether v prints in a width-byte P4: a signed field
+// spends one byte on the sign.
+func exValueFits(v, width int, signed bool) bool {
+	if signed {
+		width--
+	} else if v < 0 {
+		return false
+	}
+	if v < 0 {
+		v = -v
+	}
+	if width < 1 {
+		return false
+	}
+	limit := 1
+	for i := 0; i < width; i++ {
+		limit *= 10
+	}
+	return v < limit
 }
 
 // renderEXAddressForV8 renders addr through form for a V8 error message,

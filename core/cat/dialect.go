@@ -149,6 +149,11 @@ type Dialect struct {
 	// buildFT710ExWrite, the one place that filtering happens.
 	exWrite map[EXAddress]exWriteDescriptor
 
+	// exWritePaper marks a dialect whose exWrite widths come from the
+	// manual's Digits column, not a hardware observation (DialectConfig.
+	// EXWritePaperWidths). False for the FT-710 literal.
+	exWritePaper bool
+
 	// modeByName is the inverse of modeNames, derived at construction.
 	// NewDialect rejects duplicate names, so it is total over this
 	// dialect's own table.
@@ -367,6 +372,28 @@ func buildFT710ExWrite(rows []EXWriteItem, items []EXItem) map[EXAddress]exWrite
 			continue
 		}
 		out[r.Addr] = exWriteDescriptor{Domain: r.Domain, Width: r.ObservedSetWidth}
+	}
+	return out
+}
+
+// buildConfigExWrite builds a config-built dialect's write table: V20 has
+// already accepted cfg.EXWrite, so every address is in items. Each row's
+// Domain.Codes is copied, so no dialect shares a backing array with the
+// config or with its paper/unpaper twin.
+func buildConfigExWrite(rows []EXWriteItem, items []EXItem, paper bool) map[EXAddress]exWriteDescriptor {
+	digits := make(map[EXAddress]int, len(items))
+	for _, it := range items {
+		digits[it.Addr] = it.Digits
+	}
+	out := make(map[EXAddress]exWriteDescriptor, len(rows))
+	for _, r := range rows {
+		w := r.ObservedSetWidth
+		if paper {
+			w = digits[r.Addr]
+		}
+		d := r.Domain
+		d.Codes = slices.Clone(d.Codes)
+		out[r.Addr] = exWriteDescriptor{Domain: d, Width: w}
 	}
 	return out
 }
