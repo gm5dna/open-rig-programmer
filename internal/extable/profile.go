@@ -1012,6 +1012,57 @@ var ftdx101Profile = Profile{
 	},
 }
 
+// ftdx101writeProfile is the FTdx101D/MP's write-descriptor table: a SECOND
+// profile sharing ftdx101Profile's package and table2.csv, rendering
+// exwrite_gen.go. One table serves both models (the MAX POWER rows, the only
+// model-conditional legends, are denied). No write-observation CSV exists, so
+// every row renders ObservedSetWidth 0. Hand overrides: MIC GAIN and EQ3 FREQ.
+var ftdx101writeProfile = Profile{
+	Renderer: RenderWrite,
+
+	Model:       "FTdx101D/MP",
+	Package:     "ftdx101",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exWrite",
+	OutFile:     "exwrite_gen.go",
+	ManualCSV:   "table2.csv",
+
+	Addresses:           AddressTriple,
+	LabelPolicy:         LabelsRequired,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
+
+	DigitsCeiling:    MaxDigitsCeiling,
+	MinDigits:        1,
+	MaxDigits:        4,
+	TextWidths:       []int{12},
+	MaxObservedWidth: 12, // inert sentinel, as on ftdx101Profile
+	ExpectedRows:     193,
+
+	Observations: ObservationsAbsent,
+
+	DomainOverrides: map[[3]int]Domain{
+		// MIC GAIN: ftdx101_layout.txt:744 and :758 print "1000: MCVR 0000 ~ 0100: FIX",
+		// a hybrid the parser inverts: 1000 = MCVR, 0000-0100 = FIX.
+		{1, 2, 12}: {Codes: []int{1000}, Lo: 0, Hi: 100, Step: 1},
+		{1, 3, 11}: {Codes: []int{1000}, Lo: 0, Hi: 100, Step: 1},
+		// PRMTRC EQ3 FREQ (ftdx101_layout.txt:909-911) and P PRMTRC EQ3 FREQ
+		// (:922-924) print "06: 2000 ~ 18: 3200 Hz": codes 6..18 the parser drops.
+		{3, 3, 9}:  {Codes: []int{0, 1, 2, 3, 4, 5}, Lo: 6, Hi: 18, Step: 1},
+		{3, 3, 18}: {Codes: []int{0, 1, 2, 3, 4, 5}, Lo: 6, Hi: 18, Step: 1},
+	},
+	DocLines: []string{
+		"exWrite is the FTdx101D/MP write-descriptor table, sorted by (P1,P2,P3),",
+		"built from the manual transcription in table2.csv alone: no hardware",
+		"Set-width observations exist, so every item carries ObservedSetWidth 0. It",
+		"carries one EXWriteItem per row, admitted or not; the model's denylist and",
+		"held map filter it. Regenerate with `go generate ./core/cat/ftdx101`; do",
+		"not edit by hand.",
+	},
+}
+
 // ft891Profile carries the FT-891's menu-chart transcription facts. It is
 // the registry's first entry to take the MINORITY value of all three
 // chart-shape policies at once, which is what those policies were added for:
@@ -1771,18 +1822,19 @@ var ts990sProfile = Profile{
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
-	"ft710":       ft710Profile,
-	"ft710write":  ft710writeProfile,
-	"ft891":       ft891Profile,
-	"ft991a":      ft991aProfile,
-	"ftdx10":      ftdx10Profile,
-	"ftdx10write": ftdx10writeProfile,
-	"ftdx101":     ftdx101Profile,
-	"ts480":       ts480Profile,
-	"ts590s":      ts590sProfile,
-	"ts590sg":     ts590sgProfile,
-	"ts890s":      ts890sProfile,
-	"ts990s":      ts990sProfile,
+	"ft710":        ft710Profile,
+	"ft710write":   ft710writeProfile,
+	"ft891":        ft891Profile,
+	"ft991a":       ft991aProfile,
+	"ftdx10":       ftdx10Profile,
+	"ftdx10write":  ftdx10writeProfile,
+	"ftdx101":      ftdx101Profile,
+	"ftdx101write": ftdx101writeProfile,
+	"ts480":        ts480Profile,
+	"ts590s":       ts590sProfile,
+	"ts590sg":      ts590sgProfile,
+	"ts890s":       ts890sProfile,
+	"ts990s":       ts990sProfile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {

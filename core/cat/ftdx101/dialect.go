@@ -85,7 +85,11 @@ var modeNames = map[cat.Mode]string{
 // constant table: a mistake in it is a build-time defect that must stop the
 // programme loudly on first use, not an error threaded through model
 // registration.
-func newDialect(catID string) cat.Dialect {
+//
+// paper selects the menu-write dialect (EXWritePaperWidths): the static
+// one's EX write table has Width 0 everywhere, so it refuses every EX Set. Each
+// call builds its own dialect and shares nothing with any other.
+func newDialect(catID string, paper bool) cat.Dialect {
 	return cat.MustNewDialect(cat.DialectConfig{
 		CATID:     catID,
 		ModeNames: modeNames, // fresh transcription, 1..F per this manual;
@@ -116,6 +120,11 @@ func newDialect(catID string) cat.Dialect {
 			MCSelects: cat.MCSelectsAll,
 		},
 		EXItems: exItems,
+		// The write table is the generated rows less the denied and held
+		// ones (spec v2 §2.4); a failure is a compile-time-data defect, so
+		// it panics.
+		EXWrite:            mustFilter(),
+		EXWritePaperWidths: paper,
 		// The FTdx101's EX grammar block prints "E X P1 P1 P2 P2 P3 P3"
 		// (ftdx101_layout.txt:699-708, Set at 702, Read at 705, Answer at
 		// 708): six digits, three components, as on both siblings.
@@ -172,12 +181,24 @@ func newDialect(catID string) cat.Dialect {
 	})
 }
 
+func mustFilter() []cat.EXWriteItem {
+	w, err := cat.FilterEXWrite(exWrite, exItems, cat.EXWriteDeniedFTdx, held)
+	if err != nil {
+		panic(err)
+	}
+	return w
+}
+
 var (
-	dialectD  = newDialect("0681")
-	dialectMP = newDialect("0682")
+	dialectD  = newDialect("0681", false)
+	dialectMP = newDialect("0682", false)
+
+	paperDialectD  = newDialect("0681", true)
+	paperDialectMP = newDialect("0682", true)
 )
 
-// DialectD is the FTDX101D (CAT ID 0681).
+// DialectD is the FTDX101D (CAT ID 0681): the static dialect, which refuses
+// every EX Set. PaperDialectD is the consent-gated one.
 //
 // A function over an exported var so that the package-held value cannot be
 // reassigned by a consumer: a Dialect is what the outbound write gate
@@ -188,3 +209,12 @@ func DialectD() cat.Dialect { return dialectD }
 
 // DialectMP is the FTDX101MP (CAT ID 0682). Same reasoning as DialectD.
 func DialectMP() cat.Dialect { return dialectMP }
+
+// PaperDialectD is the FTDX101D dialect with the paper write table: every
+// admitted EX address is settable at its Digits width. Only a session with
+// menu-write consent, or a simulated one, may use it; DialectD never accepts
+// an EX Set.
+func PaperDialectD() cat.Dialect { return paperDialectD }
+
+// PaperDialectMP is the FTDX101MP counterpart of PaperDialectD.
+func PaperDialectMP() cat.Dialect { return paperDialectMP }

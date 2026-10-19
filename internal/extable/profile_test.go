@@ -534,7 +534,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ft710write", "ft891", "ft991a", "ftdx10", "ftdx101", "ftdx10write", "ts480", "ts590s", "ts590sg", "ts890s", "ts990s"}
+	want := []string{"ft710", "ft710write", "ft891", "ft991a", "ftdx10", "ftdx101", "ftdx101write", "ftdx10write", "ts480", "ts590s", "ts590sg", "ts890s", "ts990s"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -543,7 +543,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "FTdx10", "TS-480", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"}
+	wantModels := []string{"FT-710", "FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "FTdx101D/MP", "FTdx10", "TS-480", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
