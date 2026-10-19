@@ -203,3 +203,38 @@ func containsAllKeying(p4 string) bool {
 	}
 	return true
 }
+
+// TestParseP4Domain_FTdxLegends pins the exact Domain for each FTdx legend
+// shape (legends copied verbatim from core/cat/ftdx10/table2.csv and
+// ftdx101/table2.csv; "–" is U+2013, "~" the range tilde).
+func TestParseP4Domain_FTdxLegends(t *testing.T) {
+	cases := []struct {
+		name string
+		p4   string
+		want Domain
+	}{
+		{"AF gain", "–10 ~ +00 ~ +10", Domain{Lo: -10, Hi: 10, Step: 1, Signed: true}},
+		{"QUICK SPLIT FREQ", "–20 kHz ~ +00 (or –00) ~ +20 kHz (P4= –20 ~ +00 or –00 ~ +20)", Domain{Lo: -20, Hi: 20, Step: 1, Signed: true}},
+		{"CONTOUR LEVEL", "–40 ~ 0 ~ +20 (P4 = –40 ~ –00 or +00 ~ +20)", Domain{Lo: -40, Hi: 20, Step: 1, Signed: true}},
+		{"PRMTRC EQ LEVEL", "–20 ~ 0 ~ +10 (P4 = –20 ~ –00 or +00 ~ +10)", Domain{Lo: -20, Hi: 10, Step: 1, Signed: true}},
+		{"REF FREQ ADJ", "–25 ~ +00 (or –00) ~ +25 (P4= –25 ~ +00 or –00 ~ +25)", Domain{Lo: -25, Hi: 25, Step: 1, Signed: true}},
+		{"LCUT FREQ hybrid", "00: OFF 01: 100 Hz ~ 19: 1000 Hz (50 Hz steps)", Domain{Codes: []int{0}, Lo: 1, Hi: 19, Step: 1}},
+	}
+	for _, c := range cases {
+		got, ok := ParseP4Domain(c.p4)
+		if !ok || !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: got %+v ok=%v, want %+v", c.name, got, ok, c.want)
+		}
+	}
+	// FTdx10 RPT "0: - 1: SIMPLEX 2: +": the hybrid-suffix heuristic fires on
+	// the lone "-", so the Domain is Codes{2}+range 0..1; equivalent to {0,1,2}.
+	d, ok := ParseP4Domain("0: - 1: SIMPLEX 2: +")
+	if !ok {
+		t.Fatal("RPT: not parsed")
+	}
+	for v := -1; v <= 4; v++ {
+		if want := v >= 0 && v <= 2; d.Contains(v) != want {
+			t.Errorf("RPT: Contains(%d) = %v, want %v", v, !want, want)
+		}
+	}
+}
