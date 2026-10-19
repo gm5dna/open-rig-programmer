@@ -81,7 +81,8 @@ func sessionOptionsFor(model string) (wiring.SessionOptions, error) {
 	// asked" and "asked and declined" answer it identically. The difference
 	// between them matters to whoever might PROMPT, not to the session.
 	granted, _ := settings.UnverifiedWritesFor(wiring.ModelSlug(model))
-	return wiring.SessionOptions{ConsentUnverifiedWrites: granted}, nil
+	menu, _ := settings.MenuWritesFor(wiring.ModelSlug(model))
+	return wiring.SessionOptions{ConsentUnverifiedWrites: granted, ConsentMenuWrites: menu}, nil
 }
 
 // openRealSession opens a session against a real radio of model, attached

@@ -38,7 +38,7 @@ func TestYaesuBuildDescriptor_OtherFourDialectsMintUnverified(t *testing.T) {
 			if len(items) == 0 {
 				t.Fatalf("%s: EXItems() is empty — test fixture has nothing to check", name)
 			}
-			d := BuildDescriptor(dialect, &Params{Name: name, Model: name})
+			d := BuildDescriptor(dialect, &Params{Name: name, Model: name}, spec.Supported)
 			var checked int
 			for _, m := range d.Menus {
 				for _, g := range m.Groups {
@@ -54,5 +54,30 @@ func TestYaesuBuildDescriptor_OtherFourDialectsMintUnverified(t *testing.T) {
 				t.Errorf("%s: checked %d items, want %d (== EXItems() count)", name, checked, len(items))
 			}
 		})
+	}
+}
+
+// TestWriteSupport_Labels: writable on a hardware-width dialect is Supported,
+// writable on a paper dialect is the caller's label, not writable is
+// Unverified whatever the label.
+func TestWriteSupport_Labels(t *testing.T) {
+	addr := cat.EXAddress{P1: 1, P2: 1, P3: 1}
+	hw := cat.DialectWithEXWriteForTest(cat.FT710, addr, cat.Domain{Lo: 0, Hi: 9, Step: 1}, 1)
+	paper := cat.DialectWithEXWritePaperForTest(cat.FT710, addr, cat.Domain{Lo: 0, Hi: 9, Step: 1}, 1)
+	other := cat.EXAddress{P1: 1, P2: 1, P3: 2}
+	for _, tc := range []struct {
+		name string
+		d    cat.Dialect
+		a    cat.EXAddress
+		want spec.Support
+	}{
+		{"hardware width", hw, addr, spec.Supported},
+		{"paper width", paper, addr, spec.ConsentedUnverified},
+		{"not writable, hardware dialect", hw, other, spec.Unverified},
+		{"not writable, paper dialect", paper, other, spec.Unverified},
+	} {
+		if got := writeSupport(tc.d, tc.a, spec.ConsentedUnverified); got != tc.want {
+			t.Errorf("%s: writeSupport = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }

@@ -11,6 +11,41 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+This is a MINOR release in waiting (v1.12.0): it adds a capability.
+
+### Added
+- **Menu (EX) settings writes for the FTdx10, FTdx101D and FTdx101MP,
+  on the printed manual alone. No FTdx radio has been tested.** No
+  FTdx has ever been written to by this project; every one of these
+  writes rests on Yaesu's CAT manual, which was wrong on the FT-710
+  in three places. This reverses the v1.11.1 statement that menu
+  writes have no consent step and that every other radio's menu
+  settings stay read-only (that release's text stands as history).
+  The FT-710 is unchanged: its menu writes stay hardware-verified and
+  need no consent.
+  - **Separate consent, per model.** FTdx menu writes are off until you
+    turn them on for that model: `rigprog settings menu-writes <model>
+    on`, or the "Menu (EX) writes" line in the app's
+    unverified-writes dialog. This is independent of the channel-write
+    consent; neither implies the other. Consent applies from the next
+    connection. `rigprog write --settings FILE` and the app's settings
+    cells then write, and read each value back to compare.
+  - **What is admitted.** FTdx10: 162 addresses writable, 27 denied,
+    8 held read-only. FTdx101D and FTdx101MP (one table): 157 writable,
+    28 denied, 8 held.
+  - **Denied for good:** CAT link settings (the CAT and 232C RATE and
+    TIME OUT TIMER items, and CAT RTS), PTT and keying over RTS, DTR or
+    DAKY (including PC KEYING and SHIFT PORT), tuner and antenna
+    routing (TUNER SELECT, and ANT3 SELECT on the FTdx101), TX power
+    and safety (MAX POWER, TX TIME OUT TIMER, EMERGENCY FREQ TX),
+    unintended transmit sources (the MOD SOURCE and REAR SELECT
+    items), and MY CALL.
+  - **Held read-only:** SHIFT FREQUENCY and MARK FREQUENCY (the FT-710
+    chart typos), TONE FREQ (FTdx10), KEYBOARD LANGUAGE, CW BK-IN DELAY
+    (FTdx101), QMB CH, MEM GROUP, DATA VOX GAIN and VOX SELECT.
+  - **Back up first.** Save an SD-card configuration backup from the
+    radio before the first write.
+
 ## [1.11.1] - 2026-10-18
 
 The first release of the 1.11 line. v1.11.0 was tagged but never

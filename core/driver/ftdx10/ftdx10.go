@@ -83,13 +83,24 @@ func WithConsentedUnverifiedWrites() Option {
 	}
 }
 
+// WithConsentedMenuWrites records that the USER has consented to menu (EX)
+// writes on this radio, which rest on the printed manual alone: no FTdx10 has
+// been tested. It is a separate bit from WithConsentedUnverifiedWrites
+// (channel writes): neither implies the other. Open hands a RealHardware
+// session the paper-width dialect only when this is set; see menuDialect.
+func WithConsentedMenuWrites() Option {
+	return func(d *ftdx10Driver) {
+		d.MenuConsented = true
+	}
+}
+
 // New builds the FTdx10 driver for profile. RealHardware — the ZERO VALUE
 // — selects the all-Unverified capability set while writeTrialsComplete is
 // false (nothing writable; see that constant's doc comment), and ANY
 // unrecognised Profile value deliberately selects the same fail-safe: the
 // failure direction for a forged or corrupted Profile is always "nothing
 // writable", never a writable set. Options: WithTransportLogger,
-// WithConsentedUnverifiedWrites.
+// WithConsentedUnverifiedWrites, WithConsentedMenuWrites.
 func New(profile Profile, opts ...Option) driver.Driver {
 	d := &ftdx10Driver{Base: driver.Base{Profile: profile}, dialect: catDialect}
 	for _, opt := range opts {
@@ -111,6 +122,9 @@ type ftdx10Driver struct {
 	// Session exists: a dialect reachable only from Session would be
 	// reachable too late to bind the engine at all.
 	dialect cat.Dialect
+	// MenuConsented records the user's menu-write consent — set only by
+	// WithConsentedMenuWrites, read only by menuDialect.
+	MenuConsented bool
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
@@ -174,7 +188,7 @@ func (d *ftdx10Driver) Capabilities() spec.Capabilities {
 // unconfigured dialect outright, so there is no ungated path through here
 // even if the field were somehow left zero.
 func (d *ftdx10Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	eng, err := yaesu.NewEngine(port, d.dialect, d.transportLogger, &params)
+	eng, err := yaesu.NewEngine(port, d.menuDialect(), d.transportLogger, &params)
 	if err != nil {
 		// NewEngine has closed the port itself on this path — Open's
 		// ownership obligation, discharged there in one place.
@@ -189,25 +203,51 @@ func (d *ftdx10Driver) Open(ctx context.Context, port transport.Port, id driver.
 	return sess, nil
 }
 
+// menuDialect is the dialect a session of this driver runs on, chosen once
+// at Open: the paper-width one only for a consented RealHardware session or a
+// Simulated one (spec v2 §3.3), otherwise the static dialect, whose EX write
+// table has Width 0 everywhere so every EX Set is refused before the wire,
+// with no consent check anywhere to forget. An unrecognised Profile gets the
+// static dialect.
+func (d *ftdx10Driver) menuDialect() cat.Dialect {
+	if d.dialect.Configured() && ((d.Profile == RealHardware && d.MenuConsented) || d.Profile == Simulated) {
+		return catftdx10.PaperDialect()
+	}
+	return d.dialect
+}
+
+// settingsLabel is the Write label a paper-dialect item carries: Supported
+// for Simulated (no consent exists there, and the label must not claim one),
+// ConsentedUnverified for a consented real session.
+func (d *ftdx10Driver) settingsLabel() spec.Support {
+	if d.Profile == Simulated {
+		return spec.Supported
+	}
+	return spec.ConsentedUnverified
+}
+
 // open is Open's body, factored so the error path can close eng in exactly
 // one place.
 func (d *ftdx10Driver) open(ctx context.Context, eng *transport.Engine, id driver.Identity) (*Session, error) {
-	got, err := yaesu.Handshake(ctx, eng, d.dialect, &params, yaesu.Want{CATID: catID})
+	dialect := d.menuDialect()
+	got, err := yaesu.Handshake(ctx, eng, dialect, &params, yaesu.Want{CATID: catID})
 	if err != nil {
 		return nil, err
 	}
 	id.CATID = got
 
-	slots60m, emg, err := yaesu.DiscoverInventory(ctx, eng, d.dialect, &params)
+	slots60m, emg, err := yaesu.DiscoverInventory(ctx, eng, dialect, &params)
 	if err != nil {
 		return nil, fmt.Errorf("ftdx10: Open: 5xx/EMG discovery: %w", err)
 	}
 
+	desc := yaesu.BuildDescriptor(dialect, &params, d.settingsLabel())
 	return &Session{
 		eng:     eng,
-		dialect: d.dialect,
+		dialect: dialect,
 		id:      id,
 		caps:    d.sessionCapabilities(slots60m, emg),
+		desc:    &desc,
 	}, nil
 }
 
@@ -338,6 +378,10 @@ type Session struct {
 	dialect cat.Dialect
 	id      driver.Identity
 	caps    spec.Capabilities // effective; never mutated after Open
+	// desc is the settings descriptor built once at Open from this
+	// session's own dialect, so its write labels match what the engine's
+	// gate will allow. Nil on a hand-built Session (tests): the static one.
+	desc *driver.SettingsDescriptor
 
 	// opMu serialises whole DRIVER OPERATIONS on this session, which is a
 	// larger claim than the engine's own per-exchange mutex: it covers the

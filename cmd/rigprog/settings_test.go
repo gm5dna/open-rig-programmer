@@ -782,3 +782,100 @@ func TestSessionOptionsFor(t *testing.T) {
 		}
 	})
 }
+
+// TestCmdSettings_MenuWrites mirrors the unverified-writes matrix for the
+// separate menu-write word: listing, round trip, independence from the
+// channel decision, and the refusals that must leave the store untouched.
+func TestCmdSettings_MenuWrites(t *testing.T) {
+	run := func(args ...string) (int, string, string) {
+		var stdout, stderr bytes.Buffer
+		code := cmdSettings(args, &stdout, &stderr)
+		return code, stdout.String(), stderr.String()
+	}
+
+	t.Run("list", func(t *testing.T) {
+		tempUserConfig(t)
+		code, out, errOut := run("menu-writes")
+		if code != exitSuccess || !strings.Contains(out, "MENU WRITES") {
+			t.Fatalf("list = %d, %q, %q", code, out, errOut)
+		}
+		for _, model := range wiring.SupportedModels() {
+			want := "n/a"
+			switch model {
+			case wiring.FTdx10Model, wiring.FTdx101DModel, wiring.FTdx101MPModel:
+				want = "off"
+			}
+			if row := consentRow(t, out, model); !strings.HasSuffix(row, want) {
+				t.Errorf("row for %q = %q, want suffix %q", model, row, want)
+			}
+		}
+	})
+
+	t.Run("round trip, independent of channel consent", func(t *testing.T) {
+		path := tempUserConfig(t)
+		if code, _, e := run("unverified-writes", "FTdx10", "on"); code != exitSuccess {
+			t.Fatal(e)
+		}
+		code, out, e := run("menu-writes", "FTdx10", "on")
+		if code != exitSuccess || !strings.Contains(out, "no FTdx radio has been tested") {
+			t.Fatalf("grant = %d, %q, %q", code, out, e)
+		}
+		opts, err := sessionOptionsFor(wiring.FTdx10Model)
+		if err != nil || !opts.ConsentMenuWrites || !opts.ConsentUnverifiedWrites {
+			t.Fatalf("both grants: %+v, %v", opts, err)
+		}
+		if code, _, e := run("unverified-writes", "FTdx10", "off"); code != exitSuccess {
+			t.Fatal(e)
+		}
+		opts, _ = sessionOptionsFor(wiring.FTdx10Model)
+		if !opts.ConsentMenuWrites || opts.ConsentUnverifiedWrites {
+			t.Fatalf("channel revoke must leave menu consent: %+v", opts)
+		}
+		if code, _, e := run("menu-writes", "FTdx10", "off"); code != exitSuccess {
+			t.Fatal(e)
+		}
+		if got := readFile(t, path); !strings.Contains(got, `"menuWrites"`) || !strings.Contains(got, `"ftdx10": false`) {
+			t.Errorf("a revoke must be stored as false: %s", got)
+		}
+		if opts, _ := sessionOptionsFor(wiring.FTdx10Model); opts.ConsentMenuWrites {
+			t.Errorf("menu consent still on after off: %+v", opts)
+		}
+	})
+
+	t.Run("refusals leave the store absent", func(t *testing.T) {
+		for _, args := range [][]string{
+			{"menu-writes", "FT-710", "on"},
+			{"menu-writes", "FTDX10", "on"},
+			{"menu-writes", "FTdx10", "maybe"},
+			{"menu-writes", "FTdx10"},
+			{"--csv", "out.csv", "menu-writes"},
+		} {
+			path := tempUserConfig(t)
+			if code, _, e := run(args...); code != exitUsage {
+				t.Errorf("%v = %d, want exitUsage; stderr=%q", args, code, e)
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Errorf("%v touched the store", args)
+			}
+		}
+	})
+
+	t.Run("corrupt store verbatim", func(t *testing.T) {
+		path := corruptStore(t, tempUserConfig(t))
+		for _, args := range [][]string{{"menu-writes"}, {"menu-writes", "FTdx10", "on"}} {
+			code, _, e := run(args...)
+			if code == exitSuccess || !strings.Contains(e, path) || !strings.Contains(e, "repair the file by hand") {
+				t.Errorf("%v = %d, %q", args, code, e)
+			}
+		}
+	})
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}

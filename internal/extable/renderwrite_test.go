@@ -51,7 +51,7 @@ func TestRenderWriteGo_PartialJoinNeverRequiresSetEquality(t *testing.T) {
 		{"full", full},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := RenderWriteGo(rows, tc.observed)
+			out, err := RenderWriteGo(ft710writeProfile, rows, tc.observed)
 			if err != nil {
 				t.Fatalf("RenderWriteGo() with a %s observation map: %v", tc.name, err)
 			}

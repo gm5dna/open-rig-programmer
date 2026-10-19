@@ -141,6 +141,10 @@ func (d Dialect) exSetP4OK(a EXAddress, p4 []byte) bool {
 	return desc.Domain.Contains(v)
 }
 
+// EXWritePaper reports whether this dialect's EX Set widths come from the
+// manual's Digits column rather than a hardware observation.
+func (d Dialect) EXWritePaper() bool { return d.exWritePaper }
+
 // CanSetEX reports whether addr is writable on this dialect right now:
 // admitted (not denied, not held) AND characterised (a non-zero
 // ObservedSetWidth — Session W has produced a row for it). It is
@@ -219,6 +223,16 @@ func (d Dialect) BuildEXSet(addr EXAddress, value string) (Command, error) {
 // then trust — has no production call site to reach it through.
 func DialectWithEXWriteForTest(d Dialect, addr EXAddress, domain Domain, width int) Dialect {
 	d.exWrite = map[EXAddress]exWriteDescriptor{addr: {Domain: domain, Width: width}}
+	return d
+}
+
+// DialectWithEXWritePaperForTest is DialectWithEXWriteForTest for a PAPER
+// dialect: the one entry is sized from the manual, not a hardware
+// observation, and the dialect records that (EXWritePaper). Same
+// cross-package seam, same reason; never used in production.
+func DialectWithEXWritePaperForTest(d Dialect, addr EXAddress, domain Domain, width int) Dialect {
+	d = DialectWithEXWriteForTest(d, addr, domain, width)
+	d.exWritePaper = true
 	return d
 }
 

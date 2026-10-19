@@ -48,6 +48,7 @@ Commands:
   settings   show (or export to CSV) a codeplug file's menu/settings snapshot (offline; no radio)
              "settings unverified-writes" grants, revokes or lists per-model consent to writing
              fields never proved on that radio (a hardware-verified model has none, and is refused)
+             "settings menu-writes" does the same, separately, for the FTdx menu (EX) writes
   version    report this build's version (also "rigprog -v")
   help       show this message
 
@@ -337,6 +338,8 @@ Usage:
   rigprog settings [--csv OUT] [--model NAME] [--force] FILE
   rigprog settings unverified-writes
   rigprog settings unverified-writes <model> on|off
+  rigprog settings menu-writes
+  rigprog settings menu-writes <model> on|off
   rigprog settings diff-observed [--observed-csv CSV] [--manual-csv CSV] FILE
   rigprog settings write-boundary [--out FILE] [--force]
 
@@ -345,7 +348,7 @@ Flags:
   --model NAME  radio model whose settings descriptor to group by (default: FT-710)
   --force       overwrite --csv if it already exists
 
-"unverified-writes", "diff-observed" and "write-boundary" are RESERVED
+"unverified-writes", "menu-writes", "diff-observed" and "write-boundary" are RESERVED
 first arguments — each selects the sub-mode described below, so none can
 ever be read as a FILE to render. A codeplug file of any of these exact
 names must be given another (any extension will do).
@@ -363,6 +366,11 @@ STORED, not forgotten: withholding consent is a decision, and it is kept
 so nothing asks again. The decisions live in a settings file shared with
 the GUI, whose path the listing prints; a file this build cannot read is
 reported, naming it, and is never overwritten.
+
+"menu-writes" takes the same arguments and keeps its own, separate decision
+for menu (EX) writes on the FTdx10, FTdx101D and FTdx101MP. No FTdx radio
+has been tested: those writes rest on the printed manual alone. Neither
+consent implies the other; other models are listed as "n/a" and refused.
 
 DIFF-OBSERVED SUB-MODE: see "rigprog settings diff-observed --help". In
 outline: diffs a "rigprog read --settings" capture's per-address P4 wire

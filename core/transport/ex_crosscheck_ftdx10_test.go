@@ -237,6 +237,67 @@ func TestEXFTdx10RoundTrip_AllAddressesRawPort(t *testing.T) {
 	}
 }
 
+// TestEXFTdx10Set_PaperFramesAcceptedAndRead is the Set leg. For every address
+// the PAPER dialect can write, the Set frame its builder emits is accepted by
+// the fake (no reply) and a read returns the same P4; for the unconsented
+// dialect the builder emits nothing, for every address.
+//
+// THE LIMIT, as in the fake's doc.go register entry 17: the fake's widths are
+// transcription B and the paper widths are transcription A's Digits column, so
+// two transcriptions of one chart agreeing proves plumbing, not the radio.
+func TestEXFTdx10Set_PaperFramesAcceptedAndRead(t *testing.T) {
+	paper := ftdx10.PaperDialect()
+	static := ftdx10.Dialect()
+	r := fakedx10.New()
+	t.Cleanup(func() { _ = r.Close() })
+	reader := newFTdx10EXFrameReader(t, r)
+
+	sets := 0
+	for _, item := range paper.EXItems() {
+		if _, err := static.BuildEXSet(item.Addr, strings.Repeat("0", item.Digits)); err == nil {
+			t.Errorf("unconsented dialect built an EX Set for %v", item.Addr)
+		}
+		if !paper.CanSetEX(item.Addr) {
+			continue
+		}
+		d, w, _ := paper.EXWriteDescriptor(item.Addr)
+		v := d.Lo
+		if len(d.Codes) > 0 {
+			v = d.Codes[0]
+		}
+		p4 := fmt.Sprintf("%0*d", w, v)
+		if d.Signed {
+			sign := "+"
+			if v < 0 {
+				sign, v = "-", -v
+			}
+			p4 = fmt.Sprintf("%s%0*d", sign, w-1, v)
+		}
+		set, err := paper.BuildEXSet(item.Addr, p4)
+		if err != nil {
+			t.Fatalf("BuildEXSet(%v, %q): %v", item.Addr, p4, err)
+		}
+		if _, err := r.Port().Write(set.Bytes()); err != nil {
+			t.Fatalf("Write(%q): %v", set.Bytes(), err)
+		}
+		read, err := paper.BuildEXRead(item.Addr)
+		if err != nil {
+			t.Fatalf("BuildEXRead(%v): %v", item.Addr, err)
+		}
+		if _, err := r.Port().Write(read.Bytes()); err != nil {
+			t.Fatalf("Write(%q): %v", read.Bytes(), err)
+		}
+		frame := reader.readOneFrame() // an accepted Set is silent, so the first frame is the read's answer
+		if _, raw, err := paper.ParseEXAnswer(frame); err != nil || raw != p4 {
+			t.Errorf("%v: Set %q then read -> %q (err %v), want the P4 back", item.Addr, p4, frame, err)
+		}
+		sets++
+	}
+	if sets != 162 {
+		t.Errorf("paper Set frames exercised = %d, want 162", sets)
+	}
+}
+
 // TestEXFTdx10RoundTrip_OutOfInventoryAddressIsRefused is the round trip's
 // negative control. Without it, a fake that answered EVERY six-digit address
 // with something plausible would pass the test above completely — the loop only

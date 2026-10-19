@@ -35,7 +35,7 @@
 	// open with the reason inline, a resolution closes it.
 	import Modal from './Modal.svelte'
 	import { appState } from './state/app.svelte.js'
-	import { applyUnverifiedWriteConsent, refreshUnverifiedConsents } from './bridge/bindings.js'
+	import { applyUnverifiedWriteConsent, refreshUnverifiedConsents, setMenuWriteConsent } from './bridge/bindings.js'
 	import { describeError } from './errorText.js'
 	import { BrowserOpenURL } from '../../wailsjs/runtime'
 
@@ -104,6 +104,27 @@
 			// the checkbox back where the store still says it belongs.
 			error = describeError(err)
 			if (toggle) toggle.checked = !on
+		} finally {
+			pending = ''
+		}
+	}
+
+	/** Records the separate menu (EX) write decision for one radio. Same
+	 * guards and inline-error handling as `record`; no reconnect, because it
+	 * applies from the next connection.
+	 * @param {string} model
+	 * @param {boolean} on
+	 * @param {HTMLInputElement} toggle */
+	async function recordMenu(model, on, toggle) {
+		if (locked) return
+		error = ''
+		pending = model
+		pendingOn = on
+		try {
+			await setMenuWriteConsent(model, on)
+		} catch (err) {
+			error = describeError(err)
+			toggle.checked = !on
 		} finally {
 			pending = ''
 		}
@@ -242,6 +263,25 @@
 							onchange={(e) => record(row.Model, !row.Granted, e.currentTarget)}
 						/>
 					</li>
+					{#if row.MenuNeedsConsent}
+						<li class="grant-row grant-row-menu">
+							<span class="grant-model">Menu (EX) writes</span>
+							<span class="grant-state" data-testid={`menu-state-${row.Model}`}>
+								{row.MenuGranted ? 'Enabled' : row.MenuRecorded ? 'Not enabled' : 'Never asked'} — applies from the
+								next connection
+							</span>
+							<input
+								type="checkbox"
+								class="grant-toggle"
+								aria-label={`Menu (EX) writes for ${row.Model}`}
+								checked={row.MenuGranted}
+								disabled={locked}
+								title={blockedReason}
+								onchange={(e) => recordMenu(row.Model, !row.MenuGranted, e.currentTarget)}
+							/>
+							<p class="menu-warning" data-testid={`menu-warning-${row.Model}`}>{row.MenuWarning}</p>
+						</li>
+					{/if}
 				{/each}
 			</ul>
 		</div>
@@ -289,6 +329,15 @@
 
 	.grant-row-all {
 		border-bottom: 1px solid var(--colour-hairline);
+	}
+
+	.grant-row-menu .menu-warning {
+		grid-column: 1 / -1;
+		margin: 0;
+		padding: var(--space-2) var(--space-3);
+		background: var(--colour-warn-bg);
+		border-left: 3px solid var(--colour-warn);
+		border-radius: var(--radius-sm);
 	}
 
 	.grant-model {

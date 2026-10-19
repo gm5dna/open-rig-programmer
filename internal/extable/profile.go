@@ -62,9 +62,9 @@ const (
 	// READ observations (ObservedCSV). Every profile before this milestone
 	// is this kind.
 	RenderInventory RendererKind = iota + 1
-	// RenderWrite: RenderWriteGo, the FT-710-only write-descriptor table,
-	// joined with WriteObservedCSV instead. Exactly one profile,
-	// "ft710write", declares this.
+	// RenderWrite: RenderWriteGo, the write-descriptor table, joined with
+	// WriteObservedCSV (when the model has one) instead; "ft710write" and
+	// the FTdx write profiles declare this.
 	RenderWrite
 )
 
@@ -366,13 +366,18 @@ type Profile struct {
 	// WriteObservedCSV is the Set-direction counterpart of ObservedCSV — for
 	// the FT-710, table2-write-observed.csv, Session W's hardware Set-width
 	// characterisation. It is empty for every profile except "ft710write":
-	// no other registration has a write-descriptor table to join it
-	// against. Non-empty iff Renderer is RenderWrite.
+	// no other registration has write observations to join. May be empty under RenderWrite (no observations: every row
+	// renders ObservedSetWidth 0); must be empty under RenderInventory.
 	WriteObservedCSV string
+	// DomainOverrides replaces the parsed Domain of the named (P1,P2,P3)
+	// addresses in a RenderWrite profile: hand-corrected legends, each with
+	// its evidence in a comment at the profile. An address with no row is a
+	// render error. Empty under RenderInventory.
+	DomainOverrides map[[3]int]Domain
 
 	// Renderer selects which render function internal/extable/gen calls:
 	// RenderInventory (RenderGo) for every profile before this milestone,
-	// RenderWrite (RenderWriteGo) for "ft710write" alone. Zero is refused,
+	// RenderWrite (RenderWriteGo) for the write-descriptor profiles. Zero is refused,
 	// as every other omitted semantic on this type is.
 	Renderer RendererKind
 
@@ -640,12 +645,17 @@ func (p Profile) Validate() error {
 		if p.WriteObservedCSV != "" {
 			return fmt.Errorf("extable: profile %s: WriteObservedCSV %q is set under RenderInventory", p.Model, p.WriteObservedCSV)
 		}
-	case RenderWrite:
-		if err := checkRelPath("WriteObservedCSV", p.WriteObservedCSV); err != nil {
-			return fmt.Errorf("extable: profile %s: %w (RenderWrite)", p.Model, err)
+		if len(p.DomainOverrides) > 0 {
+			return fmt.Errorf("extable: profile %s: DomainOverrides is set under RenderInventory", p.Model)
 		}
-		if strings.EqualFold(p.OutFile, p.WriteObservedCSV) {
-			return fmt.Errorf("extable: profile %s: OutFile %q collides with its WriteObservedCSV %q (compared case-insensitively) — generating would overwrite the source", p.Model, p.OutFile, p.WriteObservedCSV)
+	case RenderWrite:
+		if p.WriteObservedCSV != "" {
+			if err := checkRelPath("WriteObservedCSV", p.WriteObservedCSV); err != nil {
+				return fmt.Errorf("extable: profile %s: %w (RenderWrite)", p.Model, err)
+			}
+			if strings.EqualFold(p.OutFile, p.WriteObservedCSV) {
+				return fmt.Errorf("extable: profile %s: OutFile %q collides with its WriteObservedCSV %q (compared case-insensitively) — generating would overwrite the source", p.Model, p.OutFile, p.WriteObservedCSV)
+			}
 		}
 	default:
 		return fmt.Errorf("extable: profile %s: RendererKind %v must be set explicitly", p.Model, p.Renderer)
@@ -674,6 +684,13 @@ func (p Profile) clone() Profile {
 	c := p
 	c.DocLines = append([]string(nil), p.DocLines...)
 	c.ParameterlessAddresses = append([][3]int(nil), p.ParameterlessAddresses...)
+	if p.DomainOverrides != nil {
+		c.DomainOverrides = make(map[[3]int]Domain, len(p.DomainOverrides))
+		for a, d := range p.DomainOverrides {
+			d.Codes = append([]int(nil), d.Codes...)
+			c.DomainOverrides[a] = d
+		}
+	}
 	return c
 }
 
@@ -794,6 +811,16 @@ var ft710writeProfile = Profile{
 	// direction counterpart it does take, gated on Renderer, not on
 	// ObservationPolicy.
 	Observations: ObservationsAbsent,
+
+	// The two charts' own legends are wrong; hardware (Session R/W,
+	// 18/10/2026) fixed the codes — core/cat/table2-corrections.csv.
+	DomainOverrides: map[[3]int]Domain{
+		// SHIFT FREQUENCY: the manual prints "1:" twice and no "0"; code 0 = 170 Hz.
+		{1, 5, 16}: {Codes: []int{0, 1, 2, 3}},
+		// RTTY MARK FREQUENCY: the manual prints codes 1-2; code 2 was refused,
+		// so the codes are 0 = 1275 Hz, 1 = 2125 Hz.
+		{1, 5, 15}: {Codes: []int{0, 1}},
+	},
 	DocLines: []string{
 		"ft710ExWrite is the FT-710 write-descriptor table, sorted by",
 		"(P1,P2,P3), built from TWO sources of different provenance: the manual",
@@ -878,6 +905,57 @@ var ftdx10Profile = Profile{
 	},
 }
 
+// ftdx10writeProfile is the FTdx10's write-descriptor table: a SECOND profile
+// sharing ftdx10Profile's package and table2.csv, rendering exwrite_gen.go.
+// No write-observation CSV exists (no FTdx10 hardware), so every row renders
+// ObservedSetWidth 0; the paper widths come from the Digits column inside
+// core/cat.NewDialect. The one hand override is the MIC GAIN legend.
+var ftdx10writeProfile = Profile{
+	Renderer: RenderWrite,
+
+	Model:       "FTdx10",
+	Package:     "ftdx10",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exWrite",
+	OutFile:     "exwrite_gen.go",
+	ManualCSV:   "table2.csv",
+
+	Addresses:           AddressTriple,
+	LabelPolicy:         LabelsRequired,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
+
+	DigitsCeiling:    MaxDigitsCeiling,
+	MinDigits:        1,
+	MaxDigits:        4,
+	TextWidths:       []int{12},
+	MaxObservedWidth: 12, // inert sentinel, as on ftdx10Profile
+	ExpectedRows:     197,
+
+	Observations: ObservationsAbsent,
+
+	DomainOverrides: map[[3]int]Domain{
+		// MIC GAIN: ftdx10_layout.txt:685 and :703 print "1000: MCVR 0000 ~ 0100: FIX",
+		// a hybrid the parser inverts: 1000 = MCVR, 0000-0100 = FIX.
+		{1, 2, 14}: {Codes: []int{1000}, Lo: 0, Hi: 100, Step: 1},
+		{1, 3, 13}: {Codes: []int{1000}, Lo: 0, Hi: 100, Step: 1},
+		// PRMTRC EQ3 FREQ (ftdx10_layout.txt:848-850) and P PRMTRC EQ3 FREQ
+		// (:864-866) print "06: 2000 ~ 18: 3200 Hz": codes 6..18 the parser drops.
+		{3, 3, 8}:  {Codes: []int{0, 1, 2, 3, 4, 5}, Lo: 6, Hi: 18, Step: 1},
+		{3, 3, 17}: {Codes: []int{0, 1, 2, 3, 4, 5}, Lo: 6, Hi: 18, Step: 1},
+	},
+	DocLines: []string{
+		"exWrite is the FTdx10 write-descriptor table, sorted by (P1,P2,P3), built",
+		"from the manual transcription in table2.csv alone: no hardware Set-width",
+		"observations exist, so every item carries ObservedSetWidth 0. It carries one",
+		"EXWriteItem per row, admitted or not; the model's denylist and held map",
+		"filter it. Regenerate with `go generate ./core/cat/ftdx10`; do not edit by",
+		"hand.",
+	},
+}
+
 // ftdx101Profile carries the FTdx101D/MP's Table 2 transcription facts —
 // ONE profile for BOTH models, because the spec-reviewed applicability
 // sweep (core/cat/ftdx101/testdata/group-ledger.md) attests that no
@@ -931,6 +1009,57 @@ var ftdx101Profile = Profile{
 		"every item carries the absence sentinels ObservedReadWidth 0 and",
 		"ObservedReadShape \"\". Regenerate with `go generate ./core/cat/ftdx101`;",
 		"do not edit by hand.",
+	},
+}
+
+// ftdx101writeProfile is the FTdx101D/MP's write-descriptor table: a SECOND
+// profile sharing ftdx101Profile's package and table2.csv, rendering
+// exwrite_gen.go. One table serves both models (the MAX POWER rows, the only
+// model-conditional legends, are denied). No write-observation CSV exists, so
+// every row renders ObservedSetWidth 0. Hand overrides: MIC GAIN and EQ3 FREQ.
+var ftdx101writeProfile = Profile{
+	Renderer: RenderWrite,
+
+	Model:       "FTdx101D/MP",
+	Package:     "ftdx101",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exWrite",
+	OutFile:     "exwrite_gen.go",
+	ManualCSV:   "table2.csv",
+
+	Addresses:           AddressTriple,
+	LabelPolicy:         LabelsRequired,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
+
+	DigitsCeiling:    MaxDigitsCeiling,
+	MinDigits:        1,
+	MaxDigits:        4,
+	TextWidths:       []int{12},
+	MaxObservedWidth: 12, // inert sentinel, as on ftdx101Profile
+	ExpectedRows:     193,
+
+	Observations: ObservationsAbsent,
+
+	DomainOverrides: map[[3]int]Domain{
+		// MIC GAIN: ftdx101_layout.txt:744 and :758 print "1000: MCVR 0000 ~ 0100: FIX",
+		// a hybrid the parser inverts: 1000 = MCVR, 0000-0100 = FIX.
+		{1, 2, 12}: {Codes: []int{1000}, Lo: 0, Hi: 100, Step: 1},
+		{1, 3, 11}: {Codes: []int{1000}, Lo: 0, Hi: 100, Step: 1},
+		// PRMTRC EQ3 FREQ (ftdx101_layout.txt:909-911) and P PRMTRC EQ3 FREQ
+		// (:922-924) print "06: 2000 ~ 18: 3200 Hz": codes 6..18 the parser drops.
+		{3, 3, 9}:  {Codes: []int{0, 1, 2, 3, 4, 5}, Lo: 6, Hi: 18, Step: 1},
+		{3, 3, 18}: {Codes: []int{0, 1, 2, 3, 4, 5}, Lo: 6, Hi: 18, Step: 1},
+	},
+	DocLines: []string{
+		"exWrite is the FTdx101D/MP write-descriptor table, sorted by (P1,P2,P3),",
+		"built from the manual transcription in table2.csv alone: no hardware",
+		"Set-width observations exist, so every item carries ObservedSetWidth 0. It",
+		"carries one EXWriteItem per row, admitted or not; the model's denylist and",
+		"held map filter it. Regenerate with `go generate ./core/cat/ftdx101`; do",
+		"not edit by hand.",
 	},
 }
 
@@ -1693,17 +1822,19 @@ var ts990sProfile = Profile{
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
-	"ft710":      ft710Profile,
-	"ft710write": ft710writeProfile,
-	"ft891":      ft891Profile,
-	"ft991a":     ft991aProfile,
-	"ftdx10":     ftdx10Profile,
-	"ftdx101":    ftdx101Profile,
-	"ts480":      ts480Profile,
-	"ts590s":     ts590sProfile,
-	"ts590sg":    ts590sgProfile,
-	"ts890s":     ts890sProfile,
-	"ts990s":     ts990sProfile,
+	"ft710":        ft710Profile,
+	"ft710write":   ft710writeProfile,
+	"ft891":        ft891Profile,
+	"ft991a":       ft991aProfile,
+	"ftdx10":       ftdx10Profile,
+	"ftdx10write":  ftdx10writeProfile,
+	"ftdx101":      ftdx101Profile,
+	"ftdx101write": ftdx101writeProfile,
+	"ts480":        ts480Profile,
+	"ts590s":       ts590sProfile,
+	"ts590sg":      ts590sgProfile,
+	"ts890s":       ts890sProfile,
+	"ts990s":       ts990sProfile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {

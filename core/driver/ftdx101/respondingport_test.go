@@ -116,6 +116,10 @@ type slotImage struct {
 	// silence the ASSUMED convention reads as accepted (doc.go's register
 	// entry 9, second half). Task 3's rejection path.
 	rejectSets bool
+	// exSetSilent makes an EX Set (a frame longer than the 9-byte read) draw
+	// silence, the same assumed accept convention as an MT Set; unset, an EX
+	// Set draws "?;". Menu-write tests pair it with exAnswers.
+	exSetSilent bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -217,6 +221,8 @@ func (img slotImage) reply(frame string) string {
 			return ans
 		}
 		return "?;"
+	case strings.HasPrefix(frame, "EX") && len(frame) > exReadFrameLen && img.exSetSilent:
+		return ""
 	default:
 		return "?;"
 	}

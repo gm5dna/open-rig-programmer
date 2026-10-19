@@ -294,3 +294,25 @@ func TestApp_WriteSetting_BusyExclusion(t *testing.T) {
 	_, err = a.ReadRadio()
 	checkOperationBusy(t, "ReadRadio", err, "WriteSetting")
 }
+
+// TestSettingEditable_ConsentedUnverified: a settings item is editable for
+// Supported and for ConsentedUnverified (a menu-write consent minted it),
+// never for Unverified; GetSettingsSpec's Editable view agrees.
+func TestSettingEditable_ConsentedUnverified(t *testing.T) {
+	for _, tc := range []struct {
+		write spec.Support
+		want  bool
+	}{
+		{spec.Supported, true},
+		{spec.ConsentedUnverified, true},
+		{spec.Unverified, false},
+	} {
+		d := oneItemDescriptor("010101", tc.write)
+		if got := settingEditable(d, "010101"); got != tc.want {
+			t.Errorf("settingEditable(%v) = %v, want %v", tc.write, got, tc.want)
+		}
+		if got := descriptorToSpecView(d, true).Menus[0].Groups[0].Items[0].Editable; got != tc.want {
+			t.Errorf("Editable view for %v = %v, want %v", tc.write, got, tc.want)
+		}
+	}
+}

@@ -202,14 +202,16 @@ type SettingDelta struct {
 
 // settingsDeltas computes SendPlan.settings for PrepareSend (task f1): a
 // fresh live read of every settings item this session's driver currently
-// admits for writing — SettingItem.Write == spec.Supported, minted the
-// moment Session W characterises an address (cat.Dialect.CanSetEX; see
-// driver.SettingsWriter's doc comment) — diffed against wanted, the
-// candidate codeplug's own settings snapshot (file.Menus). An item whose
-// Write is anything else (spec.Unverified today, for every address without
-// a Session W row yet, admitted or denied alike: the descriptor draws no
-// distinction between them — see SettingItem.Write's doc comment) is never
-// read here, so it can never appear in the result.
+// admits for writing — a SettingItem.Write for which FieldSupport.CanWrite
+// holds: spec.Supported, minted the moment Session W characterises an
+// address (cat.Dialect.CanSetEX; see driver.SettingsWriter's doc comment),
+// or spec.ConsentedUnverified, minted only for a paper-width menu item after
+// a MENU-write consent (never from channel consent) — diffed against wanted,
+// the candidate codeplug's own settings snapshot (file.Menus). An item whose
+// Write is anything else (spec.Unverified for every address without a write
+// width, admitted or denied alike: the descriptor draws no distinction
+// between them — see SettingItem.Write's doc comment) is never read here,
+// so it can never appear in the result.
 //
 // wanted may be nil (a candidate carrying no menu data): nothing can be
 // diffed against nothing, so this returns (nil, nil) WITHOUT reading
@@ -255,7 +257,7 @@ func (s *Service) settingsDeltas(ctx context.Context, wanted *codeplug.MenuSnaps
 	for _, menu := range descriptor.Menus {
 		for _, group := range menu.Groups {
 			for _, item := range group.Items {
-				if item.Write != spec.Supported {
+				if !(spec.FieldSupport{Write: item.Write}).CanWrite() {
 					continue
 				}
 				want, ok := wantByID[item.ID]

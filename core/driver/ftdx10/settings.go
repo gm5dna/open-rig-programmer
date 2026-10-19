@@ -8,6 +8,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -41,7 +42,7 @@ var ftdx10SettingsDescriptor = buildSettingsDescriptor(catDialect)
 // P1 in {01,02,03,04}, 18 groups) is written into it: they are properties
 // of the inventory, asserted in settings_test.go against the dialect.
 func buildSettingsDescriptor(dialect cat.Dialect) driver.SettingsDescriptor {
-	return yaesu.BuildDescriptor(dialect, &params)
+	return yaesu.BuildDescriptor(dialect, &params, spec.Supported)
 }
 
 // SettingsDescriptor returns the FTdx10's radio-neutral settings
@@ -61,13 +62,15 @@ func (d *ftdx10Driver) StaticSettingsDescriptor() driver.SettingsDescriptor {
 }
 
 // SettingsDescriptor implements the optional driver.SettingsReader
-// capability on the concrete *Session. It deliberately does NOT consult
-// s.dialect, even though the session carries one: the package-level tree
-// is built from catDialect, the single dialect every session of this
-// driver is opened with, and a per-session rebuild would cost 197 items of
-// allocation per call to produce the identical answer.
+// capability on the concrete *Session: the descriptor Open built once from
+// the session's own dialect (a consented session's items carry
+// ConsentedUnverified, a simulated one's Supported, any other's Unverified),
+// cloned per call.
 func (s *Session) SettingsDescriptor() driver.SettingsDescriptor {
-	return SettingsDescriptor()
+	if s.desc == nil {
+		return SettingsDescriptor()
+	}
+	return s.desc.Clone()
 }
 
 // UnknownSettingError is the refusal ReadSetting returns for an id that
@@ -103,4 +106,16 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 	return yaesu.ReadSetting(ctx, s.eng, s.dialect, &params, id)
+}
+
+// WriteSetting implements the optional driver.SettingsWriter capability: it
+// writes one EX (MENU) setting by its opaque id, then verifies it with a
+// paired read (yaesu.WriteSetting). There is no consent check here: the
+// session's dialect carries a zero Set width for every address unless the
+// session was opened menu-consented or simulated (menuDialect), and the
+// gate inside yaesu.WriteSetting refuses before the wire.
+func (s *Session) WriteSetting(ctx context.Context, id, value string) (driver.SettingWriteResult, error) {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	return yaesu.WriteSetting(ctx, s.eng, s.dialect, &params, id, value)
 }

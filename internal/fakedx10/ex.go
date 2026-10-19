@@ -8,9 +8,8 @@ import (
 )
 
 // This file is fakedx10's own, independent model of the FTdx10's EX (MENU)
-// command — READ ONLY, exactly as internal/fakeradio models the FT-710's (its
-// register item 24): the manual documents a Set form and this fake does not
-// implement it (register entry 17 below/in doc.go).
+// command: reads, and a Set arm written from the manual (register entry 17 in
+// doc.go).
 //
 // # WHERE THE INVENTORY COMES FROM, AND WHY IT IS GENERATED
 //
@@ -63,7 +62,7 @@ import (
 // width: 1-4 raw ASCII digits, or the one 12-byte text field (MY CALL., at
 // address 040101 — the FTdx10's chart has exactly one, where the FT-710's has
 // six).
-// Set frame: same shape with a P4 payload — NOT modelled; see handleEX.
+// Set frame: same shape with a P4 payload — see handleEX's Set arm.
 
 // exAddr builds a six-digit wire address from two-digit P1/P2/P3 strings.
 func exAddr(p1, p2, p3 string) string { return p1 + p2 + p3 }
@@ -179,15 +178,17 @@ func buildEXAnswer(addr, p4 string) []byte {
 // handleEX validates and answers an EX body (the frame bytes after "EX", before
 // the trailing ';').
 //
-// READ ONLY. Any body that is not exactly six ASCII digits naming a KNOWN
-// address draws "?;" with the state unchanged — which covers malformed bodies
-// (wrong length, non-digit bytes), addresses the chart never enumerated, and
-// SET-SHAPED bodies alike (a valid address immediately followed by a P4
-// payload, e.g. "EX0301051;", is simply a too-long body to this handler). Both
-// of those last two are doc.go register entry 17: the "?;" for an
-// out-of-inventory address is ASSUMED here where the FT-710's was OBSERVED at
-// M8c, and the Set rejection is a deliberate modelling gap rather than a claim
-// that a real FTdx10 refuses EX Set.
+// A body of exactly six ASCII digits naming a KNOWN address is a read. A body
+// of six digits plus a P4 payload is a Set (manual rev 2308-F EX frames,
+// 636-645: Set and Answer share one shape): it is accepted, with no reply
+// (register entry 11), only when the address is known, the payload is printable
+// ASCII, and its width equals the stored value's width; the stored value then
+// becomes the payload, so a following read returns it. Anything else — a
+// malformed body, an unknown address, a wrong width — draws "?;" with the
+// state unchanged (register entry 17).
+//
+// The Set rule accepts ANY inventory address, admitted or not: the project's
+// denylist is policy, tested at the gate, never modelled here.
 //
 // Note what the six-digit check does NOT do: it does not consult the EX grammar
 // block's own P1/P2/P3 ranges. Those disagree with the chart on this radio
@@ -198,6 +199,9 @@ func buildEXAnswer(addr, p4 string) []byte {
 // answers "?;" because no such item was transcribed — not because a range was
 // enforced.
 func (r *Radio) handleEX(body []byte) []byte {
+	if len(body) > exAddrLen {
+		return r.setEX(string(body[:exAddrLen]), body[exAddrLen:])
+	}
 	addr := string(body)
 	if !isEXAddr(addr) {
 		return rejection
@@ -209,4 +213,24 @@ func (r *Radio) handleEX(body []byte) []byte {
 		return rejection // register entry 17
 	}
 	return buildEXAnswer(addr, p4)
+}
+
+// setEX applies an EX Set: nil (no reply) when accepted, "?;" otherwise.
+func (r *Radio) setEX(addr string, p4 []byte) []byte {
+	if !isEXAddr(addr) {
+		return rejection
+	}
+	for _, c := range p4 {
+		if c < 0x20 || c > 0x7e {
+			return rejection
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cur, ok := r.exSettings[addr]
+	if !ok || len(cur) != len(p4) {
+		return rejection
+	}
+	r.exSettings[addr] = string(p4)
+	return nil
 }

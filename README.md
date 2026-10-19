@@ -95,11 +95,14 @@ rigprog settings unverified-writes IC-7610 on     # allow writes to the IC-7610
 Permission changes what the program may send, not how carefully it
 sends it.
 
-**Menu settings are different.** They stay read-only everywhere,
-including the FT-710: the manual's own FT-710 settings chart has
-already been shown wrong, so only testing on hardware can be trusted.
-An FT-710 settings-write path is merged but not yet in a tagged
-release — see [CHANGELOG.md](CHANGELOG.md)'s Unreleased section.
+**Menu settings are different.** The manual's own FT-710 settings chart
+has already been shown wrong, so the FT-710 writes only menu addresses
+proven on hardware, with no consent step. The FTdx10, FTdx101D and
+FTdx101MP can write menu settings too, but only after a separate
+consent, and **no FTdx has been tested**: those writes rest on the
+printed manual alone. See [CHANGELOG.md](CHANGELOG.md) and
+[docs/menu-write-decision.md](docs/menu-write-decision.md). Every other
+radio's menu settings stay read-only.
 
 ## For developers
 

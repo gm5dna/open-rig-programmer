@@ -41,6 +41,12 @@ package radiotext
 // TestUnverifiedWriteWarningTemplate_CarriesItsFourElements.
 const UnverifiedWriteWarningTemplate = "This project has never written to a real %s. Enabling unverified writes sends memory-write commands that are documented in the manufacturer's CAT reference and exercised against a simulator, but have not been proven on real hardware. Every write is read back and compared, and stops on any mismatch — but a misinterpreted frame could corrupt the targeted memory channel. You can revoke this at any time."
 
+// MenuWriteWarningTemplate is the menu (EX) write consent text for the FTdx
+// models. %s is the model name. It is separate from
+// UnverifiedWriteWarningTemplate: menu-write consent and channel-write
+// consent are independent and neither implies the other.
+const MenuWriteWarningTemplate = "No FTdx radio has been tested: no %s has ever been written to by this project, and every menu write rests on the printed manual alone. That manual was wrong on the FT-710 for SHIFT, MARK and TONE frequency. Take an SD-card configuration backup of the radio first. Every write is read back and compared, but a code that means something other than its printed label cannot be detected by software. Menu writes are separate from channel writes, and consent applies from the next connection. You can revoke this at any time."
+
 // Text holds one radio model's user-facing prose. Every FT-710 field
 // below is copied VERBATIM from where that string lives TODAY; see each
 // field's own doc comment for its exact source.

@@ -963,6 +963,10 @@ export namespace main {
 	    Granted: boolean;
 	    Recorded: boolean;
 	    Warning: string;
+	    MenuNeedsConsent: boolean;
+	    MenuGranted: boolean;
+	    MenuRecorded: boolean;
+	    MenuWarning: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UnverifiedWriteConsentView(source);
@@ -975,6 +979,10 @@ export namespace main {
 	        this.Granted = source["Granted"];
 	        this.Recorded = source["Recorded"];
 	        this.Warning = source["Warning"];
+	        this.MenuNeedsConsent = source["MenuNeedsConsent"];
+	        this.MenuGranted = source["MenuGranted"];
+	        this.MenuRecorded = source["MenuRecorded"];
+	        this.MenuWarning = source["MenuWarning"];
 	    }
 	}
 	export class ValidationView {

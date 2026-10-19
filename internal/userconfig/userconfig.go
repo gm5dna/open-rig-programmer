@@ -55,6 +55,10 @@ const (
 	// address the key without going through the struct.
 	unverifiedWritesKey = "unverifiedWrites"
 
+	// menuWritesKey holds the separate per-model menu (EX) write
+	// consent. It never reads or writes unverifiedWrites, and vice versa.
+	menuWritesKey = "menuWrites"
+
 	// configDirPerm is the mode new parent directories are created with.
 	// An existing directory's mode is left alone — a user who has
 	// tightened it to 0700 meant it.
@@ -76,6 +80,17 @@ type Settings struct {
 	// that a decision was taken; its value is the decision. false is a
 	// meaningful, stored value — see UnverifiedWritesFor.
 	UnverifiedWrites map[string]bool `json:"unverifiedWrites"`
+
+	// MenuWrites is the separate per-model decision about menu (EX)
+	// writes on paper-evidence-only radios, with the same presence =
+	// decided rule. A channel-write grant never counts here.
+	MenuWrites map[string]bool `json:"menuWrites"`
+}
+
+// MenuWritesFor is UnverifiedWritesFor for the menuWrites key.
+func (s Settings) MenuWritesFor(slug string) (granted, recorded bool) {
+	granted, recorded = s.MenuWrites[slug]
+	return granted, recorded
 }
 
 // UnverifiedWritesFor reports the user's recorded decision about
@@ -130,11 +145,15 @@ func Load(path string) (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
-	consent, err := decodeUnverifiedWrites(raw, path)
+	consent, err := decodeConsent(raw, path, unverifiedWritesKey)
 	if err != nil {
 		return Settings{}, err
 	}
-	return Settings{UnverifiedWrites: consent}, nil
+	menu, err := decodeConsent(raw, path, menuWritesKey)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{UnverifiedWrites: consent, MenuWrites: menu}, nil
 }
 
 // SetUnverifiedWrites records the user's decision about unverified writes
@@ -179,11 +198,23 @@ func Load(path string) (Settings, error) {
 // No lock is taken and no test pins the interleaving — no test could
 // honestly do so — which is why the limitation is recorded here.
 func SetUnverifiedWrites(path, slug string, on bool) error {
+	return setConsent(path, unverifiedWritesKey, slug, on)
+}
+
+// SetMenuWrites records the menu-write decision for slug under the
+// menuWrites key, with every guarantee SetUnverifiedWrites documents.
+func SetMenuWrites(path, slug string, on bool) error {
+	return setConsent(path, menuWritesKey, slug, on)
+}
+
+// setConsent is the read-modify-write both setters share, parameterised
+// by the top-level key it touches.
+func setConsent(path, key, slug string, on bool) error {
 	raw, err := loadRawObject(path)
 	if err != nil {
 		return err
 	}
-	consent, err := decodeUnverifiedWrites(raw, path)
+	consent, err := decodeConsent(raw, path, key)
 	if err != nil {
 		return err
 	}
@@ -200,7 +231,7 @@ func SetUnverifiedWrites(path, slug string, on bool) error {
 	if raw == nil {
 		raw = make(map[string]json.RawMessage, 1)
 	}
-	raw[unverifiedWritesKey] = json.RawMessage(bytes.TrimRight(encodedConsent, "\n"))
+	raw[key] = json.RawMessage(bytes.TrimRight(encodedConsent, "\n"))
 
 	// Indented with a trailing newline: the corrupt-file error tells the
 	// user to repair this by hand, so it has to be legible by hand.
@@ -213,7 +244,7 @@ func SetUnverifiedWrites(path, slug string, on bool) error {
 	// buffer, that is about to become the user's settings, and that is
 	// the check that actually matters (see verifyEncoded's doc comment).
 	return replaceAtomically(path, out, func(b []byte) error {
-		return verifyEncoded(b, slug, on)
+		return verifyEncoded(b, key, slug, on)
 	})
 }
 
@@ -241,17 +272,17 @@ func loadRawObject(path string) (map[string]json.RawMessage, error) {
 	return raw, nil
 }
 
-// decodeUnverifiedWrites extracts the consent map from an already-decoded
+// decodeConsent extracts the consent map under key from an already-decoded
 // raw object. An absent key yields (nil, nil); a value of the wrong shape
 // is a corrupt file, not an empty one.
-func decodeUnverifiedWrites(raw map[string]json.RawMessage, path string) (map[string]bool, error) {
-	v, ok := raw[unverifiedWritesKey]
+func decodeConsent(raw map[string]json.RawMessage, path, key string) (map[string]bool, error) {
+	v, ok := raw[key]
 	if !ok {
 		return nil, nil
 	}
 	consent, err := strictConsentMap(v)
 	if err != nil {
-		return nil, corruptFileError(path, fmt.Errorf("%q: %w", unverifiedWritesKey, err))
+		return nil, corruptFileError(path, fmt.Errorf("%q: %w", key, err))
 	}
 	return consent, nil
 }
@@ -338,12 +369,12 @@ func encodeJSON(v any, indent string) ([]byte, error) {
 // settings.
 //
 // It shares the STRICT decode (strictConsentMap — no null map, no null
-// entry) but not decodeUnverifiedWrites itself, even though the two do the
+// entry) but not decodeConsent itself, even though the two do the
 // same work. That helper's failure text is corruptFileError's — it names a
 // path on disk and tells the user to delete or repair the file by hand —
 // which would be actively misleading here, where the subject is bytes this
 // function has just produced and no user file is at fault.
-func verifyEncoded(b []byte, slug string, on bool) error {
+func verifyEncoded(b []byte, key, slug string, on bool) error {
 	if len(b) == 0 {
 		return errors.New("the encoded settings were empty")
 	}
@@ -352,13 +383,13 @@ func verifyEncoded(b []byte, slug string, on bool) error {
 		return fmt.Errorf("the encoded settings did not parse back: %w", err)
 	}
 	var consent map[string]bool
-	if v, ok := raw[unverifiedWritesKey]; ok {
+	if v, ok := raw[key]; ok {
 		var err error
 		if consent, err = strictConsentMap(v); err != nil {
-			return fmt.Errorf("the encoded settings' %q did not parse back: %w", unverifiedWritesKey, err)
+			return fmt.Errorf("the encoded settings' %q did not parse back: %w", key, err)
 		}
 	}
-	got, recorded := Settings{UnverifiedWrites: consent}.UnverifiedWritesFor(slug)
+	got, recorded := consent[slug]
 	if !recorded || got != on {
 		return fmt.Errorf("the encoded settings do not record %q as %v (got granted=%v, recorded=%v)", slug, on, got, recorded)
 	}

@@ -701,6 +701,20 @@ type DialectConfig struct {
 	// also sizes the EX read frame the outbound gate measures.
 	EXAddressForm EXAddressForm
 
+	// EXWrite is this family's EX write table, plain data: one row per
+	// writable address, already filtered of denied and held addresses
+	// (FilterEXWrite). Nil means no EX Set at all. V20 validates it and
+	// NewDialect deep-copies it. Every row's Width is its ObservedSetWidth
+	// (hardware evidence), or, under EXWritePaperWidths, the matching
+	// EXItem's Digits.
+	EXWrite []EXWriteItem
+
+	// EXWritePaperWidths sizes every EXWrite row by the manual's Digits
+	// column instead of a hardware observation: a PAPER dialect. A radio
+	// builds two dialects from one config differing only in this bool, so
+	// the unconsented one has Width 0 everywhere and refuses every EX Set.
+	EXWritePaperWidths bool
+
 	// MT is the MT command's frame form and tag policy.
 	MT MTPolicy
 
@@ -813,6 +827,11 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 	items := make([]EXItem, len(cfg.EXItems))
 	copy(items, cfg.EXItems)
 
+	var exWrite map[EXAddress]exWriteDescriptor
+	if len(cfg.EXWrite) > 0 {
+		exWrite = buildConfigExWrite(cfg.EXWrite, items, cfg.EXWritePaperWidths)
+	}
+
 	return Dialect{
 		catID:     cfg.CATID,
 		modeNames: modes,
@@ -830,17 +849,19 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 
 			mcSelects: cfg.Slots.MCSelects,
 		},
-		exItems:     items,
-		exAddrForm:  cfg.EXAddressForm,
-		exMembers:   buildEXMembers(items),
-		exByTriple:  buildEXByTriple(items),
-		exP4Max:     maxEXP4Bytes(items),
-		modeByName:  buildModeByName(modes),
-		mt:          cfg.MT,
-		clar:        cfg.Clarifier,
-		memoryP5:    cfg.MemoryP5,
-		toneStates:  cfg.ToneStates,
-		mwWriteKind: cfg.MWWriteKind,
+		exItems:      items,
+		exAddrForm:   cfg.EXAddressForm,
+		exMembers:    buildEXMembers(items),
+		exByTriple:   buildEXByTriple(items),
+		exP4Max:      maxEXP4Bytes(items),
+		exWrite:      exWrite,
+		exWritePaper: cfg.EXWritePaperWidths,
+		modeByName:   buildModeByName(modes),
+		mt:           cfg.MT,
+		clar:         cfg.Clarifier,
+		memoryP5:     cfg.MemoryP5,
+		toneStates:   cfg.ToneStates,
+		mwWriteKind:  cfg.MWWriteKind,
 
 		memoryFrameLen:   cfg.MemoryFrameLen,
 		memoryFreqDigits: cfg.MemoryFreqDigits,

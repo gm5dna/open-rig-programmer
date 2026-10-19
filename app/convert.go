@@ -134,7 +134,7 @@ func descriptorToSpecView(d driver.SettingsDescriptor, live bool) SettingsSpecVi
 		for j, g := range m.Groups {
 			items := make([]SettingItemView, len(g.Items))
 			for k, it := range g.Items {
-				items[k] = SettingItemView{ID: it.ID, Label: it.Label, Display: it.Display, Editable: it.Write == spec.Supported}
+				items[k] = SettingItemView{ID: it.ID, Label: it.Label, Display: it.Display, Editable: spec.FieldSupport{Write: it.Write}.CanWrite()}
 			}
 			groups[j] = SettingGroupView{ID: g.ID, Label: g.Label, Items: items}
 		}

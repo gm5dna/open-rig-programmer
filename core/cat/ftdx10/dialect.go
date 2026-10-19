@@ -62,7 +62,20 @@ var modeNames = map[cat.Mode]string{
 // constant table: a mistake in it is a build-time defect that must stop the
 // programme loudly on first use, not an error threaded through model
 // registration.
-var dialect = cat.MustNewDialect(cat.DialectConfig{
+var dialect = cat.MustNewDialect(dialectConfig)
+
+// paperDialect is the same configuration with EXWritePaperWidths on: the
+// menu-write dialect a consented real session (or a simulated one) uses. It
+// comes from its own MustNewDialect call and shares nothing with dialect.
+var paperDialect = cat.MustNewDialect(paperConfig())
+
+func paperConfig() cat.DialectConfig {
+	cfg := dialectConfig
+	cfg.EXWritePaperWidths = true
+	return cfg
+}
+
+var dialectConfig = cat.DialectConfig{
 	CATID:     "0761",
 	ModeNames: modeNames, // fresh transcription, 1..F per the manual;
 	// '0' (ModeUnset, "-") included as an ASSUMED member — absent
@@ -94,6 +107,9 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		MCSelects: cat.MCSelectsAll,
 	},
 	EXItems: exItems,
+	// The write table is the generated rows less the denied and held ones
+	// (spec v2 §2.4); a failure is a compile-time-data defect, so it panics.
+	EXWrite: mustFilter(),
 	// The FTdx10's EX grammar block prints "E X P1 P1 P2 P2 P3 P3"
 	// (ftdx10_layout.txt:636-645, Read frame at 642, Answer at 645): six
 	// digits, three components.
@@ -148,9 +164,19 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	MemoryFrameLen:   28,
 	MemoryFreqDigits: 9,
 	MemoryP9:         cat.P9Fixed00,
-})
+}
 
-// Dialect returns the FTdx10's cat.Dialect.
+func mustFilter() []cat.EXWriteItem {
+	w, err := cat.FilterEXWrite(exWrite, exItems, cat.EXWriteDeniedFTdx, held)
+	if err != nil {
+		panic(err)
+	}
+	return w
+}
+
+// Dialect returns the FTdx10's cat.Dialect: the static one, whose EX write
+// table has Width 0 everywhere, so it refuses every EX Set. PaperDialect is
+// the consent-gated one.
 //
 // A function over an exported var so that the package-held value cannot be
 // reassigned by a consumer: a Dialect is what the outbound write gate
@@ -158,3 +184,9 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 // gate. cat.Dialect is a value type carrying only copied maps and slices,
 // so the returned copy is inert in the other direction too.
 func Dialect() cat.Dialect { return dialect }
+
+// PaperDialect returns the FTdx10 dialect with the paper write table: every
+// admitted EX address is settable at its Digits width. Only a session with
+// menu-write consent, or a simulated one, may use it; Dialect() never
+// accepts an EX Set.
+func PaperDialect() cat.Dialect { return paperDialect }

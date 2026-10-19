@@ -2954,3 +2954,12 @@ func TestRadiotext_FTX1Verbatim(t *testing.T) {
 
 	assertNotBorrowedFromAnyOtherModel(t, "FTX-1", got)
 }
+
+func TestMenuWriteWarningTemplate_StatesNoFTdxTested(t *testing.T) {
+	got := fmt.Sprintf(radiotext.MenuWriteWarningTemplate, "FTdx10")
+	for _, want := range []string{"No FTdx radio has been tested", "FTdx10", "printed manual", "SD-card", "cannot be detected"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("warning lacks %q: %s", want, got)
+		}
+	}
+}

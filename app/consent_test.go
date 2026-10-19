@@ -605,3 +605,61 @@ func TestConnect_HardwareVerifiedModelSpendsNoConsent(t *testing.T) {
 		t.Errorf("the seeded key is now granted=%v recorded=%v, want true, true — connect must not rewrite the store", granted, recorded)
 	}
 }
+
+// TestMenuWriteConsent_SeparateFromChannelConsent pins the GUI backend of the
+// separate menu-write consent: eligibility, the refusal before the store is
+// touched, independence from the channel decision, and what Connect spends.
+func TestMenuWriteConsent_SeparateFromChannelConsent(t *testing.T) {
+	containSnapshotDir(t)
+	a, _ := newTestApp(t)
+	path := tempUserConfig(t)
+
+	// Refused before the store is touched: ineligible and unknown models.
+	for _, m := range []string{wiring.DefaultModel, "no-such-radio"} {
+		if err := a.SetMenuWriteConsent(m, true); err == nil {
+			t.Fatalf("SetMenuWriteConsent(%q): want a refusal", m)
+		}
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("a refused call touched the store: %v", err)
+	}
+	if got, _ := a.GetUnverifiedWriteConsent(wiring.DefaultModel); got.MenuNeedsConsent || got.MenuWarning != "" {
+		t.Errorf("FT-710 view = %+v, want no menu consent", got)
+	}
+
+	// A channel grant is not a menu grant.
+	if err := a.SetUnverifiedWriteConsent(eligibleModel, true); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.GetUnverifiedWriteConsent(eligibleModel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.MenuNeedsConsent || got.MenuGranted || got.MenuRecorded {
+		t.Fatalf("after a channel grant: %+v, want menu eligible, never asked", got)
+	}
+	if want := fmt.Sprintf(radiotext.MenuWriteWarningTemplate, eligibleModel); got.MenuWarning != want {
+		t.Errorf("MenuWarning = %q, want %q", got.MenuWarning, want)
+	}
+
+	// A menu grant is not a channel grant, and Connect spends each alone.
+	if err := a.SetUnverifiedWriteConsent(eligibleModel, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetMenuWriteConsent(eligibleModel, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = a.GetUnverifiedWriteConsent(eligibleModel)
+	if !got.MenuGranted || !got.MenuRecorded || got.Granted {
+		t.Fatalf("after a menu grant: %+v", got)
+	}
+	var rec realSessionRecorder
+	rec.install(t)
+	if _, err := a.Connect("/dev/nonexistent-rigprog-test-port", eligibleModel); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.Disconnect() })
+	if o := rec.only(t).opts; !o.ConsentMenuWrites || o.ConsentUnverifiedWrites {
+		t.Errorf("SessionOptions = %+v, want menu consent only", o)
+	}
+}

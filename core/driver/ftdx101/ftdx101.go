@@ -48,17 +48,21 @@ type modelParams struct {
 	// outbound gate and AI init frame, the capability data's CAT ID, modes,
 	// slot inventories and MT answer geometry.
 	dialect cat.Dialect
+	// paper is the same radio's menu-write dialect (paper EX Set widths),
+	// used only by a consented real session or a simulated one: see
+	// menuDialect.
+	paper cat.Dialect
 }
 
 // modelD is the FTDX101D: CAT ID 0681 (matrix §1.2, MANUAL-EVIDENCED — ID's
 // P1 legend at layout 1070).
-var modelD = modelParams{name: "FTdx101D", dialect: catftdx101.DialectD()}
+var modelD = modelParams{name: "FTdx101D", dialect: catftdx101.DialectD(), paper: catftdx101.PaperDialectD()}
 
 // modelMP is the FTDX101MP: CAT ID 0682 (matrix §1.2, MANUAL-EVIDENCED —
 // ID's P1 legend at layout 1072). It differs from modelD in the name and
 // the CAT ID and in nothing else; core/cat/ftdx101 builds both dialects
 // over ONE config for exactly that reason.
-var modelMP = modelParams{name: "FTdx101MP", dialect: catftdx101.DialectMP()}
+var modelMP = modelParams{name: "FTdx101MP", dialect: catftdx101.DialectMP(), paper: catftdx101.PaperDialectMP()}
 
 // siblingNames maps every CAT ID this PACKAGE registers to its display
 // name, so a probe refusal can spell out both models involved (spec A5).
@@ -123,6 +127,18 @@ func WithConsentedUnverifiedWrites() Option {
 	}
 }
 
+// WithConsentedMenuWrites records that the USER has consented to menu (EX)
+// writes on this radio, which rest on the printed manual alone: no FTdx101
+// has been tested. It is a separate bit from WithConsentedUnverifiedWrites
+// (channel writes): neither implies the other. Per driver, so per model.
+// Open hands a RealHardware session the paper-width dialect only when this is
+// set; see menuDialect.
+func WithConsentedMenuWrites() Option {
+	return func(d *ftdx101Driver) {
+		d.MenuConsented = true
+	}
+}
+
 // NewD builds the FTDX101D driver for profile. RealHardware — the ZERO
 // VALUE — selects the all-Unverified capability set while
 // writeTrialsCompleteD is false (nothing writable; see that constant's doc
@@ -173,6 +189,9 @@ type ftdx101Driver struct {
 	// model's dialect (see TestOpen_UnconfiguredDialectRefusesToOpen).
 	model modelParams
 	driver.Base
+	// MenuConsented records the user's menu-write consent — set only by
+	// WithConsentedMenuWrites, read only by menuDialect.
+	MenuConsented bool
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
@@ -252,7 +271,7 @@ func (d *ftdx101Driver) Capabilities() spec.Capabilities {
 // one, so there is no code action here; it is why every Stage R capture
 // must record its port.
 func (d *ftdx101Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	eng, err := yaesu.NewEngine(port, d.model.dialect, d.transportLogger, &params)
+	eng, err := yaesu.NewEngine(port, d.menuDialect(), d.transportLogger, &params)
 	if err != nil {
 		// NewEngine has closed the port itself on this path — Open's
 		// ownership obligation, discharged there in one place.
@@ -267,26 +286,52 @@ func (d *ftdx101Driver) Open(ctx context.Context, port transport.Port, id driver
 	return sess, nil
 }
 
+// menuDialect is the dialect a session of this driver runs on, chosen once
+// at Open: the paper-width one only for a consented RealHardware session or a
+// Simulated one (spec v2 §3.3), otherwise the static dialect, whose EX write
+// table has Width 0 everywhere so every EX Set is refused before the wire,
+// with no consent check anywhere to forget. An unrecognised Profile gets the
+// static dialect.
+func (d *ftdx101Driver) menuDialect() cat.Dialect {
+	if d.model.dialect.Configured() && d.model.paper.Configured() && ((d.Profile == RealHardware && d.MenuConsented) || d.Profile == Simulated) {
+		return d.model.paper
+	}
+	return d.model.dialect
+}
+
+// settingsLabel is the Write label a paper-dialect item carries: Supported
+// for Simulated (no consent exists there, and the label must not claim one),
+// ConsentedUnverified for a consented real session.
+func (d *ftdx101Driver) settingsLabel() spec.Support {
+	if d.Profile == Simulated {
+		return spec.Supported
+	}
+	return spec.ConsentedUnverified
+}
+
 // open is Open's body, factored so the error path can close eng in exactly
 // one place.
 func (d *ftdx101Driver) open(ctx context.Context, eng *transport.Engine, id driver.Identity) (*Session, error) {
 	m := d.model
-	got, err := yaesu.Handshake(ctx, eng, m.dialect, &params, yaesu.Want{CATID: m.dialect.CATID(), Model: m.name, Sibling: func(id string) string { return siblingNames[id] }})
+	dialect := d.menuDialect()
+	got, err := yaesu.Handshake(ctx, eng, dialect, &params, yaesu.Want{CATID: m.dialect.CATID(), Model: m.name, Sibling: func(id string) string { return siblingNames[id] }})
 	if err != nil {
 		return nil, err
 	}
 	id.CATID = got
 
-	slots60m, emg, err := yaesu.DiscoverInventory(ctx, eng, m.dialect, &params)
+	slots60m, emg, err := yaesu.DiscoverInventory(ctx, eng, dialect, &params)
 	if err != nil {
 		return nil, fmt.Errorf("ftdx101: Open: 5xx/EMG discovery: %w", err)
 	}
 
+	desc := yaesu.BuildDescriptor(dialect, &params, d.settingsLabel())
 	return &Session{
 		eng:     eng,
-		dialect: m.dialect,
+		dialect: dialect,
 		id:      id,
 		caps:    d.sessionCapabilities(slots60m, emg),
+		desc:    &desc,
 	}, nil
 }
 
@@ -421,6 +466,10 @@ type Session struct {
 	dialect cat.Dialect
 	id      driver.Identity
 	caps    spec.Capabilities // effective; never mutated after Open
+	// desc is the settings descriptor built once at Open from this
+	// session's own dialect, so its write labels match what the engine's
+	// gate will allow. Nil on a hand-built Session (tests): the static one.
+	desc *driver.SettingsDescriptor
 
 	// opMu serialises whole DRIVER OPERATIONS on this session, which is a
 	// larger claim than the engine's own per-exchange mutex: it covers the

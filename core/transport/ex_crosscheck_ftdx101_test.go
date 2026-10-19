@@ -258,6 +258,77 @@ func TestEXFTdx101RoundTrip_AllAddressesRawPort(t *testing.T) {
 	}
 }
 
+// TestEXFTdx101Set_PaperFramesAcceptedAndRead is the Set leg, per model. For
+// every address the PAPER dialect can write, the Set frame its builder emits is
+// accepted by the fake (no reply) and a read returns the same P4; for the
+// unconsented dialect the builder emits nothing, for every address.
+//
+// THE LIMIT, as in the fake's doc.go register entry 17: the fake's widths are
+// transcription B and the paper widths are transcription A's Digits column, so
+// two transcriptions of one chart agreeing proves plumbing, not the radio.
+func TestEXFTdx101Set_PaperFramesAcceptedAndRead(t *testing.T) {
+	for _, m := range []struct {
+		name          string
+		paper, static cat.Dialect
+		radio         func(...fakedx101.Option) *fakedx101.Radio
+	}{
+		{"D", ftdx101.PaperDialectD(), ftdx101.DialectD(), fakedx101.NewD},
+		{"MP", ftdx101.PaperDialectMP(), ftdx101.DialectMP(), fakedx101.NewMP},
+	} {
+		t.Run(m.name, func(t *testing.T) {
+			paper, static := m.paper, m.static
+			r := m.radio()
+			t.Cleanup(func() { _ = r.Close() })
+			reader := newFTdx101EXFrameReader(t, r)
+
+			sets := 0
+			for _, item := range paper.EXItems() {
+				if _, err := static.BuildEXSet(item.Addr, strings.Repeat("0", item.Digits)); err == nil {
+					t.Errorf("unconsented dialect built an EX Set for %v", item.Addr)
+				}
+				if !paper.CanSetEX(item.Addr) {
+					continue
+				}
+				d, w, _ := paper.EXWriteDescriptor(item.Addr)
+				v := d.Lo
+				if len(d.Codes) > 0 {
+					v = d.Codes[0]
+				}
+				p4 := fmt.Sprintf("%0*d", w, v)
+				if d.Signed {
+					sign := "+"
+					if v < 0 {
+						sign, v = "-", -v
+					}
+					p4 = fmt.Sprintf("%s%0*d", sign, w-1, v)
+				}
+				set, err := paper.BuildEXSet(item.Addr, p4)
+				if err != nil {
+					t.Fatalf("BuildEXSet(%v, %q): %v", item.Addr, p4, err)
+				}
+				if _, err := r.Port().Write(set.Bytes()); err != nil {
+					t.Fatalf("Write(%q): %v", set.Bytes(), err)
+				}
+				read, err := paper.BuildEXRead(item.Addr)
+				if err != nil {
+					t.Fatalf("BuildEXRead(%v): %v", item.Addr, err)
+				}
+				if _, err := r.Port().Write(read.Bytes()); err != nil {
+					t.Fatalf("Write(%q): %v", read.Bytes(), err)
+				}
+				frame := reader.readOneFrame() // an accepted Set is silent, so the first frame is the read's answer
+				if _, raw, err := paper.ParseEXAnswer(frame); err != nil || raw != p4 {
+					t.Errorf("%v: Set %q then read -> %q (err %v), want the P4 back", item.Addr, p4, frame, err)
+				}
+				sets++
+			}
+			if sets != 157 {
+				t.Errorf("paper Set frames exercised = %d, want 157", sets)
+			}
+		})
+	}
+}
+
 // TestEXFTdx101RoundTrip_TheTwoModelsAnswerIdentically is this file's own leg,
 // with no sibling in either single-model cross-check: the SAME EX read, put to a
 // fake FTDX101D and to a fake FTDX101MP, must produce byte-identical answer

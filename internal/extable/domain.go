@@ -52,6 +52,22 @@ func (d Domain) Contains(v int) bool {
 // value under two spellings, so only the outer bounds are captured.
 var signedRangeRe = regexp.MustCompile(`^([-+]\d+)\s*-\s*[-+]00\s*\(or\s*[-+]00\)\s*-\s*([-+]\d+)`)
 
+// signedLegendRe matches a colonless legend that begins with a signed
+// integer (the FTdx charts: "-10 ~ +00 ~ +10", "-20 kHz ~ +00 (or -00) ~
+// +20 kHz (P4= -20 ~ +00 or -00 ~ +20)"), after glyph normalisation.
+// signedIntRe picks the bounds: the first and last signed integers inside
+// the "(P4 ...)" parenthetical when there is one, else of the whole legend.
+// Digits-free: whether a bound fits the field width is the dialect
+// validator's job, not the parser's.
+var (
+	signedLegendRe = regexp.MustCompile(`^[-+]\d+`)
+	signedIntRe    = regexp.MustCompile(`[-+]\d+`)
+	p4ParenRe      = regexp.MustCompile(`\(P4[^)]*\)`)
+)
+
+// glyphs maps the FTdx charts' range tilde and sign dash (U+2013) to ASCII.
+var glyphs = strings.NewReplacer("~", "-", "\u2013", "-")
+
 // steppedP4Re matches a P4-parenthetical stepped range: "(P4= 0020 - 4000,
 // 20 msec/step)", "(P4 = 0000 - 1000, 10 kHz/step)", "(P4 = 0000 - 3000, 10
 // Hz steps)" — three unit spellings (slash or not, singular or plural), so
@@ -79,6 +95,7 @@ var codeRe = regexp.MustCompile(`(\d+)\s*:\s*`)
 // below recognise; the milestone spec (§2) holds such an address read-only
 // regardless of Session W.
 func ParseP4Domain(p4 string) (Domain, bool) {
+	p4 = glyphs.Replace(p4)
 	if m := signedRangeRe.FindStringSubmatch(p4); m != nil {
 		lo, loErr := strconv.Atoi(m[1])
 		hi, hiErr := strconv.Atoi(m[2])
@@ -89,6 +106,22 @@ func ParseP4Domain(p4 string) (Domain, bool) {
 	}
 	if strings.Contains(p4, ":") {
 		return parseEnumOrHybrid(p4)
+	}
+	if signedLegendRe.MatchString(p4) {
+		src := p4
+		if par := p4ParenRe.FindString(p4); par != "" {
+			src = par
+		}
+		ints := signedIntRe.FindAllString(src, -1)
+		if len(ints) < 2 {
+			return Domain{}, false
+		}
+		lo, loErr := strconv.Atoi(ints[0])
+		hi, hiErr := strconv.Atoi(ints[len(ints)-1])
+		if loErr != nil || hiErr != nil {
+			return Domain{}, false
+		}
+		return Domain{Lo: lo, Hi: hi, Step: 1, Signed: true}, true
 	}
 	if m := steppedP4Re.FindStringSubmatch(p4); m != nil {
 		lo, loErr := strconv.Atoi(m[1])

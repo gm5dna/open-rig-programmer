@@ -374,6 +374,16 @@ async function persistUnverifiedWriteConsent(model, on) {
 	return call('recording the unverified-write decision', () => App.SetUnverifiedWriteConsent(model, on))
 }
 
+/** Records the SEPARATE menu (EX) write decision. No reconnect: it applies
+ * from the next connection, which the dialogue's own text says. Rejects when
+ * nothing was persisted.
+ * @param {string} model
+ * @param {boolean} on */
+export async function setMenuWriteConsent(model, on) {
+	await call('recording the menu-write decision', () => App.SetMenuWriteConsent(model, on))
+	await refreshUnverifiedConsents()
+}
+
 /** Records a consent decision, re-opening the live session when — and only
  * when — the decision changes what that session can do. See this section's
  * doc comment for the ordering and why it is that way.

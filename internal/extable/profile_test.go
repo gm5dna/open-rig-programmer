@@ -534,7 +534,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ft710write", "ft891", "ft991a", "ftdx10", "ftdx101", "ts480", "ts590s", "ts590sg", "ts890s", "ts990s"}
+	want := []string{"ft710", "ft710write", "ft891", "ft991a", "ftdx10", "ftdx101", "ftdx101write", "ftdx10write", "ts480", "ts590s", "ts590sg", "ts890s", "ts990s"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -543,7 +543,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "TS-480", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"}
+	wantModels := []string{"FT-710", "FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "FTdx101D/MP", "FTdx10", "TS-480", "TS-590S", "TS-590SG", "TS-890S", "TS-990S"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
@@ -622,7 +622,8 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 						a.Name, b.Name, a.Profile.Package, k.key, k.av))
 				}
 			}
-			// ManualCSV carries ONE exception: ft710 and ft710write
+			// ManualCSV carries ONE exception: a profile and its
+			// "<name>write" sibling (ft710/ft710write, ftdx10/ftdx10write)
 			// deliberately read the same table2.csv — one profile renders
 			// the read inventory, the other the write-descriptor table,
 			// both for the FT-710 from the one manual transcription, which
@@ -630,7 +631,7 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 			// catch (milestone plan.md, task b2). Every other pair is
 			// still checked exactly as before.
 			if av, bv := strings.ToLower(a.Profile.ManualCSV), strings.ToLower(b.Profile.ManualCSV); av == bv {
-				exempt := (a.Name == "ft710" && b.Name == "ft710write") || (a.Name == "ft710write" && b.Name == "ft710")
+				exempt := a.Name+"write" == b.Name || b.Name+"write" == a.Name
 				if !exempt {
 					out = append(out, fmt.Sprintf("profiles %q and %q both emit into package %q and share %s %q",
 						a.Name, b.Name, a.Profile.Package, "ManualCSV", av))
@@ -973,5 +974,84 @@ func TestFT991AProfile_DeclaresItsValues(t *testing.T) {
 	}
 	if !strings.HasPrefix(p.DocLines[0], "exItems is the FT-991A's EX address inventory") {
 		t.Errorf("DocLines[0] = %q", p.DocLines[0])
+	}
+}
+
+// TestSharedGenerateDatum_WriteSiblingExemption: an inventory profile and its
+// "<name>write" sibling may share ManualCSV; any other pair still may not.
+func TestSharedGenerateDatum_WriteSiblingExemption(t *testing.T) {
+	inv := func(model, out, v string) Profile {
+		p := fixtureAbsent
+		p.Model, p.Package, p.OutFile, p.VarName, p.ManualCSV = model, "ftdx10", out, v, "table2.csv"
+		return p
+	}
+	wr := inv("X", "exwrite_gen.go", "exWrite")
+	wr.Renderer = RenderWrite
+	a := NamedProfile{Name: "x", Profile: inv("X", "exinventory_gen.go", "exItems")}
+	b := NamedProfile{Name: "xwrite", Profile: wr}
+	if got := sharedGenerateDatum([]NamedProfile{a, b}); len(got) != 0 {
+		t.Errorf("x/xwrite sharing ManualCSV reported %v, want permitted", got)
+	}
+	c := NamedProfile{Name: "y", Profile: inv("Y", "exinventory_gen.go", "exItems")}
+	d := NamedProfile{Name: "xwrite", Profile: wr}
+	if got := sharedGenerateDatum([]NamedProfile{c, d}); len(got) == 0 {
+		t.Errorf("y/xwrite cross-model sharing was permitted, want a ManualCSV report")
+	}
+	e := NamedProfile{Name: "ftdx10", Profile: inv("A", "exinventory_gen.go", "exItems")}
+	f := NamedProfile{Name: "ftdx101", Profile: inv("B", "exinv2_gen.go", "exItems2")}
+	if got := sharedGenerateDatum([]NamedProfile{e, f}); len(got) != 1 {
+		t.Errorf("ftdx10/ftdx101 sharing ManualCSV reported %v, want one ManualCSV violation", got)
+	}
+}
+
+// writeFixture is a RenderWrite profile with no write observations.
+var writeFixture = func() Profile {
+	p := fixtureAbsent
+	p.Renderer = RenderWrite
+	p.OutFile, p.VarName = "fixturewrite_gen.go", "exWrite"
+	p.DocLines = []string{"exWrite is the fixture write table."}
+	return p
+}()
+
+func TestProfileValidate_WriteProfileWithoutObservations(t *testing.T) {
+	if err := writeFixture.Validate(); err != nil {
+		t.Errorf("write profile with empty WriteObservedCSV: %v", err)
+	}
+	p := writeFixture
+	p.WriteObservedCSV = "FIXTUREWRITE_GEN.GO"
+	if err := p.Validate(); err == nil {
+		t.Error("OutFile equal to a non-empty WriteObservedCSV was accepted")
+	}
+	p = fixtureAbsent
+	p.DomainOverrides = map[[3]int]Domain{{1, 1, 1}: {Codes: []int{0}}}
+	if err := p.Validate(); err == nil {
+		t.Error("DomainOverrides under RenderInventory was accepted")
+	}
+}
+
+func TestRenderWriteGo_NoObservationsAndOverrides(t *testing.T) {
+	rows := []Row{
+		{P1: 1, P2: 1, P3: 1, Name: "A", P4: "000 - 100", ManualLine: 5},
+		{P1: 1, P2: 1, P3: 2, Name: "B", P4: "garbage", ManualLine: 6},
+	}
+	p := withRows(writeFixture, 2)
+	out, err := RenderWriteGo(p, rows, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(out), "ObservedSetWidth: 0,"); n != 2 {
+		t.Errorf("%d rows render ObservedSetWidth: 0, want 2", n)
+	}
+	if !strings.Contains(string(out), "cat.EXWriteItem") || !strings.Contains(string(out), "package ftdx10") {
+		t.Errorf("package/type qualifier missing:\n%s", out)
+	}
+	p.DomainOverrides = map[[3]int]Domain{{1, 1, 2}: {Codes: []int{7}}}
+	out, err = RenderWriteGo(p, rows, nil)
+	if err != nil || !strings.Contains(string(out), "Codes: []int{7}") {
+		t.Errorf("override not applied: err=%v\n%s", err, out)
+	}
+	p.DomainOverrides = map[[3]int]Domain{{9, 9, 9}: {Codes: []int{7}}}
+	if _, err = RenderWriteGo(p, rows, nil); err == nil {
+		t.Error("override for an address with no row was accepted")
 	}
 }

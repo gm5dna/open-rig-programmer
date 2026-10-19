@@ -38,12 +38,12 @@ import (
 func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	var matches []extable.NamedProfile
 	for _, np := range extable.RegisteredProfiles() {
-		if np.Profile.Package == "ftdx101" {
+		if np.Profile.Package == "ftdx101" && np.Profile.Renderer == extable.RenderInventory {
 			matches = append(matches, np)
 		}
 	}
 	if len(matches) != 1 {
-		t.Fatalf("registry holds %d profiles emitting into package ftdx101, want exactly 1: %v", len(matches), names(matches))
+		t.Fatalf("registry holds %d inventory profiles emitting into package ftdx101, want exactly 1: %v", len(matches), names(matches))
 	}
 	p := matches[0].Profile
 
@@ -70,6 +70,42 @@ func TestEXInventoryGenerated_NotStale(t *testing.T) {
 
 	if !bytes.Equal(got, want) {
 		t.Errorf("%s is stale relative to %s; run `go generate ./core/cat/ftdx101` and commit the result (regenerated %d bytes, committed %d bytes)", p.OutFile, p.ManualCSV, len(want), len(got))
+	}
+}
+
+// TestEXWriteGenerated_NotStale is the write-table sibling: one RenderWrite
+// profile emits into this package, and exwrite_gen.go must equal its output.
+// No observation CSV exists, so RenderWriteGo gets a nil map. On failure, run
+// `go generate ./core/cat/ftdx101` and commit the result.
+func TestEXWriteGenerated_NotStale(t *testing.T) {
+	var matches []extable.NamedProfile
+	for _, np := range extable.RegisteredProfiles() {
+		if np.Profile.Package == "ftdx101" && np.Profile.Renderer == extable.RenderWrite {
+			matches = append(matches, np)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("registry holds %d write profiles emitting into package ftdx101, want exactly 1: %v", len(matches), names(matches))
+	}
+	p := matches[0].Profile
+	csv, err := os.ReadFile(p.ManualCSV)
+	if err != nil {
+		t.Fatalf("reading %s: %v", p.ManualCSV, err)
+	}
+	rows, err := extable.ParseCSV(p, csv)
+	if err != nil {
+		t.Fatalf("ParseCSV(%s): %v", p.ManualCSV, err)
+	}
+	want, err := extable.RenderWriteGo(p, rows, nil)
+	if err != nil {
+		t.Fatalf("RenderWriteGo: %v", err)
+	}
+	got, err := os.ReadFile(p.OutFile)
+	if err != nil {
+		t.Fatalf("reading %s: %v", p.OutFile, err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("%s is stale relative to %s; run `go generate ./core/cat/ftdx101` and commit the result", p.OutFile, p.ManualCSV)
 	}
 }
 

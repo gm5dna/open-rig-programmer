@@ -88,6 +88,15 @@ type UnverifiedWriteConsentView struct {
 	// unverified write to warn about, and inventing a caution for a
 	// hardware-verified radio would teach a user to dismiss the real one.
 	Warning string
+	// MenuNeedsConsent, MenuGranted, MenuRecorded and MenuWarning are the
+	// same four facts for the SEPARATE menu (EX) write consent: eligible
+	// only for the FTdx models whose menu writes rest on the printed
+	// manual alone. MenuWarning is radiotext.MenuWriteWarningTemplate with
+	// the model name substituted, empty when MenuNeedsConsent is false.
+	MenuNeedsConsent bool
+	MenuGranted      bool
+	MenuRecorded     bool
+	MenuWarning      string
 }
 
 // CodeplugView is a read view of the working codeplug — returned by
@@ -518,10 +527,11 @@ type UISpecView struct {
 // GetSettings/ReadSettingsRadio's SettingEntryView.ID addresses. Display is
 // the driver's own human-facing rendering of the setting's position (e.g.
 // the FT-710's "01-01-01", driver.SettingItem.Display's own value) — for
-// display only, never re-parsed as an ID. Editable mirrors driver.
-// SettingItem.Write == spec.Supported (task g1): true only once a Session
-// W row has hardware-characterised this item's write descriptor (see
-// core/driver/settings.go's doc comment — R1, no consent parameter). The
+// display only, never re-parsed as an ID. Editable mirrors whether driver.
+// SettingItem.Write satisfies FieldSupport.CanWrite (task g1): Supported once
+// a Session W row has hardware-characterised this item's write descriptor,
+// or ConsentedUnverified once the user has given a menu-write consent for a
+// paper-width item (see core/driver/settings.go's doc comment). The
 // frontend's SettingsViewer renders an editable item's Value cell as an
 // input (task g2); every other item stays plain text.
 type SettingItemView struct {
