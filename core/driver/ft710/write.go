@@ -267,8 +267,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// is refused by buildWriteCommands further down
 	// (TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire). That is a
 	// question about a well-formed field and belongs there, not here.
-	if field, err := driver.CheckFieldStates(s.caps, *ch.Data); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
+	if refusal := driver.RefuseIncoherentFields(ch.Slot, s.caps, *ch.Data); refusal != nil {
+		return res, refusal
 	}
 
 	// THE write gate (defence in depth below the clone service): every

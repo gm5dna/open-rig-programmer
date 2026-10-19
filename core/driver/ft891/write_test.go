@@ -333,6 +333,18 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "must have zero Value",
 		},
 		{
+			// One refusal names every incoherent field, in declaration
+			// order, rather than the first alone.
+			name: "three incoherent fields are refused once, naming all three",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.ScanSkip = codeplug.BoolField{State: codeplug.Unknown, Value: true}
+				d.IPPlus = codeplug.BoolField{State: codeplug.Unknown, Value: true}
+				d.TagDisplay = codeplug.BoolField{State: codeplug.Unavailable, Value: true}
+			}),
+			fields: []spec.Field{spec.FieldTagDisplay, spec.FieldScanSkip, spec.FieldIPPlus},
+			reason: "; ",
+		},
+		{
 			// MEDIUM-1's "a bogus FieldState value" case: a State no
 			// FieldState constant names. Nothing past this rung — not the
 			// capability gate, not buildWriteCommand — inspects State for
@@ -1051,5 +1063,41 @@ func TestMTSetSpec_IsFireAndForgetAndNeverRetries(t *testing.T) {
 		t.Fatalf("mtSpec(catDialect) = %v", err)
 	} else if reflect.DeepEqual(got, read) {
 		t.Error("the Set spec equals the READ spec — a Set that waited for the read's 41-byte answer would time out on every accepted write")
+	}
+}
+
+// TestWriteChannel_FrequencyRangeRefusedBeforeWire pins the declared
+// MinFreqHz/MaxFreqHz rung: one Hz outside either bound is refused with
+// FieldFrequency and nothing reaches the port; the bounds themselves write.
+func TestWriteChannel_FrequencyRangeRefusedBeforeWire(t *testing.T) {
+	caps := CapabilitiesSimulated()
+	for _, tc := range []struct {
+		name   string
+		hz     uint64
+		refuse bool
+	}{
+		{"one above Max", caps.MaxFreqHz + 1, true},
+		{"one below Min", caps.MinFreqHz - 1, true},
+		{"Max", caps.MaxFreqHz, false},
+		{"Min", caps.MinFreqHz, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, sess := openSession(t, Simulated, slotImage{})
+			before := len(p.Transcript())
+			_, err := sess.WriteChannel(testCtx(t), withData(func(d *codeplug.ChannelData) { d.FreqHz = tc.hz }))
+			if !tc.refuse {
+				if err != nil {
+					t.Fatalf("WriteChannel at %d Hz: %v", tc.hz, err)
+				}
+				return
+			}
+			var wre *driver.WriteRefusedError
+			if !errors.As(err, &wre) || !reflect.DeepEqual(wre.Fields, []spec.Field{spec.FieldFrequency}) {
+				t.Fatalf("WriteChannel at %d Hz = %v, want a refusal naming frequency", tc.hz, err)
+			}
+			if after := p.Transcript(); len(after) != before {
+				t.Errorf("the refusal sent %v — the range rung is PRE-WIRE", after[before:])
+			}
+		})
 	}
 }

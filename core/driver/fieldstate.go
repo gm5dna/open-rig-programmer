@@ -4,6 +4,7 @@ package driver
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -214,6 +215,34 @@ func CheckFieldStates(caps spec.Capabilities, d codeplug.ChannelData) (spec.Fiel
 		}
 	}
 	return "", nil
+}
+
+// RefuseIncoherentFields is CheckFieldStates for a ladder that wants one
+// refusal naming EVERY incoherent field, in ChannelData's declaration
+// order, or nil when all are coherent. One failing field keeps its
+// reason verbatim; several are joined with "; ", each prefixed by its
+// field name.
+func RefuseIncoherentFields(slot string, caps spec.Capabilities, d codeplug.ChannelData) *WriteRefusedError {
+	var fields []spec.Field
+	var errs []error
+	for _, c := range FieldStateChecks(caps, d) {
+		if c.Err != nil {
+			fields = append(fields, c.Field)
+			errs = append(errs, c.Err)
+		}
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	reason := errs[0].Error()
+	if len(fields) > 1 {
+		parts := make([]string, len(fields))
+		for i, f := range fields {
+			parts[i] = fmt.Sprintf("%s: %s", f, errs[i])
+		}
+		reason = strings.Join(parts, "; ")
+	}
+	return &WriteRefusedError{Slot: slot, Fields: fields, Reason: reason}
 }
 
 // anyBankReaches reports whether ANY bank in caps grades f above the zero

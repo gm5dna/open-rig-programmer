@@ -112,7 +112,7 @@ func TestSpecialBankText_DerivesFromTheDECLAREDBanks(t *testing.T) {
 		want string
 	}{
 		{"both banks", both, "5xx/EMG"},
-		{"60m only", sixtyOnly, "5xx"},
+		{"60m only, partial bank", sixtyOnly, "501-510"},
 		{"emergency only", emgOnly, "EMG"},
 		{"neither", base, ""},
 	} {
@@ -126,7 +126,8 @@ func TestSpecialBankText_DerivesFromTheDECLAREDBanks(t *testing.T) {
 
 	// The "5xx" shorthand is the reference's own spelling and is derived
 	// from this dialect's declared bounds, not assumed: a bank straddling
-	// two hundred-blocks could not honestly be called "5xx", so it is
+	// two hundred-blocks, or sitting inside one without filling it (the
+	// FT-891's 501-510), could not honestly be called "5xx", so it is
 	// spelled out instead.
 	straddling := base
 	straddling.Slots.SixtyLo, straddling.Slots.SixtyHi = 490, 510

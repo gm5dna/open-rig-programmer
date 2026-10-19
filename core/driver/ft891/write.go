@@ -51,9 +51,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 // refuses naming the field at fault — see yaesu.BuildWriteCommand for the
 // order the refusals fire in.
 //
-// The capability set the shared body takes is consulted only under
-// Params.CheckFreqRange, which this radio does not set: its storable
-// range is the codec's, enforced by cat.MemoryFreqHz.
+// The capability set supplies the declared frequency range, which
+// Params.CheckFreqRange refuses outside of before the wire.
 func buildWriteCommand(dialect cat.Dialect, ch codeplug.Channel) (cat.Command, error) {
-	return yaesu.BuildWriteCommand(dialect, spec.Capabilities{}, &params, ch)
+	return yaesu.BuildWriteCommand(dialect, CapabilitiesSimulated(), &params, ch)
 }

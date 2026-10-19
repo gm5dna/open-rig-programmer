@@ -368,23 +368,11 @@ func (d Dialect) pmsDomainText() string {
 // sentence, and a bank is consulted from the same place as its datum.
 //
 // "5xx" is the reference's own shorthand, and it is derived rather than
-// assumed: a bank that did not sit inside one hundred-block could not
-// honestly be spelled that way, so it is written out instead.
+// assumed: only a bank that FILLS one hundred-block (x01-x99) can honestly
+// be spelled that way, so any other is written out. The FT-891's 501-510
+// therefore reads "501-510", while the FT-710, FTdx10 and FTdx101's 501-599
+// keep "5xx".
 // TestSpecialBankText_DerivesFromTheDECLAREDBanks holds both arms.
-//
-// SITTING INSIDE A HUNDRED-BLOCK IS NOT FILLING ONE, and this renders "5xx"
-// either way. The FT-891's transcribed bank is 501-510 (core/cat/ft891/
-// dialect.go), so its refusal sentence names ninety slots it does not have —
-// harmless, because everything in 5xx is refused on that radio whether as a
-// 60m slot or as invalid, but it is an overclaim of the class S0.2 exists to
-// remove (Stage 0 close review, seat 2 LOW-1). SPELLING THE RANGE WHEN THE
-// BANK IS PARTIAL WOULD MOVE A REGISTERED DIALECT'S SHIPPED SENTENCE — the
-// FT-891's, from "5xx/EMG/\"000\" rejected" to "501-510/EMG/\"000\"
-// rejected" — which the Stage 0 close forbids and which
-// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
-// (core/transport) now catches. The finding is therefore recorded here and
-// referred back, not applied: it is a byte-identity decision, not an
-// implementation choice.
 func (d Dialect) specialBankText() string {
 	var banks []string
 	if d.slots.sixtyHi > 0 {
@@ -393,7 +381,7 @@ func (d Dialect) specialBankText() string {
 		// FTX-1's 50001-50020 "5 MHz BAND") spells the full range instead,
 		// which keeps every registered (3-digit) dialect's sentence
 		// byte-identical while giving a wider dialect an honest one.
-		if d.slotDigits() == 3 && d.slots.sixtyLo/100 == d.slots.sixtyHi/100 {
+		if d.slotDigits() == 3 && d.slots.sixtyLo%100 == 1 && d.slots.sixtyHi%100 == 99 && d.slots.sixtyLo/100 == d.slots.sixtyHi/100 {
 			banks = append(banks, fmt.Sprintf("%dxx", d.slots.sixtyLo/100))
 		} else {
 			w := d.slotDigits()

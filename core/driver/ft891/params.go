@@ -29,7 +29,10 @@ var params = yaesu.Params{
 		{Name: "ENC-DEC", State: cat.CTCSSEncDec},
 		{Name: "ENC", State: cat.CTCSSEnc},
 	},
-	EraseReason: "this radio's CAT command set contains no erase command at all (layout 111-147), so this codec cannot express an erase, and FieldErase is not write-Supported",
+	// The declared FA/FB range is refused before the wire, as on the
+	// other Yaesu drivers.
+	CheckFreqRange: true,
+	EraseReason:    "this radio's CAT command set contains no erase command at all (layout 111-147), so this codec cannot express an erase, and FieldErase is not write-Supported",
 	// This radio's P11 (byte 28) is a LIVE TAG flag with no "leave it
 	// alone" encoding, so a write may only ever send a Known value; the
 	// format verbs take the state found and the state required.
