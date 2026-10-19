@@ -20,7 +20,8 @@ import (
 // sentences with Dialect.mwSlotDomainRefusal/mtSlotDomainRefusal, composed
 // from the receiver's own memory range, PMS domain and declared special
 // banks, on the argument that each of them composes back to the frozen text.
-// One shared constant is that argument written down; a table of five would
+// One shared constant is that argument written down (the FT-891, whose bank
+// is partial, has its own pair below); a table of five would
 // let a drifting dialect be "fixed" by editing its own row.
 //
 // THE SIXTH REGISTERED DIALECT IS NOT AMONG THEM AND CANNOT BE: the FT-991A's
@@ -35,6 +36,11 @@ import (
 const (
 	frozenMWSlotDomainRefusal = `MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected)`
 	frozenMTSlotDomainRefusal = `MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference`
+
+	// The FT-891's 5 MHz bank is 501-510, not the whole hundred-block, so
+	// its sentences spell the range.
+	ft891MWSlotDomainRefusal = `MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 501-510/EMG/"000" rejected)`
+	ft891MTSlotDomainRefusal = `MT: slot must be memory (001-099) or PMS (P1L-P9U); 501-510/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference`
 )
 
 // TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical pins the
@@ -56,14 +62,16 @@ const (
 // would pass on a sentence that had grown a clause.
 func TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		d    cat.Dialect
+		name   string
+		d      cat.Dialect
+		wantMW string
+		wantMT string
 	}{
-		{"FT-710", cat.FT710},
-		{"FTdx10", ftdx10.Dialect()},
-		{"FTdx101D", ftdx101.DialectD()},
-		{"FTdx101MP", ftdx101.DialectMP()},
-		{"FT-891", ft891.Dialect()},
+		{"FT-710", cat.FT710, frozenMWSlotDomainRefusal, frozenMTSlotDomainRefusal},
+		{"FTdx10", ftdx10.Dialect(), frozenMWSlotDomainRefusal, frozenMTSlotDomainRefusal},
+		{"FTdx101D", ftdx101.DialectD(), frozenMWSlotDomainRefusal, frozenMTSlotDomainRefusal},
+		{"FTdx101MP", ftdx101.DialectMP(), frozenMWSlotDomainRefusal, frozenMTSlotDomainRefusal},
+		{"FT-891", ft891.Dialect(), ft891MWSlotDomainRefusal, ft891MTSlotDomainRefusal},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// The none form is the slot every one of these dialects refuses
@@ -75,8 +83,8 @@ func TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical(t *testing.T) {
 			}
 
 			_, err = tc.d.BuildMWSet(cat.MemoryData{Slot: none})
-			if got := slotRefusalReason(t, err, "BuildMWSet"); got != frozenMWSlotDomainRefusal {
-				t.Errorf("BuildMWSet slot refusal =\n\t%q\nwant\n\t%q", got, frozenMWSlotDomainRefusal)
+			if got := slotRefusalReason(t, err, "BuildMWSet"); got != tc.wantMW {
+				t.Errorf("BuildMWSet slot refusal =\n\t%q\nwant\n\t%q", got, tc.wantMW)
 			}
 
 			// The MT sentence is reached through the builder THIS dialect's
@@ -92,8 +100,8 @@ func TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical(t *testing.T) {
 			default:
 				_, err = tc.d.BuildMTSetCombined(combined, "AB")
 			}
-			if got := slotRefusalReason(t, err, "the MT Set builder"); got != frozenMTSlotDomainRefusal {
-				t.Errorf("MT Set slot refusal =\n\t%q\nwant\n\t%q", got, frozenMTSlotDomainRefusal)
+			if got := slotRefusalReason(t, err, "the MT Set builder"); got != tc.wantMT {
+				t.Errorf("MT Set slot refusal =\n\t%q\nwant\n\t%q", got, tc.wantMT)
 			}
 		})
 	}
