@@ -527,3 +527,114 @@ func TestSlugsAreOpaque(t *testing.T) {
 		}
 	}
 }
+
+// TestSetUnverifiedWrites_ByteIdenticalToGolden pins the setter's output
+// against bytes produced by the function before the menuWrites key existed.
+func TestSetUnverifiedWrites_ByteIdenticalToGolden(t *testing.T) {
+	path := settingsPath(t)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"zzz": {"a": "<&>"}, "unverifiedWrites": {"old": false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for slug, on := range map[string]bool{"ft710": true, "ftdx10": false} {
+		if err := SetUnverifiedWrites(path, slug, on); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, _ := os.ReadFile(path)
+	want, err := os.ReadFile("testdata/unverified-set.golden.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("output changed:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestSetMenuWrites_RoundTripAndIndependence(t *testing.T) {
+	path := settingsPath(t)
+	if err := SetUnverifiedWrites(path, "ftdx10", true); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, r := s.MenuWritesFor("ftdx10"); g || r {
+		t.Fatalf("channel grant read as menu grant: %v %v", g, r)
+	}
+	if err := SetMenuWrites(path, "ftdx101d", false); err != nil {
+		t.Fatal(err)
+	}
+	s, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, r := s.MenuWritesFor("ftdx101d"); g || !r {
+		t.Fatalf("false must be stored: got %v %v", g, r)
+	}
+	if g, r := s.UnverifiedWritesFor("ftdx101d"); g || r {
+		t.Fatalf("menu decision read as channel decision: %v %v", g, r)
+	}
+	if g, r := s.UnverifiedWritesFor("ftdx10"); !g || !r {
+		t.Fatalf("channel grant lost: %v %v", g, r)
+	}
+	if err := SetMenuWrites(path, "ftdx101d", true); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = Load(path)
+	if g, r := s.MenuWritesFor("ftdx101d"); !g || !r {
+		t.Fatalf("regrant: %v %v", g, r)
+	}
+}
+
+func TestMenuWrites_AbsentAndUnknownKeysPreserved(t *testing.T) {
+	path := settingsPath(t)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"future": [1,2]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, r := s.MenuWritesFor("x"); g || r {
+		t.Fatal("absent key must be (false,false)")
+	}
+	if err := SetMenuWrites(path, "x", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := readRawMap(t, path)["future"]; !ok {
+		t.Fatal("unknown key lost")
+	}
+}
+
+func TestMenuWrites_CorruptValueIsAnError(t *testing.T) {
+	for name, body := range map[string]string{
+		"null map":      `{"menuWrites": null}`,
+		"null entry":    `{"menuWrites": {"a": null}}`,
+		"non-bool":      `{"menuWrites": {"a": "yes"}}`,
+		"not an object": `{"menuWrites": true}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := settingsPath(t)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Load(path); err == nil || !strings.Contains(err.Error(), path) {
+				t.Fatalf("Load: want error naming the file, got %v", err)
+			}
+			if err := SetMenuWrites(path, "a", true); err == nil {
+				t.Fatal("SetMenuWrites must refuse a corrupt file")
+			}
+			assertBytesUntouched(t, path, body)
+		})
+	}
+}
