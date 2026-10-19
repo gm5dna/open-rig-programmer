@@ -5,6 +5,7 @@ package clone
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -66,6 +67,25 @@ func TestReadAll_TS2000_SkipsSatelliteBank(t *testing.T) {
 		if bankID, ok := satBankFor(caps.Banks, ch.Slot); ok && bankID == spec.BankSatellite {
 			t.Errorf("ReadAll included slot %q from the Satellite Memory bank, want it skipped entirely", ch.Slot)
 		}
+	}
+}
+
+// TestReadAll_TS2000_SatelliteSkipSaysWhy pins the narration: the skip is
+// reported once, naming the bank and the reason, and the read still succeeds.
+func TestReadAll_TS2000_SatelliteSkipSaysWhy(t *testing.T) {
+	_, sess := openTS2000SimSession(t)
+	var skips []string
+	svc := NewService(sess, newStore(t), WithProgress(func(phase string, done, total int, slot string) {
+		if phase == "skip" {
+			skips = append(skips, slot)
+		}
+	}))
+
+	if _, err := svc.ReadAll(context.Background()); err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(skips) != 1 || !strings.Contains(skips[0], string(spec.BankSatellite)) || !strings.Contains(skips[0], "current channel only") {
+		t.Errorf("skip events = %q, want one naming %s and the reason", skips, spec.BankSatellite)
 	}
 }
 
