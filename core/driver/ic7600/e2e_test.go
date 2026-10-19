@@ -219,7 +219,7 @@ func TestE2E_ProbeFingerprints(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			seed := e2eSeed(1)
-			img := radioImage{idToken: tt.token, records: map[int][]byte{1: seed.record(t)}}
+			img := radioImage{IDToken: tt.token, Records: map[int][]byte{1: seed.record(t)}}
 			p := newScriptedPort(t, img)
 
 			s := openScripted(t, p)
@@ -239,7 +239,7 @@ func TestE2E_ProbeFingerprints(t *testing.T) {
 // session opens ON ADDRESS EVIDENCE ALONE (spec D3.2, D5 entry 2(a),
 // matrix lift R2a).
 func TestE2E_EmptyRadioOpensUnfingerprinted(t *testing.T) {
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}})
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}})
 	s := openScripted(t, p)
 	if length, confirmed := s.Fingerprint(); confirmed || length != 0 {
 		t.Errorf("Fingerprint() = (%d, %v), want (0, false)", length, confirmed)
@@ -280,7 +280,7 @@ func checkReadAll(t *testing.T, echo bool) {
 		records[slotChannel(t, slot)] = f.record(t)
 	}
 
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: records})
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: records})
 	port := p.Port()
 	if echo {
 		port = &echoingPort{Port: port}
@@ -356,7 +356,7 @@ func checkWriteOne(t *testing.T, echo bool) {
 		1:  e2eSeed(1).record(t),
 		42: prior.record(t),
 	}
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: records, ackSets: true})
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: records, AckSets: true})
 	port := p.Port()
 	if echo {
 		port = &echoingPort{Port: port}
@@ -439,7 +439,7 @@ func TestE2E_WriteIsRefusedForASelectGroupChannel(t *testing.T) {
 				1:  e2eSeed(1).record(t),
 				42: append([]byte(nil), prior...),
 			}
-			p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: records, ackSets: true})
+			p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: records, AckSets: true})
 			s := openScripted(t, p, WithConsentedUnverifiedWrites())
 			before := len(p.Transcript())
 
@@ -475,7 +475,7 @@ func TestE2E_WriteIsRefusedForASelectGroupChannel(t *testing.T) {
 // THE REFUSAL NAMES NO FOUND MODEL. The IC-7600 has no registered sibling
 // (matrix S4).
 func TestE2E_WrongRecordLengthIsRefused(t *testing.T) {
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: map[int][]byte{1: make([]byte, 39)}})
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: map[int][]byte{1: make([]byte, 39)}})
 
 	sess, err := New(Simulated).Open(t.Context(), p.Port(), driver.Identity{})
 	if err == nil {
@@ -503,7 +503,7 @@ func TestE2E_WrongRecordLengthIsRefused(t *testing.T) {
 func TestE2E_EraseIsRefused(t *testing.T) {
 	for _, opts := range [][]Option{nil, {WithConsentedUnverifiedWrites()}} {
 		seeded := e2eSeed(1).record(t)
-		p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: map[int][]byte{1: append([]byte(nil), seeded...)}, ackSets: true})
+		p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: map[int][]byte{1: append([]byte(nil), seeded...)}, AckSets: true})
 		s := openScripted(t, p, opts...)
 		before := len(p.Transcript())
 
@@ -589,7 +589,7 @@ func TestE2E_AnswerForAnotherChannelIsRefused(t *testing.T) {
 	for i, slot := range []string{"001", "005", "006"} {
 		records[slotChannel(t, slot)] = e2eSeed(i + 1).record(t)
 	}
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: records})
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: records})
 	port := &misaddressingPort{Port: p.Port()}
 
 	sess, err := New(Simulated).Open(t.Context(), port, driver.Identity{})
@@ -671,7 +671,7 @@ func TestE2E_EchoOnChangesNothing(t *testing.T) {
 	t.Run("write-one with echo", func(t *testing.T) { checkWriteOne(t, true) })
 
 	t.Run("the echoes are counted and dropped, not answered", func(t *testing.T) {
-		p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: map[int][]byte{1: e2eSeed(1).record(t)}})
+		p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: map[int][]byte{1: e2eSeed(1).record(t)}})
 		port := &echoingPort{Port: p.Port()}
 		sess, err := New(Simulated).Open(t.Context(), port, driver.Identity{})
 		if err != nil {
@@ -696,8 +696,8 @@ func TestE2E_BroadcastFloodNeverReachesTheEngine(t *testing.T) {
 	for i, slot := range e2eSlots() {
 		records[slotChannel(t, slot)] = e2eSeed(i).record(t)
 	}
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: records, ackSets: true})
-	p.startFlood(0x00)
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: records, AckSets: true})
+	p.StartFlood(0x00)
 
 	s := openScripted(t, p, WithConsentedUnverifiedWrites())
 	if s.OpenDiagnostics().InitDrainCapExceeded {
@@ -744,21 +744,21 @@ func TestE2E_AddressedFloodCapIsNonfatalThenLaterFailsClosed(t *testing.T) {
 		1:  e2eSeed(1).record(t),
 		42: e2eSeed(42).record(t),
 	}
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: records, ackSets: true})
-	p.startFlood(byte(civ.ControllerAddressDefault))
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: records, AckSets: true})
+	p.StartFlood(byte(civ.ControllerAddressDefault))
 
 	s := openScripted(t, p, WithConsentedUnverifiedWrites())
 	if !s.OpenDiagnostics().InitDrainCapExceeded {
 		t.Error("InitDrainCapExceeded is false under a CONTROLLER-ADDRESSED flood - Init's drain cannot have found its idle gap")
 	}
 
-	p.stopFlood()
+	p.StopFlood()
 	time.Sleep(300 * time.Millisecond)
 	if _, err := s.ReadChannel(t.Context(), "042"); err != nil {
 		t.Fatalf("the clean read on a quiet line failed: %v", err)
 	}
 
-	p.restartFlood(byte(civ.ControllerAddressDefault))
+	p.RestartFlood(byte(civ.ControllerAddressDefault))
 
 	var lastErr error
 	for i := 0; i < 12 && lastErr == nil; i++ {
@@ -792,7 +792,7 @@ func TestE2E_TheDriverNeverMutatesTheRadiosSettings(t *testing.T) {
 	for i, slot := range e2eSlots() {
 		records[slotChannel(t, slot)] = e2eSeed(i).record(t)
 	}
-	p := newScriptedPort(t, radioImage{idToken: []byte{0xA5}, records: records, ackSets: true})
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0xA5}, Records: records, AckSets: true})
 	s := openScripted(t, p, WithConsentedUnverifiedWrites())
 
 	for _, slot := range []string{"001", "042", "099", "P1", "P2"} {

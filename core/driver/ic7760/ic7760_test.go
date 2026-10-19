@@ -79,8 +79,8 @@ func openWith(t *testing.T, p *scriptedPort, opts ...Option) *Session {
 // channel 1, so the probe fingerprints on its first read.
 func occupiedRadio() radioImage {
 	return radioImage{
-		idToken: []byte{0xB2},
-		records: map[int][]byte{1: goldenRecord},
+		IDToken: []byte{0xB2},
+		Records: map[int][]byte{1: goldenRecord},
 	}
 }
 
@@ -110,13 +110,13 @@ func TestOpen_AddressMatchedIDIsRequired(t *testing.T) {
 		// A radio moved off B2, an unsuitable virtual COM port, an absent
 		// or powered-off radio, and a wrong assumed baud all look exactly
 		// like this: nothing comes back, and nothing can be attributed.
-		p := newScriptedPort(t, radioImage{idToken: nil})
+		p := newScriptedPort(t, radioImage{IDToken: nil})
 		if err := openErr(t, p); !strings.Contains(err.Error(), "identity probe") {
 			t.Errorf("err = %v, want the 19 00 identity probe to name itself", err)
 		}
 	})
 	t.Run("a reply from another station does not open", func(t *testing.T) {
-		p := newScriptedPort(t, radioImage{idToken: []byte{0x42}, idFrom: 0x94})
+		p := newScriptedPort(t, radioImage{IDToken: []byte{0x42}, IDFrom: 0x94})
 		_ = openErr(t, p)
 	})
 	t.Run("a broadcast does not open", func(t *testing.T) {
@@ -124,13 +124,13 @@ func TestOpen_AddressMatchedIDIsRequired(t *testing.T) {
 		// controller. The address check is the CODEC's — the matcher from
 		// Profile.TransceiverIDAnswerMatcher checks both to and from — so
 		// this arm is here to prove the driver leans on it.
-		p := newScriptedPort(t, radioImage{idToken: []byte{0x42}, idBroadcast: true})
+		p := newScriptedPort(t, radioImage{IDToken: []byte{0x42}, IDBroadcast: true})
 		_ = openErr(t, p)
 	})
 	t.Run("an address-matched reply opens and its token is recorded", func(t *testing.T) {
 		p := newScriptedPort(t, radioImage{
-			idToken: []byte{0x7A},
-			records: map[int][]byte{1: goldenRecord},
+			IDToken: []byte{0x7A},
+			Records: map[int][]byte{1: goldenRecord},
 		})
 		s := openWith(t, p)
 		if got := s.OpenDiagnostics().IDToken; !bytes.Equal(got, []byte{0x7A}) {
@@ -180,7 +180,7 @@ func TestOpen_ControlLinesAreNeverToggled(t *testing.T) {
 	if _, err := s.ReadChannel(t.Context(), "001"); err != nil {
 		t.Fatalf("ReadChannel: %v", err)
 	}
-	if rts, dtr := p.controlLineCalls(); rts != 0 || dtr != 0 {
+	if rts, dtr := p.ControlLineCalls(); rts != 0 || dtr != 0 {
 		t.Errorf("SetRTS called %d times and SetDTR %d times; both must be zero — register entry ic7760-control-lines records why", rts, dtr)
 	}
 }
@@ -206,8 +206,8 @@ func TestOpen_FingerprintIsRecordOnlyTwentyFive(t *testing.T) {
 func TestOpen_WrongRecordLengthIsRefusedWithANamedReason(t *testing.T) {
 	for _, n := range []int{24, 26} {
 		p := newScriptedPort(t, radioImage{
-			idToken: []byte{0x42},
-			records: map[int][]byte{1: make([]byte, n)},
+			IDToken: []byte{0x42},
+			Records: map[int][]byte{1: make([]byte, n)},
 		})
 		err := openErr(t, p)
 		var mismatch *RecordLengthMismatchError
@@ -250,7 +250,7 @@ func TestOpen_WrongRecordLengthIsRefusedWithANamedReason(t *testing.T) {
 func TestOpen_LaterQuarantineFailureFailsClosed(t *testing.T) {
 	t.Run("an addressed flood spanning Init alone is non-fatal", func(t *testing.T) {
 		p := newScriptedPort(t, occupiedRadio())
-		p.startFlood(0xE0)
+		p.StartFlood(0xE0)
 		// Stop the flood the moment Init is over — the first frame in the
 		// transcript is the identity read, which Open cannot have written
 		// before Init returned. The flood therefore covers the whole of
@@ -259,7 +259,7 @@ func TestOpen_LaterQuarantineFailureFailsClosed(t *testing.T) {
 		go func() {
 			for {
 				if len(p.Transcript()) >= 1 {
-					p.stopFlood()
+					p.StopFlood()
 					return
 				}
 				time.Sleep(time.Millisecond)
@@ -280,18 +280,18 @@ func TestOpen_LaterQuarantineFailureFailsClosed(t *testing.T) {
 		// read times out and retries — and a retry's drain-to-quiet is a
 		// later quarantine drain, which meets the same absolute cap.
 		img := occupiedRadio()
-		img.memSilent = true
+		img.MemSilent = true
 		p := newScriptedPort(t, img)
 		go func() {
 			for {
 				if len(p.Transcript()) >= 2 {
-					p.startFlood(0xE0)
+					p.StartFlood(0xE0)
 					return
 				}
 				time.Sleep(2 * time.Millisecond)
 			}
 		}()
-		defer p.stopFlood()
+		defer p.StopFlood()
 
 		err := openErr(t, p)
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
@@ -300,7 +300,7 @@ func TestOpen_LaterQuarantineFailureFailsClosed(t *testing.T) {
 	})
 	t.Run("a broadcast flood never reaches the engine", func(t *testing.T) {
 		p := newScriptedPort(t, occupiedRadio())
-		p.startFlood(0x00)
+		p.StartFlood(0x00)
 		s := openWith(t, p)
 		if s.OpenDiagnostics().InitDrainCapExceeded {
 			t.Error("InitDrainCapExceeded is true under a to=00 flood; the accumulator must have dropped those before any engine event")
@@ -313,8 +313,8 @@ func TestOpen_LaterQuarantineFailureFailsClosed(t *testing.T) {
 
 func TestProbeScheduleIncludesP1AndP2AfterBoundedMEMSearch(t *testing.T) {
 	p := newScriptedPort(t, radioImage{
-		idToken: []byte{0x42},
-		records: map[int][]byte{101: goldenRecord},
+		IDToken: []byte{0x42},
+		Records: map[int][]byte{101: goldenRecord},
 	})
 	s := openWith(t, p)
 	report := s.OpenDiagnostics()
@@ -339,7 +339,7 @@ func TestProbeScheduleIncludesP1AndP2AfterBoundedMEMSearch(t *testing.T) {
 }
 
 func TestProbeScheduleOpensEmptyMEMAndSCANOnAddressEvidence(t *testing.T) {
-	p := newScriptedPort(t, radioImage{idToken: []byte{0x42}, records: map[int][]byte{}})
+	p := newScriptedPort(t, radioImage{IDToken: []byte{0x42}, Records: map[int][]byte{}})
 	s := openWith(t, p)
 	if report := s.OpenDiagnostics(); report.Fingerprinted || report.RecordLength != 0 || report.SlotsTried != 12 {
 		t.Fatalf("OpenDiagnostics = %+v, want un-fingerprinted open after all 12 bounded slots", report)
