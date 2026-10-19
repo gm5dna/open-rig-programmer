@@ -5,6 +5,7 @@ package icomtest
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -36,7 +37,7 @@ func (fx Fixture) writeSession(t *testing.T, img RadioImage) (Session, *Scripted
 	p := fx.port(t, img)
 	return fx.openWith(t, p), p
 }
-func (fx Fixture) framesAfterOpen(t *testing.T, p *ScriptedPort, openFrames int) [][]byte {
+func (fx Fixture) FramesAfterOpen(t *testing.T, p *ScriptedPort, openFrames int) [][]byte {
 	t.Helper()
 	all := p.Transcript()
 	if len(all) < openFrames {
@@ -44,7 +45,7 @@ func (fx Fixture) framesAfterOpen(t *testing.T, p *ScriptedPort, openFrames int)
 	}
 	return all[openFrames:]
 }
-func (fx Fixture) ackingRadio() RadioImage {
+func (fx Fixture) AckingRadio() RadioImage {
 	img := fx.occupiedRadio()
 	img.AckSets = true
 	img.Records[42] = fx.Golden
@@ -63,7 +64,7 @@ func (fx Fixture) tMemorySetSpec_IsWriteWithAckAndNeverRetries(t *testing.T) {
 	}
 }
 func (fx Fixture) tWriteChannel_FBIsConfirmed(t *testing.T) {
-	s, p := fx.writeSession(t, fx.ackingRadio())
+	s, p := fx.writeSession(t, fx.AckingRadio())
 	openFrames := len(p.Transcript())
 
 	res, err := s.WriteChannel(t.Context(), fx.GoodChannel("042"))
@@ -74,7 +75,7 @@ func (fx Fixture) tWriteChannel_FBIsConfirmed(t *testing.T) {
 	if !reflect.DeepEqual(res.Steps, want) {
 		t.Errorf("Steps = %+v, want %+v", res.Steps, want)
 	}
-	frames := fx.framesAfterOpen(t, p, openFrames)
+	frames := fx.FramesAfterOpen(t, p, openFrames)
 	if len(frames) != 2 {
 		t.Fatalf("the write put %d frames on the wire, want 2 (one read, one set):\n  %s", len(frames), HexFrames(frames))
 	}
@@ -86,7 +87,7 @@ func (fx Fixture) tWriteChannel_FBIsConfirmed(t *testing.T) {
 	}
 }
 func (fx Fixture) tWriteChannel_AckTimeoutReportsAnUnknownOutcome(t *testing.T) {
-	img := fx.ackingRadio()
+	img := fx.AckingRadio()
 	img.AckSets = false
 	s, p := fx.writeSession(t, img)
 	openFrames := len(p.Transcript())
@@ -100,7 +101,7 @@ func (fx Fixture) tWriteChannel_AckTimeoutReportsAnUnknownOutcome(t *testing.T) 
 		t.Errorf("Steps = %+v, want %+v - an ack timeout leaves the outcome UNKNOWN", res.Steps, want)
 	}
 	var sets int
-	for _, f := range fx.framesAfterOpen(t, p, openFrames) {
+	for _, f := range fx.FramesAfterOpen(t, p, openFrames) {
 		if len(f) >= MemSetFrameLen {
 			sets++
 		}
@@ -110,8 +111,8 @@ func (fx Fixture) tWriteChannel_AckTimeoutReportsAnUnknownOutcome(t *testing.T) 
 	}
 }
 func (fx Fixture) tWriteChannel_FARejectionIsReported(t *testing.T) {
-	t.Run("FA from the radio is a rejection", func(t *testing.T) {
-		img := fx.ackingRadio()
+	t.Run(fmt.Sprintf("FA from 0x%02X is a rejection", fx.Addr), func(t *testing.T) {
+		img := fx.AckingRadio()
 		img.AckSets = false
 		img.RejectSets = true
 		s, _ := fx.writeSession(t, img)
@@ -129,7 +130,7 @@ func (fx Fixture) tWriteChannel_FARejectionIsReported(t *testing.T) {
 	})
 
 	t.Run("FA from another station is not a rejection", func(t *testing.T) {
-		img := fx.ackingRadio()
+		img := fx.AckingRadio()
 		img.AckSets = false
 		img.RejectSets = true
 		img.SetFrom = 0x94
@@ -144,7 +145,7 @@ func (fx Fixture) tWriteChannel_FARejectionIsReported(t *testing.T) {
 	})
 }
 func (fx Fixture) tWriteChannel_UnverifiedRefusesBeforeAnyWire(t *testing.T) {
-	p := fx.port(t, fx.ackingRadio())
+	p := fx.port(t, fx.AckingRadio())
 	d := fx.New(true, false)
 	sess, err := d.Open(t.Context(), p.Port(), driver.Identity{})
 	if err != nil {
@@ -160,7 +161,7 @@ func (fx Fixture) tWriteChannel_UnverifiedRefusesBeforeAnyWire(t *testing.T) {
 	if len(res.Steps) != 0 || res.Steps == nil {
 		t.Errorf("Steps = %+v, want an EMPTY non-nil slice - a refusal before any frame is built has no sequence to describe", res.Steps)
 	}
-	if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+	if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 		t.Errorf("%d frames reached the port:\n  %s\nwant NONE - a locally decidable refusal precedes ALL wire traffic (T5)", len(frames), HexFrames(frames))
 	}
 }
@@ -184,7 +185,7 @@ func (fx Fixture) tWriteChannel_KnownUnmappedFieldIsRefusedNotDropped(t *testing
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			s, p := fx.writeSession(t, fx.ackingRadio())
+			s, p := fx.writeSession(t, fx.AckingRadio())
 			openFrames := len(p.Transcript())
 			ch := fx.GoodChannel("042")
 			tt.set(ch.Data)
@@ -203,7 +204,7 @@ func (fx Fixture) tWriteChannel_KnownUnmappedFieldIsRefusedNotDropped(t *testing
 			if len(res.Steps) != 0 {
 				t.Errorf("Steps = %+v, want empty", res.Steps)
 			}
-			if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+			if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 				t.Errorf("%d frames reached the port, want none", len(frames))
 			}
 		})
@@ -219,7 +220,7 @@ func (fx Fixture) tWriteChannel_RefusesASlotWhoseUnmappedRegionsDiffer(t *testin
 			got    byte
 		}{row.Name, fx.withRecord(row.Off, row.Val), row.Offset, row.Nibble, row.Got}
 		t.Run(tt.name, func(t *testing.T) {
-			img := fx.ackingRadio()
+			img := fx.AckingRadio()
 			img.Records[42] = tt.prior
 			s, p := fx.writeSession(t, img)
 			openFrames := len(p.Transcript())
@@ -239,7 +240,7 @@ func (fx Fixture) tWriteChannel_RefusesASlotWhoseUnmappedRegionsDiffer(t *testin
 				t.Errorf("Steps = %+v, want empty - no frame was ever built", res.Steps)
 			}
 
-			frames := fx.framesAfterOpen(t, p, openFrames)
+			frames := fx.FramesAfterOpen(t, p, openFrames)
 			if len(frames) != 1 {
 				t.Fatalf("the refused write put %d frames on the wire, want exactly 1 (the T5 preservation read):\n  %s", len(frames), HexFrames(frames))
 			}
@@ -250,7 +251,7 @@ func (fx Fixture) tWriteChannel_RefusesASlotWhoseUnmappedRegionsDiffer(t *testin
 	}
 }
 func (fx Fixture) tWriteChannel_EmptySlotWritesAgainstTheTemplate(t *testing.T) {
-	img := fx.ackingRadio()
+	img := fx.AckingRadio()
 	delete(img.Records, 42)
 	s, p := fx.writeSession(t, img)
 	openFrames := len(p.Transcript())
@@ -262,7 +263,7 @@ func (fx Fixture) tWriteChannel_EmptySlotWritesAgainstTheTemplate(t *testing.T) 
 	if !res.Steps[0].Confirmed {
 		t.Errorf("Steps = %+v, want a confirmed write", res.Steps)
 	}
-	frames := fx.framesAfterOpen(t, p, openFrames)
+	frames := fx.FramesAfterOpen(t, p, openFrames)
 	if len(frames) != 2 {
 		t.Fatalf("the write put %d frames on the wire, want 2:\n  %s", len(frames), HexFrames(frames))
 	}
@@ -279,7 +280,7 @@ func (fx Fixture) tWriteChannel_EmptySlotWritesAgainstTheTemplate(t *testing.T) 
 	}
 }
 func (fx Fixture) tWriteChannel_ConsentedWritesTheFullRecord(t *testing.T) {
-	p := fx.port(t, fx.ackingRadio())
+	p := fx.port(t, fx.AckingRadio())
 	d := fx.New(true, true)
 	sess, err := d.Open(t.Context(), p.Port(), driver.Identity{})
 	if err != nil {
@@ -291,7 +292,7 @@ func (fx Fixture) tWriteChannel_ConsentedWritesTheFullRecord(t *testing.T) {
 	if _, err := sess.WriteChannel(t.Context(), fx.GoodChannel("042")); err != nil {
 		t.Fatalf("WriteChannel under consent: %v", err)
 	}
-	frames := fx.framesAfterOpen(t, p, openFrames)
+	frames := fx.FramesAfterOpen(t, p, openFrames)
 	if len(frames) != 2 {
 		t.Fatalf("the write put %d frames on the wire, want 2:\n  %s", len(frames), HexFrames(frames))
 	}
@@ -316,7 +317,7 @@ func (fx Fixture) tWriteChannel_EraseIsRefused(t *testing.T) {
 		{"Simulated + consent", func() driver.Driver { return fx.New(false, true) }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			p := fx.port(t, fx.ackingRadio())
+			p := fx.port(t, fx.AckingRadio())
 			sess, err := tt.mk().Open(t.Context(), p.Port(), driver.Identity{})
 			if err != nil {
 				t.Fatalf("Open: %v", err)
@@ -335,7 +336,7 @@ func (fx Fixture) tWriteChannel_EraseIsRefused(t *testing.T) {
 			if len(res.Steps) != 0 {
 				t.Errorf("Steps = %+v, want empty", res.Steps)
 			}
-			if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+			if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 				t.Errorf("%d frames reached the port, want none", len(frames))
 			}
 		})
@@ -372,7 +373,7 @@ func (fx Fixture) tWriteChannel_NoClearFrameIsReachable(t *testing.T) {
 		func() driver.Driver { return fx.New(false, false) },
 		func() driver.Driver { return fx.New(false, true) },
 	} {
-		p := fx.port(t, fx.ackingRadio())
+		p := fx.port(t, fx.AckingRadio())
 		sess, err := mk().Open(t.Context(), p.Port(), driver.Identity{})
 		if err != nil {
 			t.Fatalf("Open: %v", err)
@@ -390,7 +391,7 @@ func (fx Fixture) tWriteChannel_NoClearFrameIsReachable(t *testing.T) {
 }
 func (fx Fixture) tWriteChannel_RefusesAFrequencyOutsideTheEncodableRange(t *testing.T) {
 	for _, hz := range []uint64{70_000_000, 100_000_000, 1 << 40} {
-		s, p := fx.writeSession(t, fx.ackingRadio())
+		s, p := fx.writeSession(t, fx.AckingRadio())
 		openFrames := len(p.Transcript())
 		ch := fx.GoodChannel("042")
 		ch.Data.FreqHz = hz
@@ -406,11 +407,11 @@ func (fx Fixture) tWriteChannel_RefusesAFrequencyOutsideTheEncodableRange(t *tes
 		if len(res.Steps) != 0 {
 			t.Errorf("Steps = %+v, want empty - the refusal precedes the frame being built", res.Steps)
 		}
-		if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+		if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 			t.Errorf("%d frames reached the port, want none", len(frames))
 		}
 	}
-	s, _ := fx.writeSession(t, fx.ackingRadio())
+	s, _ := fx.writeSession(t, fx.AckingRadio())
 	ch := fx.GoodChannel("042")
 	ch.Data.FreqHz = fx.MaxFreqHz
 	if _, err := s.WriteChannel(t.Context(), ch); err != nil {
@@ -432,7 +433,7 @@ func (fx Fixture) tWriteChannel_RefusesAToneOutsideThePrintedDigitRange(t *testi
 	} {
 		for _, v := range []spec.Tone{3000, 9999} {
 			t.Run(tt.name, func(t *testing.T) {
-				s, p := fx.writeSession(t, fx.ackingRadio())
+				s, p := fx.writeSession(t, fx.AckingRadio())
 				openFrames := len(p.Transcript())
 				ch := fx.GoodChannel("042")
 				tt.set(ch.Data, v)
@@ -445,7 +446,7 @@ func (fx Fixture) tWriteChannel_RefusesAToneOutsideThePrintedDigitRange(t *testi
 				if e.Field != tt.field || e.Value != uint64(v) || e.Max != fx.MaxToneDeciHz {
 					t.Errorf("OutOfDomainError = %+v, want {%s, %d, %d}", e, tt.field, v, fx.MaxToneDeciHz)
 				}
-				if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+				if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 					t.Errorf("%d frames reached the port, want none", len(frames))
 				}
 			})
@@ -467,14 +468,14 @@ func (fx Fixture) tNumericRefusalIsDefenceInDepthNotTheGate(t *testing.T) {
 			"the wire. Rewrite this test to assert the REFUSAL, and update doc.go's deferred-gap section.\n"+
 			"frame: %s", HexFrames([][]byte{frame}))
 	}
-	s, p := fx.writeSession(t, fx.ackingRadio())
+	s, p := fx.writeSession(t, fx.AckingRadio())
 	openFrames := len(p.Transcript())
 	ch := fx.GoodChannel("042")
 	ch.Data.FreqHz = 70_000_000
 	if _, err := s.WriteChannel(t.Context(), ch); !errors.Is(err, driver.ErrOutOfDomain) {
 		t.Errorf("the DRIVER admitted 70 MHz too (%v); the gate does not bound it, so this refusal is the only one there is", err)
 	}
-	if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+	if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 		t.Errorf("%d frames reached the port, want none", len(frames))
 	}
 }
@@ -525,7 +526,7 @@ func (fx Fixture) tRequestedFields_EveryConditionalAppearsWhenKnown(t *testing.T
 func (fx Fixture) tWriteChannel_EveryConditionalIsRefusedByTheGate(t *testing.T) {
 	for _, tt := range fx.conditionalCases() {
 		t.Run(string(tt.field), func(t *testing.T) {
-			s, p := fx.writeSession(t, fx.ackingRadio())
+			s, p := fx.writeSession(t, fx.AckingRadio())
 			openFrames := len(p.Transcript())
 			ch := fx.GoodChannel("042")
 			tt.set(ch.Data)
@@ -544,7 +545,7 @@ func (fx Fixture) tWriteChannel_EveryConditionalIsRefusedByTheGate(t *testing.T)
 			if len(res.Steps) != 0 {
 				t.Errorf("Steps = %+v, want empty", res.Steps)
 			}
-			if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+			if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 				t.Errorf("%d frames reached the port, want none:\n  %s", len(frames), HexFrames(frames))
 			}
 		})
@@ -613,7 +614,7 @@ func (fx Fixture) tWriteChannel_RefusesANonKnownMandatoryField(t *testing.T) {
 		{"tag is longer than the name span", spec.FieldTag, func(d *codeplug.ChannelData) { d.Tag = "ELEVENCHARS" }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			s, p := fx.writeSession(t, fx.ackingRadio())
+			s, p := fx.writeSession(t, fx.AckingRadio())
 			openFrames := len(p.Transcript())
 			ch := fx.GoodChannel("042")
 			tt.set(ch.Data)
@@ -629,7 +630,7 @@ func (fx Fixture) tWriteChannel_RefusesANonKnownMandatoryField(t *testing.T) {
 			if len(res.Steps) != 0 {
 				t.Errorf("Steps = %+v, want empty", res.Steps)
 			}
-			if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+			if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 				t.Errorf("%d frames reached the port, want ZERO - this rung is locally decidable and precedes the preservation read (T5)", len(frames))
 			}
 		})
@@ -654,7 +655,7 @@ func (fx Fixture) tWriteChannel_UpdateCarriesTheJustReadToneWhenNotKnown(t *test
 		}(), []byte{0x00, 0x29, 0x99, 0x00, 0x00, 0x01}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			img := fx.ackingRadio()
+			img := fx.AckingRadio()
 			img.Records[42] = tt.prior
 			s, p := fx.writeSession(t, img)
 			openFrames := len(p.Transcript())
@@ -666,7 +667,7 @@ func (fx Fixture) tWriteChannel_UpdateCarriesTheJustReadToneWhenNotKnown(t *test
 			if _, err := s.WriteChannel(t.Context(), ch); err != nil {
 				t.Fatalf("WriteChannel: %v", err)
 			}
-			frames := fx.framesAfterOpen(t, p, openFrames)
+			frames := fx.FramesAfterOpen(t, p, openFrames)
 			if len(frames) != 2 {
 				t.Fatalf("the write put %d frames on the wire, want 2:\n  %s", len(frames), HexFrames(frames))
 			}
@@ -694,7 +695,7 @@ func (fx Fixture) tWriteChannel_CreateWithoutToneIsRefused(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			img := fx.ackingRadio()
+			img := fx.AckingRadio()
 			delete(img.Records, 42)
 			s, p := fx.writeSession(t, img)
 			openFrames := len(p.Transcript())
@@ -715,7 +716,7 @@ func (fx Fixture) tWriteChannel_CreateWithoutToneIsRefused(t *testing.T) {
 			if len(res.Steps) != 0 {
 				t.Errorf("Steps = %+v, want empty", res.Steps)
 			}
-			frames := fx.framesAfterOpen(t, p, openFrames)
+			frames := fx.FramesAfterOpen(t, p, openFrames)
 			if len(frames) != 1 {
 				t.Errorf("the refused CREATE put %d frames on the wire, want exactly 1 (the preservation read):\n  %s", len(frames), HexFrames(frames))
 			}
@@ -723,7 +724,7 @@ func (fx Fixture) tWriteChannel_CreateWithoutToneIsRefused(t *testing.T) {
 	}
 }
 func (fx Fixture) tWriteChannel_CreateWithEveryValueSucceeds(t *testing.T) {
-	img := fx.ackingRadio()
+	img := fx.AckingRadio()
 	delete(img.Records, 42)
 	s, p := fx.writeSession(t, img)
 	openFrames := len(p.Transcript())
@@ -735,7 +736,7 @@ func (fx Fixture) tWriteChannel_CreateWithEveryValueSucceeds(t *testing.T) {
 	if !res.Steps[0].Sent || !res.Steps[0].Confirmed {
 		t.Errorf("Steps = %+v, want a sent, confirmed write", res.Steps)
 	}
-	frames := fx.framesAfterOpen(t, p, openFrames)
+	frames := fx.FramesAfterOpen(t, p, openFrames)
 	if len(frames) != 2 {
 		t.Fatalf("the write put %d frames on the wire, want 2:\n  %s", len(frames), HexFrames(frames))
 	}
@@ -750,7 +751,7 @@ func (fx Fixture) tWriteChannel_ScanEdgesWriteThroughTheSameForm(t *testing.T) {
 		lo   byte
 	}{{"P1", 0x01, 0x00}, {"P2", 0x01, 0x01}} {
 		t.Run(tt.slot, func(t *testing.T) {
-			img := fx.ackingRadio()
+			img := fx.AckingRadio()
 			a, _, _ := fx.slotToAddress(tt.slot)
 			img.Records[a.Channel] = fx.Golden
 			s, p := fx.writeSession(t, img)
@@ -759,7 +760,7 @@ func (fx Fixture) tWriteChannel_ScanEdgesWriteThroughTheSameForm(t *testing.T) {
 			if _, err := s.WriteChannel(t.Context(), fx.GoodChannel(tt.slot)); err != nil {
 				t.Fatalf("WriteChannel %s: %v", tt.slot, err)
 			}
-			frames := fx.framesAfterOpen(t, p, openFrames)
+			frames := fx.FramesAfterOpen(t, p, openFrames)
 			if len(frames) != 2 {
 				t.Fatalf("the write put %d frames on the wire, want 2", len(frames))
 			}
@@ -802,7 +803,7 @@ func (fx Fixture) tWriteChannel_RefusesAValueOutsideThisRadiosVocabulary(t *test
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			s, p := fx.writeSession(t, fx.ackingRadio())
+			s, p := fx.writeSession(t, fx.AckingRadio())
 			openFrames := len(p.Transcript())
 			ch := fx.GoodChannel("042")
 			tt.set(ch.Data)
@@ -818,7 +819,7 @@ func (fx Fixture) tWriteChannel_RefusesAValueOutsideThisRadiosVocabulary(t *test
 			if len(res.Steps) != 0 {
 				t.Errorf("Steps = %+v, want empty", res.Steps)
 			}
-			if frames := fx.framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+			if frames := fx.FramesAfterOpen(t, p, openFrames); len(frames) != 0 {
 				t.Errorf("%d frames reached the port:\n  %s\nwant ZERO - T5 names vocabularies among the refusals that precede ALL wire traffic, so the builder must never be the first detector", len(frames), HexFrames(frames))
 			}
 		})

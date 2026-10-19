@@ -62,7 +62,6 @@ matrix §1
 matrix §1b
 matrix §2
 matrix §3.1
-matrix §3.2
 matrix §3.4
 matrix §3.13
 matrix §3.14
