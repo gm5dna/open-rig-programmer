@@ -3,6 +3,7 @@
 package ftdx10
 
 //go:generate go run github.com/gm5dna/open-rig-programmer/internal/extable/gen -profile ftdx10
+//go:generate go run github.com/gm5dna/open-rig-programmer/internal/extable/gen -profile ftdx10write
 
 // The generated exinventory_gen.go declares exactly one identifier:
 //
