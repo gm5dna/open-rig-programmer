@@ -36,13 +36,12 @@ func composeBaseline(t *testing.T, model string) (driver.Session, *clone.Service
 }
 
 // TestCompose_ReadAllToReadBack_PerEngine runs ReadAll, PrepareSend, Execute
-// and an independent session read-back for the FT-710 and FT-450D write
-// engines. The FT-991A's own round trip is
-// TestOpenFakeSessionFor_FT991ACloneWriteVerifyRoundTrip. The IC-7610 (its
-// fake seeds no channel) and TS-590S (A9 refuses every MEM write) cannot
-// compose from their default fakes; see the lane report.
+// and an independent session read-back for the FT-710, FT-450D and TS-890S
+// write engines (the TS-590S is not used: its A9 rung, core/driver/ts590/
+// write.go, deliberately refuses every MEM write until trialled). The
+// FT-991A's own round trip is TestOpenFakeSessionFor_FT991ACloneWriteVerifyRoundTrip.
 func TestCompose_ReadAllToReadBack_PerEngine(t *testing.T) {
-	for _, model := range []string{DefaultModel, FT450DModel} {
+	for _, model := range []string{DefaultModel, FT450DModel, TS890SModel} {
 		t.Run(model, func(t *testing.T) {
 			if model == FT450DModel {
 				// The default image populates only PMS pair 1, which its own
@@ -142,5 +141,75 @@ func TestCompose_CloneModeHasNoWriteSession(t *testing.T) {
 		if !errors.As(err, &unk) {
 			t.Errorf("OpenFakeSessionFor(%q) = %v, want *UnknownModelError", model, err)
 		}
+	}
+}
+
+// TestCompose_ReadAllToReadBack_IC7610Add is the Icom engine's round trip.
+// Its fake seeds no channel, so the send ADDS one to an empty MEM slot.
+func TestCompose_ReadAllToReadBack_IC7610Add(t *testing.T) {
+	ctx := testCtx(t)
+	sess, service, baseline := composeBaseline(t, IC7610Model)
+	caps := sess.Capabilities()
+
+	var slot string
+	for _, ch := range baseline.Channels {
+		if b, _ := caps.BankOf(ch.Slot); ch.Data == nil && b == spec.BankMemory {
+			slot = ch.Slot
+			break
+		}
+	}
+	if slot == "" {
+		t.Fatal("the default image has no empty MEM slot")
+	}
+	after := codeplug.ChannelData{
+		FreqHz:   14_250_000,
+		Mode:     "USB",
+		Tag:      "HOME QTH01",
+		Filter:   codeplug.StringField{State: codeplug.Known, Value: "FIL1"},
+		ToneMode: codeplug.StringField{State: codeplug.Known, Value: "TONE"},
+		ToneTx:   codeplug.ToneField{State: codeplug.Known, Value: 885},
+		ToneRx:   codeplug.ToneField{State: codeplug.Known, Value: 1000},
+
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		TagDisplay: codeplug.BoolField{State: codeplug.Unknown},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+	}
+	file := &codeplug.Codeplug{Schema: baseline.Schema, Radio: baseline.Radio}
+	file.Channels = append(file.Channels, baseline.Channels...)
+	for i := range file.Channels {
+		if file.Channels[i].Slot == slot {
+			file.Channels[i].Data = &after
+		}
+	}
+
+	plan, err := service.PrepareSend(ctx, file)
+	if err != nil {
+		t.Fatalf("PrepareSend: %v", err)
+	}
+	var added int
+	for _, e := range plan.Diff().Entries {
+		if e.Blocked {
+			t.Fatalf("slot %q Blocked: %s", e.Slot, e.BlockReason)
+		}
+		if e.Kind == codeplug.DiffAdded {
+			added++
+		}
+	}
+	if added != 1 {
+		t.Fatalf("Added entries = %d, want 1", added)
+	}
+	report, err := service.Execute(ctx, plan, plan.ConfirmationDigest())
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if report.Aborted || report.Written != 1 || report.Verified != 1 {
+		t.Fatalf("Aborted=%v (%s) Written=%d Verified=%d, want not aborted, 1, 1", report.Aborted, report.AbortReason, report.Written, report.Verified)
+	}
+	got, err := sess.ReadChannel(ctx, slot)
+	if err != nil || got.Data == nil {
+		t.Fatalf("ReadChannel(%q) after the send: %v, data %v", slot, err, got.Data)
+	}
+	if got.Data.FreqHz != after.FreqHz || got.Data.Mode != after.Mode || got.Data.Tag != after.Tag {
+		t.Errorf("read-back %d %q %q, want %d %q %q", got.Data.FreqHz, got.Data.Mode, got.Data.Tag, after.FreqHz, after.Mode, after.Tag)
 	}
 }
