@@ -120,8 +120,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		}
 	}
 
-	if field, err := driver.CheckFieldStates(s.caps, *ch.Data); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
+	if refusal := driver.RefuseIncoherentFields(ch.Slot, s.caps, *ch.Data); refusal != nil {
+		return res, refusal
 	}
 
 	var unwritable []spec.Field

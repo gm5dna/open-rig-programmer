@@ -202,8 +202,8 @@ func WriteChannel(ctx context.Context, eng *transport.Engine, dialect cat.Dialec
 		}
 	}
 
-	if field, err := driver.CheckFieldStates(caps, *ch.Data); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
+	if refusal := driver.RefuseIncoherentFields(ch.Slot, caps, *ch.Data); refusal != nil {
+		return res, refusal
 	}
 
 	var unwritable []spec.Field

@@ -354,3 +354,34 @@ func TestCheckFieldStates_VocabularyIsFieldSpecific(t *testing.T) {
 		})
 	}
 }
+
+// TestRefuseIncoherentFields_NamesEveryFailingField pins the multi-field
+// refusal and that a single failing field keeps its reason verbatim.
+func TestRefuseIncoherentFields_NamesEveryFailingField(t *testing.T) {
+	d := codeplug.ChannelData{
+		ScanSkip: codeplug.BoolField{State: codeplug.Unknown, Value: true},
+		IPPlus:   codeplug.BoolField{State: codeplug.Unknown, Value: true},
+	}
+	r := driver.RefuseIncoherentFields("001", walkCaps(), d)
+	if r == nil {
+		t.Fatal("RefuseIncoherentFields = nil, want a refusal")
+	}
+	if len(r.Fields) != 2 || r.Fields[0] != spec.FieldScanSkip || r.Fields[1] != spec.FieldIPPlus {
+		t.Errorf("Fields = %v, want [ScanSkip IPPlus]", r.Fields)
+	}
+	for _, f := range []spec.Field{spec.FieldScanSkip, spec.FieldIPPlus} {
+		if !strings.Contains(r.Reason, string(f)+": ") {
+			t.Errorf("Reason %q does not name %s", r.Reason, f)
+		}
+	}
+
+	d.IPPlus = codeplug.BoolField{}
+	one := driver.RefuseIncoherentFields("001", walkCaps(), d)
+	_, err := driver.CheckFieldStates(walkCaps(), d)
+	if one == nil || len(one.Fields) != 1 || one.Reason != err.Error() {
+		t.Errorf("single failure = %+v, want one field with CheckFieldStates' reason %q", one, err)
+	}
+	if driver.RefuseIncoherentFields("001", walkCaps(), codeplug.ChannelData{}) != nil {
+		t.Error("coherent channel refused")
+	}
+}

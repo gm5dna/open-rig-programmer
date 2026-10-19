@@ -333,6 +333,18 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "must have zero Value",
 		},
 		{
+			// One refusal names every incoherent field, in declaration
+			// order, rather than the first alone.
+			name: "three incoherent fields are refused once, naming all three",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.ScanSkip = codeplug.BoolField{State: codeplug.Unknown, Value: true}
+				d.IPPlus = codeplug.BoolField{State: codeplug.Unknown, Value: true}
+				d.TagDisplay = codeplug.BoolField{State: codeplug.Unavailable, Value: true}
+			}),
+			fields: []spec.Field{spec.FieldTagDisplay, spec.FieldScanSkip, spec.FieldIPPlus},
+			reason: "; ",
+		},
+		{
 			// MEDIUM-1's "a bogus FieldState value" case: a State no
 			// FieldState constant names. Nothing past this rung — not the
 			// capability gate, not buildWriteCommand — inspects State for
