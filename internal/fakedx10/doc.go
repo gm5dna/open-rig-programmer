@@ -105,9 +105,9 @@
 // is the template to copy — and copying it is the right move, per the sibling
 // section above.
 //
-// EX SET. Reads are modelled (ex.go); the Set direction is not, exactly as
-// fakeradio does not model it (its own register item 24). A set-shaped EX body
-// draws "?;" — register entry 17.
+// EX SET. Reads and Sets are modelled (ex.go), the Set from the manual: an
+// accepted Set is silent, a wrong-width or unknown-address Set draws "?;" —
+// register entry 17.
 //
 // TIMING. Every reply is near-instant unless WithLatency says otherwise. No
 // FTdx10 timing has ever been observed by this project, so there is nothing
@@ -418,19 +418,17 @@
 //     shape of "I have no such item" and is what core/driver/ftdx10's settings
 //     reader maps to driver.SettingUnavailable.
 //
-//     The second is a deliberate MODELLING GAP, KNOWN-DIVERGENT from the
-//     documented grammar rather than a hardware claim: the manual documents an
-//     EX Set form and this fake does not implement it, so a valid address
-//     followed by a P4 payload ("EX0101011;") is simply a too-long body to
-//     handleEX and falls through the same length check to the same NAK. The
-//     menu surface is READ-ONLY for v1.x by the M8d decision of 25/07/2026
-//     (docs/menu-write-decision.md), so nothing in this project sends one.
-//     STAGE R LIFTS THE FIRST WITH: one EX read of 050101 and one of a P3 past
-//     a subgroup's end, on a real FTdx10 — an answer rather than "?;" would
-//     mean the grammar block's range is real and the chart is incomplete,
-//     which is a finding for the dialect as much as for this fake. A STAGE W
-//     capture would be needed for the second, and none is planned while the
-//     menu surface stays read-only.
+//     The second is the EX Set arm, written from the manual's EX frames
+//     (rev 2308-F, 636-645; Set and Answer share one shape): a Set whose P4
+//     width equals the stored value's width is accepted silently for ANY
+//     inventory address and updates the stored value; an unknown address, a
+//     malformed body or a wrong width draws "?;". THE LIMIT: this fake's
+//     widths (transcription B) ARE the paper widths the dialect's paper table
+//     uses, so a fake built on the same assumption cannot catch a TONE
+//     FREQ-style Digits error (hardware refused a width the manual printed).
+//     Tests against it prove the plumbing, not the radio; whether a real
+//     FTdx10 refuses a wrong width is unknown (spec v2 §3.4). The project's
+//     denylist is policy, tested at the gate, never modelled here.
 //     (ex.go: handleEX)
 //
 //  18. THE "?;" REJECTION CONVENTION ITSELF IS INHERITED, AND THIS MANUAL

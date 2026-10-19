@@ -138,21 +138,37 @@ func TestEXRead_LowerCaseCommandAccepted(t *testing.T) {
 	}
 }
 
-// --- Set-shaped bodies: not modelled ---
+// --- Sets (register entry 17, second half) ---
 
-// TestEXSetShaped_NotModelled is register entry 17's second half. "EX0101011;"
-// is shaped like a real Set frame (address "010101" + a P4 digit "1"), and
-// handleEX rejects any non-six-digit body uniformly, so it draws "?;" — and,
-// critically, WITHOUT applying the write. This is a deliberate modelling gap (the
-// manual documents a Set form), not a claim that a real FTdx10 refuses EX Set.
-func TestEXSetShaped_NotModelled(t *testing.T) {
+// TestEXSet_AcceptedIsSilentAndVisibleToARead: "EX010101+02;" is a Set of AF
+// TREBLE GAIN (Digits 3); it draws no reply and a following read returns it.
+func TestEXSet_AcceptedIsSilentAndVisibleToARead(t *testing.T) {
 	r, conn := newTestRadio(t)
-	writeFrame(t, conn, "EX0101011;")
-	if got, want := mustReadFrame(t, conn), "?;"; got != want {
-		t.Errorf("EX0101011; (set-shaped) -> %q, want %q", got, want)
+	writeFrame(t, conn, "EX010101+02;")
+	assertNoReply(t, conn)
+	if got, ok := r.EXState("010101"); !ok || got != "+02" {
+		t.Errorf("EXState(\"010101\") = %q, %v, want \"+02\", true", got, ok)
 	}
-	if got, ok := r.EXState("010101"); !ok || got != "000" {
-		t.Errorf("EXState(\"010101\") after a rejected set-shaped body = %q, %v, want \"000\", true (state unchanged)", got, ok)
+	if got, want := exchange(t, conn, "EX010101;"), "EX010101+02;"; got != want {
+		t.Errorf("read after Set -> %q, want %q", got, want)
+	}
+}
+
+// TestEXSet_Rejections: a wrong width (the old set-shaped "EX0101011;"), an
+// unknown address and a malformed body all draw "?;" and leave state alone.
+func TestEXSet_Rejections(t *testing.T) {
+	for _, send := range []string{
+		"EX0101011;",         // width 1 against a Digits-3 item
+		"EX0101010000;",      // width 4 against a Digits-3 item
+		"EX050101000;",       // unknown address (no P1=05 group)
+		"EX010199000;",       // P3 past the subgroup's end
+		"EX01010\x01\x0200;", // control bytes in the payload
+	} {
+		r, conn := newTestRadio(t)
+		assertRejected(t, conn, send)
+		if got, ok := r.EXState("010101"); !ok || got != "000" {
+			t.Errorf("%q changed state: EXState = %q, %v", send, got, ok)
+		}
 	}
 }
 
