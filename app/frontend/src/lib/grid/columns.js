@@ -63,7 +63,7 @@ export const COLUMNS = [
  * @property {string} field   the spec.Field this column is, and decorates from
  * @property {string} key     the ChannelData key it edits
  * @property {'freq'|'tone'|'int'|'bool'|'text'} kind   how its value is rendered and parsed
- * @property {string} [vocab]   the UISpecView field a select-kind editor reads its
+ * @property {'AntennaOptions'|'DTCSPolarities'|'DuplexOptions'|'Filters'|'PreampOptions'|'ToneModeOptions'|'TuningSteps'} [vocab]   the UISpecView field a select-kind editor reads its
  *   option list from, for a `text`-kind column whose vocabulary GetUISpec serves.
  *   Free text remains the fallback when the radio's own list is empty
  *   (ChannelGrid.svelte's tierTextColumn) — see that file's comment for why.
