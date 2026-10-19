@@ -518,10 +518,11 @@ type UISpecView struct {
 // GetSettings/ReadSettingsRadio's SettingEntryView.ID addresses. Display is
 // the driver's own human-facing rendering of the setting's position (e.g.
 // the FT-710's "01-01-01", driver.SettingItem.Display's own value) — for
-// display only, never re-parsed as an ID. Editable mirrors driver.
-// SettingItem.Write == spec.Supported (task g1): true only once a Session
-// W row has hardware-characterised this item's write descriptor (see
-// core/driver/settings.go's doc comment — R1, no consent parameter). The
+// display only, never re-parsed as an ID. Editable mirrors whether driver.
+// SettingItem.Write satisfies FieldSupport.CanWrite (task g1): Supported once
+// a Session W row has hardware-characterised this item's write descriptor,
+// or ConsentedUnverified once the user has given a menu-write consent for a
+// paper-width item (see core/driver/settings.go's doc comment). The
 // frontend's SettingsViewer renders an editable item's Value cell as an
 // input (task g2); every other item stays plain text.
 type SettingItemView struct {

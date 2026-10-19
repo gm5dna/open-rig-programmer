@@ -70,7 +70,7 @@ func DisplayP1P2P3(a cat.EXAddress) string {
 // returns the P4 body verbatim. That is why the printing defects the
 // per-radio doc.go files record in their manuals' value legends do not
 // bite this surface: nothing here interprets a legend.
-func BuildDescriptor(dialect cat.Dialect, p *Params) driver.SettingsDescriptor {
+func BuildDescriptor(dialect cat.Dialect, p *Params, paperLabel spec.Support) driver.SettingsDescriptor {
 	group := p.Group
 	if group == nil {
 		group = GroupNested
@@ -99,7 +99,7 @@ func BuildDescriptor(dialect cat.Dialect, p *Params) driver.SettingsDescriptor {
 			ID:      dialect.EXWire(it.Addr),
 			Label:   it.Name,
 			Display: display(it.Addr),
-			Write:   writeSupport(dialect, it.Addr),
+			Write:   writeSupport(dialect, it.Addr, paperLabel),
 		})
 	}
 
@@ -114,13 +114,19 @@ func BuildDescriptor(dialect cat.Dialect, p *Params) driver.SettingsDescriptor {
 // other four: every one of their items mints Unverified, exercised by
 // TestYaesuBuildDescriptor_OtherFourDialectsMintUnverified. It mints
 // nothing above Unverified until a dialect's own write descriptor has a
-// non-zero ObservedSetWidth row for the address — never guessed, never a
-// dialect == FT710 literal.
-func writeSupport(dialect cat.Dialect, addr cat.EXAddress) spec.Support {
-	if dialect.CanSetEX(addr) {
-		return spec.Supported
+// non-zero Set width for the address — never guessed, never a dialect ==
+// FT710 literal. A width taken from the manual rather than a hardware
+// observation (a paper dialect) mints paperLabel instead of Supported:
+// ConsentedUnverified for a consented real session, Supported for
+// Simulated; the dialects that are never paper pass spec.Supported, unused.
+func writeSupport(dialect cat.Dialect, addr cat.EXAddress, paperLabel spec.Support) spec.Support {
+	switch {
+	case !dialect.CanSetEX(addr):
+		return spec.Unverified
+	case dialect.EXWritePaper():
+		return paperLabel
 	}
-	return spec.Unverified
+	return spec.Supported
 }
 
 // EXSpec is the transport spec for an EX read of addr.

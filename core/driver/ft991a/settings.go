@@ -8,6 +8,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -39,7 +40,7 @@ var ft991aSettingsDescriptor = buildSettingsDescriptor(catDialect)
 // holding a single group rather than inventing a partition the manual
 // does not have, and the item Display is the wire address.
 func buildSettingsDescriptor(dialect cat.Dialect) driver.SettingsDescriptor {
-	return yaesu.BuildDescriptor(dialect, &params)
+	return yaesu.BuildDescriptor(dialect, &params, spec.Supported)
 }
 
 // SettingsDescriptor returns the FT-991A's radio-neutral settings

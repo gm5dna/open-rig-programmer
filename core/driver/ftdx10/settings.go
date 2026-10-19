@@ -8,6 +8,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -41,7 +42,7 @@ var ftdx10SettingsDescriptor = buildSettingsDescriptor(catDialect)
 // P1 in {01,02,03,04}, 18 groups) is written into it: they are properties
 // of the inventory, asserted in settings_test.go against the dialect.
 func buildSettingsDescriptor(dialect cat.Dialect) driver.SettingsDescriptor {
-	return yaesu.BuildDescriptor(dialect, &params)
+	return yaesu.BuildDescriptor(dialect, &params, spec.Supported)
 }
 
 // SettingsDescriptor returns the FTdx10's radio-neutral settings

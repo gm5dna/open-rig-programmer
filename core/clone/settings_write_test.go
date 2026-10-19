@@ -251,3 +251,37 @@ func TestExecute_SettingsWriteThenVerify(t *testing.T) {
 		}
 	}
 }
+
+// TestPrepareSend_SettingsDeltaIncludesConsentedUnverified: a menu item
+// minted ConsentedUnverified (a menu-write consent) is read and diffed like
+// a Supported one; an Unverified neighbour is not.
+func TestPrepareSend_SettingsDeltaIncludesConsentedUnverified(t *testing.T) {
+	const consented, unverified = "010101", "010102"
+	sess := &settingsWriteStubSession{
+		caps: spec.Capabilities{Model: "STUB-1"},
+		descriptor: driver.SettingsDescriptor{
+			Version: "stub@1",
+			Menus: []driver.SettingMenu{{ID: "01", Label: "M1", Groups: []driver.SettingGroup{{ID: "0101", Label: "G1", Items: []driver.SettingItem{
+				{ID: consented, Label: "A", Write: spec.ConsentedUnverified},
+				{ID: unverified, Label: "B", Write: spec.Unverified},
+			}}}}},
+		},
+		readSetting: func(ctx context.Context, id string) (driver.SettingValue, error) {
+			return driver.SettingValue{ID: id, State: driver.SettingKnown, Raw: "111"}, nil
+		},
+	}
+	file := settingsWriteStubCodeplug("STUB-1", &codeplug.MenuSnapshot{
+		Descriptor: "stub@1", Complete: true,
+		Entries: []codeplug.MenuEntry{
+			{ID: consented, Value: "222", State: codeplug.MenuKnown},
+			{ID: unverified, Value: "333", State: codeplug.MenuKnown},
+		},
+	})
+	plan, err := NewService(sess, newStore(t)).PrepareSend(testCtx(t), file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan.Settings(); len(got) != 1 || got[0].ID != consented {
+		t.Errorf("Settings() = %+v, want only %s", got, consented)
+	}
+}

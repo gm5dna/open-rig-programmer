@@ -73,12 +73,12 @@ type SettingItem struct {
 	// Write reports this item's write-gate state: spec.Supported once a
 	// Session W row has characterised it (this radio's write
 	// descriptor's Width != 0 — see cat.Dialect.CanSetEX), spec.
-	// Unverified otherwise (including every setting on a radio with no
-	// write descriptor at all). No other spec.Support value is ever
-	// minted here: a menu setting is not Session-consented
-	// (SettingsWriter has no consent parameter — R1) and never Inert or
-	// Unsupported by construction, since only a known inventory member
-	// reaches BuildDescriptor's loop.
+	// ConsentedUnverified for a paper-width item on a session that was
+	// given a MENU-write consent (never from channel consent; a Simulated
+	// session mints Supported instead), spec.Unverified otherwise
+	// (including every setting on a radio with no write descriptor at
+	// all). Never Inert or Unsupported by construction, since only a known
+	// inventory member reaches BuildDescriptor's loop.
 	Write spec.Support
 }
 
@@ -327,14 +327,13 @@ func (e *SettingVerifyMismatchError) Error() string {
 //
 // NO CONSENT PARAMETER (ruling R1, spec §4): unlike a channel write,
 // there is no settingsCanWrite predicate and no consented argument here.
-// A radio's write descriptor admits an address the moment its own
-// hardware characterisation (Session W) exists, and FieldSupport.
-// CanWrite's usual second key — ConsentedUnverified, recorded user
-// consent standing in for missing hardware evidence — has nothing to
-// stand on for a menu setting: the only paper source is the manual's
-// Table 2 chart, already proven untrustworthy. WriteSetting therefore
-// gates on one fact alone, a driver-specific equivalent of
-// SettingItem.Write == spec.Supported.
+// The consent, where there is one, lives in the dialect the session was
+// opened with: a radio's write descriptor admits an address once its own
+// hardware characterisation (Session W) exists, or, for a paper dialect,
+// only on a session opened after a MENU-write consent (never the channel
+// consent; ConsentedUnverified on a settings item means that and nothing
+// else). WriteSetting therefore gates on one fact alone, a driver-specific
+// equivalent of FieldSupport.CanWrite on SettingItem.Write.
 type SettingsWriter interface {
 	// WriteSetting writes value to the setting named by id, then
 	// verifies it: id that does not name a known item, or a known item

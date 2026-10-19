@@ -226,17 +226,18 @@ func (a *App) ReadSettingsRadio() (SettingsView, error) {
 	return view, nil
 }
 
-// settingEditable reports whether id names an item in d whose Write ==
-// spec.Supported — the single fact SettingItemView.Editable (types.go) and
+// settingEditable reports whether id names an item in d whose Write
+// satisfies FieldSupport.CanWrite (Supported, or ConsentedUnverified after a
+// menu-write consent) — the single fact SettingItemView.Editable (types.go) and
 // WriteSetting's own pre-flight gate both key off (see driver.
-// SettingsWriter's doc comment: no consent parameter, R1 — this is the
-// whole gate). An id absent from d altogether is not editable either.
+// SettingsWriter's doc comment: the consent is already baked into the
+// descriptor's label — this is the whole gate). An id absent from d altogether is not editable either.
 func settingEditable(d driver.SettingsDescriptor, id string) bool {
 	for _, m := range d.Menus {
 		for _, g := range m.Groups {
 			for _, it := range g.Items {
 				if it.ID == id {
-					return it.Write == spec.Supported
+					return spec.FieldSupport{Write: it.Write}.CanWrite()
 				}
 			}
 		}
@@ -247,8 +248,8 @@ func settingEditable(d driver.SettingsDescriptor, id string) bool {
 // SettingNotEditableError is WriteSetting's typed pre-flight refusal for
 // an id that is not currently writable — absent from the connected
 // session's own settings descriptor, or present but not yet
-// hardware-characterised (SettingItem.Write != spec.Supported, R1's
-// no-consent-parameter gate). Returned BEFORE any wire traffic: the
+// writable (SettingItem.Write fails FieldSupport.CanWrite: no write width, or
+// a paper width with no menu-write consent). Returned BEFORE any wire traffic: the
 // driver's own WriteSetting is never called for an id this fails.
 type SettingNotEditableError struct {
 	// ID is the offending setting ID.
@@ -256,7 +257,7 @@ type SettingNotEditableError struct {
 }
 
 func (e *SettingNotEditableError) Error() string {
-	return fmt.Sprintf("app: setting %q is not currently editable (no hardware write characterisation yet)", e.ID)
+	return fmt.Sprintf("app: setting %q is not currently editable (no write width, or no menu-write consent)", e.ID)
 }
 
 // WriteSetting writes value to the connected radio's setting id, then
