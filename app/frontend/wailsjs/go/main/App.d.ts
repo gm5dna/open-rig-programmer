@@ -59,6 +59,8 @@ export function SaveFile(arg1:string):Promise<void>;
 
 export function SaveFileAs():Promise<string>;
 
+export function SetMenuWriteConsent(arg1:string,arg2:boolean):Promise<void>;
+
 export function SetUnverifiedWriteConsent(arg1:string,arg2:boolean):Promise<void>;
 
 export function UpdateChannel(arg1:codeplug.Channel):Promise<main.EditResult>;

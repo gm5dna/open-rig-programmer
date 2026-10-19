@@ -114,6 +114,10 @@ export function SaveFileAs() {
   return window['go']['main']['App']['SaveFileAs']();
 }
 
+export function SetMenuWriteConsent(arg1, arg2) {
+  return window['go']['main']['App']['SetMenuWriteConsent'](arg1, arg2);
+}
+
 export function SetUnverifiedWriteConsent(arg1, arg2) {
   return window['go']['main']['App']['SetUnverifiedWriteConsent'](arg1, arg2);
 }

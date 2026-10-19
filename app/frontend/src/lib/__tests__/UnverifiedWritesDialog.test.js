@@ -23,12 +23,14 @@ import UnverifiedWritesDialog from '../UnverifiedWritesDialog.svelte'
 vi.mock('../bridge/bindings.js', () => ({
 	applyUnverifiedWriteConsent: vi.fn().mockResolvedValue(undefined),
 	refreshUnverifiedConsents: vi.fn().mockResolvedValue([]),
+	setMenuWriteConsent: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { applyUnverifiedWriteConsent, refreshUnverifiedConsents } from '../bridge/bindings.js'
+import { applyUnverifiedWriteConsent, refreshUnverifiedConsents, setMenuWriteConsent } from '../bridge/bindings.js'
 
 const applyMock = vi.mocked(applyUnverifiedWriteConsent)
 const refreshMock = vi.mocked(refreshUnverifiedConsents)
+const menuMock = vi.mocked(setMenuWriteConsent)
 
 /** internal/radiotext.UnverifiedWriteWarningTemplate's real shape, filled
  * for one radio — the text Go serves and this dialogue must render
@@ -55,6 +57,7 @@ beforeEach(() => {
 	vi.clearAllMocks()
 	applyMock.mockResolvedValue(undefined)
 	refreshMock.mockResolvedValue([])
+	menuMock.mockResolvedValue(undefined)
 })
 
 describe('arming mode', () => {
@@ -255,5 +258,55 @@ describe('grants panel (manage mode)', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Close' }))
 
 		expect(appState.unverifiedGrantsOpen).toBe(false)
+	})
+})
+
+describe('menu (EX) write line (manage mode)', () => {
+	const MENU_WARNING = 'No FTdx radio has been tested: no FTdx10 has ever been written to by this project.'
+	const MENU_ROWS = [
+		{ Model: 'FT-710', NeedsConsent: false, Granted: false, Recorded: false, Warning: '', MenuNeedsConsent: false },
+		{
+			Model: 'FTdx10',
+			NeedsConsent: true,
+			Granted: true,
+			Recorded: true,
+			Warning: 'w',
+			MenuNeedsConsent: true,
+			MenuGranted: false,
+			MenuRecorded: false,
+			MenuWarning: MENU_WARNING,
+		},
+	]
+
+	it('renders only for eligible models, with the backend warning verbatim and the next-connection note', () => {
+		appState.unverifiedConsents = MENU_ROWS
+		render(UnverifiedWritesDialog, { mode: 'manage' })
+
+		expect(screen.getAllByText('Menu (EX) writes')).toHaveLength(1)
+		expect(screen.queryByLabelText('Menu (EX) writes for FT-710')).toBeNull()
+		expect(screen.getByTestId('menu-warning-FTdx10').textContent).toBe(MENU_WARNING)
+		expect(screen.getByTestId('menu-state-FTdx10').textContent).toContain('next connection')
+	})
+
+	it('toggling calls the binding with the model and the new state, independent of the channel toggle', async () => {
+		appState.unverifiedConsents = MENU_ROWS
+		render(UnverifiedWritesDialog, { mode: 'manage' })
+
+		await fireEvent.click(screen.getByLabelText('Menu (EX) writes for FTdx10'))
+
+		expect(menuMock).toHaveBeenCalledWith('FTdx10', true)
+		expect(applyMock).not.toHaveBeenCalled()
+	})
+
+	it('a refusal shows inline and puts the box back', async () => {
+		appState.unverifiedConsents = MENU_ROWS
+		menuMock.mockRejectedValue('userconfig: corrupt')
+		render(UnverifiedWritesDialog, { mode: 'manage' })
+
+		const box = screen.getByLabelText('Menu (EX) writes for FTdx10')
+		await fireEvent.click(box)
+
+		expect(screen.getByText(/userconfig: corrupt/)).toBeInTheDocument()
+		expect(box).not.toBeChecked()
 	})
 })
