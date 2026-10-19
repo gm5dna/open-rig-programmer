@@ -2,6 +2,11 @@
 
 package cat
 
+import (
+	"fmt"
+	"strings"
+)
+
 // This file is HAND-MAINTAINED, not generated: unlike exinventory_gen.go
 // (internal/extable/gen, driven by table2.csv), nothing here is derived
 // mechanically from the CSV. Each predicate below encodes one of the six
@@ -118,4 +123,62 @@ func exWriteDenied(it EXItem) bool {
 		exTXSafetyDenied(p1, p2, p3, it.Name) ||
 		exUnintendedTXSourceDenied(it.Name) ||
 		exTextDenied(it.Text)
+}
+
+// EXWriteDeniedFTdx reports whether it is one of the FTdx10/FTdx101's
+// permanently denied write classes: the CAT/232C link settings, RTS/DTR/DAKY
+// keying (RPTT SELECT, PC KEYING, SHIFT PORT), tuner and antenna routing
+// (TUNER SELECT, ANT3 SELECT), TX power and safety (MAX POWER per band,
+// EMERGENCY FREQ TX, TX TIME OUT TIMER), unintended TX sources (every
+// "... MOD SOURCE", REAR SELECT) and free text. 27 rows on the FTdx10, 28 on
+// the FTdx101. It matches names only, never addresses: positions are
+// per-radio facts (03-04-06 is the FT-710's TX INHIBIT and the FTdx's DATA VOX
+// GAIN), and a held address belongs in the model's own held map. The
+// FT-710's predicates above are untouched.
+func EXWriteDeniedFTdx(it EXItem) bool {
+	switch it.Name {
+	case "232C RATE", "232C TIME OUT TIMER", "CAT RATE", "CAT TIME OUT TIMER", "CAT RTS",
+		"RPTT SELECT", "PC KEYING", "SHIFT PORT",
+		"TUNER SELECT", "ANT3 SELECT",
+		"HF MAX POWER", "50M MAX POWER", "70M MAX POWER", "AM MAX POWER",
+		"EMERGENCY FREQ TX", "TX TIME OUT TIMER",
+		"REAR SELECT":
+		return true
+	}
+	return strings.HasSuffix(it.Name, "MOD SOURCE") || exTextDenied(it.Text)
+}
+
+// FilterEXWrite is the one place a generated write table meets a model's
+// denylist and held map: it returns rows without the denied (deny), held and
+// zero-Domain rows. It fails closed: a row with no matching item, or a held
+// address absent from items, is an error. held maps an address to its reason; a caller panics on
+// the error (a model table is compile-time data).
+func FilterEXWrite(rows []EXWriteItem, items []EXItem, deny func(EXItem) bool, held map[EXAddress]string) ([]EXWriteItem, error) {
+	byAddr := make(map[EXAddress]EXItem, len(items))
+	for _, it := range items {
+		byAddr[it.Addr] = it
+	}
+	for a := range held {
+		if _, ok := byAddr[a]; !ok {
+			return nil, fmt.Errorf("cat: held address %v is not in the inventory", a)
+		}
+	}
+	var out []EXWriteItem
+	for _, r := range rows {
+		it, ok := byAddr[r.Addr]
+		if !ok {
+			return nil, fmt.Errorf("cat: write row %v has no inventory item", r.Addr)
+		}
+		if deny(it) {
+			continue
+		}
+		if _, isHeld := held[r.Addr]; isHeld {
+			continue
+		}
+		if len(r.Domain.Codes) == 0 && r.Domain.Hi == 0 && r.Domain.Lo == 0 {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }

@@ -177,3 +177,48 @@ func containsAll(s string, subs ...string) bool {
 	}
 	return true
 }
+
+// TestEXWriteDeniedFTdx pins the name-only predicate: every denied FTdx name
+// (spec §2.1), every MOD SOURCE prefix, text rows, and that a position alone
+// denies nothing.
+func TestEXWriteDeniedFTdx(t *testing.T) {
+	denied := []string{
+		"232C RATE", "232C TIME OUT TIMER", "CAT RATE", "CAT TIME OUT TIMER", "CAT RTS",
+		"RPTT SELECT", "PC KEYING", "SHIFT PORT", "TUNER SELECT", "ANT3 SELECT",
+		"HF MAX POWER", "50M MAX POWER", "70M MAX POWER", "AM MAX POWER",
+		"EMERGENCY FREQ TX", "TX TIME OUT TIMER", "REAR SELECT",
+		"SSB MOD SOURCE", "AM MOD SOURCE", "FM MOD SOURCE", "DATA MOD SOURCE",
+	}
+	for _, n := range denied {
+		if !EXWriteDeniedFTdx(EXItem{Name: n}) {
+			t.Errorf("%q not denied", n)
+		}
+	}
+	if !EXWriteDeniedFTdx(EXItem{Name: "MY CALL.", Text: true}) {
+		t.Error("text row not denied")
+	}
+	// The FT-710's TX rule is positional (03-04-06); the FTdx predicate is not.
+	if EXWriteDeniedFTdx(EXItem{Addr: EXAddress{P1: 3, P2: 4, P3: 6}, Name: "DATA VOX GAIN"}) {
+		t.Error("DATA VOX GAIN at 03-04-06 denied by position; it is held by the model's map")
+	}
+	if EXWriteDeniedFTdx(EXItem{Name: "AF TREBLE GAIN"}) {
+		t.Error("AF TREBLE GAIN denied")
+	}
+}
+
+func TestFilterEXWrite(t *testing.T) {
+	a := func(p3 uint16) EXAddress { return EXAddress{P1: 1, P2: 1, P3: p3} }
+	dom := Domain{Codes: []int{0, 1}}
+	items := []EXItem{{Addr: a(1), Name: "OK"}, {Addr: a(2), Name: "RPTT SELECT"}, {Addr: a(3), Name: "HELD ONE"}, {Addr: a(4), Name: "UNPARSED"}}
+	rows := []EXWriteItem{{Addr: a(1), Domain: dom}, {Addr: a(2), Domain: dom}, {Addr: a(3), Domain: dom}, {Addr: a(4)}}
+	got, err := FilterEXWrite(rows, items, EXWriteDeniedFTdx, map[EXAddress]string{a(3): "reason"})
+	if err != nil || len(got) != 1 || got[0].Addr != a(1) {
+		t.Errorf("FilterEXWrite = %v, %v; want only %v (denied, held and zero-Domain dropped)", got, err, a(1))
+	}
+	if _, err := FilterEXWrite(rows, items, EXWriteDeniedFTdx, map[EXAddress]string{a(9): "gone"}); err == nil {
+		t.Error("held address absent from the inventory was accepted")
+	}
+	if _, err := FilterEXWrite(append(rows, EXWriteItem{Addr: a(7), Domain: dom}), items, EXWriteDeniedFTdx, nil); err == nil {
+		t.Error("write row with no inventory item was accepted")
+	}
+}
