@@ -87,9 +87,9 @@ func (s *Service) readAll(ctx context.Context) (*codeplug.Codeplug, error) {
 			// only ever answer for whichever slot the radio currently
 			// has selected, so a bulk read cannot enumerate it. Skip it
 			// outright rather than let the inevitable per-slot mismatch
-			// abort the whole read; recorded here for whoever reads
-			// stderr's progress narration.
-			s.progress("skip", done, total, string(bank.ID))
+			// abort the whole read; the progress line carries the reason
+			// for whoever reads stderr's narration.
+			s.progress("skip", done, total, string(bank.ID)+" (current channel only; no CAT address to enumerate)")
 			continue
 		}
 		for _, slot := range bank.Slots {
