@@ -6,10 +6,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/icom/icomtest"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 const radioAddr = 0x98
@@ -90,8 +93,14 @@ var fixture = icomtest.Fixture{
 
 func TestSharedReadSuite(t *testing.T) { icomtest.RunReadSuite(t, fixture) }
 
-func withRecord(offset int, b ...byte) []byte {
-	rec := append([]byte(nil), goldenRecord...)
-	copy(rec[offset:], b)
-	return rec
+const probeSlotCount = 10
+
+var containsField = icomtest.ContainsField
+
+func goodChannel(slot string) codeplug.Channel { return fixture.GoodChannel(slot) }
+
+func slotToAddress(slot string) (civ.ChannelAddress, spec.BankID, error) {
+	return icom.SlotToAddress(params.Name, slot)
 }
+
+func TestSharedWriteSuite(t *testing.T) { icomtest.RunWriteSuite(t, fixture) }

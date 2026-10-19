@@ -134,3 +134,38 @@ func RunReadSuite(t *testing.T, fx Fixture) {
 		t.Run(c.name, c.run)
 	}
 }
+
+// RunWriteSuite runs every shared write test against fx.
+func RunWriteSuite(t *testing.T, fx Fixture) {
+	for _, c := range []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"TestMemorySetSpec_IsWriteWithAckAndNeverRetries", fx.tMemorySetSpec_IsWriteWithAckAndNeverRetries},
+		{"TestWriteChannel_FBIsConfirmed", fx.tWriteChannel_FBIsConfirmed},
+		{"TestWriteChannel_AckTimeoutReportsAnUnknownOutcome", fx.tWriteChannel_AckTimeoutReportsAnUnknownOutcome},
+		{"TestWriteChannel_FARejectionIsReported", fx.tWriteChannel_FARejectionIsReported},
+		{"TestWriteChannel_UnverifiedRefusesBeforeAnyWire", fx.tWriteChannel_UnverifiedRefusesBeforeAnyWire},
+		{"TestWriteChannel_KnownUnmappedFieldIsRefusedNotDropped", fx.tWriteChannel_KnownUnmappedFieldIsRefusedNotDropped},
+		{"TestWriteChannel_RefusesASlotWhoseUnmappedRegionsDiffer", fx.tWriteChannel_RefusesASlotWhoseUnmappedRegionsDiffer},
+		{"TestWriteChannel_EmptySlotWritesAgainstTheTemplate", fx.tWriteChannel_EmptySlotWritesAgainstTheTemplate},
+		{"TestWriteChannel_ConsentedWritesTheFullRecord", fx.tWriteChannel_ConsentedWritesTheFullRecord},
+		{"TestWriteChannel_EraseIsRefused", fx.tWriteChannel_EraseIsRefused},
+		{"TestWriteChannel_NoClearFrameIsReachable", fx.tWriteChannel_NoClearFrameIsReachable},
+		{"TestWriteChannel_RefusesAFrequencyOutsideTheEncodableRange", fx.tWriteChannel_RefusesAFrequencyOutsideTheEncodableRange},
+		{"TestWriteChannel_RefusesAToneOutsideThePrintedDigitRange", fx.tWriteChannel_RefusesAToneOutsideThePrintedDigitRange},
+		{"TestNumericRefusalIsDefenceInDepthNotTheGate", fx.tNumericRefusalIsDefenceInDepthNotTheGate},
+		{"TestRequestedFields_BaseMembershipAndOrder", fx.tRequestedFields_BaseMembershipAndOrder},
+		{"TestRequestedFields_EveryConditionalAppearsWhenKnown", fx.tRequestedFields_EveryConditionalAppearsWhenKnown},
+		{"TestWriteChannel_EveryConditionalIsRefusedByTheGate", fx.tWriteChannel_EveryConditionalIsRefusedByTheGate},
+		{"TestWriteChannel_RefusesANonKnownMandatoryField", fx.tWriteChannel_RefusesANonKnownMandatoryField},
+		{"TestWriteChannel_UpdateCarriesTheJustReadToneWhenNotKnown", fx.tWriteChannel_UpdateCarriesTheJustReadToneWhenNotKnown},
+		{"TestWriteChannel_CreateWithoutToneIsRefused", fx.tWriteChannel_CreateWithoutToneIsRefused},
+		{"TestWriteChannel_CreateWithEveryValueSucceeds", fx.tWriteChannel_CreateWithEveryValueSucceeds},
+		{"TestWriteChannel_ScanEdgesWriteThroughTheSameForm", fx.tWriteChannel_ScanEdgesWriteThroughTheSameForm},
+		{"TestWriteChannel_RefusesAValueOutsideThisRadiosVocabulary", fx.tWriteChannel_RefusesAValueOutsideThisRadiosVocabulary},
+		{"TestUnreachableRefusalsTellTheTruth", fx.tUnreachableRefusalsTellTheTruth},
+	} {
+		t.Run(c.name, c.run)
+	}
+}
