@@ -204,6 +204,13 @@ func (s *Session) buildMWSet(slotID string, channel int, data codeplug.ChannelDa
 		}
 	}
 
+	if data.FreqHz < s.caps.MinFreqHz || data.FreqHz > s.caps.MaxFreqHz {
+		return kw.Command{}, &driver.WriteRefusedError{
+			Slot: slotID, Fields: []spec.Field{spec.FieldFrequency},
+			Reason: fmt.Sprintf("frequency %d Hz is outside this radio's storable range %d-%d Hz", data.FreqHz, s.caps.MinFreqHz, s.caps.MaxFreqHz),
+		}
+	}
+
 	cmd, err := s.layout.BuildMWSet(kw.Record870{
 		Channel:   channel,
 		FreqHz:    data.FreqHz,

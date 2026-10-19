@@ -246,3 +246,41 @@ func TestReadChannel_NoTierFieldIsLeftAbsent(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteChannel_FrequencyRangeRefusedBeforeWire: one Hz outside the
+// declared MinFreqHz/MaxFreqHz is refused with frequency and no MW is
+// sent; the bounds themselves write.
+func TestWriteChannel_FrequencyRangeRefusedBeforeWire(t *testing.T) {
+	caps := CapabilitiesSimulated()
+	for _, tc := range []struct {
+		name   string
+		hz     uint64
+		refuse bool
+	}{
+		{"one above Max", caps.MaxFreqHz + 1, true},
+		{"one below Min", caps.MinFreqHz - 1, true},
+		{"Max", caps.MaxFreqHz, false},
+		{"Min", caps.MinFreqHz, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sess, port := openSession(t, Simulated, radioImage{}, WithConsentedUnverifiedWrites())
+			before := len(port.Transcript())
+			data := populatedData()
+			data.FreqHz = tc.hz
+			_, err := sess.WriteChannel(context.Background(), codeplug.Channel{Slot: "03", Data: &data})
+			if !tc.refuse {
+				if err != nil {
+					t.Fatalf("WriteChannel at %d Hz: %v", tc.hz, err)
+				}
+				return
+			}
+			var refused *driver.WriteRefusedError
+			if !errors.As(err, &refused) || len(refused.Fields) != 1 || refused.Fields[0] != "frequency" {
+				t.Fatalf("WriteChannel at %d Hz = %v, want a refusal naming frequency", tc.hz, err)
+			}
+			if after := port.Transcript(); len(after) != before {
+				t.Errorf("the refusal sent %v, want nothing", after[before:])
+			}
+		})
+	}
+}
