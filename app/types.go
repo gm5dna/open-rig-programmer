@@ -88,6 +88,15 @@ type UnverifiedWriteConsentView struct {
 	// unverified write to warn about, and inventing a caution for a
 	// hardware-verified radio would teach a user to dismiss the real one.
 	Warning string
+	// MenuNeedsConsent, MenuGranted, MenuRecorded and MenuWarning are the
+	// same four facts for the SEPARATE menu (EX) write consent: eligible
+	// only for the FTdx models whose menu writes rest on the printed
+	// manual alone. MenuWarning is radiotext.MenuWriteWarningTemplate with
+	// the model name substituted, empty when MenuNeedsConsent is false.
+	MenuNeedsConsent bool
+	MenuGranted      bool
+	MenuRecorded     bool
+	MenuWarning      string
 }
 
 // CodeplugView is a read view of the working codeplug — returned by

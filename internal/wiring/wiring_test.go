@@ -5854,3 +5854,64 @@ func assertTSPairEndToEnd(t *testing.T, tc tsPairEndToEnd) {
 		}
 	}
 }
+
+// TestNeedsMenuWriteConsent_ExactlyTheThreeFTdx pins the menu-consent
+// eligibility set: the FTdx10, FTdx101D and FTdx101MP, nothing else.
+func TestNeedsMenuWriteConsent_ExactlyTheThreeFTdx(t *testing.T) {
+	want := map[string]bool{FTdx10Model: true, FTdx101DModel: true, FTdx101MPModel: true}
+	for _, m := range SupportedModels() {
+		got, err := NeedsMenuWriteConsent(m)
+		if err != nil || got != want[m] {
+			t.Errorf("NeedsMenuWriteConsent(%q) = %v, %v; want %v", m, got, err, want[m])
+		}
+	}
+	if got, err := NeedsMenuWriteConsent("no-such-radio"); got || err == nil {
+		t.Errorf("unknown model = %v, %v; want false and an error", got, err)
+	}
+}
+
+// TestOpenRealSessionWith_MenuConsentIsSeparate proves, at session level, that
+// menu consent and channel consent open different gates: each FTdx session
+// carries ConsentedUnverified menu items only under ConsentMenuWrites, and a
+// channel-only session stays menu-refused (and the converse).
+func TestOpenRealSessionWith_MenuConsentIsSeparate(t *testing.T) {
+	menuItems := func(sess driver.Session) (consented int) {
+		for _, m := range sess.(driver.SettingsReader).SettingsDescriptor().Menus {
+			for _, g := range m.Groups {
+				for _, it := range g.Items {
+					if it.Write == spec.ConsentedUnverified {
+						consented++
+					}
+				}
+			}
+		}
+		return consented
+	}
+	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel} {
+		for name, tc := range map[string]struct {
+			opts       SessionOptions
+			wantMenu   bool
+			wantMemory bool
+		}{
+			"channel only": {SessionOptions{ConsentUnverifiedWrites: true}, false, true},
+			"menu only":    {SessionOptions{ConsentMenuWrites: true}, true, false},
+			"neither":      {SessionOptions{}, false, false},
+		} {
+			t.Run(model+"/"+name, func(t *testing.T) {
+				fakePortSeam(t, model)
+				sess, closeAll, err := OpenRealSessionWith(testCtx(t), model, "test-port", tc.opts)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = closeAll() })
+				if got := menuItems(sess) > 0; got != tc.wantMenu {
+					t.Errorf("menu items consented = %v, want %v", got, tc.wantMenu)
+				}
+				mem := sess.Capabilities().FieldSupport(spec.BankMemory, spec.FieldFrequency).Write == spec.ConsentedUnverified
+				if mem != tc.wantMemory {
+					t.Errorf("channel writes consented = %v, want %v", mem, tc.wantMemory)
+				}
+			})
+		}
+	}
+}

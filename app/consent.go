@@ -64,6 +64,12 @@ type consentDecision struct {
 	// Eligible is false — see consentFrom for why.
 	Granted  bool
 	Recorded bool
+	// MenuEligible, MenuGranted and MenuRecorded are the same three facts
+	// for the SEPARATE menu-write consent (wiring.NeedsMenuWriteConsent,
+	// userconfig MenuWritesFor). Neither consent implies the other.
+	MenuEligible bool
+	MenuGranted  bool
+	MenuRecorded bool
 }
 
 // sessionOptions turns a decision into the options a real session for this
@@ -77,7 +83,7 @@ type consentDecision struct {
 // write-side unverified field — so this costs nothing and keeps the
 // no-op explicit rather than incidental.
 func (d consentDecision) sessionOptions() wiring.SessionOptions {
-	return wiring.SessionOptions{ConsentUnverifiedWrites: d.Granted}
+	return wiring.SessionOptions{ConsentUnverifiedWrites: d.Granted, ConsentMenuWrites: d.MenuGranted}
 }
 
 // view renders a decision as the struct the frontend receives.
@@ -86,12 +92,20 @@ func (d consentDecision) view() UnverifiedWriteConsentView {
 	if d.Eligible {
 		warning = fmt.Sprintf(radiotext.UnverifiedWriteWarningTemplate, d.Model)
 	}
+	menuWarning := ""
+	if d.MenuEligible {
+		menuWarning = fmt.Sprintf(radiotext.MenuWriteWarningTemplate, d.Model)
+	}
 	return UnverifiedWriteConsentView{
-		Model:        d.Model,
-		NeedsConsent: d.Eligible,
-		Granted:      d.Granted,
-		Recorded:     d.Recorded,
-		Warning:      warning,
+		Model:            d.Model,
+		NeedsConsent:     d.Eligible,
+		Granted:          d.Granted,
+		Recorded:         d.Recorded,
+		Warning:          warning,
+		MenuNeedsConsent: d.MenuEligible,
+		MenuGranted:      d.MenuGranted,
+		MenuRecorded:     d.MenuRecorded,
+		MenuWarning:      menuWarning,
 	}
 }
 
@@ -113,7 +127,11 @@ func consentFor(model string) (consentDecision, error) {
 	if err != nil {
 		return consentDecision{}, err
 	}
-	return consentFrom(settings, model, eligible), nil
+	menuEligible, err := wiring.NeedsMenuWriteConsent(model)
+	if err != nil {
+		return consentDecision{}, err
+	}
+	return consentFrom(settings, model, eligible, menuEligible), nil
 }
 
 // loadConsentSettings reads the whole settings store once. Both readers
@@ -143,12 +161,14 @@ func loadConsentSettings() (userconfig.Settings, error) {
 // (through sessionOptions) would spend a decision on a session that has
 // nothing to spend it on. The key itself is left untouched: this package
 // reads the store, it does not tidy it.
-func consentFrom(settings userconfig.Settings, model string, eligible bool) consentDecision {
-	d := consentDecision{Model: model, Eligible: eligible}
-	if !eligible {
-		return d
+func consentFrom(settings userconfig.Settings, model string, eligible, menuEligible bool) consentDecision {
+	d := consentDecision{Model: model, Eligible: eligible, MenuEligible: menuEligible}
+	if eligible {
+		d.Granted, d.Recorded = settings.UnverifiedWritesFor(wiring.ModelSlug(model))
 	}
-	d.Granted, d.Recorded = settings.UnverifiedWritesFor(wiring.ModelSlug(model))
+	if menuEligible {
+		d.MenuGranted, d.MenuRecorded = settings.MenuWritesFor(wiring.ModelSlug(model))
+	}
 	return d
 }
 
@@ -208,6 +228,26 @@ func (a *App) SetUnverifiedWriteConsent(model string, on bool) error {
 	return userconfig.SetUnverifiedWrites(path, wiring.ModelSlug(model), on)
 }
 
+// SetMenuWriteConsent records the user's decision about menu (EX) writes for
+// model under the separate menuWrites key. It mirrors SetUnverifiedWriteConsent
+// (a false is stored, an unknown or ineligible model is refused BEFORE the
+// store is touched, and a decision applies from the next connection), but
+// never reads or writes the channel-write decision.
+func (a *App) SetMenuWriteConsent(model string, on bool) error {
+	eligible, err := wiring.NeedsMenuWriteConsent(model)
+	if err != nil {
+		return err
+	}
+	if !eligible {
+		return fmt.Errorf("app: menu-write consent applies only to the FTdx10, FTdx101D and FTdx101MP, whose menu writes rest on the printed manual alone; %s has no menu write for a consent to unlock", model)
+	}
+	path, err := userConfigPath()
+	if err != nil {
+		return err
+	}
+	return userconfig.SetMenuWrites(path, wiring.ModelSlug(model), on)
+}
+
 // ListUnverifiedWriteConsents returns one row per model this build
 // supports, in wiring.SupportedModels' own order — the grants panel's data
 // source, so a management surface built on it can never offer, or omit, a
@@ -232,7 +272,11 @@ func (a *App) ListUnverifiedWriteConsents() ([]UnverifiedWriteConsentView, error
 			// the two fails loudly instead of listing a wrong state.
 			return nil, err
 		}
-		out = append(out, consentFrom(settings, model, eligible).view())
+		menuEligible, err := wiring.NeedsMenuWriteConsent(model)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, consentFrom(settings, model, eligible, menuEligible).view())
 	}
 	return out, nil
 }

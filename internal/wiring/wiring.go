@@ -1506,6 +1506,35 @@ func (e *UnknownModelError) Error() string {
 	return fmt.Sprintf("wiring: unknown model %q (supported: %s)", e.Model, strings.Join(e.Supported, ", "))
 }
 
+// menuDrivers holds the menu-write-consented constructor of the three FTdx
+// models whose menu (EX) writes rest on the printed manual alone. Menu consent
+// is a separate bit from channel consent, so these rows take both. A model
+// with no row here has no menu-write consent to give. Its own table, not a
+// change to realDrivers' closure type, which about forty rows and tests share.
+var menuDrivers = map[string]func(consent bool, log transport.Logger) driver.Driver{
+	FTdx10Model: func(consent bool, log transport.Logger) driver.Driver {
+		opts := []ftdx10.Option{ftdx10.WithConsentedMenuWrites(), ftdx10.WithTransportLogger(log)}
+		if consent {
+			opts = append(opts, ftdx10.WithConsentedUnverifiedWrites())
+		}
+		return ftdx10.New(ftdx10.RealHardware, opts...)
+	},
+	FTdx101DModel: func(consent bool, log transport.Logger) driver.Driver {
+		opts := []ftdx101.Option{ftdx101.WithConsentedMenuWrites(), ftdx101.WithTransportLogger(log)}
+		if consent {
+			opts = append(opts, ftdx101.WithConsentedUnverifiedWrites())
+		}
+		return ftdx101.NewD(ftdx101.RealHardware, opts...)
+	},
+	FTdx101MPModel: func(consent bool, log transport.Logger) driver.Driver {
+		opts := []ftdx101.Option{ftdx101.WithConsentedMenuWrites(), ftdx101.WithTransportLogger(log)}
+		if consent {
+			opts = append(opts, ftdx101.WithConsentedUnverifiedWrites())
+		}
+		return ftdx101.NewMP(ftdx101.RealHardware, opts...)
+	},
+}
+
 // realDriverFor looks model up in realDrivers and constructs its driver at
 // the caller's consent, or fails with *UnknownModelError. It is the shared
 // entry point every model-keyed real-driver lookup in this file
@@ -1600,6 +1629,12 @@ type SessionOptions struct {
 	// package.
 	ConsentUnverifiedWrites bool
 
+	// ConsentMenuWrites is the USER's recorded acceptance of menu (EX)
+	// writes, a decision separate from ConsentUnverifiedWrites: neither
+	// implies the other. Only the models NeedsMenuWriteConsent names act on
+	// it; for every other model it changes nothing.
+	ConsentMenuWrites bool
+
 	// Logger receives the transport engine's diagnostics (unexpected
 	// frames, quarantine drains, contamination). Nil is the default and
 	// drops them. ONLY drivers that export WithTransportLogger honour it
@@ -1653,6 +1688,9 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 	d, err := realDriverFor(model, opts.ConsentUnverifiedWrites, opts.Logger)
 	if err != nil {
 		return nil, nil, err
+	}
+	if ctor, ok := menuDrivers[model]; ok && opts.ConsentMenuWrites {
+		d = ctor(opts.ConsentUnverifiedWrites, opts.Logger)
 	}
 
 	// registerDriver validates d (its Model()/Capabilities().Model
@@ -1734,6 +1772,19 @@ func NeedsUnverifiedConsent(model string) (bool, error) {
 		return false, err
 	}
 	return consentCouldUnlockAWrite(caps), nil
+}
+
+// NeedsMenuWriteConsent reports whether model has menu (EX) writes that rest
+// on the printed manual alone and so need the separate menu-write consent:
+// true for the FTdx10, FTdx101D and FTdx101MP only. The FT-710's menu writes
+// are hardware-verified and every other model has none. Fails with
+// *UnknownModelError for an unrecognised model, like NeedsUnverifiedConsent.
+func NeedsMenuWriteConsent(model string) (bool, error) {
+	if _, ok := realDrivers[model]; !ok {
+		return false, &UnknownModelError{Model: model, Supported: SupportedModels()}
+	}
+	_, ok := menuDrivers[model]
+	return ok, nil
 }
 
 // consentCouldUnlockAWrite reports whether caps carries a write-side
