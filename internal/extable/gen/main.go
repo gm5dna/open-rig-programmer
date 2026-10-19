@@ -102,7 +102,7 @@ func main() {
 				log.Fatalf("parsing %s: %v", p.WriteObservedCSV, err)
 			}
 		}
-		if out, err = extable.RenderWriteGo(rows, observed); err != nil {
+		if out, err = extable.RenderWriteGo(p, rows, observed); err != nil {
 			log.Fatalf("rendering Go: %v", err)
 		}
 	default:

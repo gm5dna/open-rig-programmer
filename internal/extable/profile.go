@@ -62,9 +62,9 @@ const (
 	// READ observations (ObservedCSV). Every profile before this milestone
 	// is this kind.
 	RenderInventory RendererKind = iota + 1
-	// RenderWrite: RenderWriteGo, the FT-710-only write-descriptor table,
-	// joined with WriteObservedCSV instead. Exactly one profile,
-	// "ft710write", declares this.
+	// RenderWrite: RenderWriteGo, the write-descriptor table, joined with
+	// WriteObservedCSV (when the model has one) instead; "ft710write" and
+	// the FTdx write profiles declare this.
 	RenderWrite
 )
 
@@ -366,13 +366,18 @@ type Profile struct {
 	// WriteObservedCSV is the Set-direction counterpart of ObservedCSV — for
 	// the FT-710, table2-write-observed.csv, Session W's hardware Set-width
 	// characterisation. It is empty for every profile except "ft710write":
-	// no other registration has a write-descriptor table to join it
-	// against. Non-empty iff Renderer is RenderWrite.
+	// no other registration has write observations to join. May be empty under RenderWrite (no observations: every row
+	// renders ObservedSetWidth 0); must be empty under RenderInventory.
 	WriteObservedCSV string
+	// DomainOverrides replaces the parsed Domain of the named (P1,P2,P3)
+	// addresses in a RenderWrite profile: hand-corrected legends, each with
+	// its evidence in a comment at the profile. An address with no row is a
+	// render error. Empty under RenderInventory.
+	DomainOverrides map[[3]int]Domain
 
 	// Renderer selects which render function internal/extable/gen calls:
 	// RenderInventory (RenderGo) for every profile before this milestone,
-	// RenderWrite (RenderWriteGo) for "ft710write" alone. Zero is refused,
+	// RenderWrite (RenderWriteGo) for the write-descriptor profiles. Zero is refused,
 	// as every other omitted semantic on this type is.
 	Renderer RendererKind
 
@@ -640,12 +645,17 @@ func (p Profile) Validate() error {
 		if p.WriteObservedCSV != "" {
 			return fmt.Errorf("extable: profile %s: WriteObservedCSV %q is set under RenderInventory", p.Model, p.WriteObservedCSV)
 		}
-	case RenderWrite:
-		if err := checkRelPath("WriteObservedCSV", p.WriteObservedCSV); err != nil {
-			return fmt.Errorf("extable: profile %s: %w (RenderWrite)", p.Model, err)
+		if len(p.DomainOverrides) > 0 {
+			return fmt.Errorf("extable: profile %s: DomainOverrides is set under RenderInventory", p.Model)
 		}
-		if strings.EqualFold(p.OutFile, p.WriteObservedCSV) {
-			return fmt.Errorf("extable: profile %s: OutFile %q collides with its WriteObservedCSV %q (compared case-insensitively) — generating would overwrite the source", p.Model, p.OutFile, p.WriteObservedCSV)
+	case RenderWrite:
+		if p.WriteObservedCSV != "" {
+			if err := checkRelPath("WriteObservedCSV", p.WriteObservedCSV); err != nil {
+				return fmt.Errorf("extable: profile %s: %w (RenderWrite)", p.Model, err)
+			}
+			if strings.EqualFold(p.OutFile, p.WriteObservedCSV) {
+				return fmt.Errorf("extable: profile %s: OutFile %q collides with its WriteObservedCSV %q (compared case-insensitively) — generating would overwrite the source", p.Model, p.OutFile, p.WriteObservedCSV)
+			}
 		}
 	default:
 		return fmt.Errorf("extable: profile %s: RendererKind %v must be set explicitly", p.Model, p.Renderer)
@@ -674,6 +684,13 @@ func (p Profile) clone() Profile {
 	c := p
 	c.DocLines = append([]string(nil), p.DocLines...)
 	c.ParameterlessAddresses = append([][3]int(nil), p.ParameterlessAddresses...)
+	if p.DomainOverrides != nil {
+		c.DomainOverrides = make(map[[3]int]Domain, len(p.DomainOverrides))
+		for a, d := range p.DomainOverrides {
+			d.Codes = append([]int(nil), d.Codes...)
+			c.DomainOverrides[a] = d
+		}
+	}
 	return c
 }
 
@@ -794,6 +811,16 @@ var ft710writeProfile = Profile{
 	// direction counterpart it does take, gated on Renderer, not on
 	// ObservationPolicy.
 	Observations: ObservationsAbsent,
+
+	// The two charts' own legends are wrong; hardware (Session R/W,
+	// 18/10/2026) fixed the codes — core/cat/table2-corrections.csv.
+	DomainOverrides: map[[3]int]Domain{
+		// SHIFT FREQUENCY: the manual prints "1:" twice and no "0"; code 0 = 170 Hz.
+		{1, 5, 16}: {Codes: []int{0, 1, 2, 3}},
+		// RTTY MARK FREQUENCY: the manual prints codes 1-2; code 2 was refused,
+		// so the codes are 0 = 1275 Hz, 1 = 2125 Hz.
+		{1, 5, 15}: {Codes: []int{0, 1}},
+	},
 	DocLines: []string{
 		"ft710ExWrite is the FT-710 write-descriptor table, sorted by",
 		"(P1,P2,P3), built from TWO sources of different provenance: the manual",

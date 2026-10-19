@@ -50,7 +50,7 @@ func TestExWriteGenerated_NotStale(t *testing.T) {
 		t.Fatalf("ParseWriteObservedCSV(%s): %v", p.WriteObservedCSV, err)
 	}
 
-	want, err := extable.RenderWriteGo(rows, observed)
+	want, err := extable.RenderWriteGo(p, rows, observed)
 	if err != nil {
 		t.Fatalf("RenderWriteGo: %v", err)
 	}

@@ -40,12 +40,12 @@ import (
 func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	var matches []extable.NamedProfile
 	for _, np := range extable.RegisteredProfiles() {
-		if np.Profile.Package == "ftdx10" {
+		if np.Profile.Package == "ftdx10" && np.Profile.Renderer == extable.RenderInventory {
 			matches = append(matches, np)
 		}
 	}
 	if len(matches) != 1 {
-		t.Fatalf("registry holds %d profiles emitting into package ftdx10, want exactly 1: %v", len(matches), names(matches))
+		t.Fatalf("registry holds %d inventory profiles emitting into package ftdx10, want exactly 1: %v", len(matches), names(matches))
 	}
 	p := matches[0].Profile
 
