@@ -163,22 +163,41 @@ func TestEXRead_LowerCaseCommandAccepted(t *testing.T) {
 	}
 }
 
-// --- Set-shaped bodies: not modelled ---
+// --- Sets (register entry 17, second half) ---
 
-// TestEXSetShaped_NotModelled is register entry 17's second half. "EX0101011;"
-// is shaped like a real Set frame (address "010101" + a P4 digit "1"), and
-// handleEX rejects any non-six-digit body uniformly, so it draws "?;" — and,
-// critically, WITHOUT applying the write. This is a deliberate modelling gap (the
-// manual documents a Set form), not a claim that a real FTdx101 refuses EX Set;
-// the menu surface is READ-ONLY for v1.x by the M8d decision of 25/07/2026.
-func TestEXSetShaped_NotModelled(t *testing.T) {
-	r, conn := newTestRadio(t)
-	writeFrame(t, conn, "EX0101011;")
-	if got, want := mustReadFrame(t, conn), "?;"; got != want {
-		t.Errorf("EX0101011; (set-shaped) -> %q, want %q", got, want)
+// TestEXSet_AcceptedIsSilentAndVisibleToARead: "EX010101+02;" is a Set of the
+// width-4 item 010101 only when the payload is 4 wide, so this sets "+002".
+func TestEXSet_AcceptedIsSilentAndVisibleToARead(t *testing.T) {
+	for _, m := range exModels {
+		t.Run(m.name, func(t *testing.T) {
+			r, conn := newTestRadioFrom(t, m.build)
+			writeFrame(t, conn, "EX010101+002;")
+			assertNoReply(t, conn)
+			if got, ok := r.EXState("010101"); !ok || got != "+002" {
+				t.Errorf("EXState(\"010101\") = %q, %v, want \"+002\", true", got, ok)
+			}
+			if got, want := exchange(t, conn, "EX010101;"), "EX010101+002;"; got != want {
+				t.Errorf("read after Set -> %q, want %q", got, want)
+			}
+		})
 	}
-	if got, ok := r.EXState("010101"); !ok || got != "0000" {
-		t.Errorf("EXState(\"010101\") after a rejected set-shaped body = %q, %v, want \"0000\", true (state unchanged)", got, ok)
+}
+
+// TestEXSet_Rejections: a wrong width (the old set-shaped "EX0101011;"), an
+// unknown address and a malformed body all draw "?;" and leave state alone.
+func TestEXSet_Rejections(t *testing.T) {
+	for _, send := range []string{
+		"EX0101011;",         // width 1 against a Digits-4 item
+		"EX01010100000;",     // width 5 against a Digits-4 item
+		"EX0501010000;",      // unknown address (no P1=05 group)
+		"EX0101150000;",      // P3 past the subgroup's end
+		"EX01010\x01\x0200;", // control bytes in the payload
+	} {
+		r, conn := newTestRadio(t)
+		assertRejected(t, conn, send)
+		if got, ok := r.EXState("010101"); !ok || got != "0000" {
+			t.Errorf("%q changed state: EXState = %q, %v", send, got, ok)
+		}
 	}
 }
 

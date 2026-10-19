@@ -41,7 +41,7 @@
 //
 // EX (MENU) is answered from a GENERATED PROJECTION of this package's own copy
 // of transcription B (ex.go, exinventory_gen.go, transcription-b.csv,
-// PROVENANCE.md) — 193 items across 18 (P1,P2) subgroups, read-only. ONE
+// PROVENANCE.md) — 193 items across 18 (P1,P2) subgroups, reads and Sets. ONE
 // projection serves both models: the manual prints Table 2 once for the pair,
 // and TestEXAnswersAreIdenticalOnBothModels plus the transport cross-check's
 // ID-divergence leg require the D and the MP to answer every address
@@ -182,12 +182,9 @@
 // case is ever genuinely needed, fakeradio's options.go is the template to copy
 // — and copying it is the right move, per the sibling section above.
 //
-// EX SET. The read side is modelled (ex.go); the SET side is not, exactly as
-// fakeradio does not model it and internal/fakedx10 does not either. The manual
-// documents a Set form, so this is a KNOWN-DIVERGENT modelling gap rather than a
-// claim about the radio — register entry 17's second half. The menu surface is
-// READ-ONLY for v1.x by the M8d decision of 25/07/2026
-// (docs/menu-write-decision.md), so nothing in this project sends one.
+// EX SET. Reads and Sets are modelled (ex.go), the Set from the manual: an
+// accepted Set is silent, a wrong-width or unknown-address Set draws "?;" —
+// register entry 17.
 //
 // TIMING. Every reply is near-instant unless WithLatency says otherwise. No
 // FTdx101 timing has ever been observed by this project, so there is nothing to
@@ -520,7 +517,7 @@
 //     (parser.go: rejection, and every refusal in the file)
 //
 //  17. AN EX READ OF AN ADDRESS THIS FAKE HAS NO ENTRY FOR ANSWERS "?;", AND SO
-//     DOES A SET-SHAPED EX BODY. Two claims about the EX command's edges,
+//     DOES A MALFORMED, UNKNOWN-ADDRESS OR WRONG-WIDTH EX SET. Two claims about the EX command's edges,
 //     recorded together because one line of code makes both.
 //     The first is the menu-side twin of entry 1: a grammatically valid
 //     six-digit address the chart never enumerated — every 05xxxx, every P3 past
@@ -551,13 +548,17 @@
 //     Membership comes from the chart's own rows via the generated inventory,
 //     never from a range check, and it is what a settings reader maps to
 //     driver.SettingUnavailable.
-//     The second is a deliberate MODELLING GAP, KNOWN-DIVERGENT from the
-//     documented grammar rather than a hardware claim: the manual documents an
-//     EX Set form and this fake does not implement it, so a valid address
-//     followed by a P4 payload ("EX0101011;") is simply a too-long body to
-//     handleEX and falls through the same length check to the same NAK. The menu
-//     surface is READ-ONLY for v1.x by the M8d decision of 25/07/2026
-//     (docs/menu-write-decision.md), so nothing in this project sends one.
+//     The second is the EX Set arm, written from the manual's EX frames
+//     (rev 2308-L, 699-708; Set and Answer share one shape): a Set whose P4
+//     width equals the stored value's width is accepted silently for ANY
+//     inventory address and updates the stored value; an unknown address, a
+//     malformed body or a wrong width draws "?;". THE LIMIT: this fake's
+//     widths (transcription B) ARE the paper widths the dialect's paper table
+//     uses, so a fake built on the same assumption cannot catch a TONE
+//     FREQ-style Digits error (hardware refused a width the manual printed).
+//     Tests against it prove the plumbing, not the radio; whether a real
+//     FTDX101 refuses a wrong width is unknown (spec v2 §3.4). The project's
+//     denylist is policy, tested at the gate, never modelled here.
 //     STAGE R LIFTS THE FIRST, PER MODEL, WITH: one EX read of 050101 and one of
 //     a P3 past a subgroup's end, on a radio of that model — an answer rather
 //     than "?;" would mean the grammar block's range is real and the chart is
@@ -565,8 +566,6 @@
 //     and is the same capture that would settle its own UNRESOLVED
 //     header-vs-chart anomaly. It is the probe the capability matrix already
 //     asks for; record the port with it (this radio offers two CAT paths).
-//     A STAGE W capture would be needed for the second, and none is planned
-//     while the menu surface stays read-only.
 //     (ex.go: handleEX)
 //
 //  18. AUTOMATIC-INFORMATION SUPPRESSION: THIS FAKE NEVER PUSHES AN

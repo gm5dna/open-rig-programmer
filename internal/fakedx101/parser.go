@@ -862,8 +862,7 @@ func upperASCII(name [2]byte) [2]byte {
 // leniency. That half is ASSUMED — doc.go register entry 12.
 //
 // EX (MENU) is dispatched to handleEX (ex.go), which answers from this package's
-// generated projection of transcription B. It is READ ONLY: a set-shaped body
-// falls through the same length check as any other malformed one, to "?;" —
+// generated projection of transcription B: reads, and a Set arm (see handleEX) —
 // doc.go register entry 17.
 func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(frame) == 0 || frame[len(frame)-1] != ';' {
