@@ -48,17 +48,17 @@ func cmdSettings(args []string, stdout, stderr io.Writer) int {
 	// and must be given another name — a price paid once, in the usage text,
 	// against a sub-mode a user can find. "diff-observed" (below) is
 	// reserved on the same precedent.
-	if fs.NArg() > 0 && fs.Arg(0) == unverifiedWritesArg {
+	if k, ok := consentWord(fs); ok {
 		if fs.NFlag() > 0 {
 			// --csv/--model/--force describe a codeplug file's settings
 			// snapshot; none of them means anything to a consent listing.
 			// Refused rather than silently ignored: a caller who asked for a
 			// CSV must not be told the command succeeded without one.
-			fmt.Fprintf(stderr, "rigprog settings: %s takes no flags\n", unverifiedWritesArg)
+			fmt.Fprintf(stderr, "rigprog settings: %s takes no flags\n", k.word)
 			printSettingsUsage(stderr)
 			return exitUsage
 		}
-		return settingsUnverifiedWrites(fs.Args()[1:], stdout, stderr)
+		return settingsConsent(k, fs.Args()[1:], stdout, stderr)
 	}
 
 	// diff-observed is reserved the same way: it takes its OWN flags
@@ -365,6 +365,44 @@ func writeSettingsCSV(w io.Writer, recognised, unrecognised []settingsRow) error
 // not a file path — printSettingsUsage says so.
 const unverifiedWritesArg = "unverified-writes"
 
+// menuWritesArg is the reserved word for the separate menu (EX) write
+// consent, parallel to unverifiedWritesArg and owned the same way.
+const menuWritesArg = "menu-writes"
+
+// consentKind is what differs between the two consent words: which
+// decision is read and written, which models it applies to, and its text.
+// The list and set functions below are shared by both.
+type consentKind struct {
+	word, noun, column, naState string
+	eligible                    func(model string) (bool, error)
+	get                         func(s userconfig.Settings, slug string) (granted, recorded bool)
+	set                         func(path, slug string, on bool) error
+	refusal                     func(model string) string
+	confirm                     func(model, slug string, on bool) string
+}
+
+var unverifiedKind = consentKind{
+	word: unverifiedWritesArg, noun: "unverified writes", column: "UNVERIFIED WRITES", naState: hardwareVerifiedState,
+	eligible: wiring.NeedsUnverifiedConsent,
+	get:      userconfig.Settings.UnverifiedWritesFor,
+	set:      userconfig.SetUnverifiedWrites,
+	refusal: func(model string) string {
+		return fmt.Sprintf("%s applies only to models with unverified write support; the %s's writes are hardware-verified, so there is no unverified write here for a consent to unlock", unverifiedWritesArg, model)
+	},
+	confirm: consentConfirmation,
+}
+
+var menuKind = consentKind{
+	word: menuWritesArg, noun: "menu writes", column: "MENU WRITES", naState: "n/a",
+	eligible: wiring.NeedsMenuWriteConsent,
+	get:      userconfig.Settings.MenuWritesFor,
+	set:      userconfig.SetMenuWrites,
+	refusal: func(model string) string {
+		return fmt.Sprintf("%s applies only to the FTdx10, FTdx101D and FTdx101MP, whose menu writes rest on the printed manual alone; %s has no menu write for a consent to unlock", menuWritesArg, model)
+	},
+	confirm: menuConsentConfirmation,
+}
+
 // hardwareVerifiedState is the listing's entry for a model that is not
 // consent-eligible at all: nothing this build writes to it is unverified,
 // so there is no decision to record and none is offered. Deliberately not
@@ -378,14 +416,14 @@ const hardwareVerifiedState = "n/a (hardware-verified)"
 // decision. Any other arity is a usage error — in particular a bare model
 // name, which could be read as either "show me this one" or "turn this one
 // on", and is not guessed at.
-func settingsUnverifiedWrites(args []string, stdout, stderr io.Writer) int {
+func settingsConsent(k consentKind, args []string, stdout, stderr io.Writer) int {
 	switch len(args) {
 	case 0:
-		return listUnverifiedWrites(stdout, stderr)
+		return listConsent(k, stdout, stderr)
 	case 2:
-		return setUnverifiedWrites(args[0], args[1], stdout, stderr)
+		return setConsent(k, args[0], args[1], stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "rigprog settings: %s takes either no arguments (to list) or exactly two, <model> on|off\n", unverifiedWritesArg)
+		fmt.Fprintf(stderr, "rigprog settings: %s takes either no arguments (to list) or exactly two, <model> on|off\n", k.word)
 		printSettingsUsage(stderr)
 		return exitUsage
 	}
@@ -405,7 +443,7 @@ func settingsUnverifiedWrites(args []string, stdout, stderr io.Writer) int {
 // OWN message, verbatim (it names the file and says how to repair it), and
 // the listing is abandoned — a listing that quietly showed every model
 // "off" would be telling the user their recorded decisions were gone.
-func listUnverifiedWrites(stdout, stderr io.Writer) int {
+func listConsent(k consentKind, stdout, stderr io.Writer) int {
 	path, err := userConfigPath()
 	if err != nil {
 		fmt.Fprintf(stderr, "rigprog settings: %v\n", err)
@@ -418,9 +456,9 @@ func listUnverifiedWrites(stdout, stderr io.Writer) int {
 	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "MODEL\tSLUG\tUNVERIFIED WRITES")
+	fmt.Fprintln(tw, "MODEL\tSLUG\t"+k.column)
 	for _, model := range wiring.SupportedModels() {
-		eligible, err := wiring.NeedsUnverifiedConsent(model)
+		eligible, err := k.eligible(model)
 		if err != nil {
 			// Unreachable: model came from SupportedModels() itself.
 			// Reported rather than ignored so a future divergence between
@@ -430,9 +468,9 @@ func listUnverifiedWrites(stdout, stderr io.Writer) int {
 			return exitError
 		}
 		slug := wiring.ModelSlug(model)
-		state := hardwareVerifiedState
+		state := k.naState
 		if eligible {
-			granted, _ := settings.UnverifiedWritesFor(slug)
+			granted, _ := k.get(settings, slug)
 			state = consentStateWord(granted)
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\n", model, slug, state)
@@ -458,26 +496,26 @@ func listUnverifiedWrites(stdout, stderr io.Writer) int {
 // Every one of those refusals happens BEFORE the settings store is touched
 // at all, so a refused invocation cannot create, alter or even read the
 // user's settings file.
-func setUnverifiedWrites(model, state string, stdout, stderr io.Writer) int {
+func setConsent(k consentKind, model, state string, stdout, stderr io.Writer) int {
 	if !validateModel(stderr, "settings", model, printSettingsUsage) {
 		return exitUsage
 	}
 
 	on, ok := parseConsentState(state)
 	if !ok {
-		fmt.Fprintf(stderr, "rigprog settings: %q is not a state — write \"on\" to consent to unverified writes for %s, or \"off\" to withhold consent\n", state, model)
+		fmt.Fprintf(stderr, "rigprog settings: %q is not a state — write \"on\" to consent to %s for %s, or \"off\" to withhold consent\n", state, k.noun, model)
 		printSettingsUsage(stderr)
 		return exitUsage
 	}
 
-	eligible, err := wiring.NeedsUnverifiedConsent(model)
+	eligible, err := k.eligible(model)
 	if err != nil {
 		// Unreachable: validateModel accepted model above.
 		fmt.Fprintf(stderr, "rigprog settings: %v\n", err)
 		return exitError
 	}
 	if !eligible {
-		fmt.Fprintf(stderr, "rigprog settings: %s applies only to models with unverified write support; the %s's writes are hardware-verified, so there is no unverified write here for a consent to unlock\n", unverifiedWritesArg, model)
+		fmt.Fprintf(stderr, "rigprog settings: %s\n", k.refusal(model))
 		printSettingsUsage(stderr)
 		return exitUsage
 	}
@@ -488,7 +526,7 @@ func setUnverifiedWrites(model, state string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 	slug := wiring.ModelSlug(model)
-	if err := userconfig.SetUnverifiedWrites(path, slug, on); err != nil {
+	if err := k.set(path, slug, on); err != nil {
 		// internal/userconfig's own wording, verbatim: on the corrupt-file
 		// path it names the file and tells the user to repair it by hand,
 		// which a generic "could not save settings" would throw away.
@@ -496,7 +534,7 @@ func setUnverifiedWrites(model, state string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
-	fmt.Fprintln(stdout, consentConfirmation(model, slug, on))
+	fmt.Fprintln(stdout, k.confirm(model, slug, on))
 	return exitSuccess
 }
 
@@ -548,4 +586,27 @@ func consentConfirmation(model, slug string, on bool) string {
 		return fmt.Sprintf("unverified writes for %s (%s): on — this project has never written to a real %s; every write is read back and compared", model, slug, model)
 	}
 	return fmt.Sprintf("unverified writes for %s (%s): off — from the next connection onwards, writes this project has not proved on a real %s are refused; a session already open keeps what it was opened with until it is re-opened; the decision is recorded, so nothing will ask you for it", model, slug, model)
+}
+
+// consentWord reports which consent word, if any, is fs's first positional.
+func consentWord(fs *flag.FlagSet) (consentKind, bool) {
+	if fs.NArg() > 0 {
+		switch fs.Arg(0) {
+		case unverifiedWritesArg:
+			return unverifiedKind, true
+		case menuWritesArg:
+			return menuKind, true
+		}
+	}
+	return consentKind{}, false
+}
+
+// menuConsentConfirmation is consentConfirmation for menu writes. A grant
+// carries the plain statement that no FTdx has been tested; both say when
+// the decision binds, which is the next connection, not now.
+func menuConsentConfirmation(model, slug string, on bool) string {
+	if on {
+		return fmt.Sprintf("menu writes for %s (%s): on — no FTdx radio has been tested: no %s has ever been written to by this project, and every menu write rests on the printed manual alone; take an SD-card configuration backup first; every write is read back and compared, but a code that means something other than its printed label cannot be detected; applies from the next connection", model, slug, model)
+	}
+	return fmt.Sprintf("menu writes for %s (%s): off — from the next connection onwards, menu writes to the %s are refused; a session already open keeps what it was opened with until it is re-opened; the decision is recorded, so nothing will ask you for it", model, slug, model)
 }
