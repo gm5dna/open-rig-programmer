@@ -59,12 +59,15 @@ func (d *ftdx101Driver) StaticSettingsDescriptor() driver.SettingsDescriptor {
 }
 
 // SettingsDescriptor implements the optional driver.SettingsReader
-// capability on the concrete *Session. It deliberately does NOT consult
-// s.dialect: both siblings' dialects carry the same EX inventory, so a
-// per-session rebuild would allocate the whole tree to produce the
-// identical answer.
+// capability on the concrete *Session: the descriptor Open built once from
+// the session's own dialect (a consented session's items carry
+// ConsentedUnverified, a simulated one's Supported, any other's Unverified),
+// cloned per call.
 func (s *Session) SettingsDescriptor() driver.SettingsDescriptor {
-	return SettingsDescriptor()
+	if s.desc == nil {
+		return SettingsDescriptor()
+	}
+	return s.desc.Clone()
 }
 
 // UnknownSettingError is the refusal ReadSetting returns for an id that
@@ -99,4 +102,16 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 	return yaesu.ReadSetting(ctx, s.eng, s.dialect, &params, id)
+}
+
+// WriteSetting implements the optional driver.SettingsWriter capability: it
+// writes one EX (MENU) setting by its opaque id, then verifies it with a
+// paired read (yaesu.WriteSetting). There is no consent check here: the
+// session's dialect carries a zero Set width for every address unless the
+// session was opened menu-consented or simulated (menuDialect), and the
+// gate inside yaesu.WriteSetting refuses before the wire.
+func (s *Session) WriteSetting(ctx context.Context, id, value string) (driver.SettingWriteResult, error) {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	return yaesu.WriteSetting(ctx, s.eng, s.dialect, &params, id, value)
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -661,8 +662,10 @@ func TestSession_ReadSetting_ScriptedRoundTrips(t *testing.T) {
 			if !ok {
 				t.Fatal("the session Open returned does not implement driver.SettingsReader — app/settings.go reaches this capability by a two-result type assertion and would silently fall back to the static descriptor")
 			}
-			if !reflect.DeepEqual(reader.SettingsDescriptor(), SettingsDescriptor()) {
-				t.Error("the live session's SettingsDescriptor() differs from the package-level one")
+			// A Simulated session runs the paper dialect, so its items carry
+			// Supported where the static (offline) descriptor says Unverified.
+			if want := yaesu.BuildDescriptor(m.params.paper, &params, spec.Supported); !reflect.DeepEqual(reader.SettingsDescriptor(), want) {
+				t.Error("the live Simulated session's SettingsDescriptor() differs from the paper-dialect one")
 			}
 
 			t.Run("a numeric item answered at its full declared width", func(t *testing.T) {
