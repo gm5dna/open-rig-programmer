@@ -5,15 +5,20 @@ package ftdx10
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
+	catftdx10 "github.com/gm5dna/open-rig-programmer/core/cat/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
+	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 )
 
 // Compile-time proof of the two settings seams this task adds. Any
@@ -510,8 +515,10 @@ func TestSession_ReadSetting_ScriptedRoundTrips(t *testing.T) {
 	if !ok {
 		t.Fatal("the session Open returned does not implement driver.SettingsReader — app/settings.go reaches this capability by a two-result type assertion and would silently fall back to the static descriptor")
 	}
-	if !reflect.DeepEqual(reader.SettingsDescriptor(), SettingsDescriptor()) {
-		t.Error("the live session's SettingsDescriptor() differs from the package-level one")
+	// A Simulated session runs the paper dialect, so its items carry
+	// Supported where the static (offline) descriptor says Unverified.
+	if want := yaesu.BuildDescriptor(catftdx10.PaperDialect(), &params, spec.Supported); !reflect.DeepEqual(reader.SettingsDescriptor(), want) {
+		t.Error("the live Simulated session's SettingsDescriptor() differs from the paper-dialect one")
 	}
 
 	t.Run("a numeric item answered at its full declared width", func(t *testing.T) {
@@ -731,5 +738,218 @@ func TestParseEXResponse_Table(t *testing.T) {
 				t.Errorf("parseEXResponse(%q) = %+v, want %+v", tt.frame, got, tt.want)
 			}
 		})
+	}
+}
+
+// --- Menu (EX) write: consent-selected dialect, four-way table ---
+
+const (
+	admittedAddr    = "010101" // AF TREBLE GAIN, Digits 3, -10..+10 (layout 654)
+	admittedWire    = "EX010101+02;"
+	deniedAddr      = "010114" // REAR SELECT, denied (spec v2 §2.1)
+	heldVOXSelect   = "030405" // VOX SELECT, held (spec v2 §2.2, layout 875)
+	heldDataVOXGain = "030406" // DATA VOX GAIN, held (layout 876)
+	heldShiftFreq   = "010516" // SHIFT FREQUENCY, held (layout 755)
+)
+
+// descWrites returns every item's Write label keyed by ID.
+func descWrites(d driver.SettingsDescriptor) map[string]spec.Support {
+	out := map[string]spec.Support{}
+	for _, m := range d.Menus {
+		for _, g := range m.Groups {
+			for _, it := range g.Items {
+				out[it.ID] = it.Write
+			}
+		}
+	}
+	return out
+}
+
+// countLabels counts items per Write label.
+func countLabels(m map[string]spec.Support) map[spec.Support]int {
+	out := map[spec.Support]int{}
+	for _, w := range m {
+		out[w]++
+	}
+	return out
+}
+
+// exSetFrames returns the EX Set frames (longer than the 9-byte read) a port saw.
+func exSetFrames(p *respondingPort) []string {
+	var out []string
+	for _, f := range p.Transcript() {
+		if strings.HasPrefix(f, "EX") && len(f) > exReadFrameLen {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// openFake opens a session of a fresh fakedx10 radio.
+func openFake(t *testing.T, profile Profile, opts ...Option) (*fakedx10.Radio, *Session) {
+	t.Helper()
+	r := fakedx10.New()
+	t.Cleanup(func() { _ = r.Close() })
+	sess, err := New(profile, opts...).Open(testCtx(t), r.Port(), testIdentity)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Close() })
+	return r, sess.(*Session)
+}
+
+// TestMenuWrite_UnconsentedRefusesBeforeTheWire is rows (1) and (2): with no
+// option, and with channel consent only (proving the two bits are separate),
+// every EX Set is refused before a byte is sent and no descriptor item is
+// writable.
+func TestMenuWrite_UnconsentedRefusesBeforeTheWire(t *testing.T) {
+	for name, opts := range map[string][]Option{
+		"no options":           nil,
+		"channel consent only": {WithConsentedUnverifiedWrites()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, sess := openSession(t, RealHardware, slotImage{exSetSilent: true}, opts...)
+			res, err := sess.WriteSetting(testCtx(t), admittedAddr, "+02")
+			if err == nil {
+				t.Fatalf("WriteSetting = %+v, nil; want a refusal", res)
+			}
+			if res != (driver.SettingWriteResult{}) {
+				t.Errorf("refused result = %+v, want zero", res)
+			}
+			if got := exSetFrames(p); len(got) != 0 {
+				t.Errorf("refusal sent EX Set frames %q, want none", got)
+			}
+			labels := countLabels(descWrites(sess.SettingsDescriptor()))
+			if labels[spec.Unverified] != 197 || len(labels) != 1 {
+				t.Errorf("descriptor labels = %v, want 197 Unverified only", labels)
+			}
+		})
+	}
+}
+
+// TestMenuWrite_ConsentedRealSession is row (3).
+func TestMenuWrite_ConsentedRealSession(t *testing.T) {
+	r, sess := openFake(t, RealHardware, WithConsentedMenuWrites())
+
+	res, err := sess.WriteSetting(testCtx(t), admittedAddr, "+02")
+	if err != nil {
+		t.Fatalf("WriteSetting: %v", err)
+	}
+	if res.Outcome != driver.SettingWriteAccepted || res.Observed != "+02" {
+		t.Errorf("result = %+v, want Accepted with Observed +02", res)
+	}
+	if got, _ := r.EXState(admittedAddr); got != "+02" {
+		t.Errorf("fake state = %q, want +02", got)
+	}
+
+	for _, tc := range []struct{ name, id, val string }{
+		{"denied", deniedAddr, "0"},
+		{"held VOX SELECT", heldVOXSelect, "1"},
+		{"held DATA VOX GAIN", heldDataVOXGain, "050"},
+		{"held SHIFT FREQUENCY", heldShiftFreq, "1"},
+		{"outside the domain", admittedAddr, "+99"},
+		{"wrong width", admittedAddr, "+2"},
+	} {
+		before, _ := r.EXState(tc.id)
+		res, err := sess.WriteSetting(testCtx(t), tc.id, tc.val)
+		if err == nil || res != (driver.SettingWriteResult{}) {
+			t.Errorf("%s: WriteSetting = %+v, %v; want a zero-result refusal", tc.name, res, err)
+		}
+		if tc.id != admittedAddr {
+			if after, _ := r.EXState(tc.id); after != before {
+				t.Errorf("%s: fake state moved %q -> %q", tc.name, before, after)
+			}
+		}
+	}
+	if got, _ := r.EXState(admittedAddr); got != "+02" {
+		t.Errorf("a refused write changed the fake: %q", got)
+	}
+
+	w := descWrites(sess.SettingsDescriptor())
+	labels := countLabels(w)
+	if labels[spec.ConsentedUnverified] != 162 || labels[spec.Unverified] != 35 || labels[spec.Supported] != 0 || len(labels) != 2 {
+		t.Errorf("descriptor labels = %v, want 162 ConsentedUnverified and 35 Unverified", labels)
+	}
+	for _, id := range []string{deniedAddr, heldVOXSelect, heldDataVOXGain, heldShiftFreq} {
+		if w[id] != spec.Unverified {
+			t.Errorf("%s label = %v, want Unverified", id, w[id])
+		}
+	}
+}
+
+// TestMenuWrite_SimulatedIsSupportedNeverConsented is row (4).
+func TestMenuWrite_SimulatedIsSupportedNeverConsented(t *testing.T) {
+	_, sess := openFake(t, Simulated)
+	if res, err := sess.WriteSetting(testCtx(t), admittedAddr, "+02"); err != nil || res.Outcome != driver.SettingWriteAccepted {
+		t.Fatalf("WriteSetting = %+v, %v", res, err)
+	}
+	labels := countLabels(descWrites(sess.SettingsDescriptor()))
+	if labels[spec.Supported] != 162 || labels[spec.ConsentedUnverified] != 0 {
+		t.Errorf("descriptor labels = %v, want 162 Supported and no ConsentedUnverified", labels)
+	}
+}
+
+// TestMenuWrite_PaperSessionDoesNotLoosenALaterUnconsentedOne is the driver-level
+// aliasing check: opening and writing on a paper session leaves a later
+// unconsented real session refusing every address.
+func TestMenuWrite_PaperSessionDoesNotLoosenALaterUnconsentedOne(t *testing.T) {
+	_, paper := openFake(t, RealHardware, WithConsentedMenuWrites())
+	if _, err := paper.WriteSetting(testCtx(t), admittedAddr, "+02"); err != nil {
+		t.Fatalf("paper WriteSetting: %v", err)
+	}
+	p, plain := openSession(t, RealHardware, slotImage{exSetSilent: true})
+	for _, it := range catDialect.EXItems() {
+		wire := catDialect.EXWire(it.Addr)
+		if res, err := plain.WriteSetting(testCtx(t), wire, strings.Repeat("0", it.Digits)); err == nil {
+			t.Fatalf("unconsented session wrote %s: %+v", wire, res)
+		}
+	}
+	if got := exSetFrames(p); len(got) != 0 {
+		t.Errorf("unconsented session sent %q", got)
+	}
+}
+
+// TestMenuWrite_OutcomesRefusedAndMismatch covers the two non-accepted
+// outcomes over the scripted radio: a "?;" to the Set, and a silent Set whose
+// read-back disagrees.
+func TestMenuWrite_OutcomesRefusedAndMismatch(t *testing.T) {
+	t.Run("radio refuses", func(t *testing.T) {
+		_, sess := openSession(t, RealHardware, slotImage{}, WithConsentedMenuWrites())
+		res, err := sess.WriteSetting(testCtx(t), admittedAddr, "+02")
+		if err == nil || res.Outcome != driver.SettingWriteRefused || !res.Step.Sent {
+			t.Errorf("= %+v, %v; want SettingWriteRefused with the frame sent", res, err)
+		}
+	})
+	t.Run("read-back differs", func(t *testing.T) {
+		img := slotImage{exSetSilent: true, exAnswers: map[string]string{admittedAddr: "EX010101+01;"}}
+		_, sess := openSession(t, RealHardware, img, WithConsentedMenuWrites())
+		res, err := sess.WriteSetting(testCtx(t), admittedAddr, "+02")
+		var mm *driver.SettingVerifyMismatchError
+		if !errors.As(err, &mm) || res.Outcome != driver.SettingWriteVerifyMismatch || res.Observed != "+01" {
+			t.Errorf("= %+v, %v; want a verify mismatch observing +01", res, err)
+		}
+	})
+}
+
+// TestNoParseEXAnswerResultReachesEngineDo: an EX Answer and an EX Set share
+// one shape (spec v2 §3.5), so nothing in this package may feed a parsed
+// answer to Engine.Do. Non-test sources only; none may mention both.
+func TestNoParseEXAnswerResultReachesEngineDo(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(b)
+		if strings.Contains(src, "ParseEXAnswer") && strings.Contains(src, ".Do(") {
+			t.Errorf("%s calls both ParseEXAnswer and Engine.Do: audit that no parsed answer is sent", f)
+		}
 	}
 }
