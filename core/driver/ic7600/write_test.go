@@ -58,8 +58,8 @@ func framesAfterOpen(t *testing.T, p *scriptedPort, openFrames int) [][]byte {
 // at every channel a write test targets.
 func ackingRadio() radioImage {
 	img := occupiedRadio()
-	img.ackSets = true
-	img.records[42] = goldenRecord
+	img.AckSets = true
+	img.Records[42] = goldenRecord
 	return img
 }
 
@@ -128,7 +128,7 @@ func TestWriteChannel_FBIsConfirmed(t *testing.T) {
 // exactly ONE set frame reached the port.
 func TestWriteChannel_AckTimeoutReportsAnUnknownOutcome(t *testing.T) {
 	img := ackingRadio()
-	img.ackSets = false // silence
+	img.AckSets = false // silence
 	s, p := writeSession(t, img)
 	openFrames := len(p.Transcript())
 
@@ -157,8 +157,8 @@ func TestWriteChannel_AckTimeoutReportsAnUnknownOutcome(t *testing.T) {
 func TestWriteChannel_FARejectionIsReported(t *testing.T) {
 	t.Run("FA from 0x7A is a rejection", func(t *testing.T) {
 		img := ackingRadio()
-		img.ackSets = false
-		img.rejectSets = true
+		img.AckSets = false
+		img.RejectSets = true
 		s, _ := writeSession(t, img)
 		res, err := s.WriteChannel(t.Context(), goodChannel("042"))
 		if !errors.Is(err, transport.ErrRejected) {
@@ -176,9 +176,9 @@ func TestWriteChannel_FARejectionIsReported(t *testing.T) {
 
 	t.Run("FA from another station is not a rejection", func(t *testing.T) {
 		img := ackingRadio()
-		img.ackSets = false
-		img.rejectSets = true
-		img.setFrom = 0x94
+		img.AckSets = false
+		img.RejectSets = true
+		img.SetFrom = 0x94
 		s, _ := writeSession(t, img)
 		_, err := s.WriteChannel(t.Context(), goodChannel("042"))
 		if err == nil {
@@ -299,7 +299,7 @@ func TestWriteChannel_RefusesASlotWhoseUnmappedRegionsDiffer(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			img := ackingRadio()
-			img.records[42] = tt.prior
+			img.Records[42] = tt.prior
 			s, p := writeSession(t, img)
 			openFrames := len(p.Transcript())
 
@@ -334,7 +334,7 @@ func TestWriteChannel_RefusesASlotWhoseUnmappedRegionsDiffer(t *testing.T) {
 // write proceeds. The set carries the template's zeros at both regions.
 func TestWriteChannel_EmptySlotWritesAgainstTheTemplate(t *testing.T) {
 	img := ackingRadio()
-	delete(img.records, 42) // answered FA
+	delete(img.Records, 42) // answered FA
 	s, p := writeSession(t, img)
 	openFrames := len(p.Transcript())
 
@@ -852,7 +852,7 @@ func TestWriteChannel_UpdateCarriesTheJustReadToneWhenNotKnown(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			img := ackingRadio()
-			img.records[42] = tt.prior
+			img.Records[42] = tt.prior
 			s, p := writeSession(t, img)
 			openFrames := len(p.Transcript())
 
@@ -899,7 +899,7 @@ func TestWriteChannel_CreateWithoutToneIsRefused(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			img := ackingRadio()
-			delete(img.records, 42) // an empty slot: answered FA
+			delete(img.Records, 42) // an empty slot: answered FA
 			s, p := writeSession(t, img)
 			openFrames := len(p.Transcript())
 			ch := goodChannel("042")
@@ -934,7 +934,7 @@ func TestWriteChannel_CreateWithoutToneIsRefused(t *testing.T) {
 // template.
 func TestWriteChannel_CreateWithEveryValueSucceeds(t *testing.T) {
 	img := ackingRadio()
-	delete(img.records, 42)
+	delete(img.Records, 42)
 	s, p := writeSession(t, img)
 	openFrames := len(p.Transcript())
 
@@ -966,7 +966,7 @@ func TestWriteChannel_ScanEdgesWriteThroughTheSameForm(t *testing.T) {
 		t.Run(tt.slot, func(t *testing.T) {
 			img := ackingRadio()
 			a, _, _ := slotToAddress(tt.slot)
-			img.records[a.Channel] = goldenRecord
+			img.Records[a.Channel] = goldenRecord
 			s, p := writeSession(t, img)
 			openFrames := len(p.Transcript())
 
