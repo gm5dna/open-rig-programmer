@@ -1,11 +1,12 @@
 # Decision: the menu (EX) settings surface is read-only
 
 **Decided 25/07/2026 by Stuart Henderson (project owner); amended
-05/09/2026 and 19/09/2026 — see "Amendments" below. Status: a
+05/09/2026, 19/09/2026 and 19/10/2026 — see "Amendments" below. Status: a
 characterised write subset shipped in v1.11.1 (238 of 296
 addresses, each write-verified on a real FT-710 on 18/10/2026); every
-other address, and the permanently-denied classes, stay read-only with no
-reopening.**
+other FT-710 address, and the permanently-denied classes, stay read-only
+with no reopening. FTdx menu writes are paper-only and consent-gated
+(19/10/2026): no FTdx has been tested.**
 
 open-rig-programmer reads the FT-710's menu settings and will not write
 them. This document records that decision, the evidence behind it, and
@@ -173,6 +174,36 @@ original form, dated 19/09/2026 — hardware characterisation stands in
 for chart trust, not a claim that the original condition was met
 unchanged. Condition 1 is carried by the 05/09/2026 fleet reframing
 above; condition 3 was already met.
+
+**19/10/2026 — FTdx menu writes on paper evidence, consent-gated.**
+Stuart overrides two statements in this document for the FTdx10,
+FTdx101D and FTdx101MP. First, per-address hardware evidence as the
+precondition for any write (the status line, and the 19/09/2026
+amendment's substitution of hardware characterisation for chart
+trust): reopening condition 2, a chart that can be trusted, is still
+not met, and is worked around by consent and read-back instead.
+Second, "radio models added later inherit this", meaning read-only.
+**No FTdx radio has been tested.** Every FTdx write rests on the
+printed manual alone; the FT-710 chart failed on TONE FREQ, SHIFT
+FREQUENCY and MARK FREQUENCY, so a wrong FTdx chart entry is
+plausible.
+
+The FT-710 is unchanged: its writes stay hardware-verified and need no
+consent. FTdx writes are different in kind. They are off until you
+grant a separate menu-write consent for that model (independent of
+the channel-write consent), each write is read back and compared, and
+the consent text advises an SD-card configuration backup first. The
+permanently denied classes above carry over, extended on the FTdx by
+SHIFT PORT, REAR SELECT, ANT3 SELECT, the 232C and CAT RATE and TIME
+OUT TIMER items, and MAX POWER: 27 denied on the FTdx10, 28 on the
+FTdx101. A further 8 addresses per model are held read-only: SHIFT
+FREQUENCY, MARK FREQUENCY, TONE FREQ, KEYBOARD LANGUAGE, CW BK-IN
+DELAY, QMB CH, MEM GROUP, DATA VOX GAIN and VOX SELECT. DATA VOX GAIN
+and VOX SELECT are held for the reason the 19/09/2026 amendment gives
+for MOD SOURCE: an unexpected audio source or VOX sensitivity can turn
+existing audio into a transmission.
+The remaining 162 (FTdx10) and 157 (FTdx101D and FTdx101MP) addresses
+are writable once consent is given.
 
 ## References
 

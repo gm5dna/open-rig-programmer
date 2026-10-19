@@ -29,7 +29,8 @@ Shared by every radio: a channel cannot be deleted from the program
 (the Yaesu radios have no such command; the Icom radios and the
 TS-890S and TS-990S do, and the program deliberately does not use
 it). Menu settings stay read-only on every radio except the FT-710,
-where a hardware-characterised address can be written
+where a hardware-characterised address can be written, and the FTdx10
+and FTdx101, where a paper-only write needs your consent
 (`docs/menu-write-decision.md`).
 
 ## Yaesu
@@ -70,6 +71,20 @@ the Windows session of 05/09/2026).
 Read the 99 memories and the 9 PMS pairs and every menu setting, on
 the same terms as the FT-710. Writes follow the FT-710's ladder but
 have never been sent to a real radio.
+
+Menu writes: **no FTdx has been tested.** Menu writes rest on the
+printed manual alone, which was wrong on the FT-710 in three places.
+They are off until you consent, per model, with `rigprog settings
+menu-writes <model> on` or the "Menu (EX) writes" line in the app's
+unverified-writes dialog; this is separate from the channel-write
+consent. FTdx10: 162 addresses writable, 27 denied (CAT link, keying,
+tuner and antenna routing, TX power and safety, MOD SOURCE, REAR
+SELECT, text) and 8 held read-only (SHIFT and MARK FREQUENCY, TONE
+FREQ, KEYBOARD LANGUAGE, QMB CH, MEM GROUP, DATA VOX GAIN, VOX
+SELECT). FTdx101D and FTdx101MP: 157 writable, 28 denied (adding ANT3
+SELECT), 8 held (CW BK-IN DELAY in place of TONE FREQ). Each write is
+read back and compared. Take an SD-card configuration backup from the
+radio first. See `docs/menu-write-decision.md`.
 
 Evidence: `core/driver/ftdx10/doc.go` and `core/driver/ftdx101/doc.go`
 (each carries a register of every assumption and the capture that
